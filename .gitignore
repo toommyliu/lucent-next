@@ -1,0 +1,6 @@
+/target
+/node_modules
+**/node_modules
+/assets/*.swf
+/assets/runtime
+.DS_Store

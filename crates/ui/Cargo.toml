@@ -1,0 +1,9 @@
+[package]
+name = "lucent-ui"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "gallery"
+path = "src/bin/gallery.rs"

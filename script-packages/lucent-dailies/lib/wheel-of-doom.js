@@ -1,0 +1,93 @@
+// @ts-check
+
+const api = require("lucent/api");
+const s = require("lucent/schema");
+const { wheelRewardNames } = require("./wheel-rewards");
+
+const optionsSchema = s.object({
+  bankRewards: s.boolean().default(false),
+});
+
+const DAILY_QUEST_ID = 3075;
+const DAILY_XP_BOOST_ITEM_ID = 19189;
+const GEAR_OF_DOOM_ITEM_ID = 45739;
+const WEEKLY_QUEST_ID = 3076;
+
+/** @typedef {{ readonly bankRewards?: boolean }} WheelOfDoomOptions */
+/** @typedef {{ readonly status: "unavailable" } | { readonly status: "failed" } | { readonly status: "completed", readonly banking: "not-requested" | "completed" | "failed" }} WheelOfDoomSpinOutcome */
+/** @typedef {{ readonly daily: WheelOfDoomSpinOutcome, readonly weekly: WheelOfDoomSpinOutcome }} WheelOfDoomResult */
+
+/**
+ * @param {number} questId
+ * @param {boolean} bankRewards
+ * @returns {Generator<unknown, WheelOfDoomSpinOutcome, unknown>}
+ */
+function* completeWheelQuest(questId, bankRewards) {
+  if (!(yield* api.quests.load(questId, true))) return { status: "failed" };
+  const available = yield* api.quests.isAvailable(questId);
+  const inProgress = yield* api.quests.isInProgress(questId);
+  if (!available && !inProgress) return { status: "unavailable" };
+  if (!(yield* api.player.joinMap("doom"))) return { status: "failed" };
+  if (!(yield* api.quests.accept(questId))) return { status: "failed" };
+  if (!(yield* api.quests.canComplete(questId))) return { status: "failed" };
+
+  if (!bankRewards) {
+    return (yield* api.quests.complete(questId))
+      ? { status: "completed", banking: "not-requested" }
+      : { status: "failed" };
+  }
+
+  const packet = yield* api.packet.once(
+    { command: "Wheel", direction: "extension", encoding: "json" },
+    {
+      timeout: "5 seconds",
+      trigger: api.quests.complete(questId),
+    },
+  );
+  if (packet === null) return { status: "failed" };
+
+  /** @type {string[]} */
+  const toDeposit = [];
+  for (const reward of wheelRewardNames(packet, DAILY_XP_BOOST_ITEM_ID)) {
+    if ((yield* api.inventory.get(reward)) !== null) {
+      toDeposit.push(reward);
+    } else if (!(yield* api.bank.contains(reward))) {
+      return { status: "completed", banking: "failed" };
+    }
+  }
+  if (
+    toDeposit.length > 0 &&
+    !(yield* api.bank.depositBatch(toDeposit)).every(Boolean)
+  ) {
+    return { status: "completed", banking: "failed" };
+  }
+  return { status: "completed", banking: "completed" };
+}
+
+/**
+ * Attempts the member-daily spin, then the three-Gear weekly spin.
+ *
+ * @param {WheelOfDoomOptions} [options]
+ * @returns {Generator<unknown, WheelOfDoomResult, unknown>}
+ */
+function* spinWheelOfDoom(options = {}) {
+  const { bankRewards } = optionsSchema.parse(options);
+  /** @type {WheelOfDoomSpinOutcome} */
+  let daily = { status: "unavailable" };
+  if (yield* api.player.isMember()) {
+    daily = yield* completeWheelQuest(DAILY_QUEST_ID, bankRewards);
+  }
+
+  /** @type {WheelOfDoomSpinOutcome} */
+  let weekly = { status: "unavailable" };
+  if (!(yield* api.inventory.contains(GEAR_OF_DOOM_ITEM_ID, 3))) {
+    yield* api.bank.withdraw(GEAR_OF_DOOM_ITEM_ID);
+  }
+  if (yield* api.inventory.contains(GEAR_OF_DOOM_ITEM_ID, 3)) {
+    weekly = yield* completeWheelQuest(WEEKLY_QUEST_ID, bankRewards);
+  }
+
+  return { daily, weekly };
+}
+
+module.exports = { spinWheelOfDoom };

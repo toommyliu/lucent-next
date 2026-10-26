@@ -1,0 +1,22 @@
+{
+  "name": "lucent-next",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.1.1",
+  "scripts": {
+    "as3": "pnpm run as3:bridge && pnpm run as3:build",
+    "as3:bridge": "tsx scripts/gen-as3-bridge.ts",
+    "as3:build": "tsx scripts/build-as3-swf.ts",
+    "typecheck": "pnpm -r typecheck && pnpm typecheck:script-packages",
+    "typecheck:script-packages": "tsc6 -p script-packages/lucent-consumables/jsconfig.repo.json --noEmit && tsc6 -p script-packages/lucent-dailies/jsconfig.repo.json --noEmit",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@effect/platform-node": "4.0.3",
+    "@types/node": "^24.12.2",
+    "asconfigc": "^1.9.0",
+    "effect": "4.0.3",
+    "tsx": "^4.21.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  }
+}

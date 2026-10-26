@@ -1,0 +1,172 @@
+{
+  "name": "@lucent/schemas",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./appearance": {
+      "import": {
+        "types": "./dist/appearance.d.mts",
+        "default": "./dist/appearance.mjs"
+      },
+      "require": {
+        "types": "./dist/appearance.d.cts",
+        "default": "./dist/appearance.cjs"
+      }
+    },
+    "./accounts": {
+      "import": {
+        "types": "./dist/accounts.d.mts",
+        "default": "./dist/accounts.mjs"
+      },
+      "require": {
+        "types": "./dist/accounts.d.cts",
+        "default": "./dist/accounts.cjs"
+      }
+    },
+    "./accountSettings": {
+      "import": {
+        "types": "./dist/accountSettings.d.mts",
+        "default": "./dist/accountSettings.mjs"
+      },
+      "require": {
+        "types": "./dist/accountSettings.d.cts",
+        "default": "./dist/accountSettings.cjs"
+      }
+    },
+    "./army": {
+      "import": {
+        "types": "./dist/army.d.mts",
+        "default": "./dist/army.mjs"
+      },
+      "require": {
+        "types": "./dist/army.d.cts",
+        "default": "./dist/army.cjs"
+      }
+    },
+    "./combatProfiles": {
+      "import": {
+        "types": "./dist/combatProfiles.d.mts",
+        "default": "./dist/combatProfiles.mjs"
+      },
+      "require": {
+        "types": "./dist/combatProfiles.d.cts",
+        "default": "./dist/combatProfiles.cjs"
+      }
+    },
+    "./environment": {
+      "import": {
+        "types": "./dist/environment.d.mts",
+        "default": "./dist/environment.mjs"
+      },
+      "require": {
+        "types": "./dist/environment.d.cts",
+        "default": "./dist/environment.cjs"
+      }
+    },
+    "./follower": {
+      "import": {
+        "types": "./dist/follower.d.mts",
+        "default": "./dist/follower.mjs"
+      },
+      "require": {
+        "types": "./dist/follower.d.cts",
+        "default": "./dist/follower.cjs"
+      }
+    },
+    "./filesystem": {
+      "import": {
+        "types": "./dist/filesystem.d.mts",
+        "default": "./dist/filesystem.mjs"
+      },
+      "require": {
+        "types": "./dist/filesystem.d.cts",
+        "default": "./dist/filesystem.cjs"
+      }
+    },
+    "./hotkeys": {
+      "import": {
+        "types": "./dist/hotkeys.d.mts",
+        "default": "./dist/hotkeys.mjs"
+      },
+      "require": {
+        "types": "./dist/hotkeys.d.cts",
+        "default": "./dist/hotkeys.cjs"
+      }
+    },
+    "./scriptInputs": {
+      "import": {
+        "types": "./dist/scriptInputs.d.mts",
+        "default": "./dist/scriptInputs.mjs"
+      },
+      "require": {
+        "types": "./dist/scriptInputs.d.cts",
+        "default": "./dist/scriptInputs.cjs"
+      }
+    },
+    "./scriptPackages": {
+      "import": {
+        "types": "./dist/scriptPackages.d.mts",
+        "default": "./dist/scriptPackages.mjs"
+      },
+      "require": {
+        "types": "./dist/scriptPackages.d.cts",
+        "default": "./dist/scriptPackages.cjs"
+      }
+    },
+    "./scriptPath": {
+      "import": {
+        "types": "./dist/scriptPath.d.mts",
+        "default": "./dist/scriptPath.mjs"
+      },
+      "require": {
+        "types": "./dist/scriptPath.d.cts",
+        "default": "./dist/scriptPath.cjs"
+      }
+    },
+    "./settings": {
+      "import": {
+        "types": "./dist/settings.d.mts",
+        "default": "./dist/settings.mjs"
+      },
+      "require": {
+        "types": "./dist/settings.d.cts",
+        "default": "./dist/settings.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "postinstall": "pnpm run build",
+    "test": "vitest run",
+    "typecheck": "tsc6 -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "effect": "4.0.3"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.3",
+    "tsdown": "0.22.14",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vitest": "^5.0.4"
+  }
+}
