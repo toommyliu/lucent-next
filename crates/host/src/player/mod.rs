@@ -14,7 +14,7 @@ use ruffle_core::{FloatDuration, Player, PlayerBuilder, config::Letterbox, tag_u
 pub(crate) use surface::Surface;
 pub(crate) use view::{ViewEvent, Viewport};
 
-use backends::Navigator;
+use backends::{Navigator, Tasks};
 use net::Net;
 use view::Effect;
 
@@ -111,23 +111,30 @@ fn run(
     };
     let mut running = Running::build(viewport, &surface, Net::new(net)?, outbox)?;
     let mut wait = Duration::ZERO;
-    loop {
+    'running: loop {
         match inbox.recv_timeout(wait) {
             Ok(msg) => {
                 if running.handle(msg).is_break() {
-                    return Ok(());
+                    break;
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => return Ok(()),
+            Err(RecvTimeoutError::Disconnected) => break,
         }
         while let Ok(msg) = inbox.try_recv() {
             if running.handle(msg).is_break() {
-                return Ok(());
+                break 'running;
             }
         }
         wait = running.advance();
     }
+    running.tasks.borrow_mut().clear();
+    while let Ok(msg) = inbox.try_recv() {
+        if let Msg::Poll(task) = msg {
+            task.run();
+        }
+    }
+    Ok(())
 }
 
 fn first_viewport(inbox: &mpsc::Receiver<Msg>) -> Option<Viewport> {
@@ -142,6 +149,7 @@ fn first_viewport(inbox: &mpsc::Receiver<Msg>) -> Option<Viewport> {
 
 struct Running {
     player: Arc<Mutex<Player>>,
+    tasks: Tasks,
     viewport: Viewport,
     last_tick: Instant,
     effects: Vec<Effect>,
@@ -159,12 +167,14 @@ impl Running {
         let renderer = surface.renderer(viewport)?;
         let movie = SwfMovie::from_data(LOADER_SWF, LOADER_URL.into(), None, None)
             .map_err(|error| PlayerError::Loader(error.to_string()))?;
+        let tasks = Tasks::default();
         let player = PlayerBuilder::new()
             .with_renderer(renderer)
             .with_navigator(Navigator::new(
                 url::Url::parse(LOADER_URL).unwrap(),
                 net,
                 inbox,
+                tasks.clone(),
             ))
             .with_external_interface(Box::new(crate::bridge::Bridge))
             .with_viewport_dimensions(viewport.width(), viewport.height(), viewport.scale())
@@ -175,6 +185,7 @@ impl Running {
         let now = Instant::now();
         Ok(Running {
             player,
+            tasks,
             viewport,
             last_tick: now,
             effects: Vec::new(),
@@ -223,10 +234,11 @@ impl Running {
             player.render();
             self.drawn += 1;
         }
-        if now.duration_since(self.stats_since) >= Duration::from_secs(1) {
+        let elapsed = now.duration_since(self.stats_since);
+        if elapsed >= Duration::from_secs(1) {
             tracing::debug!(
                 "fps={} viewport={}x{}@{}",
-                self.drawn,
+                (f64::from(self.drawn) / elapsed.as_secs_f64()).round() as u32,
                 self.viewport.width(),
                 self.viewport.height(),
                 self.viewport.scale()

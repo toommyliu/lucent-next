@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::time::Duration;
+use std::{cell::RefCell, rc::Rc};
 
 use async_channel::{Receiver, Sender};
 use ruffle_core::backend::navigator::{
@@ -14,15 +15,23 @@ use url::{ParseError, Url};
 use crate::player::net::{HttpRequest, HttpResponse, Method, Net, NetError, SocketEvent};
 use crate::player::{Inbox, Msg};
 
+pub(crate) type Tasks = Rc<RefCell<Vec<async_task::Task<()>>>>;
+
 pub(crate) struct Navigator {
     base: Url,
     net: Net,
     inbox: Inbox,
+    tasks: Tasks,
 }
 
 impl Navigator {
-    pub(crate) fn new(base: Url, net: Net, inbox: Inbox) -> Navigator {
-        Navigator { base, net, inbox }
+    pub(crate) fn new(base: Url, net: Net, inbox: Inbox, tasks: Tasks) -> Navigator {
+        Navigator {
+            base,
+            net,
+            inbox,
+            tasks,
+        }
     }
 }
 
@@ -95,7 +104,9 @@ impl NavigatorBackend for Navigator {
             },
             move |runnable| inbox.post(Msg::Poll(runnable)),
         );
-        task.detach();
+        let mut tasks = self.tasks.borrow_mut();
+        tasks.retain(|task| !task.is_finished());
+        tasks.push(task);
         runnable.schedule();
     }
 
@@ -193,5 +204,48 @@ impl SuccessResponse for Response {
     }
     fn expected_length(&self) -> Result<Option<u64>, Error> {
         Ok(self.length)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::*;
+
+    #[test]
+    fn stopping_drops_a_pending_local_future_on_its_owner_thread() {
+        struct OnDrop(Rc<Cell<usize>>);
+        impl Drop for OnDrop {
+            fn drop(&mut self) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let tasks = Tasks::default();
+        let mut navigator = Navigator::new(
+            Url::parse("https://game.aq.com/game/loader.swf").unwrap(),
+            Net::new(runtime.handle().clone()).unwrap(),
+            Inbox(tx),
+            tasks.clone(),
+        );
+        let dropped = Rc::new(Cell::new(0));
+        let guard = OnDrop(dropped.clone());
+        navigator.spawn_future(Box::pin(async move {
+            let _guard = guard;
+            std::future::pending::<()>().await;
+            Ok(())
+        }));
+        if let Msg::Poll(task) = rx.recv().unwrap() {
+            task.run();
+        }
+        assert_eq!(dropped.get(), 0);
+        tasks.borrow_mut().clear();
+        if let Msg::Poll(task) = rx.recv().unwrap() {
+            task.run();
+        }
+        assert_eq!(dropped.get(), 1);
     }
 }

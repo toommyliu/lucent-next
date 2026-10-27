@@ -1,3 +1,3 @@
 mod navigator;
 
-pub(super) use navigator::Navigator;
+pub(super) use navigator::{Navigator, Tasks};
