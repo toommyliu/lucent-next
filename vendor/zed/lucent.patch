@@ -1,4 +1,4 @@
-From ff9e363bcaf9db2fa4367c2ea8ac2a4e955d786f Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: toommyliu <86510873+toommyliu@users.noreply.github.com>
 Date: Tue, 27 Oct 2026 14:55:29 -0700
 Subject: [PATCH 1/3] gpui_wgpu: Update wgpu to 30
@@ -11,7 +11,7 @@ Subject: [PATCH 1/3] gpui_wgpu: Update wgpu to 30
  4 files changed, 113 insertions(+), 85 deletions(-)
 
 diff --git a/Cargo.lock b/Cargo.lock
-index 56b62212f4..469201b013 100644
+index 56b62212f48452124022afb6d19ce826f804590b..469201b01363b135865d9ae341f4694a9d5b2528 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
 @@ -2256,9 +2256,9 @@ dependencies = [
@@ -492,7 +492,7 @@ index 56b62212f4..469201b013 100644
  ]
  
 diff --git a/Cargo.toml b/Cargo.toml
-index 3e126c2690..c8762febae 100644
+index 3e126c2690a55df395e3c112e5d16f6696815018..c8762febaec58f32eec97f561e9ce9a57fc78e6d 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -872,7 +872,7 @@ which = "6.0.0"
@@ -505,7 +505,7 @@ index 3e126c2690..c8762febae 100644
  yaml-rust2 = "0.8"
  yawc = "0.2.5"
 diff --git a/crates/gpui_wgpu/src/wgpu_context.rs b/crates/gpui_wgpu/src/wgpu_context.rs
-index 9dd5599393..46964de88d 100644
+index 9dd559939340b9867ebd3701fc695b7110816e9b..46964de88d87dbec434311c4364bc4468dd94aaf 100644
 --- a/crates/gpui_wgpu/src/wgpu_context.rs
 +++ b/crates/gpui_wgpu/src/wgpu_context.rs
 @@ -369,6 +369,7 @@ impl WgpuContext {
@@ -517,7 +517,7 @@ index 9dd5599393..46964de88d 100644
              width: 64,
              height: 64,
 diff --git a/crates/gpui_wgpu/src/wgpu_renderer.rs b/crates/gpui_wgpu/src/wgpu_renderer.rs
-index 587315debf..442ad7f67d 100644
+index 587315debfa89ba89a56bdd241fdcccef89a828c..442ad7f67dbc83313db17fdec004deb376ebc9e7 100644
 --- a/crates/gpui_wgpu/src/wgpu_renderer.rs
 +++ b/crates/gpui_wgpu/src/wgpu_renderer.rs
 @@ -332,6 +332,7 @@ impl WgpuRenderer {
@@ -546,11 +546,8 @@ index 587315debf..442ad7f67d 100644
              return true;
          }
      }
--- 
-2.54.0
 
-
-From e77d9f91731c9f8c1c2e1732e9c8fec36d73868a Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: toommyliu <86510873+toommyliu@users.noreply.github.com>
 Date: Tue, 27 Oct 2026 14:55:36 -0700
 Subject: [PATCH 2/3] gpui: Expose the window's wgpu device on Linux
@@ -566,7 +563,7 @@ Subject: [PATCH 2/3] gpui: Expose the window's wgpu device on Linux
  7 files changed, 43 insertions(+)
 
 diff --git a/crates/gpui/Cargo.toml b/crates/gpui/Cargo.toml
-index 63e1814b50..f1371ce114 100644
+index 63e1814b50539936fe5a4592fe295d17cc13d520..f1371ce11451b2e650b7a3c315d2b28f6f5055db 100644
 --- a/crates/gpui/Cargo.toml
 +++ b/crates/gpui/Cargo.toml
 @@ -134,6 +134,9 @@ metal.workspace = true
@@ -580,7 +577,7 @@ index 63e1814b50..f1371ce114 100644
  scap = { workspace = true, optional = true }
  
 diff --git a/crates/gpui/src/gpui.rs b/crates/gpui/src/gpui.rs
-index 4b1679cbe4..7f84d25a5f 100644
+index 4b1679cbe440faebedeedd9229fb6d59057a1af0..7f84d25a5ff1fdc2fbda9440e8a3652bbd8e4af5 100644
 --- a/crates/gpui/src/gpui.rs
 +++ b/crates/gpui/src/gpui.rs
 @@ -344,3 +344,13 @@ pub struct GpuSpecs {
@@ -598,7 +595,7 @@ index 4b1679cbe4..7f84d25a5f 100644
 +    pub queue: wgpu::Queue,
 +}
 diff --git a/crates/gpui/src/platform.rs b/crates/gpui/src/platform.rs
-index df7973909c..f670b648e1 100644
+index df7973909c530cd3c0d86980d4bc551904f3384c..f670b648e1d08eb15bd92fdb25f014168b7ae0f8 100644
 --- a/crates/gpui/src/platform.rs
 +++ b/crates/gpui/src/platform.rs
 @@ -816,6 +816,10 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
@@ -613,7 +610,7 @@ index df7973909c..f670b648e1 100644
      fn update_ime_position(&self, _bounds: Bounds<Pixels>);
  
 diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
-index 4c8b4651c8..e5a278bfcb 100644
+index 4c8b4651c8c2a24d8fc275f950665f669e77f331..e5a278bfcb86d6da5012293facca9126d18eb7ca 100644
 --- a/crates/gpui/src/window.rs
 +++ b/crates/gpui/src/window.rs
 @@ -5544,6 +5544,12 @@ impl Window {
@@ -630,7 +627,7 @@ index 4c8b4651c8..e5a278bfcb 100644
      /// This is macOS specific.
      pub fn titlebar_double_click(&self) {
 diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/src/linux/wayland/window.rs
-index 993b2ff3fa..21bd8f4ba5 100644
+index 993b2ff3fadc854ce0e49769559d2894efda5637..21bd8f4ba53fba9d7944952658ab1b3507fd34ff 100644
 --- a/crates/gpui_linux/src/linux/wayland/window.rs
 +++ b/crates/gpui_linux/src/linux/wayland/window.rs
 @@ -1889,6 +1889,10 @@ impl PlatformWindow for WaylandWindow {
@@ -645,7 +642,7 @@ index 993b2ff3fa..21bd8f4ba5 100644
          let state = self.borrow();
          let surface = if state.surface_state.toplevel().is_some() {
 diff --git a/crates/gpui_linux/src/linux/x11/window.rs b/crates/gpui_linux/src/linux/x11/window.rs
-index 4fde66f06c..a83ec1432d 100644
+index 4fde66f06ca85841965d34c90f8ebf307638eec9..a83ec1432d7d6df4c1d3bd59face64f22f4cec97 100644
 --- a/crates/gpui_linux/src/linux/x11/window.rs
 +++ b/crates/gpui_linux/src/linux/x11/window.rs
 @@ -1924,6 +1924,10 @@ impl PlatformWindow for X11Window {
@@ -660,7 +657,7 @@ index 4fde66f06c..a83ec1432d 100644
          // Volume 0% means don't increase or decrease from system volume
          let _ = self.0.xcb.bell(0);
 diff --git a/crates/gpui_wgpu/src/wgpu_renderer.rs b/crates/gpui_wgpu/src/wgpu_renderer.rs
-index 442ad7f67d..1398548ebb 100644
+index 442ad7f67dbc83313db17fdec004deb376ebc9e7..1398548ebb807632f0920c22249ae1ba49fd7e74 100644
 --- a/crates/gpui_wgpu/src/wgpu_renderer.rs
 +++ b/crates/gpui_wgpu/src/wgpu_renderer.rs
 @@ -1071,6 +1071,18 @@ impl WgpuRenderer {
@@ -682,11 +679,8 @@ index 442ad7f67d..1398548ebb 100644
      pub fn gpu_specs(&self) -> GpuSpecs {
          GpuSpecs {
              is_software_emulated: self.adapter_info.device_type == wgpu::DeviceType::Cpu,
--- 
-2.54.0
 
-
-From 76c539f0973e89bb2438141a885638b47601ee8a Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: toommyliu <86510873+toommyliu@users.noreply.github.com>
 Date: Tue, 27 Oct 2026 14:55:36 -0700
 Subject: [PATCH 3/3] gpui_wgpu: Draw PaintSurface textures on Linux
@@ -699,7 +693,7 @@ Subject: [PATCH 3/3] gpui_wgpu: Draw PaintSurface textures on Linux
  4 files changed, 76 insertions(+), 74 deletions(-)
 
 diff --git a/crates/gpui/src/scene.rs b/crates/gpui/src/scene.rs
-index ea2ad7b2b9..904437e137 100644
+index ea2ad7b2b9051918820ea777793054ca6c8b0e06..904437e137c465e360af5ea58fdcfba92bafc8d6 100644
 --- a/crates/gpui/src/scene.rs
 +++ b/crates/gpui/src/scene.rs
 @@ -737,6 +737,18 @@ pub struct PaintSurface {
@@ -722,7 +716,7 @@ index ea2ad7b2b9..904437e137 100644
  
  impl From<PaintSurface> for Primitive {
 diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
-index e5a278bfcb..6b2f5760c8 100644
+index e5a278bfcb86d6da5012293facca9126d18eb7ca..6b2f5760c8ea39725f8ea0e33e4192e589dceb1b 100644
 --- a/crates/gpui/src/window.rs
 +++ b/crates/gpui/src/window.rs
 @@ -4229,6 +4229,27 @@ impl Window {
@@ -754,7 +748,7 @@ index e5a278bfcb..6b2f5760c8 100644
      pub fn drop_image(&mut self, data: Arc<RenderImage>) -> Result<()> {
          for frame_index in 0..data.frame_count() {
 diff --git a/crates/gpui_wgpu/src/shaders.wgsl b/crates/gpui_wgpu/src/shaders.wgsl
-index 747a34d81e..a4c2fb53e5 100644
+index 747a34d81e08ac370569b74b5ca9bc847c75ce9b..a4c2fb53e5269572d7d62db420a5b9ca64468b73 100644
 --- a/crates/gpui_wgpu/src/shaders.wgsl
 +++ b/crates/gpui_wgpu/src/shaders.wgsl
 @@ -1319,17 +1319,7 @@ struct SurfaceParams {
@@ -810,7 +804,7 @@ index 747a34d81e..a4c2fb53e5 100644
 +    return textureSampleLevel(t_sprite, s_sprite, input.texture_position, 0.0);
  }
 diff --git a/crates/gpui_wgpu/src/wgpu_renderer.rs b/crates/gpui_wgpu/src/wgpu_renderer.rs
-index 1398548ebb..ee9380dec8 100644
+index 1398548ebb807632f0920c22249ae1ba49fd7e74..ee9380dec804fd4df4310a092d00cb9d89c87a88 100644
 --- a/crates/gpui_wgpu/src/wgpu_renderer.rs
 +++ b/crates/gpui_wgpu/src/wgpu_renderer.rs
 @@ -37,6 +37,7 @@ impl From<Bounds<ScaledPixels>> for PodBounds {
@@ -950,6 +944,3 @@ index 1398548ebb..ee9380dec8 100644
      fn draw_instances(
          &self,
          data: &[u8],
--- 
-2.54.0
-
