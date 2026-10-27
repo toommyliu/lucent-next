@@ -62,13 +62,14 @@ pub(crate) fn spawn(
     surface: Surface,
     net: tokio::runtime::Handle,
     clipboard: Clipboard,
+    muted: bool,
 ) -> std::io::Result<Handle> {
     let (tx, rx) = mpsc::channel();
     let inbox = Inbox(tx);
     let (exit_tx, exited) = mpsc::sync_channel(1);
     let outbox = inbox.clone();
     let thread = thread::Builder::new().name(name).spawn(move || {
-        let result = run(rx, outbox, surface, net, clipboard);
+        let result = run(rx, outbox, surface, net, clipboard, muted);
         if let Err(error) = &result {
             tracing::error!(%error, "player failed");
         }
@@ -114,8 +115,9 @@ fn run(
     surface: Surface,
     net: tokio::runtime::Handle,
     clipboard: Clipboard,
+    muted: bool,
 ) -> Result<(), PlayerError> {
-    let Some((viewport, muted)) = first_viewport(&inbox) else {
+    let Some((viewport, muted)) = first_viewport(&inbox, muted) else {
         return Ok(());
     };
     let mut running = Running::build(viewport, &surface, Net::new(net)?, outbox, clipboard)?;
@@ -147,8 +149,7 @@ fn run(
     Ok(())
 }
 
-fn first_viewport(inbox: &mpsc::Receiver<Msg>) -> Option<(Viewport, bool)> {
-    let mut muted = false;
+fn first_viewport(inbox: &mpsc::Receiver<Msg>, mut muted: bool) -> Option<(Viewport, bool)> {
     loop {
         match inbox.recv().ok()? {
             Msg::View(ViewEvent::Resized(viewport)) => return Some((viewport, muted)),
@@ -308,6 +309,14 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::Mute(true)).unwrap();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
-        assert_eq!(first_viewport(&rx), Some((viewport, true)));
+        assert_eq!(first_viewport(&rx, false), Some((viewport, true)));
+    }
+
+    #[test]
+    fn a_player_spawned_for_a_muted_session_starts_muted() {
+        let viewport = Viewport::new(1024.0, 768.0, 1.0).unwrap();
+        let (tx, rx) = mpsc::channel();
+        tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
+        assert_eq!(first_viewport(&rx, true), Some((viewport, true)));
     }
 }
