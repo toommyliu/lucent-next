@@ -82,4 +82,10 @@ impl Session {
         self.player = Some(self.host.spawn_player(self.id, &self.surface)?);
         Ok(())
     }
+
+    pub fn set_muted(&self, muted: bool) {
+        if let Some(player) = &self.player {
+            player.set_muted(muted);
+        }
+    }
 }

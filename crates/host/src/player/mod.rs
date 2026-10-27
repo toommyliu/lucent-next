@@ -15,7 +15,7 @@ use ruffle_core::{FloatDuration, Player, PlayerBuilder, config::Letterbox, tag_u
 pub(crate) use surface::Surface;
 pub(crate) use view::{ViewEvent, Viewport};
 
-use backends::{Navigator, Tasks};
+use backends::{Navigator, Tasks, audio};
 use net::Net;
 use view::Effect;
 
@@ -32,6 +32,10 @@ pub(crate) struct Handle {
 impl Handle {
     pub(crate) fn send(&self, event: ViewEvent) {
         self.inbox.post(Msg::View(event));
+    }
+
+    pub(crate) fn set_muted(&self, muted: bool) {
+        self.inbox.post(Msg::Mute(muted));
     }
 }
 
@@ -77,6 +81,7 @@ pub(crate) fn spawn(
 
 pub(crate) enum Msg {
     View(ViewEvent),
+    Mute(bool),
     Poll(async_task::Runnable),
     Wake,
     Stop,
@@ -107,10 +112,11 @@ fn run(
     surface: Surface,
     net: tokio::runtime::Handle,
 ) -> Result<(), PlayerError> {
-    let Some(viewport) = first_viewport(&inbox) else {
+    let Some((viewport, muted)) = first_viewport(&inbox) else {
         return Ok(());
     };
     let mut running = Running::build(viewport, &surface, Net::new(net)?, outbox)?;
+    running.set_muted(muted);
     let mut wait = Duration::ZERO;
     'running: loop {
         match inbox.recv_timeout(wait) {
@@ -138,10 +144,12 @@ fn run(
     Ok(())
 }
 
-fn first_viewport(inbox: &mpsc::Receiver<Msg>) -> Option<Viewport> {
+fn first_viewport(inbox: &mpsc::Receiver<Msg>) -> Option<(Viewport, bool)> {
+    let mut muted = false;
     loop {
         match inbox.recv().ok()? {
-            Msg::View(ViewEvent::Resized(viewport)) => return Some(viewport),
+            Msg::View(ViewEvent::Resized(viewport)) => return Some((viewport, muted)),
+            Msg::Mute(mute) => muted = mute,
             Msg::Stop => return None,
             Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
         }
@@ -178,6 +186,7 @@ impl Running {
                 inbox,
                 tasks.clone(),
             ))
+            .with_boxed_audio(audio())
             .with_external_interface(Box::new(crate::bridge::Bridge))
             .with_viewport_dimensions(viewport.width(), viewport.height(), viewport.scale())
             .with_autoplay(true)
@@ -200,6 +209,7 @@ impl Running {
     fn handle(&mut self, msg: Msg) -> ControlFlow<()> {
         match msg {
             Msg::Stop => return ControlFlow::Break(()),
+            Msg::Mute(muted) => self.set_muted(muted),
             Msg::Poll(task) => {
                 task.run();
             }
@@ -226,6 +236,13 @@ impl Running {
         ControlFlow::Continue(())
     }
 
+    fn set_muted(&self, muted: bool) {
+        self.player
+            .lock()
+            .unwrap()
+            .set_volume(if muted { 0.0 } else { 1.0 });
+    }
+
     fn advance(&mut self) -> Duration {
         let now = Instant::now();
         let dt = now - self.last_tick;
@@ -250,5 +267,42 @@ impl Running {
             self.stats_since = now;
         }
         player.time_til_next_frame()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn running() -> Running {
+        let now = Instant::now();
+        Running {
+            player: PlayerBuilder::new().build(),
+            tasks: Tasks::default(),
+            viewport: Viewport::new(1024.0, 768.0, 1.0).unwrap(),
+            last_tick: now,
+            effects: Vec::new(),
+            drawn: 0,
+            stats_since: now,
+            surface: Surface::textures(surface::tests::noop_gpu(), || {}),
+        }
+    }
+
+    #[test]
+    fn muting_silences_a_player_until_it_is_unmuted() {
+        let mut running = running();
+        let _ = running.handle(Msg::Mute(true));
+        assert_eq!(running.player.lock().unwrap().volume(), 0.0);
+        let _ = running.handle(Msg::Mute(false));
+        assert_eq!(running.player.lock().unwrap().volume(), 1.0);
+    }
+
+    #[test]
+    fn a_mute_sent_before_the_first_viewport_is_kept() {
+        let viewport = Viewport::new(1024.0, 768.0, 1.0).unwrap();
+        let (tx, rx) = mpsc::channel();
+        tx.send(Msg::Mute(true)).unwrap();
+        tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
+        assert_eq!(first_viewport(&rx), Some((viewport, true)));
     }
 }
