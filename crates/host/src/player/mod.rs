@@ -12,10 +12,11 @@ use std::time::{Duration, Instant};
 
 use ruffle_core::{FloatDuration, Player, PlayerBuilder, config::Letterbox, tag_utils::SwfMovie};
 
+pub(crate) use backends::Clipboard;
 pub(crate) use surface::Surface;
 pub(crate) use view::{ViewEvent, Viewport};
 
-use backends::{Navigator, Tasks, audio};
+use backends::{Navigator, Tasks, Ui, audio};
 use net::Net;
 use view::Effect;
 
@@ -60,13 +61,14 @@ pub(crate) fn spawn(
     name: String,
     surface: Surface,
     net: tokio::runtime::Handle,
+    clipboard: Clipboard,
 ) -> std::io::Result<Handle> {
     let (tx, rx) = mpsc::channel();
     let inbox = Inbox(tx);
     let (exit_tx, exited) = mpsc::sync_channel(1);
     let outbox = inbox.clone();
     let thread = thread::Builder::new().name(name).spawn(move || {
-        let result = run(rx, outbox, surface, net);
+        let result = run(rx, outbox, surface, net, clipboard);
         if let Err(error) = &result {
             tracing::error!(%error, "player failed");
         }
@@ -111,11 +113,12 @@ fn run(
     outbox: Inbox,
     surface: Surface,
     net: tokio::runtime::Handle,
+    clipboard: Clipboard,
 ) -> Result<(), PlayerError> {
     let Some((viewport, muted)) = first_viewport(&inbox) else {
         return Ok(());
     };
-    let mut running = Running::build(viewport, &surface, Net::new(net)?, outbox)?;
+    let mut running = Running::build(viewport, &surface, Net::new(net)?, outbox, clipboard)?;
     running.set_muted(muted);
     let mut wait = Duration::ZERO;
     'running: loop {
@@ -173,6 +176,7 @@ impl Running {
         surface: &Surface,
         net: Net,
         inbox: Inbox,
+        clipboard: Clipboard,
     ) -> Result<Running, PlayerError> {
         let renderer = surface.renderer(viewport)?;
         let movie = SwfMovie::from_data(LOADER_SWF, LOADER_URL.into(), None, None)
@@ -187,6 +191,7 @@ impl Running {
                 tasks.clone(),
             ))
             .with_boxed_audio(audio())
+            .with_ui(Ui::new(clipboard))
             .with_external_interface(Box::new(crate::bridge::Bridge))
             .with_viewport_dimensions(viewport.width(), viewport.height(), viewport.scale())
             .with_autoplay(true)

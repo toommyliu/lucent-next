@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::player::frames::FrameLease;
-use crate::player::{self, Surface, ViewEvent};
+use crate::player::{self, Clipboard, Surface, ViewEvent};
 
 #[derive(Clone)]
 pub struct Host {
@@ -11,6 +11,7 @@ pub struct Host {
 
 struct Shared {
     net: tokio::runtime::Runtime,
+    clipboard: Clipboard,
     next_session: AtomicU64,
 }
 
@@ -20,6 +21,8 @@ pub enum HostError {
     NetRuntime(std::io::Error),
     #[error("couldn't start a player thread: {0}")]
     PlayerThread(std::io::Error),
+    #[error("couldn't start the clipboard thread: {0}")]
+    ClipboardThread(std::io::Error),
 }
 
 impl Host {
@@ -33,6 +36,7 @@ impl Host {
         Ok(Host {
             shared: Arc::new(Shared {
                 net,
+                clipboard: Clipboard::system().map_err(HostError::ClipboardThread)?,
                 next_session: AtomicU64::new(1),
             }),
         })
@@ -53,6 +57,7 @@ impl Host {
             format!("player-{session}"),
             surface.share(),
             self.shared.net.handle().clone(),
+            self.shared.clipboard.clone(),
         )
         .map_err(HostError::PlayerThread)
     }
