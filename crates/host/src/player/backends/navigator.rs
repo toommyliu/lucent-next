@@ -212,6 +212,7 @@ mod tests {
     use std::cell::Cell;
 
     use super::*;
+    use crate::player::net::Timeouts;
 
     #[test]
     fn stopping_drops_a_pending_local_future_on_its_owner_thread() {
@@ -247,5 +248,100 @@ mod tests {
             task.run();
         }
         assert_eq!(dropped.get(), 1);
+    }
+
+    fn serve(respond: impl FnOnce(std::net::TcpStream) + Send + 'static) -> Url {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = Url::parse(&format!(
+            "http://{}/game.swf",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            respond(stream);
+        });
+        url
+    }
+
+    fn answer(mut stream: std::net::TcpStream, head: &str) -> std::net::TcpStream {
+        use std::io::{Read, Write};
+        let _ = stream.read(&mut [0; 4096]).unwrap();
+        stream.write_all(head.as_bytes()).unwrap();
+        stream
+    }
+
+    fn hold_open(mut stream: std::net::TcpStream) {
+        let _ = std::io::copy(&mut stream, &mut std::io::sink());
+    }
+
+    fn load(timeouts: Timeouts, url: Url) -> Result<Vec<u8>, String> {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let navigator = Navigator::new(
+            Url::parse("https://game.aq.com/game/loader.swf").unwrap(),
+            Net::with_timeouts(runtime.handle().clone(), timeouts).unwrap(),
+            Inbox(tx),
+            Tasks::default(),
+        );
+        let fetch = async move {
+            let response = navigator
+                .fetch(Request::get(url.to_string()))
+                .await
+                .map_err(|response| response.error.to_string())?;
+            response.body().await.map_err(|error| error.to_string())
+        };
+        runtime
+            .block_on(async { tokio::time::timeout(Duration::from_secs(5), fetch).await })
+            .expect("the load hung")
+    }
+
+    const STALL: Timeouts = Timeouts {
+        connect: Duration::from_secs(5),
+        read: Duration::from_millis(200),
+        request: Duration::from_secs(60),
+    };
+
+    #[test]
+    fn a_server_that_never_answers_fails_the_load() {
+        let url = serve(hold_open);
+        assert_eq!(
+            load(STALL, url),
+            Err(r#"Could not fetch: "the request timed out""#.into())
+        );
+    }
+
+    #[test]
+    fn a_body_that_stops_arriving_fails_the_load() {
+        let url = serve(|stream| {
+            hold_open(answer(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\npartial",
+            ))
+        });
+        assert_eq!(
+            load(STALL, url),
+            Err(r#"Could not fetch: "the request timed out""#.into())
+        );
+    }
+
+    #[test]
+    fn a_body_that_trickles_past_the_deadline_fails_the_load() {
+        use std::io::Write;
+        let url = serve(|stream| {
+            let mut stream = answer(stream, "HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\n");
+            while stream.write_all(b".").is_ok() {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        });
+        let deadline = Timeouts {
+            connect: Duration::from_secs(5),
+            read: Duration::from_secs(60),
+            request: Duration::from_millis(500),
+        };
+        assert_eq!(
+            load(deadline, url),
+            Err(r#"Could not fetch: "the request timed out""#.into())
+        );
     }
 }

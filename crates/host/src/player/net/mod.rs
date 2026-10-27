@@ -5,6 +5,18 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
 
+pub(crate) struct Timeouts {
+    pub connect: Duration,
+    pub read: Duration,
+    pub request: Duration,
+}
+
+const TIMEOUTS: Timeouts = Timeouts {
+    connect: Duration::from_secs(30),
+    read: Duration::from_secs(60),
+    request: Duration::from_secs(300),
+};
+
 pub(crate) struct Net {
     rt: tokio::runtime::Handle,
     http: reqwest::Client,
@@ -36,13 +48,19 @@ pub(crate) struct HttpResponse {
 pub(crate) enum NetError {
     #[error("{0}")]
     Http(String),
+    #[error("the request timed out")]
+    TimedOut,
     #[error("the net runtime is gone")]
     Shutdown,
 }
 
 impl From<reqwest::Error> for NetError {
     fn from(error: reqwest::Error) -> Self {
-        Self::Http(error.to_string())
+        if error.is_timeout() {
+            Self::TimedOut
+        } else {
+            Self::Http(error.to_string())
+        }
     }
 }
 
@@ -57,7 +75,19 @@ pub(crate) enum SocketEvent {
 
 impl Net {
     pub(crate) fn new(rt: tokio::runtime::Handle) -> Result<Net, NetError> {
-        let http = reqwest::Client::builder().cookie_store(true).build()?;
+        Net::with_timeouts(rt, TIMEOUTS)
+    }
+
+    pub(crate) fn with_timeouts(
+        rt: tokio::runtime::Handle,
+        timeouts: Timeouts,
+    ) -> Result<Net, NetError> {
+        let http = reqwest::Client::builder()
+            .cookie_store(true)
+            .connect_timeout(timeouts.connect)
+            .read_timeout(timeouts.read)
+            .timeout(timeouts.request)
+            .build()?;
         Ok(Net {
             rt,
             http,
