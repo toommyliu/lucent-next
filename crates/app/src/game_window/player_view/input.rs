@@ -132,6 +132,17 @@ pub(super) fn viewport(bounds: Bounds<Pixels>, scale: f32) -> Option<Viewport> {
     Viewport::new(bounds.size.width.into(), bounds.size.height.into(), scale)
 }
 
+pub(super) fn utf16_to_byte(text: &str, offset: usize) -> usize {
+    let mut units = 0;
+    for (byte, c) in text.char_indices() {
+        units += c.len_utf16();
+        if units > offset {
+            return byte;
+        }
+    }
+    text.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,6 +182,53 @@ mod tests {
     }
 
     #[test]
+    fn windows_keystrokes_reach_the_player_as_keys() {
+        let none = gpui::Modifiers::default();
+        let control = gpui::Modifiers {
+            control: true,
+            ..none
+        };
+        let alt_gr = gpui::Modifiers {
+            alt: true,
+            ..control
+        };
+        let windows_key = gpui::Modifiers {
+            platform: true,
+            ..none
+        };
+        let cases = [
+            (
+                keystroke("c", None, control),
+                "Some(Key { code: Char('c'), modifiers: Modifiers { shift: false, control: true, alt: false, command: false } })",
+            ),
+            (
+                keystroke("!", Some("!"), none),
+                "Some(Key { code: Char('!'), modifiers: Modifiers { shift: false, control: false, alt: false, command: false } })",
+            ),
+            (
+                keystroke("enter", None, none),
+                "Some(Key { code: Named(Enter), modifiers: Modifiers { shift: false, control: false, alt: false, command: false } })",
+            ),
+            (
+                keystroke("space", Some(" "), none),
+                "Some(Key { code: Char(' '), modifiers: Modifiers { shift: false, control: false, alt: false, command: false } })",
+            ),
+            (
+                keystroke("q", Some("@"), alt_gr),
+                "Some(Key { code: Char('@'), modifiers: Modifiers { shift: false, control: true, alt: true, command: false } })",
+            ),
+            (
+                keystroke("e", None, windows_key),
+                "Some(Key { code: Char('e'), modifiers: Modifiers { shift: false, control: false, alt: false, command: true } })",
+            ),
+            (keystroke("menu", None, none), "None"),
+        ];
+        for (keystroke, expected) in cases {
+            assert_eq!(format!("{:?}", key(&keystroke)), expected, "{keystroke:?}");
+        }
+    }
+
+    #[test]
     fn pressing_shift_is_a_shift_key_down() {
         let after = gpui::Modifiers {
             shift: true,
@@ -186,5 +244,11 @@ mod tests {
                 },
             })],
         );
+    }
+
+    #[test]
+    fn ime_offsets_convert_utf16_to_utf8_boundaries() {
+        let offsets = [0, 1, 2, 3, 4, 5].map(|offset| utf16_to_byte("a😀é", offset));
+        assert_eq!(offsets, [0, 1, 1, 5, 7, 7]);
     }
 }

@@ -1,4 +1,5 @@
 mod backends;
+pub(crate) mod frames;
 mod net;
 pub(crate) mod surface;
 pub(crate) mod view;
@@ -155,6 +156,7 @@ struct Running {
     effects: Vec<Effect>,
     drawn: u32,
     stats_since: Instant,
+    surface: Surface,
 }
 
 impl Running {
@@ -169,7 +171,7 @@ impl Running {
             .map_err(|error| PlayerError::Loader(error.to_string()))?;
         let tasks = Tasks::default();
         let player = PlayerBuilder::new()
-            .with_renderer(renderer)
+            .with_boxed_renderer(renderer)
             .with_navigator(Navigator::new(
                 url::Url::parse(LOADER_URL).unwrap(),
                 net,
@@ -191,6 +193,7 @@ impl Running {
             effects: Vec::new(),
             drawn: 0,
             stats_since: now,
+            surface: surface.share(),
         })
     }
 
@@ -230,7 +233,7 @@ impl Running {
         let mut player = self.player.lock().unwrap();
         let before = player.frames_run();
         player.tick(FloatDuration::from_std(dt));
-        if player.frames_run() != before && player.needs_render() {
+        if player.frames_run() != before && player.needs_render() && self.surface.wants_frame() {
             player.render();
             self.drawn += 1;
         }

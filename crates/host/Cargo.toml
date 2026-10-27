@@ -7,6 +7,7 @@ publish.workspace = true
 [dependencies]
 lucent-protocol.workspace = true
 ruffle_core.workspace = true
+ruffle_render.workspace = true
 ruffle_render_wgpu.workspace = true
 
 async-channel = "2.5"
@@ -23,3 +24,6 @@ objc2 = "0.6"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 raw-window-handle = "0.6"
+
+[dev-dependencies]
+wgpu = { version = "30", features = ["noop"] }

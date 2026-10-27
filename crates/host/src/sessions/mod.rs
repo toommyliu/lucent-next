@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::player::frames::FrameLease;
 use crate::player::{self, Surface, ViewEvent};
 
 #[derive(Clone)]
@@ -39,28 +40,46 @@ impl Host {
 
     pub fn start_session(&self, surface: Surface) -> Result<Session, HostError> {
         let id = self.shared.next_session.fetch_add(1, Ordering::Relaxed);
-        let player = player::spawn(
-            format!("player-{id}"),
+        Ok(Session {
+            player: Some(self.spawn_player(id, &surface)?),
+            id,
+            surface,
+            host: self.clone(),
+        })
+    }
+
+    fn spawn_player(&self, session: u64, surface: &Surface) -> Result<player::Handle, HostError> {
+        player::spawn(
+            format!("player-{session}"),
             surface.share(),
             self.shared.net.handle().clone(),
         )
-        .map_err(HostError::PlayerThread)?;
-        Ok(Session {
-            player,
-            _surface: surface,
-            _host: self.clone(),
-        })
+        .map_err(HostError::PlayerThread)
     }
 }
 
 pub struct Session {
-    player: player::Handle,
-    _surface: Surface,
-    _host: Host,
+    player: Option<player::Handle>,
+    id: u64,
+    surface: Surface,
+    host: Host,
 }
 
 impl Session {
     pub fn send(&self, event: ViewEvent) {
-        self.player.send(event);
+        if let Some(player) = &self.player {
+            player.send(event);
+        }
+    }
+
+    pub fn frame(&self) -> Option<FrameLease> {
+        self.surface.lease()
+    }
+
+    pub fn restart(&mut self, surface: Surface) -> Result<(), HostError> {
+        self.player = None;
+        self.surface = surface;
+        self.player = Some(self.host.spawn_player(self.id, &self.surface)?);
+        Ok(())
     }
 }

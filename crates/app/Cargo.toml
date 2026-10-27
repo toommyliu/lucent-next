@@ -6,8 +6,32 @@ publish.workspace = true
 
 [dependencies]
 lucent-host.workspace = true
-lucent-protocol.workspace = true
-lucent-ui.workspace = true
+gpui.workspace = true
+gpui_platform.workspace = true
+anyhow = "1"
+async-channel = "2.5"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[features]
+overlay-check = []
+
+[target.'cfg(target_os = "macos")'.dependencies]
+raw-window-handle = "0.6"
+objc2 = "0.6"
+objc2-core-graphics = "0.3"
+objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
+objc2-app-kit = { version = "0.3", features = ["NSView", "NSResponder", "NSGraphics"] }
+objc2-quartz-core = { version = "0.3", features = ["CALayer", "CAMetalLayer", "CATransaction"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+raw-window-handle = "0.6"
+windows = { version = "0.61", features = [
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [[bin]]
 name = "lucent"

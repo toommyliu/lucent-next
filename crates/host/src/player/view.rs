@@ -437,6 +437,52 @@ mod tests {
         );
     }
 
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn control_is_the_text_shortcut_modifier() {
+        let control = Modifiers {
+            control: true,
+            ..Default::default()
+        };
+        let control_shift = Modifiers {
+            shift: true,
+            ..control
+        };
+        let command = Modifiers {
+            command: true,
+            ..Default::default()
+        };
+        let cases = [
+            (KeyCode::Char('c'), control, "Some(Copy)"),
+            (KeyCode::Char('V'), control_shift, "Some(Paste)"),
+            (
+                KeyCode::Named(NamedKey::Backspace),
+                control,
+                "Some(BackspaceWord)",
+            ),
+            (
+                KeyCode::Named(NamedKey::ArrowLeft),
+                control_shift,
+                "Some(SelectLeftWord)",
+            ),
+            (
+                KeyCode::Named(NamedKey::Home),
+                control,
+                "Some(MoveLeftDocument)",
+            ),
+            (KeyCode::Char('c'), command, "None"),
+            (
+                KeyCode::Named(NamedKey::ArrowLeft),
+                command,
+                "Some(MoveLeft)",
+            ),
+        ];
+        for (code, modifiers, expected) in cases {
+            let key = Key { code, modifiers };
+            assert_eq!(format!("{:?}", text_control(key)), expected, "{key:?}");
+        }
+    }
+
     #[test]
     fn viewport_validates_and_scales_logical_dimensions() {
         assert_eq!(
