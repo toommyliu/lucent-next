@@ -73,7 +73,11 @@ impl Net {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.track(self.rt.spawn(async move {
             let method = match request.method { Method::Get => reqwest::Method::GET, Method::Post => reqwest::Method::POST };
+            let game_host = request.url.host_str() == Some("game.aq.com");
             let mut builder = http.request(method, request.url);
+            if game_host {
+                builder = builder.header(reqwest::header::USER_AGENT, concat!("Lucent/", env!("CARGO_PKG_VERSION")));
+            }
             for (name, value) in request.headers { builder = builder.header(name, value); }
             if let Some((body, mime)) = request.body {
                 builder = builder.header(reqwest::header::CONTENT_TYPE, mime).body(body);
