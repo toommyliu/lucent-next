@@ -16,21 +16,41 @@ pub(crate) use backends::Clipboard;
 pub(crate) use surface::Surface;
 pub(crate) use view::{ViewEvent, Viewport};
 
+use crate::bridge::{Bridge, Call, Error as BridgeError, Event, Events, PendingCall, Value};
 use backends::{Navigator, Tasks, Ui, audio};
 use net::Net;
 use view::Effect;
 
 const STOP_TIMEOUT: Duration = Duration::from_secs(2);
+const MIN_INBOX_DRAIN: Duration = Duration::from_millis(2);
 const LOADER_SWF: &[u8] = include_bytes!("../../../../assets/loader.swf");
-const LOADER_URL: &str = "https://game.aq.com/game/loader.swf";
 
 pub(crate) struct Handle {
     inbox: Inbox,
     exited: mpsc::Receiver<Result<(), PlayerError>>,
     thread: Option<thread::JoinHandle<()>>,
+    events: Events,
 }
 
 impl Handle {
+    pub(crate) fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {
+        let (call, pending) = Call::new(name.into(), args);
+        if let Err(error) = self.inbox.0.send(Msg::Call(call))
+            && let Msg::Call(call) = error.0
+        {
+            call.reject(BridgeError::Stopped);
+        }
+        pending
+    }
+
+    pub(crate) fn try_loader_event(&self) -> Result<Option<Event>, BridgeError> {
+        self.events.try_recv()
+    }
+
+    pub(crate) fn recv_loader_event(&self, timeout: Duration) -> Result<Event, BridgeError> {
+        self.events.recv_timeout(timeout)
+    }
+
     pub(crate) fn send(&self, event: ViewEvent) {
         self.inbox.post(Msg::View(event));
     }
@@ -68,8 +88,9 @@ pub(crate) fn spawn(
     let inbox = Inbox(tx);
     let (exit_tx, exited) = mpsc::sync_channel(1);
     let outbox = inbox.clone();
+    let (bridge, events) = Bridge::new();
     let thread = thread::Builder::new().name(name).spawn(move || {
-        let result = run(rx, outbox, surface, net, clipboard, muted);
+        let result = run(rx, outbox, surface, net, clipboard, muted, bridge);
         if let Err(error) = &result {
             tracing::error!(%error, "player failed");
         }
@@ -79,10 +100,12 @@ pub(crate) fn spawn(
         inbox,
         exited,
         thread: Some(thread),
+        events,
     })
 }
 
 pub(crate) enum Msg {
+    Call(Call),
     View(ViewEvent),
     Mute(bool),
     Poll(async_task::Runnable),
@@ -116,14 +139,23 @@ fn run(
     net: tokio::runtime::Handle,
     clipboard: Clipboard,
     muted: bool,
+    bridge: Bridge,
 ) -> Result<(), PlayerError> {
     let Some((viewport, muted)) = first_viewport(&inbox, muted) else {
         return Ok(());
     };
-    let mut running = Running::build(viewport, &surface, Net::new(net)?, outbox, clipboard)?;
+    let mut running = Running::build(
+        viewport,
+        &surface,
+        Net::new(net)?,
+        outbox,
+        clipboard,
+        bridge,
+    )?;
     running.set_muted(muted);
     let mut wait = Duration::ZERO;
     'running: loop {
+        let frame_deadline = Instant::now() + wait;
         match inbox.recv_timeout(wait) {
             Ok(msg) => {
                 if running.handle(msg).is_break() {
@@ -133,7 +165,11 @@ fn run(
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
-        while let Ok(msg) = inbox.try_recv() {
+        let drain_deadline = frame_deadline.max(Instant::now() + MIN_INBOX_DRAIN);
+        while Instant::now() < drain_deadline {
+            let Ok(msg) = inbox.try_recv() else {
+                break;
+            };
             if running.handle(msg).is_break() {
                 break 'running;
             }
@@ -154,6 +190,7 @@ fn first_viewport(inbox: &mpsc::Receiver<Msg>, mut muted: bool) -> Option<(Viewp
         match inbox.recv().ok()? {
             Msg::View(ViewEvent::Resized(viewport)) => return Some((viewport, muted)),
             Msg::Mute(mute) => muted = mute,
+            Msg::Call(call) => call.reject(BridgeError::NotReady),
             Msg::Stop => return None,
             Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
         }
@@ -178,22 +215,18 @@ impl Running {
         net: Net,
         inbox: Inbox,
         clipboard: Clipboard,
+        bridge: Bridge,
     ) -> Result<Running, PlayerError> {
         let renderer = surface.renderer(viewport)?;
-        let movie = SwfMovie::from_data(LOADER_SWF, LOADER_URL.into(), None, None)
+        let movie = SwfMovie::from_data(LOADER_SWF, "file:///lucent/loader.swf".into(), None, None)
             .map_err(|error| PlayerError::Loader(error.to_string()))?;
         let tasks = Tasks::default();
         let player = PlayerBuilder::new()
             .with_boxed_renderer(renderer)
-            .with_navigator(Navigator::new(
-                url::Url::parse(LOADER_URL).unwrap(),
-                net,
-                inbox,
-                tasks.clone(),
-            ))
+            .with_navigator(Navigator::new(net, inbox, tasks.clone()))
             .with_boxed_audio(audio())
             .with_ui(Ui::new(clipboard))
-            .with_external_interface(Box::new(crate::bridge::Bridge))
+            .with_external_interface(Box::new(bridge))
             .with_viewport_dimensions(viewport.width(), viewport.height(), viewport.scale())
             .with_autoplay(true)
             .with_letterbox(Letterbox::On)
@@ -216,6 +249,7 @@ impl Running {
         match msg {
             Msg::Stop => return ControlFlow::Break(()),
             Msg::Mute(muted) => self.set_muted(muted),
+            Msg::Call(call) => call.dispatch(&mut self.player.lock().unwrap()),
             Msg::Poll(task) => {
                 task.run();
             }
@@ -292,6 +326,31 @@ mod tests {
             stats_since: now,
             surface: Surface::textures(surface::tests::noop_gpu(), || {}),
         }
+    }
+
+    #[test]
+    fn calls_before_the_first_viewport_are_rejected() {
+        let (tx, rx) = mpsc::channel();
+        let (call, pending) = Call::new("player.rest".into(), vec![]);
+        tx.send(Msg::Call(call)).unwrap();
+        tx.send(Msg::Stop).unwrap();
+        assert_eq!(first_viewport(&rx, false), None);
+        assert_eq!(
+            pending.recv_timeout(Duration::ZERO),
+            Err(BridgeError::NotReady)
+        );
+    }
+
+    #[test]
+    fn closing_the_player_inbox_resolves_queued_calls() {
+        let (tx, rx) = mpsc::channel();
+        let (call, pending) = Call::new("player.rest".into(), vec![]);
+        tx.send(Msg::Call(call)).unwrap();
+        drop(rx);
+        assert_eq!(
+            pending.recv_timeout(Duration::ZERO),
+            Err(BridgeError::Stopped)
+        );
     }
 
     #[test]

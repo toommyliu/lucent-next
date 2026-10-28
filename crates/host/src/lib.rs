@@ -1,4 +1,4 @@
-mod bridge;
+pub mod bridge;
 mod player;
 mod sessions;
 
