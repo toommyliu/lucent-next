@@ -4,12 +4,18 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+testing = ["dep:swf", "dep:wgpu"]
+
 [dependencies]
 lucent-protocol.workspace = true
 ruffle_core.workspace = true
 ruffle_frontend_utils.workspace = true
 ruffle_render.workspace = true
 ruffle_render_wgpu.workspace = true
+
+swf = { workspace = true, optional = true }
+wgpu = { version = "30", features = ["noop"], optional = true }
 
 arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }
 async-channel = "2.5"
@@ -32,6 +38,7 @@ objc2 = "0.6"
 raw-window-handle = "0.6"
 
 [dev-dependencies]
+lucent-host = { path = ".", features = ["testing"] }
 tokio = { version = "1", features = ["test-util"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 wgpu = { version = "30", features = ["noop"] }

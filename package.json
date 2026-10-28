@@ -16,7 +16,9 @@
     "typecheck:script-packages": "tsc6 -p script-packages/lucent-consumables/jsconfig.repo.json --noEmit && tsc6 -p script-packages/lucent-dailies/jsconfig.repo.json --noEmit",
     "test": "pnpm test:scripts && pnpm -r test",
     "test:scripts": "tsx --test scripts/*.test.ts",
-    "vendor:zed": "tsx scripts/vendor-zed.ts"
+    "vendor:zed": "tsx scripts/vendor-zed.ts",
+    "bundle:runtime": "pnpm --filter @lucent/runtime bundle",
+    "check:runtime-bundle": "pnpm --filter @lucent/runtime check:bundle"
   },
   "devDependencies": {
     "@effect/platform-node": "4.0.3",

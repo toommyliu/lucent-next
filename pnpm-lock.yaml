@@ -64,6 +64,9 @@ importers:
       '@types/node':
         specifier: 24.12.2
         version: 24.12.2
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       typescript:
         specifier: npm:@typescript/typescript6@^6.0.2
         version: '@typescript/typescript6@6.0.2'

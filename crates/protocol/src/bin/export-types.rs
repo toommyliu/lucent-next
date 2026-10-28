@@ -1,8 +1,8 @@
 use std::{env, fs, path::PathBuf};
 
 use lucent_protocol::{
-    aura::*, auth::*, event::*, hydration::*, item::*, monster_drop::*, packet::*, quest::*,
-    readiness::*, shop::*, world::*,
+    aura::*, auth::*, event::*, hydration::*, item::*, monster_drop::*, packet::*, query::*,
+    quest::*, readiness::*, shop::*, world::*,
 };
 use ts_rs::{Config, TS};
 
@@ -33,6 +33,7 @@ fn declarations(config: &Config) -> String {
         ItemSnapshotFields,
         ItemSnapshot,
         MapState,
+        Query,
         Point,
         EntityKind,
         AuraKind,
@@ -58,6 +59,7 @@ fn declarations(config: &Config) -> String {
         ShopData,
         MonsterDrop
     );
+    output.push_str(&query_outputs(config));
     output.push_str(&format!(
         "\nexport const EntityState = {{ Dead: {}, Idle: {}, InCombat: {} }} as const;\n",
         i64::from(EntityState::Dead),

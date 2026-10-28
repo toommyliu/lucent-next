@@ -14,4 +14,5 @@ pub mod quest;
 pub mod shop;
 
 pub mod hydration;
+pub mod query;
 pub mod readiness;

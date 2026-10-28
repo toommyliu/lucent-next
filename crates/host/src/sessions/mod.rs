@@ -1,11 +1,14 @@
+mod link;
+pub use link::ScriptLink;
+
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::bridge::{Call, Error as BridgeError, Event, PendingCall, PendingRead, Value};
+use crate::bridge::{Error as BridgeError, Event, PendingRead};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::player::frames::FrameLease;
-use crate::player::{self, Clipboard, SessionEvent, Surface, ViewEvent};
+use crate::player::{self, Audio, Clipboard, Movie, SessionEvent, Surface, ViewEvent};
 
 #[derive(Clone)]
 pub struct Host {
@@ -15,6 +18,7 @@ pub struct Host {
 struct Shared {
     net: tokio::runtime::Runtime,
     clipboard: Clipboard,
+    audio: Audio,
     next_session: AtomicU64,
 }
 
@@ -30,6 +34,13 @@ pub enum HostError {
 
 impl Host {
     pub fn new() -> Result<Host, HostError> {
+        Self::with_services(
+            Clipboard::system().map_err(HostError::ClipboardThread)?,
+            player::audio,
+        )
+    }
+
+    pub(crate) fn with_services(clipboard: Clipboard, audio: Audio) -> Result<Host, HostError> {
         let net = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .thread_name("lucent-net")
@@ -39,16 +50,24 @@ impl Host {
         Ok(Host {
             shared: Arc::new(Shared {
                 net,
-                clipboard: Clipboard::system().map_err(HostError::ClipboardThread)?,
+                clipboard,
+                audio,
                 next_session: AtomicU64::new(1),
             }),
         })
     }
 
     pub fn start_session(&self, surface: Surface) -> Result<Session, HostError> {
+        self.start_movie(surface, Movie::loader())
+    }
+
+    pub(crate) fn start_movie(&self, surface: Surface, movie: Movie) -> Result<Session, HostError> {
         let id = self.shared.next_session.fetch_add(1, Ordering::Relaxed);
+        let (player, script_link) = self.spawn_player(id, &surface, false, &movie)?;
         Ok(Session {
-            player: Some(self.spawn_player(id, &surface, false)?),
+            player: Some(player),
+            script_link: Some(script_link),
+            movie,
             id,
             surface,
             muted: false,
@@ -61,20 +80,29 @@ impl Host {
         session: u64,
         surface: &Surface,
         muted: bool,
-    ) -> Result<player::Handle, HostError> {
-        player::spawn(
+        movie: &Movie,
+    ) -> Result<(player::Handle, ScriptLink), HostError> {
+        let player = player::spawn(
             format!("player-{session}"),
             surface.share(),
             self.shared.net.handle().clone(),
-            self.shared.clipboard.clone(),
-            muted,
+            player::Options {
+                clipboard: self.shared.clipboard.clone(),
+                audio: self.shared.audio,
+                movie: movie.clone(),
+                muted,
+            },
         )
-        .map_err(HostError::PlayerThread)
+        .map_err(HostError::PlayerThread)?;
+        let link = ScriptLink::new(session, player.inbox.clone());
+        Ok((player, link))
     }
 }
 
 pub struct Session {
     player: Option<player::Handle>,
+    script_link: Option<ScriptLink>,
+    movie: Movie,
     id: u64,
     surface: Surface,
     muted: bool,
@@ -108,7 +136,7 @@ impl Session {
         read: impl FnOnce(&crate::projection::Projection) -> R + Send + 'static,
     ) -> PendingRead<R> {
         match &self.player {
-            Some(player) => player.read_projection(read),
+            Some(player) => player.inbox.read_projection(read),
             None => PendingRead::stopped(),
         }
     }
@@ -127,16 +155,8 @@ impl Session {
             .recv_event(timeout)
     }
 
-    /// Raw loader transport for actions and targeted hydration. Ordinary reads use host state.
-    pub fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {
-        match &self.player {
-            Some(player) => player.call_loader(name, args),
-            None => {
-                let (call, pending) = Call::new(name.into(), args);
-                call.reject(BridgeError::Stopped);
-                pending
-            }
-        }
+    pub fn take_script_link(&mut self) -> Option<ScriptLink> {
+        self.script_link.take()
     }
 
     pub fn try_loader_event(&self) -> Result<Option<Event>, BridgeError> {
@@ -164,9 +184,14 @@ impl Session {
     }
 
     pub fn restart(&mut self, surface: Surface) -> Result<(), HostError> {
+        self.script_link = None;
         self.player = None;
         self.surface = surface;
-        self.player = Some(self.host.spawn_player(self.id, &self.surface, self.muted)?);
+        let (player, script_link) =
+            self.host
+                .spawn_player(self.id, &self.surface, self.muted, &self.movie)?;
+        self.player = Some(player);
+        self.script_link = Some(script_link);
         Ok(())
     }
 

@@ -10,3 +10,5 @@ pub(crate) fn audio() -> Box<dyn AudioBackend> {
         }
     }
 }
+
+pub(crate) type Audio = fn() -> Box<dyn AudioBackend>;

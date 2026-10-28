@@ -155,12 +155,14 @@ fn boxed(
     }
 }
 
-#[cfg(test)]
-pub(crate) mod tests {
+#[cfg(any(test, feature = "testing"))]
+pub(crate) use noop::noop_gpu;
+
+#[cfg(any(test, feature = "testing"))]
+mod noop {
+    use super::*;
     use std::pin::pin;
     use std::task::{Context, Poll, Waker};
-
-    use super::*;
 
     fn ready<T>(future: impl Future<Output = T>) -> T {
         match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
@@ -187,6 +189,11 @@ pub(crate) mod tests {
             queue,
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 
     #[test]
     fn a_device_from_a_recreated_instance_is_another_gpu() {
