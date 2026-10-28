@@ -9,7 +9,8 @@
     "as3:build": "tsx scripts/build-as3-swf.ts",
     "typecheck": "pnpm -r typecheck && pnpm typecheck:script-packages",
     "typecheck:script-packages": "tsc6 -p script-packages/lucent-consumables/jsconfig.repo.json --noEmit && tsc6 -p script-packages/lucent-dailies/jsconfig.repo.json --noEmit",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "vendor:zed": "tsx scripts/vendor-zed.ts"
   },
   "devDependencies": {
     "@effect/platform-node": "4.0.3",

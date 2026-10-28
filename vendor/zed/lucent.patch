@@ -1,0 +1,946 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: toommyliu <86510873+toommyliu@users.noreply.github.com>
+Date: Tue, 27 Oct 2026 14:55:29 -0700
+Subject: [PATCH 1/3] gpui_wgpu: Update wgpu to 30
+
+---
+ Cargo.lock                            | 190 +++++++++++++++-----------
+ Cargo.toml                            |   2 +-
+ crates/gpui_wgpu/src/wgpu_context.rs  |   1 +
+ crates/gpui_wgpu/src/wgpu_renderer.rs |   5 +-
+ 4 files changed, 113 insertions(+), 85 deletions(-)
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 56b62212f48452124022afb6d19ce826f804590b..469201b01363b135865d9ae341f4694a9d5b2528 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -2256,9 +2256,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "bit-set"
+-version = "0.9.1"
++version = "0.10.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "34ddef2995421ab6a5c779542c81ee77c115206f4ad9d5a8e05f4ff49716a3dd"
++checksum = "09ec2f926cc3060f09db9ebc5b52823d85268d24bb917e472c0c4bea35780a7d"
+ dependencies = [
+  "bit-vec 0.9.1",
+ ]
+@@ -2426,7 +2426,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ad8646f98db542e39fc66e68a20b2144f6a732636df7c2354e74645faaa433ce"
+ dependencies = [
+  "borsh-derive",
+- "cfg_aliases 0.2.1",
++ "cfg_aliases 0.2.2",
+ ]
+ 
+ [[package]]
+@@ -2955,9 +2955,9 @@ checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
+ 
+ [[package]]
+ name = "cfg_aliases"
+-version = "0.2.1"
++version = "0.2.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
++checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
+ 
+ [[package]]
+ name = "cgl"
+@@ -7750,26 +7750,6 @@ dependencies = [
+  "windows 0.62.2",
+ ]
+ 
+-[[package]]
+-name = "gpu-descriptor"
+-version = "0.3.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b89c83349105e3732062a895becfc71a8f921bb71ecbbdd8ff99263e3b53a0ca"
+-dependencies = [
+- "bitflags 2.10.0",
+- "gpu-descriptor-types",
+- "hashbrown 0.15.5",
+-]
+-
+-[[package]]
+-name = "gpu-descriptor-types"
+-version = "0.2.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "fdf242682df893b86f33a73828fb09ca4b2d3bb6cc95249707fc684d27484b91"
+-dependencies = [
+- "bitflags 2.10.0",
+-]
+-
+ [[package]]
+ name = "gpui"
+ version = "0.2.2"
+@@ -8429,12 +8409,6 @@ version = "0.4.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+ 
+-[[package]]
+-name = "hexf-parse"
+-version = "0.2.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
+-
+ [[package]]
+ name = "hkdf"
+ version = "0.12.4"
+@@ -9406,13 +9380,12 @@ dependencies = [
+ 
+ [[package]]
+ name = "js-sys"
+-version = "0.3.97"
++version = "0.3.106"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a1840c94c045fbcf8ba2812c95db44499f7c64910a912551aaaa541decebcacf"
++checksum = "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5"
+ dependencies = [
+  "cfg-if",
+  "futures-util",
+- "once_cell",
+  "wasm-bindgen",
+ ]
+ 
+@@ -11341,22 +11314,22 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+ 
+ [[package]]
+ name = "naga"
+-version = "29.0.4"
++version = "30.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b2bf919621e7975acb27d881bae2fb993e0d45c8e0446e85e6272971e00dc8df"
++checksum = "a616d2fb8c89516ac2723a581f69d6c18576046bed761bd6b305e5618e6ae130"
+ dependencies = [
+  "arrayvec",
+- "bit-set 0.9.1",
++ "bit-set 0.10.0",
+  "bitflags 2.10.0",
+  "cfg-if",
+- "cfg_aliases 0.2.1",
++ "cfg_aliases 0.2.2",
+  "codespan-reporting",
+  "half",
+- "hashbrown 0.16.1",
+- "hexf-parse",
++ "hashbrown 0.17.1",
+  "indexmap 2.14.0",
+  "libm",
+  "log",
++ "naga-types",
+  "num-traits",
+  "once_cell",
+  "rustc-hash 1.1.0",
+@@ -11365,6 +11338,18 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
++[[package]]
++name = "naga-types"
++version = "30.0.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "590afbf58a6f4f62873cd5cff4468061844bafa1cdf399cc954537c22d768d49"
++dependencies = [
++ "hashbrown 0.17.1",
++ "indexmap 2.14.0",
++ "rustc-hash 1.1.0",
++ "thiserror 2.0.17",
++]
++
+ [[package]]
+ name = "nalgebra"
+ version = "0.34.2"
+@@ -11505,7 +11490,7 @@ checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
+ dependencies = [
+  "bitflags 2.10.0",
+  "cfg-if",
+- "cfg_aliases 0.2.1",
++ "cfg_aliases 0.2.2",
+  "libc",
+  "memoffset",
+ ]
+@@ -11518,7 +11503,7 @@ checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+ dependencies = [
+  "bitflags 2.10.0",
+  "cfg-if",
+- "cfg_aliases 0.2.1",
++ "cfg_aliases 0.2.2",
+  "libc",
+ ]
+ 
+@@ -12047,6 +12032,18 @@ dependencies = [
+  "objc2 0.6.3",
+ ]
+ 
++[[package]]
++name = "objc2-core-graphics"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807"
++dependencies = [
++ "dispatch2",
++ "objc2 0.6.3",
++ "objc2-core-foundation",
++ "objc2-io-surface",
++]
++
+ [[package]]
+ name = "objc2-core-image"
+ version = "0.2.2"
+@@ -12110,6 +12107,17 @@ dependencies = [
+  "objc2-core-foundation",
+ ]
+ 
++[[package]]
++name = "objc2-io-surface"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d"
++dependencies = [
++ "bitflags 2.10.0",
++ "objc2 0.6.3",
++ "objc2-core-foundation",
++]
++
+ [[package]]
+ name = "objc2-metal"
+ version = "0.2.2"
+@@ -12158,6 +12166,7 @@ dependencies = [
+  "bitflags 2.10.0",
+  "objc2 0.6.3",
+  "objc2-core-foundation",
++ "objc2-core-graphics",
+  "objc2-foundation 0.3.2",
+  "objc2-metal 0.3.2",
+ ]
+@@ -14618,7 +14627,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "b9e20a958963c291dc322d98411f541009df2ced7b5a4f2bd52337638cfccf20"
+ dependencies = [
+  "bytes 1.11.1",
+- "cfg_aliases 0.2.1",
++ "cfg_aliases 0.2.2",
+  "pin-project-lite",
+  "quinn-proto",
+  "quinn-udp",
+@@ -14658,7 +14667,7 @@ version = "0.5.14"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "addec6a0dcad8a8d96a771f815f0eaf55f9d1805756410b39f5fa81332574cbd"
+ dependencies = [
+- "cfg_aliases 0.2.1",
++ "cfg_aliases 0.2.2",
+  "libc",
+  "once_cell",
+  "socket2 0.6.3",
+@@ -18082,6 +18091,17 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
++[[package]]
++name = "syn"
++version = "3.0.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "unicode-ident",
++]
++
+ [[package]]
+ name = "sync_wrapper"
+ version = "0.1.2"
+@@ -20324,9 +20344,9 @@ checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
+ 
+ [[package]]
+ name = "wasm-bindgen"
+-version = "0.2.120"
++version = "0.2.129"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "df52b6d9b87e0c74c9edfa1eb2d9bf85e5d63515474513aa50fa181b3c4f5db1"
++checksum = "9bb54f33acc68fd454578d9820b0bde1a1a3d17aa17bb7b6595806d02886d409"
+ dependencies = [
+  "cfg-if",
+  "once_cell",
+@@ -20337,19 +20357,20 @@ dependencies = [
+ 
+ [[package]]
+ name = "wasm-bindgen-futures"
+-version = "0.4.70"
++version = "0.4.79"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "af934872acec734c2d80e6617bbb5ff4f12b052dd8e6332b0817bce889516084"
++checksum = "3cbab34de2d982e9b48e18d216d04c4a6f641066ff19ffb699980f591ee3610e"
+ dependencies = [
+  "js-sys",
++ "tokio",
+  "wasm-bindgen",
+ ]
+ 
+ [[package]]
+ name = "wasm-bindgen-macro"
+-version = "0.2.120"
++version = "0.2.129"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "78b1041f495fb322e64aca85f5756b2172e35cd459376e67f2a6c9dffcedb103"
++checksum = "2e29d0c35b16e224a7eeb5cd2d25e3e1968fbd65604117b44d3b789d00ee8535"
+ dependencies = [
+  "quote",
+  "wasm-bindgen-macro-support",
+@@ -20357,22 +20378,22 @@ dependencies = [
+ 
+ [[package]]
+ name = "wasm-bindgen-macro-support"
+-version = "0.2.120"
++version = "0.2.129"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9dcd0ff20416988a18ac686d4d4d0f6aae9ebf08a389ff5d29012b05af2a1b41"
++checksum = "6f501a8bc3719dba86ef8ae4728879c08001bea749eb1333ac5b91e040e2a6b7"
+ dependencies = [
+  "bumpalo",
+  "proc-macro2",
+  "quote",
+- "syn 2.0.117",
++ "syn 3.0.9",
+  "wasm-bindgen-shared",
+ ]
+ 
+ [[package]]
+ name = "wasm-bindgen-shared"
+-version = "0.2.120"
++version = "0.2.129"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "49757b3c82ebf16c57d69365a142940b384176c24df52a087fb748e2085359ea"
++checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
+ dependencies = [
+  "unicode-ident",
+ ]
+@@ -21011,9 +21032,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "web-sys"
+-version = "0.3.97"
++version = "0.3.106"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2eadbac71025cd7b0834f20d1fe8472e8495821b4e9801eb0a60bd1f19827602"
++checksum = "88261b9deccee56594c11a3460c462c41f58d148598fe70ad77070126a68aba4"
+ dependencies = [
+  "js-sys",
+  "wasm-bindgen",
+@@ -21125,17 +21146,17 @@ checksum = "a751b3277700db47d3e574514de2eced5e54dc8a5436a3bf7a0b248b2cee16f3"
+ 
+ [[package]]
+ name = "wgpu"
+-version = "29.0.4"
++version = "30.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "76e8840e1ba2881d4cbb18d2147627a56af426ff064c0401eb0c8410c6325d07"
++checksum = "527ccdf43dd5b2e8676eed9984ce00e2bbb0a1b85b70c1969dcb6cd2eb55ab9e"
+ dependencies = [
+  "arrayvec",
+  "bitflags 2.10.0",
+  "bytemuck",
+  "cfg-if",
+- "cfg_aliases 0.2.1",
++ "cfg_aliases 0.2.2",
+  "document-features",
+- "hashbrown 0.16.1",
++ "hashbrown 0.17.1",
+  "js-sys",
+  "log",
+  "naga",
+@@ -21155,21 +21176,22 @@ dependencies = [
+ 
+ [[package]]
+ name = "wgpu-core"
+-version = "29.0.4"
++version = "30.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2f519832254e56965a9940c4af57dcb75f702b6f6fa4a0b172f685395843a4d7"
++checksum = "14c018fce9b6270aa203c2fdd56f3cce996713534bd757e4ea58c8560b121f14"
+ dependencies = [
+  "arrayvec",
+- "bit-set 0.9.1",
++ "bit-set 0.10.0",
+  "bit-vec 0.9.1",
+  "bitflags 2.10.0",
+  "bytemuck",
+- "cfg_aliases 0.2.1",
++ "cfg_aliases 0.2.2",
+  "document-features",
+- "hashbrown 0.16.1",
++ "hashbrown 0.17.1",
+  "indexmap 2.14.0",
+  "log",
+  "naga",
++ "naga-types",
+  "once_cell",
+  "parking_lot",
+  "portable-atomic",
+@@ -21188,60 +21210,61 @@ dependencies = [
+ 
+ [[package]]
+ name = "wgpu-core-deps-apple"
+-version = "29.0.4"
++version = "30.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f5e39e26c4c0e07589e67d18546cf79ff45383659fc72fca4dd293358a0347f3"
++checksum = "061f3d319a40d39d00b1ecc2c33b89fe21d4e6fe01859df3500a3a8ecccd6b68"
+ dependencies = [
+  "wgpu-hal",
+ ]
+ 
+ [[package]]
+ name = "wgpu-core-deps-emscripten"
+-version = "29.0.4"
++version = "30.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "01e09be551dc939498bdd5f6b2c66e55ab275dad25825267a08605a80fc9f0af"
++checksum = "d98b86cf4abf524a902dd35f18ca6a3f08fc2ae9847c8f10b48e30491b1f0b86"
+ dependencies = [
+  "wgpu-hal",
+ ]
+ 
+ [[package]]
+ name = "wgpu-core-deps-windows-linux-android"
+-version = "29.0.4"
++version = "30.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "4e592c1bbef6ad047647ae6e666ebd8cee7a32bb4544d9700ec96cbf73230257"
++checksum = "7586165fd5f6d881cb9ce4bb71f40d6caab2c0f1837e3fc1d9788a197fb6004f"
+ dependencies = [
+  "wgpu-hal",
+ ]
+ 
+ [[package]]
+ name = "wgpu-hal"
+-version = "29.0.4"
++version = "30.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "97ace1c17727311c22a46e4e3faf56ea6de81af99dcc839bdfb54857b94d448d"
++checksum = "b6b7fb58561a792bc237628ba0792e332de418fefe145f13b5ed8201e6d52f58"
+ dependencies = [
+  "android_system_properties",
+  "arrayvec",
+  "ash",
+- "bit-set 0.9.1",
++ "bit-set 0.10.0",
+  "bitflags 2.10.0",
+  "block2 0.6.2",
+  "bytemuck",
+  "cfg-if",
+- "cfg_aliases 0.2.1",
++ "cfg_aliases 0.2.2",
+  "glow",
+  "glutin_wgl_sys",
+  "gpu-allocator",
+- "gpu-descriptor",
+- "hashbrown 0.16.1",
++ "hashbrown 0.17.1",
+  "js-sys",
+  "khronos-egl",
+  "libc",
+  "libloading",
+  "log",
+  "naga",
++ "naga-types",
+  "ndk-sys",
+  "objc2 0.6.3",
+  "objc2-core-foundation",
++ "objc2-core-graphics",
+  "objc2-foundation 0.3.2",
+  "objc2-metal 0.3.2",
+  "objc2-quartz-core 0.3.2",
+@@ -21256,6 +21279,7 @@ dependencies = [
+  "raw-window-metal",
+  "renderdoc-sys",
+  "smallvec",
++ "static_assertions",
+  "thiserror 2.0.17",
+  "wasm-bindgen",
+  "wayland-sys",
+@@ -21269,9 +21293,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "wgpu-naga-bridge"
+-version = "29.0.4"
++version = "30.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "95226013f547544b223281cd16a4fb549aa9dcb562adbda0faae4c73ffbbc161"
++checksum = "d2f62e73117bb7a62bfd9c5a5841438a823f6566c6442a808ee269d2d055c081"
+ dependencies = [
+  "naga",
+  "wgpu-types",
+@@ -21279,15 +21303,17 @@ dependencies = [
+ 
+ [[package]]
+ name = "wgpu-types"
+-version = "29.0.4"
++version = "30.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "84bf84cd9ca8ca45e2b223a3868f1adf9bfc0c66aeac212e76ee7e40fdadf8f5"
++checksum = "99dad6f1fbdbbdb4c278a6508b059d44688f5cebddf78d005a46a31340269286"
+ dependencies = [
+  "bitflags 2.10.0",
+  "bytemuck",
+  "js-sys",
+  "log",
++ "naga-types",
+  "raw-window-handle",
++ "static_assertions",
+  "web-sys",
+ ]
+ 
+diff --git a/Cargo.toml b/Cargo.toml
+index 3e126c2690a55df395e3c112e5d16f6696815018..c8762febaec58f32eec97f561e9ce9a57fc78e6d 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -872,7 +872,7 @@ which = "6.0.0"
+ wasm-bindgen = "0.2.120"
+ web-time = "1.1.0"
+ webrtc-sys = "0.3.23"
+-wgpu = "29.0.4"
++wgpu = "30.0.1"
+ windows-core = "0.61"
+ yaml-rust2 = "0.8"
+ yawc = "0.2.5"
+diff --git a/crates/gpui_wgpu/src/wgpu_context.rs b/crates/gpui_wgpu/src/wgpu_context.rs
+index 9dd559939340b9867ebd3701fc695b7110816e9b..46964de88d87dbec434311c4364bc4468dd94aaf 100644
+--- a/crates/gpui_wgpu/src/wgpu_context.rs
++++ b/crates/gpui_wgpu/src/wgpu_context.rs
+@@ -369,6 +369,7 @@ impl WgpuContext {
+ 
+         let test_config = wgpu::SurfaceConfiguration {
+             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
++            color_space: wgpu::SurfaceColorSpace::Auto,
+             format: caps.formats[0],
+             width: 64,
+             height: 64,
+diff --git a/crates/gpui_wgpu/src/wgpu_renderer.rs b/crates/gpui_wgpu/src/wgpu_renderer.rs
+index 587315debfa89ba89a56bdd241fdcccef89a828c..442ad7f67dbc83313db17fdec004deb376ebc9e7 100644
+--- a/crates/gpui_wgpu/src/wgpu_renderer.rs
++++ b/crates/gpui_wgpu/src/wgpu_renderer.rs
+@@ -332,6 +332,7 @@ impl WgpuRenderer {
+ 
+         let surface_config = wgpu::SurfaceConfiguration {
+             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
++            color_space: wgpu::SurfaceColorSpace::Auto,
+             format: surface_format,
+             width: clamped_width.max(1),
+             height: clamped_height.max(1),
+@@ -1324,7 +1325,7 @@ impl WgpuRenderer {
+                         "instance buffer size grew too large: {}",
+                         self.instance_buffer_capacity
+                     );
+-                    frame.present();
++                    self.resources().queue.present(frame);
+                     return true;
+                 }
+                 self.grow_instance_buffer();
+@@ -1334,7 +1335,7 @@ impl WgpuRenderer {
+             self.resources()
+                 .queue
+                 .submit(std::iter::once(encoder.finish()));
+-            frame.present();
++            self.resources().queue.present(frame);
+             return true;
+         }
+     }
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: toommyliu <86510873+toommyliu@users.noreply.github.com>
+Date: Tue, 27 Oct 2026 14:55:36 -0700
+Subject: [PATCH 2/3] gpui: Expose the window's wgpu device on Linux
+
+---
+ crates/gpui/Cargo.toml                        |  3 +++
+ crates/gpui/src/gpui.rs                       | 10 ++++++++++
+ crates/gpui/src/platform.rs                   |  4 ++++
+ crates/gpui/src/window.rs                     |  6 ++++++
+ crates/gpui_linux/src/linux/wayland/window.rs |  4 ++++
+ crates/gpui_linux/src/linux/x11/window.rs     |  4 ++++
+ crates/gpui_wgpu/src/wgpu_renderer.rs         | 12 ++++++++++++
+ 7 files changed, 43 insertions(+)
+
+diff --git a/crates/gpui/Cargo.toml b/crates/gpui/Cargo.toml
+index 63e1814b50539936fe5a4592fe295d17cc13d520..f1371ce11451b2e650b7a3c315d2b28f6f5055db 100644
+--- a/crates/gpui/Cargo.toml
++++ b/crates/gpui/Cargo.toml
+@@ -134,6 +134,9 @@ metal.workspace = true
+ [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))'.dependencies]
+ pathfinder_geometry = "0.5"
+ 
++[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
++wgpu.workspace = true
++
+ [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "windows"))'.dependencies]
+ scap = { workspace = true, optional = true }
+ 
+diff --git a/crates/gpui/src/gpui.rs b/crates/gpui/src/gpui.rs
+index 4b1679cbe440faebedeedd9229fb6d59057a1af0..7f84d25a5ff1fdc2fbda9440e8a3652bbd8e4af5 100644
+--- a/crates/gpui/src/gpui.rs
++++ b/crates/gpui/src/gpui.rs
+@@ -344,3 +344,13 @@ pub struct GpuSpecs {
+     /// Further information about the driver, as reported by Vulkan.
+     pub driver_info: String,
+ }
++
++#[cfg(any(target_os = "linux", target_os = "freebsd"))]
++#[derive(Clone, Debug)]
++#[expect(missing_docs)]
++pub struct WgpuDevice {
++    pub instance: wgpu::Instance,
++    pub adapter: wgpu::Adapter,
++    pub device: wgpu::Device,
++    pub queue: wgpu::Queue,
++}
+diff --git a/crates/gpui/src/platform.rs b/crates/gpui/src/platform.rs
+index df7973909c530cd3c0d86980d4bc551904f3384c..f670b648e1d08eb15bd92fdb25f014168b7ae0f8 100644
+--- a/crates/gpui/src/platform.rs
++++ b/crates/gpui/src/platform.rs
+@@ -816,6 +816,10 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
+     }
+     fn set_client_inset(&self, _inset: Pixels) {}
+     fn gpu_specs(&self) -> Option<GpuSpecs>;
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    fn wgpu_device(&self) -> Option<crate::WgpuDevice> {
++        None
++    }
+ 
+     fn update_ime_position(&self, _bounds: Bounds<Pixels>);
+ 
+diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
+index 4c8b4651c8c2a24d8fc275f950665f669e77f331..e5a278bfcb86d6da5012293facca9126d18eb7ca 100644
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -5544,6 +5544,12 @@ impl Window {
+         self.platform_window.gpu_specs()
+     }
+ 
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    #[expect(missing_docs)]
++    pub fn wgpu_device(&self) -> Option<crate::WgpuDevice> {
++        self.platform_window.wgpu_device()
++    }
++
+     /// Perform titlebar double-click action.
+     /// This is macOS specific.
+     pub fn titlebar_double_click(&self) {
+diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/src/linux/wayland/window.rs
+index 993b2ff3fadc854ce0e49769559d2894efda5637..21bd8f4ba53fba9d7944952658ab1b3507fd34ff 100644
+--- a/crates/gpui_linux/src/linux/wayland/window.rs
++++ b/crates/gpui_linux/src/linux/wayland/window.rs
+@@ -1889,6 +1889,10 @@ impl PlatformWindow for WaylandWindow {
+         self.borrow().renderer.gpu_specs().into()
+     }
+ 
++    fn wgpu_device(&self) -> Option<gpui::WgpuDevice> {
++        self.borrow().renderer.wgpu_device()
++    }
++
+     fn play_system_bell(&self) {
+         let state = self.borrow();
+         let surface = if state.surface_state.toplevel().is_some() {
+diff --git a/crates/gpui_linux/src/linux/x11/window.rs b/crates/gpui_linux/src/linux/x11/window.rs
+index 4fde66f06ca85841965d34c90f8ebf307638eec9..a83ec1432d7d6df4c1d3bd59face64f22f4cec97 100644
+--- a/crates/gpui_linux/src/linux/x11/window.rs
++++ b/crates/gpui_linux/src/linux/x11/window.rs
+@@ -1924,6 +1924,10 @@ impl PlatformWindow for X11Window {
+         self.0.state.borrow().renderer.gpu_specs().into()
+     }
+ 
++    fn wgpu_device(&self) -> Option<gpui::WgpuDevice> {
++        self.0.state.borrow().renderer.wgpu_device()
++    }
++
+     fn play_system_bell(&self) {
+         // Volume 0% means don't increase or decrease from system volume
+         let _ = self.0.xcb.bell(0);
+diff --git a/crates/gpui_wgpu/src/wgpu_renderer.rs b/crates/gpui_wgpu/src/wgpu_renderer.rs
+index 442ad7f67dbc83313db17fdec004deb376ebc9e7..1398548ebb807632f0920c22249ae1ba49fd7e74 100644
+--- a/crates/gpui_wgpu/src/wgpu_renderer.rs
++++ b/crates/gpui_wgpu/src/wgpu_renderer.rs
+@@ -1071,6 +1071,18 @@ impl WgpuRenderer {
+         self.dual_source_blending
+     }
+ 
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    pub fn wgpu_device(&self) -> Option<gpui::WgpuDevice> {
++        let context = self.context.as_ref()?.borrow();
++        let context = context.as_ref()?;
++        Some(gpui::WgpuDevice {
++            instance: context.instance.clone(),
++            adapter: context.adapter.clone(),
++            device: (*context.device).clone(),
++            queue: (*context.queue).clone(),
++        })
++    }
++
+     pub fn gpu_specs(&self) -> GpuSpecs {
+         GpuSpecs {
+             is_software_emulated: self.adapter_info.device_type == wgpu::DeviceType::Cpu,
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: toommyliu <86510873+toommyliu@users.noreply.github.com>
+Date: Tue, 27 Oct 2026 14:55:36 -0700
+Subject: [PATCH 3/3] gpui_wgpu: Draw PaintSurface textures on Linux
+
+---
+ crates/gpui/src/scene.rs              | 12 ++++
+ crates/gpui/src/window.rs             | 21 +++++++
+ crates/gpui_wgpu/src/shaders.wgsl     | 27 ++------
+ crates/gpui_wgpu/src/wgpu_renderer.rs | 90 +++++++++++----------------
+ 4 files changed, 76 insertions(+), 74 deletions(-)
+
+diff --git a/crates/gpui/src/scene.rs b/crates/gpui/src/scene.rs
+index ea2ad7b2b9051918820ea777793054ca6c8b0e06..904437e137c465e360af5ea58fdcfba92bafc8d6 100644
+--- a/crates/gpui/src/scene.rs
++++ b/crates/gpui/src/scene.rs
+@@ -737,6 +737,18 @@ pub struct PaintSurface {
+     pub content_mask: ContentMask<ScaledPixels>,
+     #[cfg(target_os = "macos")]
+     pub image_buffer: core_video::pixel_buffer::CVPixelBuffer,
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    pub texture: std::sync::Arc<dyn SurfaceTexture>,
++}
++
++/// A texture painted with [`Window::paint_surface`](crate::Window::paint_surface).
++///
++/// The window keeps it until a later frame replaces the scene that painted it,
++/// which happens after that scene's draw was submitted to the window's queue.
++#[cfg(any(target_os = "linux", target_os = "freebsd"))]
++pub trait SurfaceTexture: Debug {
++    /// A filterable, non-sRGB color view holding premultiplied alpha.
++    fn view(&self) -> &wgpu::TextureView;
+ }
+ 
+ impl From<PaintSurface> for Primitive {
+diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
+index e5a278bfcb86d6da5012293facca9126d18eb7ca..6b2f5760c8ea39725f8ea0e33e4192e589dceb1b 100644
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -4229,6 +4229,27 @@ impl Window {
+         });
+     }
+ 
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    #[expect(missing_docs)]
++    pub fn paint_surface(
++        &mut self,
++        bounds: Bounds<Pixels>,
++        texture: Arc<dyn crate::SurfaceTexture>,
++    ) {
++        use crate::PaintSurface;
++
++        self.invalidator.debug_assert_paint();
++
++        let bounds = self.snap_bounds(bounds);
++        let content_mask = self.snapped_content_mask();
++        self.next_frame.scene.insert_primitive(PaintSurface {
++            order: 0,
++            bounds,
++            content_mask,
++            texture,
++        });
++    }
++
+     /// Removes an image from the sprite atlas.
+     pub fn drop_image(&mut self, data: Arc<RenderImage>) -> Result<()> {
+         for frame_index in 0..data.frame_count() {
+diff --git a/crates/gpui_wgpu/src/shaders.wgsl b/crates/gpui_wgpu/src/shaders.wgsl
+index 747a34d81e08ac370569b74b5ca9bc847c75ce9b..a4c2fb53e5269572d7d62db420a5b9ca64468b73 100644
+--- a/crates/gpui_wgpu/src/shaders.wgsl
++++ b/crates/gpui_wgpu/src/shaders.wgsl
+@@ -1319,17 +1319,7 @@ struct SurfaceParams {
+     content_mask: Bounds,
+ }
+ 
+-@group(1) @binding(0) var<uniform> surface_locals: SurfaceParams;
+-@group(1) @binding(1) var t_y: texture_2d<f32>;
+-@group(1) @binding(2) var t_cb_cr: texture_2d<f32>;
+-@group(1) @binding(3) var s_surface: sampler;
+-
+-const ycbcr_to_RGB = mat4x4<f32>(
+-    vec4<f32>( 1.0000f,  1.0000f,  1.0000f, 0.0),
+-    vec4<f32>( 0.0000f, -0.3441f,  1.7720f, 0.0),
+-    vec4<f32>( 1.4020f, -0.7141f,  0.0000f, 0.0),
+-    vec4<f32>(-0.7010f,  0.5291f, -0.8860f, 1.0),
+-);
++@group(1) @binding(0) var<storage, read> b_surfaces: array<SurfaceParams>;
+ 
+ struct SurfaceVarying {
+     @builtin(position) position: vec4<f32>,
+@@ -1338,27 +1328,22 @@ struct SurfaceVarying {
+ }
+ 
+ @vertex
+-fn vs_surface(@builtin(vertex_index) vertex_id: u32) -> SurfaceVarying {
++fn vs_surface(@builtin(vertex_index) vertex_id: u32, @builtin(instance_index) instance_id: u32) -> SurfaceVarying {
+     let unit_vertex = vec2<f32>(f32(vertex_id & 1u), 0.5 * f32(vertex_id & 2u));
++    let surface = b_surfaces[instance_id];
+ 
+     var out = SurfaceVarying();
+-    out.position = to_device_position(unit_vertex, surface_locals.bounds);
++    out.position = to_device_position(unit_vertex, surface.bounds);
+     out.texture_position = unit_vertex;
+-    out.clip_distances = distance_from_clip_rect(unit_vertex, surface_locals.bounds, surface_locals.content_mask);
++    out.clip_distances = distance_from_clip_rect(unit_vertex, surface.bounds, surface.content_mask);
+     return out;
+ }
+ 
+ @fragment
+ fn fs_surface(input: SurfaceVarying) -> @location(0) vec4<f32> {
+-    // Alpha clip after using the derivatives.
+     if (any(input.clip_distances < vec4<f32>(0.0))) {
+         return vec4<f32>(0.0);
+     }
+ 
+-    let y_cb_cr = vec4<f32>(
+-        textureSampleLevel(t_y, s_surface, input.texture_position, 0.0).r,
+-        textureSampleLevel(t_cb_cr, s_surface, input.texture_position, 0.0).rg,
+-        1.0);
+-
+-    return ycbcr_to_RGB * y_cb_cr;
++    return textureSampleLevel(t_sprite, s_sprite, input.texture_position, 0.0);
+ }
+diff --git a/crates/gpui_wgpu/src/wgpu_renderer.rs b/crates/gpui_wgpu/src/wgpu_renderer.rs
+index 1398548ebb807632f0920c22249ae1ba49fd7e74..ee9380dec804fd4df4310a092d00cb9d89c87a88 100644
+--- a/crates/gpui_wgpu/src/wgpu_renderer.rs
++++ b/crates/gpui_wgpu/src/wgpu_renderer.rs
+@@ -37,6 +37,7 @@ impl From<Bounds<ScaledPixels>> for PodBounds {
+     }
+ }
+ 
++#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+ #[repr(C)]
+ #[derive(Clone, Copy, Pod, Zeroable)]
+ struct SurfaceParams {
+@@ -98,7 +99,6 @@ struct WgpuBindGroupLayouts {
+     globals: wgpu::BindGroupLayout,
+     instances: wgpu::BindGroupLayout,
+     instances_with_texture: wgpu::BindGroupLayout,
+-    surfaces: wgpu::BindGroupLayout,
+ }
+ 
+ /// Shared GPU context reference, used to coordinate device recovery across multiple windows.
+@@ -564,55 +564,10 @@ impl WgpuRenderer {
+                 ],
+             });
+ 
+-        let surfaces = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+-            label: Some("surfaces_layout"),
+-            entries: &[
+-                wgpu::BindGroupLayoutEntry {
+-                    binding: 0,
+-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+-                    ty: wgpu::BindingType::Buffer {
+-                        ty: wgpu::BufferBindingType::Uniform,
+-                        has_dynamic_offset: false,
+-                        min_binding_size: NonZeroU64::new(
+-                            std::mem::size_of::<SurfaceParams>() as u64
+-                        ),
+-                    },
+-                    count: None,
+-                },
+-                wgpu::BindGroupLayoutEntry {
+-                    binding: 1,
+-                    visibility: wgpu::ShaderStages::FRAGMENT,
+-                    ty: wgpu::BindingType::Texture {
+-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+-                        view_dimension: wgpu::TextureViewDimension::D2,
+-                        multisampled: false,
+-                    },
+-                    count: None,
+-                },
+-                wgpu::BindGroupLayoutEntry {
+-                    binding: 2,
+-                    visibility: wgpu::ShaderStages::FRAGMENT,
+-                    ty: wgpu::BindingType::Texture {
+-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+-                        view_dimension: wgpu::TextureViewDimension::D2,
+-                        multisampled: false,
+-                    },
+-                    count: None,
+-                },
+-                wgpu::BindGroupLayoutEntry {
+-                    binding: 3,
+-                    visibility: wgpu::ShaderStages::FRAGMENT,
+-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+-                    count: None,
+-                },
+-            ],
+-        });
+-
+         WgpuBindGroupLayouts {
+             globals,
+             instances,
+             instances_with_texture,
+-            surfaces,
+         }
+     }
+ 
+@@ -871,9 +826,12 @@ impl WgpuRenderer {
+             "vs_surface",
+             "fs_surface",
+             &layouts.globals,
+-            &layouts.surfaces,
++            &layouts.instances_with_texture,
+             wgpu::PrimitiveTopology::TriangleStrip,
+-            &[Some(color_target)],
++            &[Some(wgpu::ColorTargetState {
++                blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
++                ..color_target
++            })],
+             1,
+             &shader_module,
+         );
+@@ -1317,11 +1275,14 @@ impl WgpuRenderer {
+                                 &mut instance_offset,
+                                 &mut pass,
+                             ),
+-                        PrimitiveBatch::Surfaces(_surfaces) => {
+-                            // Surfaces are macOS-only for video playback
+-                            // Not implemented for Linux/wgpu
+-                            true
+-                        }
++                        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++                        PrimitiveBatch::Surfaces(range) => self.draw_surfaces(
++                            &scene.surfaces[range],
++                            &mut instance_offset,
++                            &mut pass,
++                        ),
++                        #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
++                        PrimitiveBatch::Surfaces(_surfaces) => true,
+                     };
+                     if !ok {
+                         overflow = true;
+@@ -1463,6 +1424,29 @@ impl WgpuRenderer {
+         )
+     }
+ 
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    fn draw_surfaces(
++        &self,
++        surfaces: &[gpui::PaintSurface],
++        instance_offset: &mut u64,
++        pass: &mut wgpu::RenderPass<'_>,
++    ) -> bool {
++        surfaces.iter().all(|surface| {
++            let params = SurfaceParams {
++                bounds: surface.bounds.into(),
++                content_mask: surface.content_mask.bounds.into(),
++            };
++            self.draw_instances_with_texture(
++                bytemuck::bytes_of(&params),
++                1,
++                surface.texture.view(),
++                &self.resources().pipelines.surfaces,
++                instance_offset,
++                pass,
++            )
++        })
++    }
++
+     fn draw_instances(
+         &self,
+         data: &[u8],

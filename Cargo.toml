@@ -1,4 +1,5 @@
 [workspace]
+exclude = ["vendor/zed"]
 resolver = "3"
 members = [
     "crates/host",
@@ -19,7 +20,7 @@ lucent-protocol = { path = "crates/protocol" }
 lucent-runtime = { path = "crates/runtime" }
 lucent-ui = { path = "crates/ui" }
 
-gpui = { git = "https://github.com/zed-industries/zed", rev = "1a246efd7e1b83ab568ec5e3e6c1a43a42e1abba", default-features = false }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "1a246efd7e1b83ab568ec5e3e6c1a43a42e1abba", default-features = false, features = ["wayland", "x11"] }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "1a246efd7e1b83ab568ec5e3e6c1a43a42e1abba", features = ["font-kit", "wayland", "x11"] }
 
 ruffle_core = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a", features = [
@@ -31,6 +32,7 @@ ruffle_core = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a3
     "mp3",
     "nellymoser",
 ] }
+ruffle_render = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
 ruffle_render_wgpu = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
 ruffle_frontend_utils = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a", default-features = false, features = ["cpal", "fs"] }
 
@@ -39,6 +41,31 @@ naga = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f
 wgpu-core = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
 wgpu-hal = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
 wgpu-types = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
+
+
+[patch."https://github.com/zed-industries/zed"]
+collections = { path = "vendor/zed/crates/collections" }
+gpui = { path = "vendor/zed/crates/gpui" }
+gpui_linux = { path = "vendor/zed/crates/gpui_linux" }
+gpui_macos = { path = "vendor/zed/crates/gpui_macos" }
+gpui_macros = { path = "vendor/zed/crates/gpui_macros" }
+gpui_platform = { path = "vendor/zed/crates/gpui_platform" }
+gpui_shared_string = { path = "vendor/zed/crates/gpui_shared_string" }
+gpui_util = { path = "vendor/zed/crates/gpui_util" }
+gpui_web = { path = "vendor/zed/crates/gpui_web" }
+gpui_wgpu = { path = "vendor/zed/crates/gpui_wgpu" }
+gpui_windows = { path = "vendor/zed/crates/gpui_windows" }
+http_client = { path = "vendor/zed/crates/http_client" }
+media = { path = "vendor/zed/crates/media" }
+refineable = { path = "vendor/zed/crates/refineable" }
+derive_refineable = { path = "vendor/zed/crates/refineable/derive_refineable" }
+scheduler = { path = "vendor/zed/crates/scheduler" }
+sum_tree = { path = "vendor/zed/crates/sum_tree" }
+util_macros = { path = "vendor/zed/crates/util_macros" }
+zlog = { path = "vendor/zed/crates/zlog" }
+ztracing = { path = "vendor/zed/crates/ztracing" }
+ztracing_macro = { path = "vendor/zed/crates/ztracing_macro" }
+perf = { path = "vendor/zed/tooling/perf" }
 
 [profile.dev.package."*"]
 opt-level = 3
