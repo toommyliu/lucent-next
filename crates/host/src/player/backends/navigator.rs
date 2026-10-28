@@ -18,20 +18,14 @@ use crate::player::{Inbox, Msg};
 pub(crate) type Tasks = Rc<RefCell<Vec<async_task::Task<()>>>>;
 
 pub(crate) struct Navigator {
-    base: Url,
     net: Net,
     inbox: Inbox,
     tasks: Tasks,
 }
 
 impl Navigator {
-    pub(crate) fn new(base: Url, net: Net, inbox: Inbox, tasks: Tasks) -> Navigator {
-        Navigator {
-            base,
-            net,
-            inbox,
-            tasks,
-        }
+    pub(crate) fn new(net: Net, inbox: Inbox, tasks: Tasks) -> Navigator {
+        Navigator { net, inbox, tasks }
     }
 }
 
@@ -91,7 +85,7 @@ impl NavigatorBackend for Navigator {
     }
 
     fn resolve_url(&self, url: &str) -> Result<Url, ParseError> {
-        self.base.join(url)
+        Url::parse(url)
     }
 
     fn spawn_future(&mut self, future: OwnedFuture<(), Error>) {
@@ -229,7 +223,6 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         let tasks = Tasks::default();
         let mut navigator = Navigator::new(
-            Url::parse("https://game.aq.com/game/loader.swf").unwrap(),
             Net::new(runtime.handle().clone()).unwrap(),
             Inbox(tx),
             tasks.clone(),
@@ -281,7 +274,6 @@ mod tests {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let (tx, _rx) = std::sync::mpsc::channel();
         let navigator = Navigator::new(
-            Url::parse("https://game.aq.com/game/loader.swf").unwrap(),
             Net::with_timeouts(runtime.handle().clone(), timeouts).unwrap(),
             Inbox(tx),
             Tasks::default(),
@@ -303,6 +295,35 @@ mod tests {
         read: Duration::from_millis(200),
         request: Duration::from_secs(60),
     };
+
+    #[test]
+    fn absolute_urls_keep_their_host_and_relative_urls_have_no_game_fallback() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let navigator = Navigator::new(
+            Net::new(runtime.handle().clone()).unwrap(),
+            Inbox(tx),
+            Tasks::default(),
+        );
+        assert_eq!(
+            navigator.resolve_url("gamefiles/game.swf"),
+            Err(ParseError::RelativeUrlWithoutBase)
+        );
+        assert_eq!(
+            navigator
+                .resolve_url("https://example.com/asset.swf")
+                .unwrap()
+                .as_str(),
+            "https://example.com/asset.swf"
+        );
+        let url = serve(|stream| {
+            answer(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: 7\r\n\r\nfixture",
+            );
+        });
+        assert_eq!(load(STALL, url), Ok(b"fixture".to_vec()));
+    }
 
     #[test]
     fn a_server_that_never_answers_fails_the_load() {

@@ -1,4 +1,7 @@
 use std::sync::Arc;
+use std::time::Duration;
+
+use crate::bridge::{Call, Error as BridgeError, Event, PendingCall, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::player::frames::FrameLease;
@@ -79,6 +82,32 @@ pub struct Session {
 }
 
 impl Session {
+    /// Raw loader transport for actions and targeted hydration. Ordinary reads use host state.
+    pub fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {
+        match &self.player {
+            Some(player) => player.call_loader(name, args),
+            None => {
+                let (call, pending) = Call::new(name.into(), args);
+                call.reject(BridgeError::Stopped);
+                pending
+            }
+        }
+    }
+
+    pub fn try_loader_event(&self) -> Result<Option<Event>, BridgeError> {
+        self.player
+            .as_ref()
+            .ok_or(BridgeError::Stopped)?
+            .try_loader_event()
+    }
+
+    pub fn recv_loader_event(&self, timeout: Duration) -> Result<Event, BridgeError> {
+        self.player
+            .as_ref()
+            .ok_or(BridgeError::Stopped)?
+            .recv_loader_event(timeout)
+    }
+
     pub fn send(&self, event: ViewEvent) {
         if let Some(player) = &self.player {
             player.send(event);
