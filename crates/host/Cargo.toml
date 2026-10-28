@@ -20,6 +20,9 @@ thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "io-util", "sync", "macros"] }
 tracing = "0.1"
 url = "2.5"
+indexmap = "2"
+regex = "1"
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
@@ -29,4 +32,5 @@ raw-window-handle = "0.6"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 wgpu = { version = "30", features = ["noop"] }
