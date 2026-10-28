@@ -52,6 +52,9 @@ jobs:
 
       - run: cargo fmt --check
 
+      - name: Build dependencies unoptimized
+        run: mkdir -p .cargo && printf '[profile.dev.package."*"]\nopt-level = 0\n' >> .cargo/config.toml
+
       - uses: Swatinem/rust-cache@v2
 
       - run: cargo run -p lucent-protocol --bin export-types -- --check
