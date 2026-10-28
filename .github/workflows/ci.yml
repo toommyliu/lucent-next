@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -16,6 +17,7 @@ env:
 jobs:
   check:
     name: check (${{ matrix.os }})
+    if: ${{ github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'skip-rust-ci') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
