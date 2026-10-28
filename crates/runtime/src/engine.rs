@@ -1,10 +1,14 @@
-use std::sync::{Once, mpsc};
+use std::ffi::c_void;
+use std::sync::{Arc, Once, mpsc};
 use std::time::{Duration, Instant};
 
 use lucent_host::ScriptLink;
 use lucent_host::bridge::{Error as EventError, ScriptEvent};
 
-use crate::{RuntimeError, host};
+use crate::interrupt::{Interrupt, Stop};
+use crate::{Kill, RuntimeError, host};
+
+const HEAP_LIMIT: usize = 64 << 20;
 
 type Rejections = Vec<(v8::Global<v8::Promise>, v8::Global<v8::Value>)>;
 
@@ -27,15 +31,20 @@ pub(crate) struct Engine {
 }
 
 impl Engine {
-    pub(crate) fn new(link: ScriptLink) -> Result<Self, RuntimeError> {
+    pub(crate) fn new(link: ScriptLink, interrupt: Arc<Interrupt>) -> Result<Self, RuntimeError> {
         static PLATFORM: Once = Once::new();
         PLATFORM.call_once(|| {
             let platform = v8::new_default_platform(0, false).make_shared();
             v8::V8::initialize_platform(platform);
             v8::V8::initialize();
         });
-        let mut isolate = v8::Isolate::new(Default::default());
+        let mut isolate = v8::Isolate::new(v8::CreateParams::default().heap_limits(0, HEAP_LIMIT));
+        isolate.add_near_heap_limit_callback(
+            near_heap_limit,
+            Arc::as_ptr(&interrupt).cast_mut().cast(),
+        );
         isolate.set_microtasks_policy(v8::MicrotasksPolicy::Explicit);
+        isolate.set_slot(interrupt.clone());
         isolate.set_slot(link);
         isolate.set_slot(Instant::now());
         isolate.set_slot(Rejections::new());
@@ -66,7 +75,19 @@ impl Engine {
             isolate,
         };
         engine.evaluate("runtime.js", include_str!("../../../assets/runtime.js"))?;
+        interrupt.attach(engine.isolate.thread_safe_handle());
         Ok(engine)
+    }
+
+    pub(crate) fn kill(mut self, kill: Kill) -> ScriptLink {
+        for active in self.active.drain(..) {
+            let _ = active.reply.send(Err(RuntimeError::Killed(kill)));
+        }
+        self.isolate.remove_slot::<ScriptLink>().unwrap()
+    }
+
+    fn stop(&self) -> Option<Stop> {
+        self.isolate.get_slot::<Arc<Interrupt>>().unwrap().stop()
     }
 
     pub(crate) fn try_event(&self) -> Result<Option<ScriptEvent>, EventError> {
@@ -78,13 +99,24 @@ impl Engine {
     }
 
     pub(crate) fn events_lost(&mut self) {
+        if self.stop().is_some() {
+            return;
+        }
         for active in self.active.drain(..) {
             let _ = active.reply.send(Err(RuntimeError::EventsLost));
         }
     }
 
     pub(crate) fn eval(&mut self, name: &str, source: &str, reply: EvalReply) {
-        match self.evaluate(name, source) {
+        let result = match self.stop() {
+            Some(stop) => Err(stop_error(stop)),
+            None => self.evaluate(name, source),
+        };
+        let result = match self.stop() {
+            Some(stop) => Err(stop_error(stop)),
+            None => result,
+        };
+        match result {
             Ok(Completion::Promise(promise)) => self.active.push(ActiveEval { promise, reply }),
             Ok(Completion::Value(json)) => {
                 let _ = reply.send(Ok(json));
@@ -161,7 +193,7 @@ impl Engine {
         loop {
             let remaining = self.active.len();
             for active in std::mem::take(&mut self.active) {
-                if self.overflowed() {
+                if self.stop().is_some() || self.overflowed() {
                     self.active.push(active);
                     continue;
                 }
@@ -178,7 +210,7 @@ impl Engine {
                     Some(settle(tc, result))
                 });
                 match settled {
-                    Some(result) if !self.overflowed() => {
+                    Some(result) if self.stop().is_none() && !self.overflowed() => {
                         let _ = active.reply.send(result);
                     }
                     _ => self.active.push(active),
@@ -190,7 +222,10 @@ impl Engine {
         }
     }
 
-    pub(crate) fn turn(&mut self, items: &str) {
+    pub(crate) fn turn(&mut self, items: &str) -> Option<Instant> {
+        if self.stop().is_some() {
+            return None;
+        }
         self.in_context(|tc| {
             let result = (|| {
                 let items = v8::String::new(tc, items)
@@ -208,18 +243,31 @@ impl Engine {
                 }
                 Ok::<_, RuntimeError>(())
             })();
-            if let Err(error) = result {
+            if let Err(error) = result
+                && tc.get_slot::<Arc<Interrupt>>().unwrap().stop().is_none()
+            {
                 tracing::error!(%error, "script turn failed");
             }
+            if tc.get_slot::<Arc<Interrupt>>().unwrap().stop().is_some() {
+                return;
+            }
             tc.perform_microtask_checkpoint();
-            for error in take_rejections(tc) {
-                tracing::error!(%error, "unhandled script rejection");
+            if tc.get_slot::<Arc<Interrupt>>().unwrap().stop().is_none() {
+                for error in take_rejections(tc) {
+                    if tc.get_slot::<Arc<Interrupt>>().unwrap().stop().is_none() {
+                        tracing::error!(%error, "unhandled script rejection");
+                    }
+                }
             }
         });
         self.check_pending();
+        if self.stop().is_some() {
+            return None;
+        }
+        self.wake()
     }
 
-    pub(crate) fn wake(&mut self) -> Option<Instant> {
+    fn wake(&mut self) -> Option<Instant> {
         let started = *self.isolate.get_slot::<Instant>().unwrap();
         let result = self.in_context(|tc| {
             call_lucent(tc, "wake", &[])
@@ -229,7 +277,9 @@ impl Engine {
             Ok(deadline) if deadline.is_finite() => deadline,
             Ok(_) => return None,
             Err(error) => {
-                tracing::error!(%error, "script timer deadline failed");
+                if self.stop().is_none() {
+                    tracing::error!(%error, "script timer deadline failed");
+                }
                 return None;
             }
         };
@@ -242,7 +292,17 @@ fn settle<T>(
     tc: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
     result: Result<T, RuntimeError>,
 ) -> Result<T, RuntimeError> {
+    if tc.is_execution_terminating()
+        && let Some(stop) = tc.get_slot::<Arc<Interrupt>>().unwrap().stop()
+    {
+        return Err(stop_error(stop));
+    }
     tc.perform_microtask_checkpoint();
+    if tc.is_execution_terminating()
+        && let Some(stop) = tc.get_slot::<Arc<Interrupt>>().unwrap().stop()
+    {
+        return Err(stop_error(stop));
+    }
     let errors = take_rejections(tc);
     let value = result?;
     if tc.has_caught() {
@@ -301,6 +361,11 @@ fn take_rejections(
 fn exception_text(
     scope: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
 ) -> RuntimeError {
+    if scope.is_execution_terminating()
+        && let Some(stop) = scope.get_slot::<Arc<Interrupt>>().unwrap().stop()
+    {
+        return stop_error(stop);
+    }
     RuntimeError::JavaScript(
         scope
             .stack_trace()
@@ -308,6 +373,19 @@ fn exception_text(
             .map(|value| value.to_rust_string_lossy(scope))
             .unwrap_or_else(|| "JavaScript operation failed".into()),
     )
+}
+
+fn stop_error(stop: Stop) -> RuntimeError {
+    match stop {
+        Stop::Kill(kill) => RuntimeError::Killed(kill),
+        Stop::Shutdown => RuntimeError::Stopped,
+    }
+}
+
+unsafe extern "C" fn near_heap_limit(data: *mut c_void, current: usize, _: usize) -> usize {
+    let interrupt = unsafe { &*data.cast::<Interrupt>() };
+    interrupt.kill(Kill::HeapLimit);
+    current.saturating_add(HEAP_LIMIT)
 }
 
 fn rejection_text(
@@ -390,7 +468,12 @@ fn host_swf(
         return;
     };
     let json = json.to_rust_string_lossy(scope);
-    let result = host::swf(scope.get_slot::<ScriptLink>().unwrap(), method, &json);
+    let result = host::swf(
+        scope.get_slot::<ScriptLink>().unwrap(),
+        scope.get_slot::<Arc<Interrupt>>().unwrap(),
+        method,
+        &json,
+    );
     return_reply(scope, reply, result);
 }
 
@@ -403,7 +486,12 @@ fn host_read(
         return;
     };
     let json = json.to_rust_string_lossy(scope);
-    let result = host::read(scope.get_slot::<ScriptLink>().unwrap(), &json).map(Some);
+    let result = host::read(
+        scope.get_slot::<ScriptLink>().unwrap(),
+        scope.get_slot::<Arc<Interrupt>>().unwrap(),
+        &json,
+    )
+    .map(Some);
     return_reply(scope, reply, result);
 }
 
