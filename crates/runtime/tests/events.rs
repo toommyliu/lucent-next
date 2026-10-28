@@ -172,3 +172,32 @@ fn a_script_settled_after_events_were_lost_still_fails() {
     let error = waiting.wait::<Value>(TIMEOUT).unwrap_err();
     assert!(matches!(error, RuntimeError::EventsLost), "{error}");
 }
+
+#[test]
+fn a_script_whose_result_loses_events_while_serializing_fails() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+    let waiting = runtime.eval(
+        "wait.js",
+        "new Promise(resolve => { globalThis.finish = resolve; })",
+    );
+    runtime
+        .eval(
+            "finish.js",
+            r#"
+            finish({
+                toJSON() {
+                    for (let index = 0; index < 1100; index++) {
+                        window.swf["probe.emit"]("onDebug", String(index));
+                    }
+                    return "done";
+                },
+            });
+            "#,
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+    let error = waiting.wait::<Value>(TIMEOUT).unwrap_err();
+    assert!(matches!(error, RuntimeError::EventsLost), "{error}");
+}

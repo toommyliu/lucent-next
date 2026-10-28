@@ -73,6 +73,10 @@ impl Engine {
         self.isolate.get_slot::<ScriptLink>().unwrap().try_event()
     }
 
+    fn overflowed(&self) -> bool {
+        self.isolate.get_slot::<ScriptLink>().unwrap().overflowed()
+    }
+
     pub(crate) fn events_lost(&mut self) {
         for active in self.active.drain(..) {
             let _ = active.reply.send(Err(RuntimeError::EventsLost));
@@ -154,12 +158,13 @@ impl Engine {
     }
 
     fn check_pending(&mut self) {
-        if self.isolate.get_slot::<ScriptLink>().unwrap().overflowed() {
-            return;
-        }
         loop {
             let remaining = self.active.len();
             for active in std::mem::take(&mut self.active) {
+                if self.overflowed() {
+                    self.active.push(active);
+                    continue;
+                }
                 let settled = self.in_context(|tc| {
                     let promise = v8::Local::new(tc, &active.promise);
                     let result = match promise.state() {
@@ -173,10 +178,10 @@ impl Engine {
                     Some(settle(tc, result))
                 });
                 match settled {
-                    Some(result) => {
+                    Some(result) if !self.overflowed() => {
                         let _ = active.reply.send(result);
                     }
-                    None => self.active.push(active),
+                    _ => self.active.push(active),
                 }
             }
             if self.active.len() == remaining {
