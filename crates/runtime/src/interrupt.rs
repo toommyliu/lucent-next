@@ -12,6 +12,7 @@ struct State {
     isolate: Option<v8::IsolateHandle>,
     clock: Clock,
     stop: Option<Stop>,
+    timed: bool,
 }
 
 enum Clock {
@@ -33,6 +34,7 @@ impl Interrupt {
                 isolate: None,
                 clock: Clock::Idle,
                 stop: None,
+                timed: false,
             }),
             alarm: Condvar::new(),
         }
@@ -66,7 +68,7 @@ impl Interrupt {
     pub(crate) fn begin_turn(&self) {
         let mut state = self.state.lock().unwrap();
         state.clock = Clock::Running(Instant::now() + Duration::from_millis(200));
-        self.alarm.notify_one();
+        self.rouse(&state);
     }
 
     pub(crate) fn block(&self) {
@@ -80,7 +82,7 @@ impl Interrupt {
         let mut state = self.state.lock().unwrap();
         if let Clock::Blocked(left) = state.clock {
             state.clock = Clock::Running(Instant::now() + left);
-            self.alarm.notify_one();
+            self.rouse(&state);
         }
     }
 
@@ -97,6 +99,13 @@ impl Interrupt {
         self.state.lock().unwrap().stop
     }
 
+    // Deadlines only move later, so a watchdog already waiting on a timer re-reads the clock in time.
+    fn rouse(&self, state: &State) {
+        if !state.timed {
+            self.alarm.notify_one();
+        }
+    }
+
     pub(crate) fn watch(&self) {
         let mut state = self.state.lock().unwrap();
         loop {
@@ -111,7 +120,10 @@ impl Interrupt {
                         state.clock = Clock::Idle;
                         continue;
                     }
-                    self.alarm.wait_timeout(state, left).unwrap().0
+                    state.timed = true;
+                    let mut state = self.alarm.wait_timeout(state, left).unwrap().0;
+                    state.timed = false;
+                    state
                 }
                 Clock::Idle | Clock::Blocked(_) => self.alarm.wait(state).unwrap(),
             };
