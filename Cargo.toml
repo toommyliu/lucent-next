@@ -23,7 +23,7 @@ lucent-ui = { path = "crates/ui" }
 gpui = { git = "https://github.com/zed-industries/zed", rev = "1a246efd7e1b83ab568ec5e3e6c1a43a42e1abba", default-features = false, features = ["wayland", "x11"] }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "1a246efd7e1b83ab568ec5e3e6c1a43a42e1abba", features = ["font-kit", "wayland", "x11"] }
 
-ruffle_core = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a", features = [
+ruffle_core = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074", features = [
     "aac",
     "audio",
     "default_compatibility_rules",
@@ -32,15 +32,15 @@ ruffle_core = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a3
     "mp3",
     "nellymoser",
 ] }
-ruffle_render = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
-ruffle_render_wgpu = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
-ruffle_frontend_utils = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a", default-features = false, features = ["cpal", "fs"] }
+ruffle_render = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }
+ruffle_render_wgpu = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }
+ruffle_frontend_utils = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074", default-features = false, features = ["cpal", "fs"] }
 
 [patch.crates-io]
-naga = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
-wgpu-core = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
-wgpu-hal = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
-wgpu-types = { git = "https://github.com/toommyliu/ruffle", rev = "687ef26ea0a31ef135f1a49fc673b26a29f89b7a" }
+naga = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }
+wgpu-core = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }
+wgpu-hal = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }
+wgpu-types = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }
 
 
 [patch."https://github.com/zed-industries/zed"]
