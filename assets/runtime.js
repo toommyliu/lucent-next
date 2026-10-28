@@ -20,6 +20,13 @@
   var clear = /* @__PURE__ */ __name((id) => {
     if (id !== void 0) timers.delete(id);
   }, "clear");
+  var describe = /* @__PURE__ */ __name((cause) => {
+    try {
+      return cause instanceof Error ? cause.stack ?? String(cause) : String(cause);
+    } catch {
+      return "a value that cannot be converted to text was thrown";
+    }
+  }, "describe");
   var turn = /* @__PURE__ */ __name((itemsJson) => {
     const now = __host.now();
     const due = [...timers.values()].filter((timer) => timer.at <= now).sort((a, b) => a.at - b.at || a.id - b.id);
@@ -28,7 +35,7 @@
       try {
         callback();
       } catch (cause) {
-        errors.push(cause instanceof Error ? cause.stack ?? String(cause) : String(cause));
+        errors.push(describe(cause));
       }
     }, "invoke");
     for (const item of JSON.parse(itemsJson)) {

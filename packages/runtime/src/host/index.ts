@@ -57,6 +57,14 @@ const clear = (id: number | undefined): void => {
   if (id !== undefined) timers.delete(id);
 };
 
+const describe = (cause: unknown): string => {
+  try {
+    return cause instanceof Error ? (cause.stack ?? String(cause)) : String(cause);
+  } catch {
+    return "a value that cannot be converted to text was thrown";
+  }
+};
+
 const turn = (itemsJson: string): string[] => {
   const now = __host.now();
   const due = [...timers.values()]
@@ -67,7 +75,7 @@ const turn = (itemsJson: string): string[] => {
     try {
       callback();
     } catch (cause) {
-      errors.push(cause instanceof Error ? (cause.stack ?? String(cause)) : String(cause));
+      errors.push(describe(cause));
     }
   };
   for (const item of JSON.parse(itemsJson) as ScriptEvent[]) {

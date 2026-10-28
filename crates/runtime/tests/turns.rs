@@ -60,7 +60,7 @@ fn callback_faults_leave_later_events_and_timers_running() {
     let seen: Value = runtime.eval("callbacks.js", r#"
         new Promise(resolve => {
             const seen = [];
-            window.onExtensionResponse = () => { throw new Error('loader fault'); };
+            window.onExtensionResponse = () => { throw Object.create(null); };
             window.onProjectionEvent = event => { seen.push(event.type); throw new Error('projection fault'); };
             window.onProjectionInvalidated = () => { seen.push('invalidated'); throw new Error('reset fault'); };
             window.onConnection = status => seen.push(status);
@@ -131,4 +131,21 @@ fn serializing_a_completion_can_settle_an_earlier_evaluation() {
         .wait::<()>(TIMEOUT).unwrap();
     assert_eq!(second.wait::<i64>(TIMEOUT).unwrap(), 7);
     assert_eq!(first.wait::<i64>(TIMEOUT).unwrap(), 42);
+}
+
+#[test]
+fn an_overdue_timer_runs_before_the_next_queued_eval() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+    let scheduled = runtime.eval(
+        "schedule.js",
+        "globalThis.order = []; setTimeout(() => order.push('timer'), 0); undefined",
+    );
+    let queued = runtime.eval("queued.js", "order.push('eval'); order");
+    scheduled.wait::<()>(TIMEOUT).unwrap();
+    assert_eq!(
+        queued.wait::<Value>(TIMEOUT).unwrap(),
+        json!(["timer", "eval"])
+    );
 }

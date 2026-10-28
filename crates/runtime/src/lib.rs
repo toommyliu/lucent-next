@@ -135,22 +135,26 @@ fn run(mut engine: Engine, incoming: &mpsc::Receiver<Command>, wake: &EventWake)
             }
             None => incoming.recv().map_err(|_| RecvTimeoutError::Disconnected),
         };
-        match command {
+        let items = match command {
             Ok(Command::Eval {
                 name,
                 source,
                 reply,
-            }) => engine.eval(&name, &source, reply),
+            }) => {
+                engine.eval(&name, &source, reply);
+                Vec::new()
+            }
             Ok(Command::Wake) => {
                 wake.queued.store(false, Ordering::Release);
                 let Some(items) = take_events(&mut engine) else {
                     return;
                 };
-                engine.turn(&serde_json::to_string(&items).unwrap());
+                items
             }
-            Err(RecvTimeoutError::Timeout) => engine.turn("[]"),
+            Err(RecvTimeoutError::Timeout) => Vec::new(),
             Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => return,
-        }
+        };
+        engine.turn(&serde_json::to_string(&items).unwrap());
     }
 }
 
