@@ -1,18 +1,12 @@
 import { LiveModel } from "./model";
+import type { DeepReadonly } from "./model";
+import type * as Protocol from "./protocol";
 
-export interface QuestItem {
-  readonly itemId: number;
-  readonly name: string;
-  readonly quantity: number;
-  readonly maxStack?: number;
-  readonly temporaryItem?: boolean;
-}
+export type QuestItem = Readonly<Protocol.QuestItem>;
 
-export interface QuestReward extends QuestItem {
-  readonly dropChance?: number;
-}
+export type QuestReward = Readonly<Protocol.QuestReward>;
 
-export type QuestCadence = "daily" | "monthly" | "none" | "weekly";
+export type QuestCadence = Protocol.QuestCadence;
 
 export interface Quest {
   readonly cadence: QuestCadence;
@@ -24,16 +18,12 @@ export interface Quest {
   toJSON(): QuestSnapshot;
 }
 
-export interface QuestData {
-  cadence: QuestCadence;
-  id: number;
-  name: string;
-  once: boolean;
+export type QuestData = Omit<Protocol.QuestData, "requirements" | "rewards"> & {
   requirements: readonly QuestItem[];
   rewards: readonly QuestReward[];
-}
+};
 
-export type QuestSnapshot = Readonly<QuestData>;
+export type QuestSnapshot = DeepReadonly<Protocol.QuestData>;
 
 export class LiveQuest extends LiveModel<QuestData> implements Quest {
   /**

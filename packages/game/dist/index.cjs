@@ -1,4 +1,5 @@
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+const require_protocol = require("./protocol.cjs");
 // src/model.ts
 const normalizeGameText = (value) => value.trim().toLowerCase();
 var LiveModel = class {
@@ -616,17 +617,12 @@ const matchesAppliedEnhancement = (item, strategy) => {
 };
 // src/entity.ts
 const percent = (value, maximum) => maximum <= 0 ? 0 : value / maximum * 100;
-const EntityState = {
-	Dead: 0,
-	Idle: 1,
-	InCombat: 2
-};
-const isEntityState = (value) => value === EntityState.Dead || value === EntityState.Idle || value === EntityState.InCombat;
+const isEntityState = (value) => value === require_protocol.EntityState.Dead || value === require_protocol.EntityState.Idle || value === require_protocol.EntityState.InCombat;
 var LiveEntity = class extends LiveModel {
 	#auras = /* @__PURE__ */ new Map();
 	#acceptsActiveSync = true;
 	get alive() {
-		return this.hp > 0 && this.state !== EntityState.Dead;
+		return this.hp > 0 && this.state !== require_protocol.EntityState.Dead;
 	}
 	get auras() {
 		return Array.from(this.#auras.values());
@@ -644,10 +640,10 @@ var LiveEntity = class extends LiveModel {
 		return percent(this.hp, this.maxHp);
 	}
 	get idle() {
-		return this.state === EntityState.Idle;
+		return this.state === require_protocol.EntityState.Idle;
 	}
 	get inCombat() {
-		return this.state === EntityState.InCombat;
+		return this.state === require_protocol.EntityState.InCombat;
 	}
 	get maxHp() {
 		return this.modelData.maxHp;
@@ -720,8 +716,8 @@ var LiveEntity = class extends LiveModel {
 	}
 	/** @internal */
 	writeAuraMonsterState(state) {
-		this.#acceptsActiveSync = state !== EntityState.Dead;
-		return state === EntityState.InCombat ? [] : this.projectAuras({
+		this.#acceptsActiveSync = state !== require_protocol.EntityState.Dead;
+		return state === require_protocol.EntityState.InCombat ? [] : this.projectAuras({
 			type: "clear",
 			keepPersistent: false
 		}, 0);
@@ -982,15 +978,20 @@ var LiveItem = class extends LiveModel {
 		return false;
 	}
 	toJSON() {
-		const enhancement = this.enhancement;
+		const { enhancement, ...data } = this.modelData;
+		const { name, special, ...enhancementData } = this.enhancement ?? {};
 		return {
-			...this.modelData,
+			...data,
 			armor: this.armor,
 			banked: this.banked,
 			cape: this.cape,
 			classItem: this.classItem,
 			classRank: this.classRank,
-			...enhancement === void 0 ? {} : { enhancement },
+			...enhancement === void 0 ? {} : { enhancement: {
+				...enhancementData,
+				...name === void 0 ? {} : { name },
+				...special === void 0 ? {} : { special }
+			} },
 			helm: this.helm,
 			pet: this.pet,
 			pool: this.pool,
@@ -1236,7 +1237,7 @@ var LiveShop = class extends LiveModel {
 		};
 	}
 };
-exports.EntityState = EntityState;
+exports.EntityState = require_protocol.EntityState;
 exports.LiveAura = LiveAura;
 exports.LiveEntity = LiveEntity;
 exports.LiveFaction = LiveFaction;

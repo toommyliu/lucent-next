@@ -1,3 +1,5 @@
+import { D as MonsterDrop$1, E as MonsterData$1, G as ShopData$1, I as QuestCadence$1, L as QuestData$1, M as PlayerData$1, N as PlayerSnapshot$1, O as MonsterSnapshot$1, P as Point, R as QuestItem$1, U as ServerData$1, W as ServerSnapshot$1, _ as ItemContext$1, b as ItemRequirement$1, c as EntityData$1, f as EntityState, o as Enhancement$1, r as AuraKind$1, s as EnhancementSnapshot, t as AuraData$1, u as EntitySnapshot$1, v as ItemData$1, x as ItemSnapshot$1, y as ItemPool$1, z as QuestReward$1 } from "./protocol-BWEdr8gL.cjs";
+type DeepReadonly<T> = T extends object ? { readonly [Key in keyof T]: DeepReadonly<T[Key]>; } : T;
 declare abstract class LiveModel<State extends object> {
   #private;
   constructor(data: State);
@@ -9,7 +11,7 @@ declare abstract class LiveModel<State extends object> {
   /** @internal */
   snapshot(): State;
 }
-type AuraKind = "active" | "passive";
+type AuraKind = AuraKind$1;
 interface AuraQueryOptions {
   readonly kind?: AuraKind;
 }
@@ -25,17 +27,7 @@ interface Aura {
   readonly value: number | string | undefined;
   toJSON(): AuraSnapshot;
 }
-interface AuraData {
-  category?: string;
-  duration: number;
-  expiresAt?: number;
-  icon?: string;
-  kind: AuraKind;
-  name: string;
-  persistent: boolean;
-  stack: number;
-  value?: number | string;
-}
+type AuraData = AuraData$1;
 type AuraSnapshot = Readonly<AuraData>;
 declare class LiveAura extends LiveModel<AuraData> implements Aura {
   get category(): string | undefined;
@@ -151,7 +143,7 @@ type ActiveAuraEdit = {
 };
 /** @internal */
 declare function reduceActiveAura(before: AuraSnapshot | undefined, edit: ActiveAuraEdit, nowMs: number): AuraSnapshot | undefined;
-type ItemContext = "bank" | "drop" | "house" | "inventory" | "monster-drop" | "shop" | "temporary";
+type ItemContext = ItemContext$1;
 /**
  * `"bag"` counts equipment and equippable consumables such as potions.
  * `"misc"` counts resources, quest items, notes, and other non-consumable items
@@ -159,28 +151,21 @@ type ItemContext = "bank" | "drop" | "house" | "inventory" | "monster-drop" | "s
  * Classes, house items, and Guild items count against neither. A misc item
  * already in the inventory never takes a new misc slot.
  */
-type InventoryPool = "bag" | "misc";
+type InventoryPool = Extract<ItemPool$1, "bag" | "misc">;
 /**
  * The pool an item counts against in the inventory. `"class"` has no limit,
  * and `"house"` uses house slots.
  */
-type ItemPool = InventoryPool | "class" | "house";
+type ItemPool = ItemPool$1;
 declare const getItemRarityName: (rarity: number) => string;
 /** Returns the class rank for a cumulative class-point total. */
 declare const getClassRankFromPoints: (classPoints: number) => number;
-interface Enhancement {
-  readonly dps?: number;
-  readonly id?: number;
-  readonly level?: number;
+type Enhancement = Readonly<Enhancement$1> & {
   /** Enhancement label, such as `Fighter` or `Vim`. */
-  readonly name?: string | undefined;
-  readonly patternId?: number;
-  readonly procId?: number;
-  readonly range?: number;
-  readonly rarity?: number;
+  readonly name?: EnhancementSnapshot["name"];
   /** Special label, such as `Dauntless` or `Ether`. */
-  readonly special?: string | undefined;
-}
+  readonly special?: EnhancementSnapshot["special"];
+};
 interface ItemSelectorById {
   readonly itemId: number;
   readonly name?: never;
@@ -200,11 +185,7 @@ type ItemQuery = ItemSelector | number | string;
 type ShopItemQuery = ShopItemSelector | number | string;
 declare const toItemSelector: (query: ItemQuery) => ItemSelector;
 declare const normalizeItemQuantity: (value: number | undefined) => number;
-interface ItemRequirement {
-  readonly itemId: number;
-  readonly name: string;
-  readonly quantity: number;
-}
+type ItemRequirement = Readonly<ItemRequirement$1>;
 interface Item {
   readonly armor: boolean;
   readonly banked: boolean;
@@ -243,44 +224,11 @@ interface Item {
   matches(selector: ItemQuery | ShopItemQuery): boolean;
   toJSON(): ItemSnapshot;
 }
-interface ItemData {
-  category: string;
-  charItemId?: number;
-  coins: boolean;
-  context: ItemContext;
-  cost: number;
-  description: string;
+type ItemData = Omit<ItemData$1, "enhancement" | "requirements" | "wearable" | "worn"> & Partial<Pick<ItemData$1, "wearable" | "worn">> & {
   enhancement?: Enhancement;
-  equipped: boolean;
-  equipmentSlot: string;
-  file: string;
-  houseItem: boolean;
-  itemId: number;
-  link: string;
-  maxStack?: number;
-  memberOnly: boolean;
-  meta: string;
-  name: string;
-  quantity: number;
   requirements?: readonly ItemRequirement[];
-  shopItemId?: number;
-  temporaryItem: boolean;
-  wearable?: boolean;
-  worn?: boolean;
-}
-type ItemSnapshot = Readonly<ItemData> & {
-  readonly armor: boolean;
-  readonly banked: boolean;
-  readonly cape: boolean;
-  readonly classItem: boolean;
-  readonly classRank: number | null;
-  readonly helm: boolean;
-  readonly pet: boolean;
-  readonly pool: ItemPool;
-  readonly weapon: boolean;
-  readonly wearable: boolean;
-  readonly worn: boolean;
 };
+type ItemSnapshot = DeepReadonly<ItemSnapshot$1>;
 declare class LiveItem extends LiveModel<ItemData> implements Item {
   get armor(): boolean;
   get banked(): boolean;
@@ -337,12 +285,6 @@ declare const formatItemEnhancement: (enhancement: Pick<Enhancement, "level" | "
 declare const resolveEnhancementStrategy: (item: Pick<Item, "cape" | "classItem" | "helm" | "weapon">, enhancement: string, playerLevel: number, special?: string) => EnhancementStrategyResolution;
 declare const matchesEnhancementShopItem: (item: Pick<Item, "category" | "enhancement" | "equipmentSlot">, strategy: EnhancementStrategy) => boolean;
 declare const matchesAppliedEnhancement: (item: Pick<Item, "enhancement">, strategy: Pick<EnhancementStrategy, "patternId" | "procId">) => boolean;
-declare const EntityState: {
-  readonly Dead: 0;
-  readonly Idle: 1;
-  readonly InCombat: 2;
-};
-type EntityState = (typeof EntityState)[keyof typeof EntityState];
 declare const isEntityState: (value: unknown) => value is EntityState;
 interface Entity {
   readonly alive: boolean;
@@ -363,23 +305,8 @@ interface Entity {
   isInCell(cell: string): boolean;
   toJSON(): EntitySnapshot;
 }
-interface EntityData {
-  cell: string;
-  hp: number;
-  maxHp: number;
-  maxMp: number;
-  mp: number;
-  state: EntityState;
-}
-type EntitySnapshot = Readonly<EntityData> & {
-  readonly alive: boolean;
-  readonly auras: readonly AuraSnapshot[];
-  readonly dead: boolean;
-  readonly hpPercent: number;
-  readonly idle: boolean;
-  readonly inCombat: boolean;
-  readonly mpPercent: number;
-};
+type EntityData = EntityData$1;
+type EntitySnapshot = DeepReadonly<EntitySnapshot$1>;
 declare abstract class LiveEntity<State extends EntityData> extends LiveModel<State> implements Entity {
   #private;
   get alive(): boolean;
@@ -428,26 +355,7 @@ declare class LiveFaction extends LiveModel<FactionData> implements Faction {
   toJSON(): FactionSnapshot;
 }
 /** An item and its acquisition metadata from AQW's monster-drop response. */
-interface MonsterDrop {
-  readonly eventDrop: boolean;
-  readonly icon: string;
-  readonly item: ItemSnapshot;
-  readonly questGated: boolean;
-  readonly questObjectives: readonly string[];
-  /** Numeric rarity identifier returned by AQW. */
-  readonly rarity: number;
-  /** Display label produced by AQW's rarity lookup. */
-  readonly rarityName: string;
-  /** Additive boosted drop percentage shown by AQW, when supplied. */
-  readonly rateBoostPercent: number | null;
-  /** Drop percentage shown by AQW, normalized for variable quantities. */
-  readonly ratePercent: number | null;
-  /** Quest IDs parsed from AQW's `sReqQuests` field. */
-  readonly requiredQuestIds: readonly number[];
-  readonly requiredQuests: readonly string[];
-  readonly stackSize: number;
-  readonly variableQuantity: boolean;
-}
+type MonsterDrop = DeepReadonly<MonsterDrop$1>;
 interface MonsterSelectorByMapId {
   readonly monsterMapId: number;
   readonly name?: never;
@@ -478,17 +386,8 @@ interface Monster extends Entity {
   matches(selector: MonsterQuery): boolean;
 }
 declare const orderMonstersByPriority: (monsters: readonly Monster[], priorities: readonly MonsterQuery[]) => readonly Monster[];
-interface MonsterData extends EntityData {
-  aggressive: boolean;
-  level: number;
-  monsterId: number;
-  monsterMapId: number;
-  name: string;
-  race: string;
-}
-type MonsterSnapshot = Readonly<MonsterData> & EntitySnapshot & {
-  readonly drops: readonly MonsterDrop[];
-};
+type MonsterData = MonsterData$1;
+type MonsterSnapshot = DeepReadonly<MonsterSnapshot$1>;
 declare class LiveMonster extends LiveEntity<MonsterData> implements Monster {
   #private;
   get aggressive(): boolean;
@@ -549,10 +448,7 @@ type PlayerSelector = PlayerSelectorByUsername;
 type PlayerQuery = PlayerSelector | string;
 declare const toPlayerSelector: (query: PlayerQuery) => PlayerSelector;
 type BoostType = "classPoints" | "exp" | "gold" | "rep";
-interface Position {
-  readonly x: number;
-  readonly y: number;
-}
+type Position = Readonly<Point>;
 interface Player extends Entity {
   readonly afk: boolean;
   readonly entityId: number;
@@ -562,16 +458,8 @@ interface Player extends Entity {
   readonly position: Position;
   readonly username: string;
 }
-interface PlayerData extends EntityData {
-  afk: boolean;
-  entityId: number;
-  entityType: string;
-  level: number;
-  pad: string;
-  position: Position;
-  username: string;
-}
-type PlayerSnapshot = Readonly<PlayerData> & EntitySnapshot;
+type PlayerData = PlayerData$1;
+type PlayerSnapshot = DeepReadonly<PlayerSnapshot$1>;
 declare class LivePlayer extends LiveEntity<PlayerData> implements Player {
   get afk(): boolean;
   get entityId(): number;
@@ -582,17 +470,9 @@ declare class LivePlayer extends LiveEntity<PlayerData> implements Player {
   get username(): string;
   toJSON(): PlayerSnapshot;
 }
-interface QuestItem {
-  readonly itemId: number;
-  readonly name: string;
-  readonly quantity: number;
-  readonly maxStack?: number;
-  readonly temporaryItem?: boolean;
-}
-interface QuestReward extends QuestItem {
-  readonly dropChance?: number;
-}
-type QuestCadence = "daily" | "monthly" | "none" | "weekly";
+type QuestItem = Readonly<QuestItem$1>;
+type QuestReward = Readonly<QuestReward$1>;
+type QuestCadence = QuestCadence$1;
 interface Quest {
   readonly cadence: QuestCadence;
   readonly id: number;
@@ -602,15 +482,11 @@ interface Quest {
   readonly rewards: readonly QuestReward[];
   toJSON(): QuestSnapshot;
 }
-interface QuestData {
-  cadence: QuestCadence;
-  id: number;
-  name: string;
-  once: boolean;
+type QuestData = Omit<QuestData$1, "requirements" | "rewards"> & {
   requirements: readonly QuestItem[];
   rewards: readonly QuestReward[];
-}
-type QuestSnapshot = Readonly<QuestData>;
+};
+type QuestSnapshot = DeepReadonly<QuestData$1>;
 declare class LiveQuest extends LiveModel<QuestData> implements Quest {
   /**
    * How often the quest can be completed.
@@ -634,18 +510,8 @@ interface Server {
   readonly online: boolean;
   toJSON(): ServerSnapshot;
 }
-interface ServerData {
-  chat: number;
-  count: number;
-  language: string;
-  max: number;
-  memberOnly: boolean;
-  name: string;
-  online: boolean;
-}
-type ServerSnapshot = Readonly<ServerData> & {
-  readonly full: boolean;
-};
+type ServerData = ServerData$1;
+type ServerSnapshot = Readonly<ServerSnapshot$1>;
 declare class LiveServer extends LiveModel<ServerData> implements Server {
   get chat(): number;
   get count(): number;
@@ -666,17 +532,10 @@ interface Shop {
   readonly name: string;
   toJSON(): ShopSnapshot;
 }
-interface ShopData {
-  house: boolean;
-  id: number;
+type ShopData = Omit<ShopData$1, "items"> & {
   items: readonly Item[];
-  limited: boolean;
-  merge: boolean;
-  name: string;
-}
-type ShopSnapshot = Readonly<Omit<ShopData, "items">> & {
-  readonly items: readonly ItemSnapshot[];
 };
+type ShopSnapshot = DeepReadonly<ShopData$1>;
 declare class LiveShop extends LiveModel<ShopData> implements Shop {
   get house(): boolean;
   get id(): number;
@@ -686,4 +545,4 @@ declare class LiveShop extends LiveModel<ShopData> implements Shop {
   get name(): string;
   toJSON(): ShopSnapshot;
 }
-export { ActiveAuraEdit, Aura, AuraApplication, AuraData, AuraDelta, AuraKind, AuraMutation, AuraQueryOptions, AuraSeed, AuraSnapshot, AuraTiming, AuraWithdrawal, BoostType, Enhancement, EnhancementSlot, EnhancementStrategy, EnhancementStrategyResolution, Entity, EntityData, EntitySnapshot, EntityState, Faction, FactionData, FactionSnapshot, InventoryPool, Item, ItemContext, ItemData, ItemPool, ItemQuery, ItemRequirement, ItemSelector, ItemSelectorById, ItemSelectorByName, ItemSnapshot, LiveAura, LiveEntity, LiveFaction, LiveItem, LiveMonster, LiveOutfit, LivePlayer, LiveQuest, LiveServer, LiveShop, Monster, MonsterData, MonsterDrop, MonsterQuery, MonsterSelector, MonsterSelectorByMapId, MonsterSelectorByName, MonsterSnapshot, Outfit, OutfitColors, OutfitData, OutfitEquipment, OutfitSnapshot, PassiveAuraInput, Player, PlayerData, PlayerQuery, PlayerSelector, PlayerSelectorByUsername, PlayerSnapshot, Position, Quest, QuestCadence, QuestData, QuestItem, QuestReward, QuestSnapshot, Server, ServerData, ServerSnapshot, Shop, ShopData, ShopItemQuery, ShopItemSelector, ShopItemSelectorById, ShopSnapshot, formatItemEnhancement, getClassRankFromPoints, getItemEnhancementNames, getItemRarityName, isEntityState, matchesAppliedEnhancement, matchesEnhancementShopItem, normalizeItemQuantity, orderMonstersByPriority, parseMonsterMapId, reduceActiveAura, resolveEnhancementStrategy, toItemSelector, toMonsterSelector, toPlayerSelector };
+export { ActiveAuraEdit, Aura, AuraApplication, AuraData, AuraDelta, AuraKind, AuraMutation, AuraQueryOptions, AuraSeed, AuraSnapshot, AuraTiming, AuraWithdrawal, BoostType, type DeepReadonly, Enhancement, EnhancementSlot, EnhancementStrategy, EnhancementStrategyResolution, Entity, EntityData, EntitySnapshot, EntityState, Faction, FactionData, FactionSnapshot, InventoryPool, Item, ItemContext, ItemData, ItemPool, ItemQuery, ItemRequirement, ItemSelector, ItemSelectorById, ItemSelectorByName, ItemSnapshot, LiveAura, LiveEntity, LiveFaction, LiveItem, LiveMonster, LiveOutfit, LivePlayer, LiveQuest, LiveServer, LiveShop, Monster, MonsterData, MonsterDrop, MonsterQuery, MonsterSelector, MonsterSelectorByMapId, MonsterSelectorByName, MonsterSnapshot, Outfit, OutfitColors, OutfitData, OutfitEquipment, OutfitSnapshot, PassiveAuraInput, Player, PlayerData, PlayerQuery, PlayerSelector, PlayerSelectorByUsername, PlayerSnapshot, Position, Quest, QuestCadence, QuestData, QuestItem, QuestReward, QuestSnapshot, Server, ServerData, ServerSnapshot, Shop, ShopData, ShopItemQuery, ShopItemSelector, ShopItemSelectorById, ShopSnapshot, formatItemEnhancement, getClassRankFromPoints, getItemEnhancementNames, getItemRarityName, isEntityState, matchesAppliedEnhancement, matchesEnhancementShopItem, normalizeItemQuantity, orderMonstersByPriority, parseMonsterMapId, reduceActiveAura, resolveEnhancementStrategy, toItemSelector, toMonsterSelector, toPlayerSelector };

@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::event::Point;
+use crate::{aura::AuraData, event::Point, monster_drop::MonsterDrop};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ts_rs::TS)]
-#[ts(type = "0 | 1 | 2")]
+#[ts(type = "typeof EntityState[keyof typeof EntityState]")]
 pub enum EntityState {
     Dead,
     #[default]
@@ -55,7 +55,6 @@ pub struct EntityData {
     pub max_mp: f64,
     #[ts(type = "number")]
     pub mp: f64,
-    #[ts(type = "0 | 1 | 2")]
     pub state: EntityState,
 }
 
@@ -63,6 +62,63 @@ impl EntityData {
     pub fn alive(&self) -> bool {
         self.hp > 0.0 && self.state != EntityState::Dead
     }
+
+    pub fn snapshot_fields(&self, auras: Vec<AuraData>) -> EntitySnapshotFields {
+        EntitySnapshotFields {
+            alive: self.alive(),
+            auras,
+            dead: !self.alive(),
+            hp_percent: if self.max_hp <= 0.0 {
+                0.0
+            } else {
+                self.hp / self.max_hp * 100.0
+            },
+            idle: self.state == EntityState::Idle,
+            in_combat: self.state == EntityState::InCombat,
+            mp_percent: if self.max_mp <= 0.0 {
+                0.0
+            } else {
+                self.mp / self.max_mp * 100.0
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct EntitySnapshotFields {
+    pub alive: bool,
+    pub auras: Vec<AuraData>,
+    pub dead: bool,
+    pub hp_percent: f64,
+    pub idle: bool,
+    pub in_combat: bool,
+    pub mp_percent: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, ts_rs::TS)]
+pub struct EntitySnapshot {
+    #[serde(flatten)]
+    pub data: EntityData,
+    #[serde(flatten)]
+    pub fields: EntitySnapshotFields,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, ts_rs::TS)]
+pub struct PlayerSnapshot {
+    #[serde(flatten)]
+    pub data: PlayerData,
+    #[serde(flatten)]
+    pub fields: EntitySnapshotFields,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, ts_rs::TS)]
+pub struct MonsterSnapshot {
+    #[serde(flatten)]
+    pub data: MonsterData,
+    #[serde(flatten)]
+    pub fields: EntitySnapshotFields,
+    pub drops: Vec<MonsterDrop>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]

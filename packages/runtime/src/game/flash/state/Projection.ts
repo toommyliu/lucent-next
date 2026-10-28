@@ -1,3 +1,5 @@
+import type { ReadinessKey } from "@lucent/game/protocol";
+
 export const projectionKeys = [
   "houseInventory",
   "inventory",
@@ -5,7 +7,7 @@ export const projectionKeys = [
   "player",
 ] as const;
 
-export type ProjectionKey = (typeof projectionKeys)[number];
+export type ProjectionKey = ReadinessKey;
 
 export interface ProjectionState {
   readonly completed: Record<ProjectionKey, boolean>;

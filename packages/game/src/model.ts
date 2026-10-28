@@ -1,6 +1,10 @@
 export const normalizeGameText = (value: string): string =>
   value.trim().toLowerCase();
 
+export type DeepReadonly<T> = T extends object
+  ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+  : T;
+
 export abstract class LiveModel<State extends object> {
   readonly #data: State;
 

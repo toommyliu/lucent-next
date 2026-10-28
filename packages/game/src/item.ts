@@ -1,14 +1,9 @@
 import { getItemEnhancementNames } from "./enhancement";
 import { LiveModel, normalizeGameText } from "./model";
+import type { DeepReadonly } from "./model";
+import type * as Protocol from "./protocol";
 
-export type ItemContext =
-  | "bank"
-  | "drop"
-  | "house"
-  | "inventory"
-  | "monster-drop"
-  | "shop"
-  | "temporary";
+export type ItemContext = Protocol.ItemContext;
 
 /**
  * `"bag"` counts equipment and equippable consumables such as potions.
@@ -17,13 +12,13 @@ export type ItemContext =
  * Classes, house items, and Guild items count against neither. A misc item
  * already in the inventory never takes a new misc slot.
  */
-export type InventoryPool = "bag" | "misc";
+export type InventoryPool = Extract<Protocol.ItemPool, "bag" | "misc">;
 
 /**
  * The pool an item counts against in the inventory. `"class"` has no limit,
  * and `"house"` uses house slots.
  */
-export type ItemPool = InventoryPool | "class" | "house";
+export type ItemPool = Protocol.ItemPool;
 
 const miscCategories = new Set(["Item", "Note", "Quest Item", "Resource"]);
 
@@ -99,19 +94,12 @@ export const getClassRankFromPoints = (classPoints: number): number => {
   return rank;
 };
 
-export interface Enhancement {
-  readonly dps?: number;
-  readonly id?: number;
-  readonly level?: number;
+export type Enhancement = Readonly<Protocol.Enhancement> & {
   /** Enhancement label, such as `Fighter` or `Vim`. */
-  readonly name?: string | undefined;
-  readonly patternId?: number;
-  readonly procId?: number;
-  readonly range?: number;
-  readonly rarity?: number;
+  readonly name?: Protocol.EnhancementSnapshot["name"];
   /** Special label, such as `Dauntless` or `Ether`. */
-  readonly special?: string | undefined;
-}
+  readonly special?: Protocol.EnhancementSnapshot["special"];
+};
 
 export interface ItemSelectorById {
   readonly itemId: number;
@@ -146,11 +134,7 @@ export const normalizeItemQuantity = (value: number | undefined): number =>
     ? 1
     : Math.max(1, Math.trunc(value));
 
-export interface ItemRequirement {
-  readonly itemId: number;
-  readonly name: string;
-  readonly quantity: number;
-}
+export type ItemRequirement = Readonly<Protocol.ItemRequirement>;
 
 export interface Item {
   readonly armor: boolean;
@@ -191,45 +175,16 @@ export interface Item {
   toJSON(): ItemSnapshot;
 }
 
-export interface ItemData {
-  category: string;
-  charItemId?: number;
-  coins: boolean;
-  context: ItemContext;
-  cost: number;
-  description: string;
-  enhancement?: Enhancement;
-  equipped: boolean;
-  equipmentSlot: string;
-  file: string;
-  houseItem: boolean;
-  itemId: number;
-  link: string;
-  maxStack?: number;
-  memberOnly: boolean;
-  meta: string;
-  name: string;
-  quantity: number;
-  requirements?: readonly ItemRequirement[];
-  shopItemId?: number;
-  temporaryItem: boolean;
-  wearable?: boolean;
-  worn?: boolean;
-}
+export type ItemData = Omit<
+  Protocol.ItemData,
+  "enhancement" | "requirements" | "wearable" | "worn"
+> &
+  Partial<Pick<Protocol.ItemData, "wearable" | "worn">> & {
+    enhancement?: Enhancement;
+    requirements?: readonly ItemRequirement[];
+  };
 
-export type ItemSnapshot = Readonly<ItemData> & {
-  readonly armor: boolean;
-  readonly banked: boolean;
-  readonly cape: boolean;
-  readonly classItem: boolean;
-  readonly classRank: number | null;
-  readonly helm: boolean;
-  readonly pet: boolean;
-  readonly pool: ItemPool;
-  readonly weapon: boolean;
-  readonly wearable: boolean;
-  readonly worn: boolean;
-};
+export type ItemSnapshot = DeepReadonly<Protocol.ItemSnapshot>;
 
 export class LiveItem extends LiveModel<ItemData> implements Item {
   get armor(): boolean {
@@ -350,15 +305,24 @@ export class LiveItem extends LiveModel<ItemData> implements Item {
   }
 
   toJSON(): ItemSnapshot {
-    const enhancement = this.enhancement;
+    const { enhancement, ...data } = this.modelData;
+    const { name, special, ...enhancementData } = this.enhancement ?? {};
     return {
-      ...this.modelData,
+      ...data,
       armor: this.armor,
       banked: this.banked,
       cape: this.cape,
       classItem: this.classItem,
       classRank: this.classRank,
-      ...(enhancement === undefined ? {} : { enhancement }),
+      ...(enhancement === undefined
+        ? {}
+        : {
+            enhancement: {
+              ...enhancementData,
+              ...(name === undefined ? {} : { name }),
+              ...(special === undefined ? {} : { special }),
+            },
+          }),
       helm: this.helm,
       pet: this.pet,
       pool: this.pool,

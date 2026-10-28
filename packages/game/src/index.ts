@@ -4,6 +4,7 @@ export * from "./entity";
 export * from "./faction";
 export * from "./item";
 export * from "./monster";
+export type { DeepReadonly } from "./model";
 export * from "./outfit";
 export * from "./player";
 export * from "./quest";

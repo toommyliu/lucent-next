@@ -1,6 +1,7 @@
 import { LiveModel } from "./model";
+import type * as Protocol from "./protocol";
 
-export type AuraKind = "active" | "passive";
+export type AuraKind = Protocol.AuraKind;
 
 export interface AuraQueryOptions {
   readonly kind?: AuraKind;
@@ -19,17 +20,7 @@ export interface Aura {
   toJSON(): AuraSnapshot;
 }
 
-export interface AuraData {
-  category?: string;
-  duration: number;
-  expiresAt?: number;
-  icon?: string;
-  kind: AuraKind;
-  name: string;
-  persistent: boolean;
-  stack: number;
-  value?: number | string;
-}
+export type AuraData = Protocol.AuraData;
 
 export type AuraSnapshot = Readonly<AuraData>;
 
