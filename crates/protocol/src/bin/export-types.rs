@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let generated = declarations(&Config::new().with_large_int("number"));
     if check {
-        if fs::read_to_string(&path)? != generated {
+        if fs::read_to_string(&path)?.replace("\r\n", "\n") != generated {
             return Err(
                 "Generated protocol declarations differ; run pnpm generate:protocol".into(),
             );
