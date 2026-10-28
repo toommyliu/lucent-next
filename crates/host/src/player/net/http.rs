@@ -203,12 +203,12 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::{SocketAddr, TcpListener, TcpStream};
 
-    #[test]
-    fn deadline_releases_the_request_when_the_body_queue_is_full() {
+    #[tokio::test(start_paused = true)]
+    async fn deadline_releases_the_request_when_the_body_queue_is_full() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         listener.set_nonblocking(true).unwrap();
-        let server = std::thread::spawn(move || {
+        let server = tokio::task::spawn_blocking(move || {
             let mut stream = accept(&listener);
             receive(&stream);
             stream
@@ -225,32 +225,30 @@ mod tests {
             }
             panic!("the client consumed an unread 64 MiB response");
         });
-        let (runtime, mut net) = runtime_net(addr);
+        let mut net = Net::for_test(
+            tokio::runtime::Handle::current(),
+            vec![("game.aq.com", addr)],
+        );
         net.deadline = Duration::from_millis(250);
-        let response = runtime
-            .block_on(net.fetch(HttpRequest {
+        let response = net
+            .fetch(HttpRequest {
                 method: Method::Get,
                 url: url("game.aq.com", addr, "/large"),
                 headers: vec![],
                 body: None,
-            }))
-            .unwrap();
-        runtime.block_on(async {
-            tokio::time::timeout(Duration::from_secs(2), async {
-                while !net
-                    .tasks
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .all(|task| task.is_finished())
-                {
-                    tokio::time::sleep(Duration::from_millis(5)).await;
-                }
             })
             .await
-            .expect("the HTTP task outlived its deadline while the consumer retained its body");
-        });
-        let error = server.join().unwrap();
+            .unwrap();
+        let filling = std::time::Instant::now();
+        while !response.body.chunks.is_full() {
+            assert!(
+                filling.elapsed() < Duration::from_secs(5),
+                "the body queue never filled"
+            );
+            tokio::task::yield_now().await;
+        }
+        tokio::time::advance(Duration::from_millis(251)).await;
+        let error = server.await.unwrap();
         assert!(
             matches!(
                 error.kind(),
@@ -260,10 +258,11 @@ mod tests {
             ),
             "expected the deadline to close the HTTP connection: {error:?}"
         );
-        let result = runtime.block_on(async {
+        let result = async {
             while response.body.next_chunk().await?.is_some() {}
             Ok::<(), NetError>(())
-        });
+        }
+        .await;
         assert!(matches!(result, Err(NetError::TimedOut)));
     }
 
@@ -344,7 +343,7 @@ mod tests {
     }
 
     fn serve(
-        responses: impl FnOnce(SocketAddr) -> Vec<(Duration, String)>,
+        responses: impl FnOnce(SocketAddr) -> Vec<String>,
     ) -> (SocketAddr, std::thread::JoinHandle<Vec<Received>>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
@@ -352,10 +351,9 @@ mod tests {
         listener.set_nonblocking(true).unwrap();
         let thread = std::thread::spawn(move || {
             let mut requests = Vec::new();
-            for (delay, response) in responses {
+            for response in responses {
                 let mut stream = accept(&listener);
                 requests.push(receive(&stream));
-                std::thread::sleep(delay);
                 let _ = stream.write_all(response.as_bytes());
             }
             requests
@@ -363,13 +361,10 @@ mod tests {
         (addr, thread)
     }
 
-    fn answer(status: &str, headers: &str, body: &str) -> (Duration, String) {
-        (
-            Duration::ZERO,
-            format!(
-                "HTTP/1.1 {status}\r\nConnection: close\r\nContent-Length: {}\r\n{headers}\r\n{body}",
-                body.len()
-            ),
+    fn answer(status: &str, headers: &str, body: &str) -> String {
+        format!(
+            "HTTP/1.1 {status}\r\nConnection: close\r\nContent-Length: {}\r\n{headers}\r\n{body}",
+            body.len()
         )
     }
 
@@ -598,31 +593,79 @@ mod tests {
         }
     }
 
-    #[test]
-    fn redirect_and_body_share_one_deadline() {
-        let (addr, server) = serve(|_| {
-            vec![
-                (
-                    Duration::from_millis(160),
-                    answer("302 Found", "Location: /final\r\n", "").1,
-                ),
-                (Duration::from_millis(160), answer("200 OK", "", "body").1),
-            ]
-        });
-        let (runtime, mut net) = runtime_net(addr);
-        net.deadline = Duration::from_millis(260);
-        assert!(matches!(
-            load(
-                &runtime,
-                &net,
-                Method::Get,
-                url("game.aq.com", addr, "/start"),
-                vec![],
-                None
-            ),
-            Err(NetError::TimedOut)
-        ));
-        server.join().unwrap();
+    #[tokio::test(start_paused = true)]
+    async fn redirect_and_body_share_one_deadline() {
+        for send_headers in [false, true] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let addr = listener.local_addr().unwrap();
+            let (first_tx, first_rx) = tokio::sync::oneshot::channel();
+            let (second_tx, second_rx) = tokio::sync::oneshot::channel();
+            let (head_tx, head_rx) = tokio::sync::oneshot::channel();
+            let (redirect_tx, redirect_rx) = std::sync::mpsc::channel();
+            // Blocking socket I/O keeps Tokio's paused clock from auto-advancing.
+            let server = tokio::task::spawn_blocking(move || {
+                let mut first = accept(&listener);
+                assert_eq!(receive(&first).line, "GET /start HTTP/1.1");
+                first_tx.send(()).unwrap();
+                redirect_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                first
+                    .write_all(answer("302 Found", "Location: /final\r\n", "").as_bytes())
+                    .unwrap();
+                drop(first);
+                let mut second = accept(&listener);
+                assert_eq!(receive(&second).line, "GET /final HTTP/1.1");
+                if send_headers {
+                    second
+                        .write_all(
+                            b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\n",
+                        )
+                        .unwrap();
+                }
+                second_tx.send(()).unwrap();
+                second
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                assert_eq!(second.read(&mut [0]).unwrap(), 0);
+            });
+            let mut net = Net::for_test(
+                tokio::runtime::Handle::current(),
+                vec![("game.aq.com", addr)],
+            );
+            net.deadline = Duration::from_millis(260);
+            let start = tokio::time::Instant::now();
+            let request = tokio::spawn(async move {
+                let response = net
+                    .fetch(HttpRequest {
+                        method: Method::Get,
+                        url: url("game.aq.com", addr, "/start"),
+                        headers: vec![],
+                        body: None,
+                    })
+                    .await?;
+                head_tx.send(()).unwrap();
+                let mut body = Vec::new();
+                while let Some(chunk) = response.body.next_chunk().await? {
+                    body.extend(chunk);
+                }
+                Ok::<_, NetError>(body)
+            });
+            first_rx.await.unwrap();
+            tokio::time::advance(Duration::from_millis(160)).await;
+            redirect_tx.send(()).unwrap();
+            second_rx.await.unwrap();
+            if send_headers {
+                head_rx.await.unwrap();
+            }
+            tokio::time::advance(Duration::from_millis(99)).await;
+            assert!(
+                !request.is_finished(),
+                "the request expired before its deadline"
+            );
+            tokio::time::advance(Duration::from_millis(2)).await;
+            assert!(matches!(request.await.unwrap(), Err(NetError::TimedOut)));
+            assert_eq!(start.elapsed(), Duration::from_millis(261));
+            server.await.unwrap();
+        }
     }
 
     #[test]
@@ -703,41 +746,5 @@ mod tests {
         let requests = server.join().unwrap();
         assert_eq!(requests[1].header("cookie"), Some("game=private"));
         assert_eq!(requests[1].header("authorization"), Some("Bearer retained"));
-    }
-
-    #[test]
-    fn time_spent_redirecting_counts_against_the_final_body_deadline() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-        let server = std::thread::spawn(move || {
-            let mut first = accept(&listener);
-            receive(&first);
-            std::thread::sleep(Duration::from_millis(160));
-            first
-                .write_all(answer("302 Found", "Location: /final\r\n", "").1.as_bytes())
-                .unwrap();
-            drop(first);
-            let mut second = accept(&listener);
-            receive(&second);
-            second
-                .write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\n")
-                .unwrap();
-            std::thread::sleep(Duration::from_millis(160));
-            let _ = second.write_all(b"body");
-        });
-        let (runtime, mut net) = runtime_net(addr);
-        net.deadline = Duration::from_millis(260);
-        assert!(matches!(
-            load(
-                &runtime,
-                &net,
-                Method::Get,
-                url("game.aq.com", addr, "/"),
-                vec![],
-                None
-            ),
-            Err(NetError::TimedOut)
-        ));
-        server.join().unwrap();
     }
 }

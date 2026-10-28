@@ -28,4 +28,5 @@ objc2 = "0.6"
 raw-window-handle = "0.6"
 
 [dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
 wgpu = { version = "30", features = ["noop"] }
