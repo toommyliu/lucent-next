@@ -1,6 +1,7 @@
 /target
 /node_modules
 **/node_modules
+/packages/*/dist/
 /assets/*.swf
 !/assets/loader.swf
 /assets/runtime

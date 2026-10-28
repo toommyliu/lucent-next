@@ -1,10 +1,7 @@
 import type { LiveMonster, LivePlayer, MonsterDrop } from "@lucent/game";
+import type { MapState } from "@lucent/game/protocol";
 
-export interface MapState {
-  id: number;
-  name: string;
-  roomNumber: number;
-}
+export type { MapState } from "@lucent/game/protocol";
 
 export interface WorldState {
   readonly cellPads: string[];

@@ -7,8 +7,10 @@ use lucent_protocol::aura::{
 };
 use lucent_protocol::event::AuraKind;
 use lucent_protocol::monster_drop::MonsterDrop;
-use lucent_protocol::world::{EntityData, EntityState, MonsterData, PlayerData};
-use serde_json::{Value, json};
+use lucent_protocol::world::{
+    EntityState, MonsterData, MonsterSnapshot, PlayerData, PlayerSnapshot,
+};
+use serde_json::Value;
 
 #[derive(Clone, Debug)]
 pub struct LiveAura(Arc<RwLock<AuraData>>);
@@ -332,11 +334,14 @@ impl LivePlayer {
     }
     pub fn snapshot(&self) -> Value {
         let record = self.0.read().unwrap();
-        snapshot(
-            &record.data.entity,
-            serde_json::to_value(&record.data).unwrap(),
-            &record.auras,
-        )
+        serde_json::to_value(PlayerSnapshot {
+            data: record.data.clone(),
+            fields: record
+                .data
+                .entity
+                .snapshot_fields(record.auras.all().iter().map(LiveAura::data).collect()),
+        })
+        .unwrap()
     }
     pub fn auras(&self) -> Vec<LiveAura> {
         self.0.read().unwrap().auras.all()
@@ -383,13 +388,15 @@ impl LiveMonster {
     }
     pub fn snapshot(&self) -> Value {
         let record = self.0.read().unwrap();
-        let mut value = snapshot(
-            &record.data.entity,
-            serde_json::to_value(&record.data).unwrap(),
-            &record.auras,
-        );
-        value["drops"] = serde_json::to_value(record.drops.values().collect::<Vec<_>>()).unwrap();
-        value
+        serde_json::to_value(MonsterSnapshot {
+            data: record.data.clone(),
+            fields: record
+                .data
+                .entity
+                .snapshot_fields(record.auras.all().iter().map(LiveAura::data).collect()),
+            drops: record.drops.values().cloned().collect(),
+        })
+        .unwrap()
     }
     pub fn auras(&self) -> Vec<LiveAura> {
         self.0.read().unwrap().auras.all()
@@ -424,40 +431,6 @@ impl LiveMonster {
             record.drops.insert(drop.item.item_id, drop.clone());
         }
     }
-}
-
-fn snapshot(entity: &EntityData, mut value: Value, auras: &AuraState) -> Value {
-    let fields = value.as_object_mut().unwrap();
-    fields.insert("alive".into(), entity.alive().into());
-    fields.insert("dead".into(), (!entity.alive()).into());
-    fields.insert(
-        "auras".into(),
-        json!(auras.all().iter().map(LiveAura::data).collect::<Vec<_>>()),
-    );
-    fields.insert(
-        "hpPercent".into(),
-        if entity.max_hp <= 0.0 {
-            0.0
-        } else {
-            entity.hp / entity.max_hp * 100.0
-        }
-        .into(),
-    );
-    fields.insert(
-        "mpPercent".into(),
-        if entity.max_mp <= 0.0 {
-            0.0
-        } else {
-            entity.mp / entity.max_mp * 100.0
-        }
-        .into(),
-    );
-    fields.insert("idle".into(), (entity.state == EntityState::Idle).into());
-    fields.insert(
-        "inCombat".into(),
-        (entity.state == EntityState::InCombat).into(),
-    );
-    value
 }
 
 #[cfg(test)]

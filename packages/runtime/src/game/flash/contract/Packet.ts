@@ -1,15 +1,20 @@
 import * as Schema from "effect/Schema";
 import type * as Duration from "effect/Duration";
+import type { DeepReadonly } from "@lucent/game";
+import type * as Protocol from "@lucent/game/protocol";
 
 export const PacketDirection = Schema.Literals([
   "client",
   "server",
   "extension",
-]);
-export type PacketDirection = typeof PacketDirection.Type;
+]) satisfies Schema.Codec<Protocol.PacketDirection>;
+export type PacketDirection = Protocol.PacketDirection;
 
-export const PacketEncoding = Schema.Literals(["string", "json"]);
-export type PacketEncoding = typeof PacketEncoding.Type;
+export const PacketEncoding = Schema.Literals([
+  "string",
+  "json",
+]) satisfies Schema.Codec<Protocol.PacketEncoding>;
+export type PacketEncoding = Protocol.PacketEncoding;
 
 export const ClientPacket = Schema.Struct({
   command: Schema.String,
@@ -17,8 +22,11 @@ export const ClientPacket = Schema.Struct({
   params: Schema.Array(Schema.String),
   raw: Schema.String,
   encoding: PacketEncoding,
-});
-export type ClientPacket = typeof ClientPacket.Type;
+}) satisfies Schema.Codec<ClientPacket>;
+export type ClientPacket = Extract<
+  FlashPacket,
+  { readonly direction: "client" }
+>;
 
 export const ServerPacket = Schema.Struct({
   command: Schema.String,
@@ -26,8 +34,11 @@ export const ServerPacket = Schema.Struct({
   direction: Schema.Literal("server"),
   raw: Schema.String,
   encoding: PacketEncoding,
-});
-export type ServerPacket = typeof ServerPacket.Type;
+}) satisfies Schema.Codec<ServerPacket>;
+export type ServerPacket = Extract<
+  FlashPacket,
+  { readonly direction: "server" }
+>;
 
 export const ExtensionPacket = Schema.Struct({
   command: Schema.String,
@@ -35,15 +46,18 @@ export const ExtensionPacket = Schema.Struct({
   direction: Schema.Literal("extension"),
   raw: Schema.String,
   encoding: PacketEncoding,
-});
-export type ExtensionPacket = typeof ExtensionPacket.Type;
+}) satisfies Schema.Codec<ExtensionPacket>;
+export type ExtensionPacket = Extract<
+  FlashPacket,
+  { readonly direction: "extension" }
+>;
 
 export const Packet = Schema.Union([
   ClientPacket,
   ServerPacket,
   ExtensionPacket,
-]);
-export type FlashPacket = ClientPacket | ServerPacket | ExtensionPacket;
+]) satisfies Schema.Codec<FlashPacket>;
+export type FlashPacket = DeepReadonly<Protocol.Packet>;
 export type Packet = FlashPacket;
 
 export interface RawPacket {

@@ -1,22 +1,14 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import type { DeepReadonly } from "@lucent/game";
+import type { ReadinessFlags, ReadinessSnapshot } from "@lucent/game/protocol";
 
-import { projectionKeys, type ProjectionKey } from "../state/Projection";
+import { projectionKeys } from "../state/Projection";
 import type { Store } from "../state/Store";
 
-export interface ProjectionReadinessState {
-  readonly houseInventory: boolean;
-  readonly inventory: boolean;
-  readonly map: boolean;
-  readonly player: boolean;
-}
+export type ProjectionReadinessState = Readonly<ReadinessFlags>;
 
-export interface ProjectionReadinessSnapshot {
-  readonly epoch: number;
-  readonly failures: Partial<Record<ProjectionKey, string>>;
-  readonly missing: readonly ProjectionKey[];
-  readonly state: ProjectionReadinessState;
-}
+export type ProjectionReadinessSnapshot = DeepReadonly<ReadinessSnapshot>;
 
 // These projections use absence as real game state after hydration, so scripts
 // must not observe their initial empty stores as authoritative data.

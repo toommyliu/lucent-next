@@ -45,8 +45,12 @@ fn declarations(config: &Config) -> String {
         AuraData,
         EntityState,
         EntityData,
+        EntitySnapshotFields,
+        EntitySnapshot,
         PlayerData,
+        PlayerSnapshot,
         MonsterData,
+        MonsterSnapshot,
         QuestCadence,
         QuestItem,
         QuestReward,
@@ -54,6 +58,12 @@ fn declarations(config: &Config) -> String {
         ShopData,
         MonsterDrop
     );
+    output.push_str(&format!(
+        "\nexport const EntityState = {{ Dead: {}, Idle: {}, InCombat: {} }} as const;\n",
+        i64::from(EntityState::Dead),
+        i64::from(EntityState::Idle),
+        i64::from(EntityState::InCombat),
+    ));
     output
 }
 
@@ -70,13 +80,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let path = path.unwrap_or_else(|| {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../packages/runtime/src/game/flash/contract/generated.ts")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../packages/game/src/protocol.ts")
     });
     let generated = declarations(&Config::new().with_large_int("number"));
     if check {
-        if fs::read_to_string(&path)? != generated {
-            return Err("Generated protocol declarations differ; run export-types".into());
+        if fs::read_to_string(&path)?.replace("\r\n", "\n") != generated {
+            return Err(
+                "Generated protocol declarations differ; run pnpm generate:protocol".into(),
+            );
         }
     } else {
         if let Some(parent) = path.parent() {
