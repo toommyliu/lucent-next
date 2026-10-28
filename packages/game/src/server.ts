@@ -1,5 +1,4 @@
 import { LiveModel } from "./model";
-import type * as Protocol from "./protocol";
 
 export interface Server {
   readonly chat: number;
@@ -13,9 +12,19 @@ export interface Server {
   toJSON(): ServerSnapshot;
 }
 
-export type ServerData = Protocol.ServerData;
+export interface ServerData {
+  chat: number;
+  count: number;
+  language: string;
+  max: number;
+  memberOnly: boolean;
+  name: string;
+  online: boolean;
+}
 
-export type ServerSnapshot = Readonly<Protocol.ServerSnapshot>;
+export type ServerSnapshot = Readonly<ServerData> & {
+  readonly full: boolean;
+};
 
 export class LiveServer extends LiveModel<ServerData> implements Server {
   get chat(): number {

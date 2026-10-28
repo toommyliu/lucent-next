@@ -1,9 +1,14 @@
 import { getItemEnhancementNames } from "./enhancement";
 import { LiveModel, normalizeGameText } from "./model";
-import type { DeepReadonly } from "./model";
-import type * as Protocol from "./protocol";
 
-export type ItemContext = Protocol.ItemContext;
+export type ItemContext =
+  | "bank"
+  | "drop"
+  | "house"
+  | "inventory"
+  | "monster-drop"
+  | "shop"
+  | "temporary";
 
 /**
  * `"bag"` counts equipment and equippable consumables such as potions.
@@ -12,13 +17,13 @@ export type ItemContext = Protocol.ItemContext;
  * Classes, house items, and Guild items count against neither. A misc item
  * already in the inventory never takes a new misc slot.
  */
-export type InventoryPool = Extract<Protocol.ItemPool, "bag" | "misc">;
+export type InventoryPool = "bag" | "misc";
 
 /**
  * The pool an item counts against in the inventory. `"class"` has no limit,
  * and `"house"` uses house slots.
  */
-export type ItemPool = Protocol.ItemPool;
+export type ItemPool = InventoryPool | "class" | "house";
 
 const miscCategories = new Set(["Item", "Note", "Quest Item", "Resource"]);
 
@@ -94,12 +99,19 @@ export const getClassRankFromPoints = (classPoints: number): number => {
   return rank;
 };
 
-export type Enhancement = Readonly<Protocol.Enhancement> & {
+export interface Enhancement {
+  readonly dps?: number;
+  readonly id?: number;
+  readonly level?: number;
   /** Enhancement label, such as `Fighter` or `Vim`. */
-  readonly name?: Protocol.EnhancementSnapshot["name"];
+  readonly name?: string | undefined;
+  readonly patternId?: number;
+  readonly procId?: number;
+  readonly range?: number;
+  readonly rarity?: number;
   /** Special label, such as `Dauntless` or `Ether`. */
-  readonly special?: Protocol.EnhancementSnapshot["special"];
-};
+  readonly special?: string | undefined;
+}
 
 export interface ItemSelectorById {
   readonly itemId: number;
@@ -134,7 +146,11 @@ export const normalizeItemQuantity = (value: number | undefined): number =>
     ? 1
     : Math.max(1, Math.trunc(value));
 
-export type ItemRequirement = Readonly<Protocol.ItemRequirement>;
+export interface ItemRequirement {
+  readonly itemId: number;
+  readonly name: string;
+  readonly quantity: number;
+}
 
 export interface Item {
   readonly armor: boolean;
@@ -175,16 +191,45 @@ export interface Item {
   toJSON(): ItemSnapshot;
 }
 
-export type ItemData = Omit<
-  Protocol.ItemData,
-  "enhancement" | "requirements" | "wearable" | "worn"
-> &
-  Partial<Pick<Protocol.ItemData, "wearable" | "worn">> & {
-    enhancement?: Enhancement;
-    requirements?: readonly ItemRequirement[];
-  };
+export interface ItemData {
+  category: string;
+  charItemId?: number;
+  coins: boolean;
+  context: ItemContext;
+  cost: number;
+  description: string;
+  enhancement?: Enhancement;
+  equipped: boolean;
+  equipmentSlot: string;
+  file: string;
+  houseItem: boolean;
+  itemId: number;
+  link: string;
+  maxStack?: number;
+  memberOnly: boolean;
+  meta: string;
+  name: string;
+  quantity: number;
+  requirements?: readonly ItemRequirement[];
+  shopItemId?: number;
+  temporaryItem: boolean;
+  wearable?: boolean;
+  worn?: boolean;
+}
 
-export type ItemSnapshot = DeepReadonly<Protocol.ItemSnapshot>;
+export type ItemSnapshot = Readonly<ItemData> & {
+  readonly armor: boolean;
+  readonly banked: boolean;
+  readonly cape: boolean;
+  readonly classItem: boolean;
+  readonly classRank: number | null;
+  readonly helm: boolean;
+  readonly pet: boolean;
+  readonly pool: ItemPool;
+  readonly weapon: boolean;
+  readonly wearable: boolean;
+  readonly worn: boolean;
+};
 
 export class LiveItem extends LiveModel<ItemData> implements Item {
   get armor(): boolean {

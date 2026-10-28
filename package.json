@@ -6,6 +6,7 @@
   "scripts": {
     "generate:protocol": "cargo run -p lucent-protocol --bin export-types",
     "check:protocol": "cargo run -p lucent-protocol --bin export-types -- --check",
+    "check:scripting-api": "pnpm --filter @lucent/scripting-api check",
     "as3": "pnpm run as3:bridge && pnpm run as3:build",
     "as3:bridge": "tsx scripts/gen-as3-bridge.ts",
     "as3:build": "tsx scripts/build-as3-swf.ts",

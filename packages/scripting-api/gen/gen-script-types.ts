@@ -284,6 +284,7 @@ type CliOptions = {
   readonly repoRoot: string;
   readonly sourceFile: string;
   readonly outputFile: string;
+  readonly check: boolean;
 };
 
 type Declaration =
@@ -311,10 +312,15 @@ const parseCliOptions = (
 ): CliOptions => {
   let source = DEFAULT_SOURCE_FILE;
   let out = DEFAULT_OUTPUT_FILE;
+  let check = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? fail(`Unable to read argument at ${index}`);
     if (arg === "--") {
+      continue;
+    }
+    if (arg === "--check") {
+      check = true;
       continue;
     }
     if (arg === "--source") {
@@ -340,6 +346,7 @@ const parseCliOptions = (
 
   return {
     repoRoot,
+    check,
     sourceFile: isAbsolute(source) ? source : resolve(repoRoot, source),
     outputFile: isAbsolute(out) ? out : resolve(repoRoot, out),
   };
@@ -370,7 +377,14 @@ const createProgram = (repoRoot: string): ts.Program => {
 
   return ts.createProgram({
     rootNames: parsed.fileNames,
-    options: parsed.options,
+    options: {
+      ...parsed.options,
+      paths: {
+        ...parsed.options.paths,
+        "@lucent/game": [join(repoRoot, "packages/game/src/index.ts")],
+        "@lucent/game/protocol": [join(repoRoot, "packages/game/src/protocol.ts")],
+      },
+    },
   });
 };
 
@@ -1634,6 +1648,26 @@ const main = async (options: CliOptions): Promise<void> => {
   const schemaDeclarations = `declare module "lucent/schema" {\n${schemaSource.replace(/\bdeclare (const|function|class)\b/g, "$1")}\n}`;
   const content = renderScriptTypes(program, declarations, schemaDeclarations);
   validateGeneratedTypes(content);
+
+  if (options.check) {
+    const current = await fs
+      .readFile(options.outputFile, "utf8")
+      .catch((error: unknown) =>
+        fail(`Unable to read ${options.outputFile}: ${String(error)}`),
+      );
+    const normalized = current.replace(/\r\n/g, "\n");
+    if (normalized !== content) {
+      const currentLines = normalized.split("\n");
+      const generatedLines = content.split("\n");
+      let line = 0;
+      while (currentLines[line] === generatedLines[line]) line += 1;
+      fail(
+        `Scripting declarations differ at line ${line + 1} in ${options.outputFile}; run pnpm --filter @lucent/scripting-api generate`,
+      );
+    }
+    console.info("Scripting declarations are up to date");
+    return;
+  }
 
   await fs.mkdir(dirname(options.outputFile), { recursive: true });
   const current = await fs
