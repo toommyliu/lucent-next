@@ -1,0 +1,10 @@
+{
+  "captured_at": "2026-10-28T03:40:06.705802+00:00",
+  "host": "sock7.aq.com",
+  "port": 5588,
+  "read_sizes": [
+    54
+  ],
+  "request": "SmartFox version check, version 166",
+  "authenticated": false
+}

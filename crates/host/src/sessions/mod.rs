@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::player::frames::FrameLease;
+use crate::player::net::Observer;
 use crate::player::{self, Clipboard, Surface, ViewEvent};
 
 #[derive(Clone)]
@@ -44,8 +45,10 @@ impl Host {
 
     pub fn start_session(&self, surface: Surface) -> Result<Session, HostError> {
         let id = self.shared.next_session.fetch_add(1, Ordering::Relaxed);
+        let observer = Observer::default();
         Ok(Session {
-            player: Some(self.spawn_player(id, &surface, false)?),
+            player: Some(self.spawn_player(id, &surface, false, observer.clone())?),
+            observer,
             id,
             surface,
             muted: false,
@@ -58,6 +61,7 @@ impl Host {
         session: u64,
         surface: &Surface,
         muted: bool,
+        observer: Observer,
     ) -> Result<player::Handle, HostError> {
         player::spawn(
             format!("player-{session}"),
@@ -65,6 +69,7 @@ impl Host {
             self.shared.net.handle().clone(),
             self.shared.clipboard.clone(),
             muted,
+            observer,
         )
         .map_err(HostError::PlayerThread)
     }
@@ -72,6 +77,7 @@ impl Host {
 
 pub struct Session {
     player: Option<player::Handle>,
+    observer: Observer,
     id: u64,
     surface: Surface,
     muted: bool,
@@ -92,7 +98,12 @@ impl Session {
     pub fn restart(&mut self, surface: Surface) -> Result<(), HostError> {
         self.player = None;
         self.surface = surface;
-        self.player = Some(self.host.spawn_player(self.id, &self.surface, self.muted)?);
+        self.player = Some(self.host.spawn_player(
+            self.id,
+            &self.surface,
+            self.muted,
+            self.observer.clone(),
+        )?);
         Ok(())
     }
 

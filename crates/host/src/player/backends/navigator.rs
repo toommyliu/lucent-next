@@ -12,7 +12,7 @@ use ruffle_core::loader::Error;
 use ruffle_core::socket::{ConnectionState, SocketAction, SocketHandle};
 use url::{ParseError, Url};
 
-use crate::player::net::{HttpRequest, HttpResponse, Method, Net, NetError, SocketEvent};
+use crate::player::net::{HttpBody, HttpRequest, HttpResponse, Method, Net, SocketEvent};
 use crate::player::{Inbox, Msg};
 
 pub(crate) type Tasks = Rc<RefCell<Vec<async_task::Task<()>>>>;
@@ -150,7 +150,7 @@ struct Response {
     redirected: bool,
     encoding: Option<&'static encoding_rs::Encoding>,
     length: Option<u64>,
-    chunks: Receiver<Result<Vec<u8>, NetError>>,
+    body: HttpBody,
 }
 
 impl Response {
@@ -161,7 +161,7 @@ impl Response {
             status: response.status,
             encoding: response.content_type.as_deref().and_then(get_encoding),
             length: response.length,
-            chunks: response.body,
+            body: response.body,
         }
     }
 }
@@ -176,8 +176,13 @@ impl SuccessResponse for Response {
     fn body(self: Box<Self>) -> OwnedFuture<Vec<u8>, Error> {
         Box::pin(async move {
             let mut body = Vec::new();
-            while let Ok(chunk) = self.chunks.recv().await {
-                body.extend(chunk.map_err(|error| Error::FetchError(error.to_string()))?);
+            while let Some(chunk) = self
+                .body
+                .next_chunk()
+                .await
+                .map_err(|error| Error::FetchError(error.to_string()))?
+            {
+                body.extend(chunk);
             }
             Ok(body)
         })
@@ -192,14 +197,11 @@ impl SuccessResponse for Response {
         self.redirected
     }
     fn next_chunk(&mut self) -> OwnedFuture<Option<Vec<u8>>, Error> {
-        let chunks = self.chunks.clone();
+        let body = self.body.clone();
         Box::pin(async move {
-            match chunks.recv().await {
-                Ok(chunk) => chunk
-                    .map(Some)
-                    .map_err(|error| Error::FetchError(error.to_string())),
-                Err(_) => Ok(None),
-            }
+            body.next_chunk()
+                .await
+                .map_err(|error| Error::FetchError(error.to_string()))
         })
     }
     fn expected_length(&self) -> Result<Option<u64>, Error> {
@@ -228,7 +230,7 @@ mod tests {
         let tasks = Tasks::default();
         let mut navigator = Navigator::new(
             Url::parse("https://game.aq.com/game/loader.swf").unwrap(),
-            Net::new(runtime.handle().clone()).unwrap(),
+            Net::new(runtime.handle().clone(), Default::default()).unwrap(),
             Inbox(tx),
             tasks.clone(),
         );

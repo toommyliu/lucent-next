@@ -1,6 +1,6 @@
 mod backends;
 pub(crate) mod frames;
-mod net;
+pub(crate) mod net;
 pub(crate) mod surface;
 pub(crate) mod view;
 
@@ -17,7 +17,7 @@ pub(crate) use surface::Surface;
 pub(crate) use view::{ViewEvent, Viewport};
 
 use backends::{Navigator, Tasks, Ui, audio};
-use net::Net;
+use net::{Net, Observer};
 use view::Effect;
 
 const STOP_TIMEOUT: Duration = Duration::from_secs(2);
@@ -63,13 +63,14 @@ pub(crate) fn spawn(
     net: tokio::runtime::Handle,
     clipboard: Clipboard,
     muted: bool,
+    observer: Observer,
 ) -> std::io::Result<Handle> {
     let (tx, rx) = mpsc::channel();
     let inbox = Inbox(tx);
     let (exit_tx, exited) = mpsc::sync_channel(1);
     let outbox = inbox.clone();
     let thread = thread::Builder::new().name(name).spawn(move || {
-        let result = run(rx, outbox, surface, net, clipboard, muted);
+        let result = run(rx, outbox, surface, net, clipboard, muted, observer);
         if let Err(error) = &result {
             tracing::error!(%error, "player failed");
         }
@@ -116,11 +117,18 @@ fn run(
     net: tokio::runtime::Handle,
     clipboard: Clipboard,
     muted: bool,
+    observer: Observer,
 ) -> Result<(), PlayerError> {
     let Some((viewport, muted)) = first_viewport(&inbox, muted) else {
         return Ok(());
     };
-    let mut running = Running::build(viewport, &surface, Net::new(net)?, outbox, clipboard)?;
+    let mut running = Running::build(
+        viewport,
+        &surface,
+        Net::new(net, observer)?,
+        outbox,
+        clipboard,
+    )?;
     running.set_muted(muted);
     let mut wait = Duration::ZERO;
     'running: loop {
