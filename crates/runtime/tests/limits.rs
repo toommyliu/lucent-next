@@ -67,6 +67,8 @@ fn a_runaway_turn_is_killed_within_250_ms_and_the_runtime_keeps_running() {
         "while (true) { try { while (true) {} } catch {} finally { while (true) {} } }",
         "new Promise(() => setTimeout(() => { while (true) {} }, 0))",
         "(function again() { Promise.resolve().then(again); })()",
+        "Promise.resolve().then(() => { while (true) {} }); while (true) {}",
+        "for (let i = 0; i < 2; i++) Promise.reject({ get stack() { while (true) {} } })",
     ] {
         let waiting = runtime.eval("wait.js", "globalThis.marker = 1; new Promise(() => {})");
         let started = Instant::now();
@@ -193,4 +195,49 @@ fn dropping_a_runtime_blocked_in_a_loader_call_returns_promptly() {
     )
     .unwrap();
     assert_eq!(map["name"], "issued");
+}
+
+#[test]
+fn a_killed_script_runs_none_of_its_queued_callbacks() {
+    let host = testing::headless_host();
+    let (session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+    let join = |area: &str| {
+        format!(
+            r#"window.swf["probe.emit"]("onExtensionResponse", JSON.stringify({{
+                type: "json",
+                dataObj: {{ cmd: "moveToArea", areaName: "{area}", uoBranch: [] }},
+            }}))"#
+        )
+    };
+    assert!(
+        runtime
+            .eval("before.js", join("before-1"))
+            .wait::<bool>(TIMEOUT)
+            .unwrap()
+    );
+
+    let error = runtime
+        .eval(
+            "leak.js",
+            format!(
+                "Promise.resolve().then(() => {}); while (true) {{}}",
+                join("leaked-1")
+            ),
+        )
+        .wait::<Value>(TIMEOUT)
+        .unwrap_err();
+    assert!(
+        matches!(error, RuntimeError::Killed(Kill::Watchdog)),
+        "{error}"
+    );
+
+    let map: Value = serde_json::from_str(
+        &session
+            .read_projection(|projection| answer(projection, Query::Map {}))
+            .recv_timeout(TIMEOUT)
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(map["name"], "before");
 }
