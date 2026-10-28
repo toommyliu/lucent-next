@@ -21,6 +21,7 @@ export type ItemPool = "bag" | "misc" | "class" | "house";
 export type ItemSnapshotFields = { armor: boolean, banked: boolean, cape: boolean, classItem: boolean, classRank: number | null, enhancement?: EnhancementSnapshot, helm: boolean, pet: boolean, pool: ItemPool, weapon: boolean, };
 export type ItemSnapshot = Omit<ItemData, "enhancement"> & ItemSnapshotFields;
 export type MapState = { id: number, name: string, roomNumber: number, };
+export type Query = { "kind": "map", } | { "kind": "me", };
 export type Point = { x: number, y: number, };
 export type EntityKind = "player" | "monster";
 export type AuraKind = "active" | "passive";
@@ -45,5 +46,6 @@ export type QuestReward = { dropChance?: number, itemId: number, name: string, q
 export type QuestData = { cadence: QuestCadence, id: number, name: string, once: boolean, requirements: Array<QuestItem>, rewards: Array<QuestReward>, };
 export type ShopData = { house: boolean, id: number, items: Array<ItemSnapshot>, limited: boolean, merge: boolean, name: string, };
 export type MonsterDrop = { eventDrop: boolean, icon: string, item: ItemSnapshot, questGated: boolean, questObjectives: Array<string>, rarity: number, rarityName: string, rateBoostPercent: number | null, ratePercent: number | null, requiredQuestIds: Array<number>, requiredQuests: Array<string>, stackSize: number, variableQuantity: boolean, };
+export type QueryOutputs = { map: MapState, me: PlayerSnapshot | null, };
 
 export const EntityState = { Dead: 0, Idle: 1, InCombat: 2 } as const;

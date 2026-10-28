@@ -36,7 +36,27 @@ impl Store for arboard::Clipboard {
     }
 }
 
+#[cfg(feature = "testing")]
+#[derive(Default)]
+struct Memory(String);
+
+#[cfg(feature = "testing")]
+impl Store for Memory {
+    fn read(&mut self) -> String {
+        self.0.clone()
+    }
+
+    fn write(&mut self, text: String) {
+        self.0 = text;
+    }
+}
+
 impl Clipboard {
+    #[cfg(feature = "testing")]
+    pub(crate) fn memory() -> std::io::Result<Clipboard> {
+        Clipboard::spawn(|| Ok::<_, std::convert::Infallible>(Memory::default()))
+    }
+
     pub(crate) fn system() -> std::io::Result<Clipboard> {
         Clipboard::spawn(arboard::Clipboard::new)
     }

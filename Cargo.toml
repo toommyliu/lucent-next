@@ -35,6 +35,7 @@ ruffle_core = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd8
 ruffle_render = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }
 ruffle_render_wgpu = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }
 ruffle_frontend_utils = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074", default-features = false, features = ["cpal", "fs"] }
+swf = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }
 
 [patch.crates-io]
 naga = { git = "https://github.com/toommyliu/ruffle", rev = "c59cb1ac1bd82aaa176cd24fd23c8fefb7b8c074" }

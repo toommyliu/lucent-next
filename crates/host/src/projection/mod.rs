@@ -170,3 +170,13 @@ impl Projection {
         }
     }
 }
+
+impl lucent_protocol::query::Answer for Projection {
+    fn map(&self) -> lucent_protocol::event::MapState {
+        self.world.map.clone()
+    }
+
+    fn me(&self) -> Option<lucent_protocol::world::PlayerSnapshot> {
+        self.world.get_me().map(|player| player.snapshot_data())
+    }
+}
