@@ -89,8 +89,11 @@ impl Runtime {
             .spawn(move || {
                 link.set_waker(Waker::from(wake.clone()));
                 match Engine::new(link) {
-                    Ok(engine) => {
-                        wake.wake_by_ref();
+                    Ok(mut engine) => {
+                        let Some(items) = take_events(&mut engine) else {
+                            return;
+                        };
+                        engine.turn(&serde_json::to_string(&items).unwrap());
                         let _ = ready.send(Ok(()));
                         run(engine, &incoming, &wake);
                     }
