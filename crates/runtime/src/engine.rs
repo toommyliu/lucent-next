@@ -154,6 +154,9 @@ impl Engine {
     }
 
     fn check_pending(&mut self) {
+        if self.isolate.get_slot::<ScriptLink>().unwrap().overflowed() {
+            return;
+        }
         loop {
             let remaining = self.active.len();
             for active in std::mem::take(&mut self.active) {

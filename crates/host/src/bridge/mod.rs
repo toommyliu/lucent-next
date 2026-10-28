@@ -144,6 +144,10 @@ impl ScriptEvents {
         self.events.try_recv()
     }
 
+    pub(crate) fn overflowed(&self) -> bool {
+        self.events.overflow.load(Ordering::Acquire)
+    }
+
     pub(crate) fn set_waker(&self, waker: Waker) {
         *self.waker.lock().unwrap() = Some(waker);
     }

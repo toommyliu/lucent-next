@@ -23,6 +23,10 @@ impl ScriptLink {
         self.events.try_recv()
     }
 
+    pub fn overflowed(&self) -> bool {
+        self.events.overflowed()
+    }
+
     pub fn set_waker(&self, waker: Waker) {
         self.events.set_waker(waker);
     }
