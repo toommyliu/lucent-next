@@ -1,6 +1,7 @@
 mod backends;
 pub(crate) mod frames;
 mod net;
+mod projection;
 pub(crate) mod surface;
 pub(crate) mod view;
 
@@ -16,7 +17,11 @@ pub(crate) use backends::Clipboard;
 pub(crate) use surface::Surface;
 pub(crate) use view::{ViewEvent, Viewport};
 
-use crate::bridge::{Bridge, Call, Error as BridgeError, Event, Events, PendingCall, Value};
+use crate::bridge::{
+    Bridge, Call, EVENT_CAPACITY, Error as BridgeError, Event, EventSender, Events, PendingCall,
+    PendingRead, Value, event_queue,
+};
+use crate::projection::Projection;
 use backends::{Navigator, Tasks, Ui, audio};
 use net::Net;
 use view::Effect;
@@ -25,14 +30,37 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(2);
 const MIN_INBOX_DRAIN: Duration = Duration::from_millis(2);
 const LOADER_SWF: &[u8] = include_bytes!("../../../../assets/loader.swf");
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum SessionEvent {
+    Projection(lucent_protocol::event::ProjectionEvent),
+    Invalidated,
+}
+
 pub(crate) struct Handle {
     inbox: Inbox,
     exited: mpsc::Receiver<Result<(), PlayerError>>,
     thread: Option<thread::JoinHandle<()>>,
     events: Events,
+    projection_events: Events<SessionEvent>,
 }
 
 impl Handle {
+    pub(crate) fn read_projection<R: serde::Serialize + Send + 'static>(
+        &self,
+        read: impl FnOnce(&Projection) -> R + Send + 'static,
+    ) -> PendingRead<R> {
+        let (read, pending) = Read::new(read);
+        self.inbox.post(Msg::Read(read));
+        pending
+    }
+
+    pub(crate) fn try_event(&self) -> Result<Option<SessionEvent>, BridgeError> {
+        self.projection_events.try_recv()
+    }
+    pub(crate) fn recv_event(&self, timeout: Duration) -> Result<SessionEvent, BridgeError> {
+        self.projection_events.recv_timeout(timeout)
+    }
+
     pub(crate) fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {
         let (call, pending) = Call::new(name.into(), args);
         if let Err(error) = self.inbox.0.send(Msg::Call(call))
@@ -88,7 +116,17 @@ pub(crate) fn spawn(
     let inbox = Inbox(tx);
     let (exit_tx, exited) = mpsc::sync_channel(1);
     let outbox = inbox.clone();
-    let (bridge, events) = Bridge::new();
+    let (provider, loader_events) = Bridge::new();
+    let (loader_notifications, events) = event_queue(EVENT_CAPACITY);
+    let (notifications, projection_events) = event_queue(EVENT_CAPACITY);
+    let bridge = PlayerBridge {
+        provider,
+        streams: EventStreams {
+            loader_events,
+            loader_notifications,
+            notifications,
+        },
+    };
     let thread = thread::Builder::new().name(name).spawn(move || {
         let result = run(rx, outbox, surface, net, clipboard, muted, bridge);
         if let Err(error) = &result {
@@ -101,10 +139,34 @@ pub(crate) fn spawn(
         exited,
         thread: Some(thread),
         events,
+        projection_events,
     })
 }
 
+type ReadCallback = Box<dyn FnOnce(Result<&Projection, BridgeError>) + Send>;
+
+pub(crate) struct Read(ReadCallback);
+
+impl Read {
+    fn new<R: serde::Serialize + Send + 'static>(
+        read: impl FnOnce(&Projection) -> R + Send + 'static,
+    ) -> (Read, PendingRead<R>) {
+        let (tx, pending) = PendingRead::channel();
+        (
+            Read(Box::new(move |state| {
+                let result = state.and_then(|state| {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read(state)))
+                        .map_err(|_| BridgeError::ReadPanicked)
+                });
+                let _ = tx.send(result);
+            })),
+            pending,
+        )
+    }
+}
+
 pub(crate) enum Msg {
+    Read(Read),
     Call(Call),
     View(ViewEvent),
     Mute(bool),
@@ -139,7 +201,7 @@ fn run(
     net: tokio::runtime::Handle,
     clipboard: Clipboard,
     muted: bool,
-    bridge: Bridge,
+    bridge: PlayerBridge,
 ) -> Result<(), PlayerError> {
     let Some((viewport, muted)) = first_viewport(&inbox, muted) else {
         return Ok(());
@@ -191,13 +253,27 @@ fn first_viewport(inbox: &mpsc::Receiver<Msg>, mut muted: bool) -> Option<(Viewp
             Msg::View(ViewEvent::Resized(viewport)) => return Some((viewport, muted)),
             Msg::Mute(mute) => muted = mute,
             Msg::Call(call) => call.reject(BridgeError::NotReady),
+            Msg::Read(read) => (read.0)(Err(BridgeError::NotReady)),
             Msg::Stop => return None,
             Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
         }
     }
 }
 
+struct EventStreams {
+    loader_events: Events,
+    loader_notifications: EventSender<Event>,
+    notifications: EventSender<SessionEvent>,
+}
+
+struct PlayerBridge {
+    provider: Bridge,
+    streams: EventStreams,
+}
+
 struct Running {
+    streams: EventStreams,
+    projection: Projection,
     player: Arc<Mutex<Player>>,
     tasks: Tasks,
     viewport: Viewport,
@@ -215,8 +291,9 @@ impl Running {
         net: Net,
         inbox: Inbox,
         clipboard: Clipboard,
-        bridge: Bridge,
+        bridge: PlayerBridge,
     ) -> Result<Running, PlayerError> {
+        let PlayerBridge { provider, streams } = bridge;
         let renderer = surface.renderer(viewport)?;
         let movie = SwfMovie::from_data(LOADER_SWF, "file:///lucent/loader.swf".into(), None, None)
             .map_err(|error| PlayerError::Loader(error.to_string()))?;
@@ -226,7 +303,7 @@ impl Running {
             .with_navigator(Navigator::new(net, inbox, tasks.clone()))
             .with_boxed_audio(audio())
             .with_ui(Ui::new(clipboard))
-            .with_external_interface(Box::new(bridge))
+            .with_external_interface(Box::new(provider))
             .with_viewport_dimensions(viewport.width(), viewport.height(), viewport.scale())
             .with_autoplay(true)
             .with_letterbox(Letterbox::On)
@@ -234,6 +311,8 @@ impl Running {
             .build();
         let now = Instant::now();
         Ok(Running {
+            streams,
+            projection: Projection::default(),
             player,
             tasks,
             viewport,
@@ -246,18 +325,25 @@ impl Running {
     }
 
     fn handle(&mut self, msg: Msg) -> ControlFlow<()> {
+        self.drain_events();
         match msg {
             Msg::Stop => return ControlFlow::Break(()),
+            Msg::Read(read) => (read.0)(Ok(&self.projection)),
             Msg::Mute(muted) => self.set_muted(muted),
-            Msg::Call(call) => call.dispatch(&mut self.player.lock().unwrap()),
+            Msg::Call(mut call) => {
+                let result = call.dispatch(&mut self.player.lock().unwrap());
+                self.drain_events();
+                call.resolve(result);
+            }
             Msg::Poll(task) => {
                 task.run();
             }
             Msg::Wake => {}
             Msg::View(event) => {
                 view::translate(event, self.viewport, &mut self.effects);
-                let mut player = self.player.lock().unwrap();
-                for effect in self.effects.drain(..) {
+                let mut effects = std::mem::take(&mut self.effects);
+                for effect in effects.drain(..) {
+                    let mut player = self.player.lock().unwrap();
                     match effect {
                         Effect::Event(event) => {
                             player.handle_event(event);
@@ -270,9 +356,13 @@ impl Running {
                             }
                         }
                     }
+                    drop(player);
+                    self.drain_events();
                 }
+                self.effects = effects;
             }
         }
+        self.drain_events();
         ControlFlow::Continue(())
     }
 
@@ -290,6 +380,9 @@ impl Running {
         let mut player = self.player.lock().unwrap();
         let before = player.frames_run();
         player.tick(FloatDuration::from_std(dt));
+        drop(player);
+        self.drain_events();
+        let mut player = self.player.lock().unwrap();
         if player.frames_run() != before && player.needs_render() && self.surface.wants_frame() {
             player.render();
             self.drawn += 1;
@@ -306,7 +399,10 @@ impl Running {
             self.drawn = 0;
             self.stats_since = now;
         }
-        player.time_til_next_frame()
+        let wait = player.time_til_next_frame();
+        drop(player);
+        self.drain_events();
+        wait
     }
 }
 
@@ -316,7 +412,16 @@ mod tests {
 
     fn running() -> Running {
         let now = Instant::now();
+        let (_provider, loader_events) = Bridge::new();
+        let (loader_notifications, _) = event_queue(EVENT_CAPACITY);
+        let (notifications, _) = event_queue(EVENT_CAPACITY);
         Running {
+            streams: EventStreams {
+                loader_events,
+                loader_notifications,
+                notifications,
+            },
+            projection: Projection::default(),
             player: PlayerBuilder::new().build(),
             tasks: Tasks::default(),
             viewport: Viewport::new(1024.0, 768.0, 1.0).unwrap(),

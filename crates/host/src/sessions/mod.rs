@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::bridge::{Call, Error as BridgeError, Event, PendingCall, Value};
+use crate::bridge::{Call, Error as BridgeError, Event, PendingCall, PendingRead, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::player::frames::FrameLease;
-use crate::player::{self, Clipboard, Surface, ViewEvent};
+use crate::player::{self, Clipboard, SessionEvent, Surface, ViewEvent};
 
 #[derive(Clone)]
 pub struct Host {
@@ -82,6 +82,51 @@ pub struct Session {
 }
 
 impl Session {
+    /// Runs after preceding events and returns owned, serializable data.
+    ///
+    /// ```
+    /// use lucent_host::Session;
+    /// use lucent_protocol::item::ItemContainer;
+    /// fn snapshot(session: &Session) {
+    ///     let _ = session.read_projection(|state| {
+    ///         state.items.get(ItemContainer::Inventory, 1).map(|item| item.data().clone())
+    ///     });
+    /// }
+    /// ```
+    ///
+    /// Live handles cannot cross this boundary.
+    ///
+    /// ```compile_fail
+    /// use lucent_host::Session;
+    /// use lucent_protocol::item::ItemContainer;
+    /// fn live_handle(session: &Session) {
+    ///     let _ = session.read_projection(|state| state.items.get(ItemContainer::Inventory, 1));
+    /// }
+    /// ```
+    pub fn read_projection<R: serde::Serialize + Send + 'static>(
+        &self,
+        read: impl FnOnce(&crate::projection::Projection) -> R + Send + 'static,
+    ) -> PendingRead<R> {
+        match &self.player {
+            Some(player) => player.read_projection(read),
+            None => PendingRead::stopped(),
+        }
+    }
+
+    pub fn try_event(&self) -> Result<Option<SessionEvent>, BridgeError> {
+        self.player
+            .as_ref()
+            .ok_or(BridgeError::Stopped)?
+            .try_event()
+    }
+
+    pub fn recv_event(&self, timeout: Duration) -> Result<SessionEvent, BridgeError> {
+        self.player
+            .as_ref()
+            .ok_or(BridgeError::Stopped)?
+            .recv_event(timeout)
+    }
+
     /// Raw loader transport for actions and targeted hydration. Ordinary reads use host state.
     pub fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {
         match &self.player {
