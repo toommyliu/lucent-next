@@ -1,10 +1,33 @@
-import { LiveEntity, type Entity } from "./entity";
+import {
+  LiveEntity,
+  type Entity,
+  type EntityData,
+  type EntitySnapshot,
+} from "./entity";
+import type { ItemSnapshot } from "./item";
 import { normalizeGameText } from "./model";
-import type { DeepReadonly } from "./model";
-import type * as Protocol from "./protocol";
 
 /** An item and its acquisition metadata from AQW's monster-drop response. */
-export type MonsterDrop = DeepReadonly<Protocol.MonsterDrop>;
+export interface MonsterDrop {
+  readonly eventDrop: boolean;
+  readonly icon: string;
+  readonly item: ItemSnapshot;
+  readonly questGated: boolean;
+  readonly questObjectives: readonly string[];
+  /** Numeric rarity identifier returned by AQW. */
+  readonly rarity: number;
+  /** Display label produced by AQW's rarity lookup. */
+  readonly rarityName: string;
+  /** Additive boosted drop percentage shown by AQW, when supplied. */
+  readonly rateBoostPercent: number | null;
+  /** Drop percentage shown by AQW, normalized for variable quantities. */
+  readonly ratePercent: number | null;
+  /** Quest IDs parsed from AQW's `sReqQuests` field. */
+  readonly requiredQuestIds: readonly number[];
+  readonly requiredQuests: readonly string[];
+  readonly stackSize: number;
+  readonly variableQuantity: boolean;
+}
 
 export interface MonsterSelectorByMapId {
   readonly monsterMapId: number;
@@ -74,9 +97,19 @@ export const orderMonstersByPriority = (
   return ordered;
 };
 
-export type MonsterData = Protocol.MonsterData;
+export interface MonsterData extends EntityData {
+  aggressive: boolean;
+  level: number;
+  monsterId: number;
+  monsterMapId: number;
+  name: string;
+  race: string;
+}
 
-export type MonsterSnapshot = DeepReadonly<Protocol.MonsterSnapshot>;
+export type MonsterSnapshot = Readonly<MonsterData> &
+  EntitySnapshot & {
+    readonly drops: readonly MonsterDrop[];
+  };
 
 export class LiveMonster extends LiveEntity<MonsterData> implements Monster {
   readonly #drops = new Map<number, MonsterDrop>();

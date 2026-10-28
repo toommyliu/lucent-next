@@ -1,6 +1,9 @@
-import { LiveEntity, type Entity } from "./entity";
-import type { DeepReadonly } from "./model";
-import type * as Protocol from "./protocol";
+import {
+  LiveEntity,
+  type Entity,
+  type EntityData,
+  type EntitySnapshot,
+} from "./entity";
 
 export interface PlayerSelectorByUsername {
   readonly username: string;
@@ -15,7 +18,10 @@ export const toPlayerSelector = (query: PlayerQuery): PlayerSelector => ({
 
 export type BoostType = "classPoints" | "exp" | "gold" | "rep";
 
-export type Position = Readonly<Protocol.Point>;
+export interface Position {
+  readonly x: number;
+  readonly y: number;
+}
 
 export interface Player extends Entity {
   readonly afk: boolean;
@@ -27,9 +33,17 @@ export interface Player extends Entity {
   readonly username: string;
 }
 
-export type PlayerData = Protocol.PlayerData;
+export interface PlayerData extends EntityData {
+  afk: boolean;
+  entityId: number;
+  entityType: string;
+  level: number;
+  pad: string;
+  position: Position;
+  username: string;
+}
 
-export type PlayerSnapshot = DeepReadonly<Protocol.PlayerSnapshot>;
+export type PlayerSnapshot = Readonly<PlayerData> & EntitySnapshot;
 
 export class LivePlayer extends LiveEntity<PlayerData> implements Player {
   get afk(): boolean {

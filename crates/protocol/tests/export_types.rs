@@ -32,3 +32,33 @@ fn check_accepts_crlf_and_rejects_changed_declarations_without_writing() {
     assert_eq!(fs::read_to_string(&path).unwrap(), stale);
     fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn enhancement_labels_allow_undefined_without_changing_json() {
+    use lucent_protocol::item::{Enhancement, EnhancementSnapshot};
+    use serde_json::json;
+    use ts_rs::{Config, TS};
+
+    let declaration = EnhancementSnapshot::decl(&Config::new());
+    assert!(
+        declaration.contains("name?: string | undefined"),
+        "{declaration}"
+    );
+    assert!(
+        declaration.contains("special?: string | undefined"),
+        "{declaration}"
+    );
+
+    let mut snapshot = EnhancementSnapshot {
+        data: Enhancement::default(),
+        name: None,
+        special: None,
+    };
+    assert_eq!(serde_json::to_value(&snapshot).unwrap(), json!({}));
+    snapshot.name = Some("Fighter".into());
+    snapshot.special = Some("Dauntless".into());
+    assert_eq!(
+        serde_json::to_value(&snapshot).unwrap(),
+        json!({ "name": "Fighter", "special": "Dauntless" })
+    );
+}

@@ -1,8 +1,5 @@
 import { LiveModel, normalizeGameText } from "./model";
-import type { DeepReadonly } from "./model";
-import type * as Protocol from "./protocol";
 import { EntityState } from "./protocol";
-
 import { LiveAura, reduceActiveAura } from "./aura";
 import type {
   Aura,
@@ -43,9 +40,24 @@ export interface Entity {
   toJSON(): EntitySnapshot;
 }
 
-export type EntityData = Protocol.EntityData;
+export interface EntityData {
+  cell: string;
+  hp: number;
+  maxHp: number;
+  maxMp: number;
+  mp: number;
+  state: EntityState;
+}
 
-export type EntitySnapshot = DeepReadonly<Protocol.EntitySnapshot>;
+export type EntitySnapshot = Readonly<EntityData> & {
+  readonly alive: boolean;
+  readonly auras: readonly AuraSnapshot[];
+  readonly dead: boolean;
+  readonly hpPercent: number;
+  readonly idle: boolean;
+  readonly inCombat: boolean;
+  readonly mpPercent: number;
+};
 
 export abstract class LiveEntity<State extends EntityData>
   extends LiveModel<State>

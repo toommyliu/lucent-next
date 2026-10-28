@@ -8,7 +8,8 @@
     "script-api.d.ts"
   ],
   "scripts": {
-    "generate": "node gen/gen-script-types.ts"
+    "generate": "node gen/gen-script-types.ts",
+    "check": "node gen/gen-script-types.ts --check"
   },
   "devDependencies": {
     "typescript": "npm:@typescript/typescript6@^6.0.2"

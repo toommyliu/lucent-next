@@ -254,10 +254,10 @@ pub struct EnhancementSnapshot {
     #[serde(flatten)]
     pub data: Enhancement,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
+    #[ts(optional, type = "string | undefined")]
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
+    #[ts(optional, type = "string | undefined")]
     pub special: Option<String>,
 }
 

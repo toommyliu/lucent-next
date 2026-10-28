@@ -1,7 +1,5 @@
-import type { Item } from "./item";
+import type { Item, ItemSnapshot } from "./item";
 import { LiveModel } from "./model";
-import type { DeepReadonly } from "./model";
-import type * as Protocol from "./protocol";
 
 export interface Shop {
   readonly house: boolean;
@@ -13,11 +11,18 @@ export interface Shop {
   toJSON(): ShopSnapshot;
 }
 
-export type ShopData = Omit<Protocol.ShopData, "items"> & {
+export interface ShopData {
+  house: boolean;
+  id: number;
   items: readonly Item[];
-};
+  limited: boolean;
+  merge: boolean;
+  name: string;
+}
 
-export type ShopSnapshot = DeepReadonly<Protocol.ShopData>;
+export type ShopSnapshot = Readonly<Omit<ShopData, "items">> & {
+  readonly items: readonly ItemSnapshot[];
+};
 
 export class LiveShop extends LiveModel<ShopData> implements Shop {
   get house(): boolean {
