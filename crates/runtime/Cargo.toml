@@ -6,3 +6,7 @@ publish.workspace = true
 
 [dependencies]
 lucent-protocol.workspace = true
+
+[dev-dependencies]
+lucent-host.workspace = true
+serde = { version = "1", features = ["derive"] }
