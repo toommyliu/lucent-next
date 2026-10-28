@@ -4,7 +4,7 @@ use lucent_host::ScriptLink;
 
 use crate::{RuntimeError, host};
 
-type Rejections = Vec<(v8::Global<v8::Promise>, String)>;
+type Rejections = Vec<(v8::Global<v8::Promise>, v8::Global<v8::Value>)>;
 
 pub(crate) struct Engine {
     context: v8::Global<v8::Context>,
@@ -87,13 +87,21 @@ impl Engine {
             })
         });
         tc.perform_microtask_checkpoint();
-        let rejections = tc.get_slot_mut::<Rejections>().unwrap();
-        let errors: Vec<_> = rejections.drain(..).map(|(_, error)| error).collect();
+        let rejections: Vec<_> = tc
+            .get_slot_mut::<Rejections>()
+            .unwrap()
+            .drain(..)
+            .map(|(_, value)| value)
+            .collect();
         let json = result?;
         if tc.has_caught() {
             return Err(exception_text(tc));
         }
-        if !errors.is_empty() {
+        if !rejections.is_empty() {
+            let errors: Vec<_> = rejections
+                .iter()
+                .map(|value| rejection_text(tc, value))
+                .collect();
             return Err(RuntimeError::JavaScript(errors.join("\n")));
         }
         Ok(json)
@@ -112,6 +120,23 @@ fn exception_text(
     )
 }
 
+fn rejection_text(
+    scope: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
+    value: &v8::Global<v8::Value>,
+) -> String {
+    let value = v8::Local::new(scope, value);
+    v8::Local::<v8::Object>::try_from(value)
+        .ok()
+        .and_then(|object| {
+            let key = v8::String::new(scope, "stack")?;
+            object
+                .get(scope, key.into())
+                .filter(|value| value.is_string())
+        })
+        .unwrap_or(value)
+        .to_rust_string_lossy(scope)
+}
+
 extern "C" fn promise_rejected(message: v8::PromiseRejectMessage) {
     v8::callback_scope!(unsafe scope, &message);
     v8::scope!(let scope, scope);
@@ -121,20 +146,11 @@ extern "C" fn promise_rejected(message: v8::PromiseRejectMessage) {
             let Some(value) = message.get_value() else {
                 return;
             };
-            let stack = v8::Local::<v8::Object>::try_from(value)
-                .ok()
-                .and_then(|object| {
-                    let key = v8::String::new(scope, "stack")?;
-                    object
-                        .get(scope, key.into())
-                        .filter(|value| value.is_string())
-                })
-                .unwrap_or(value)
-                .to_rust_string_lossy(scope);
+            let value = v8::Global::new(scope, value);
             scope
                 .get_slot_mut::<Rejections>()
                 .unwrap()
-                .push((promise, stack));
+                .push((promise, value));
         }
         v8::PromiseRejectEvent::PromiseHandlerAddedAfterReject => {
             scope

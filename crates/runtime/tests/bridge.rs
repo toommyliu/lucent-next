@@ -120,6 +120,16 @@ fn evaluations_checkpoint_microtasks_and_report_faults_without_poisoning_the_con
         .unwrap();
     assert_eq!(
         runtime
+            .eval(
+                "handled-getter.js",
+                "let hits = 0; Promise.reject({ get stack() { hits++; return 'ignored'; } }).catch(() => {}); hits",
+            )
+            .wait::<i64>(TIMEOUT)
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        runtime
             .eval("alive.js", "6 * 7")
             .wait::<i64>(TIMEOUT)
             .unwrap(),
