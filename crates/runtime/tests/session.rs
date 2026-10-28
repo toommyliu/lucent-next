@@ -14,8 +14,8 @@ struct Observed {
 #[test]
 fn a_script_calls_the_loader_and_reads_projected_state() {
     let host = testing::headless_host();
-    let mut session = testing::start_probe(&host, ProbeMovie::new());
-    let runtime = Runtime::start(session.take_script_link().unwrap()).unwrap();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
 
     let observed: Observed = runtime
         .eval(

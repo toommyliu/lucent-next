@@ -9,8 +9,8 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 #[test]
 fn loader_values_round_trip_and_invalid_host_requests_throw_errors() {
     let host = testing::headless_host();
-    let mut session = testing::start_probe(&host, ProbeMovie::new());
-    let runtime = Runtime::start(session.take_script_link().unwrap()).unwrap();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
     let observed: Value = runtime
         .eval(
             "bridge.js",
@@ -51,8 +51,8 @@ fn loader_values_round_trip_and_invalid_host_requests_throw_errors() {
 #[test]
 fn evaluations_checkpoint_microtasks_and_report_faults_without_poisoning_the_context() {
     let host = testing::headless_host();
-    let mut session = testing::start_probe(&host, ProbeMovie::new());
-    let runtime = Runtime::start(session.take_script_link().unwrap()).unwrap();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
     runtime
         .eval(
             "jobs.js",

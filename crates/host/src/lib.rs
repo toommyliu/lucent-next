@@ -4,7 +4,6 @@ pub mod projection;
 mod sessions;
 
 pub use bridge::PendingRead;
-pub use player::SessionEvent;
 pub use player::frames::FrameLease;
 pub use player::surface::{Gpu, Surface};
 pub use player::view::{

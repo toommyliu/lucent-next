@@ -1,11 +1,13 @@
 use std::sync::mpsc::{self, RecvTimeoutError, TrySendError};
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
+use std::task::Waker;
 use std::time::Duration;
 
 pub use lucent_protocol::bridge::{Event, Value};
+use lucent_protocol::event::ProjectionEvent;
 use ruffle_core::Player;
 use ruffle_core::context::UpdateContext;
 use ruffle_core::external::{ExternalInterfaceProvider, Value as ExternalValue};
@@ -85,6 +87,72 @@ pub(crate) fn invoke(player: &mut Player, name: &str, args: Vec<Value>) -> Resul
     })
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum ScriptEvent {
+    Loader {
+        event: Event,
+        projected: Vec<ProjectionEvent>,
+    },
+    Invalidated,
+}
+
+pub(crate) struct ScriptEventSender {
+    events: Option<EventSender<ScriptEvent>>,
+    waker: Arc<Mutex<Option<Waker>>>,
+}
+
+pub(crate) struct ScriptEvents {
+    events: Events<ScriptEvent>,
+    waker: Arc<Mutex<Option<Waker>>>,
+}
+
+pub(crate) fn script_events(capacity: usize) -> (ScriptEventSender, ScriptEvents) {
+    let (sender, events) = event_queue(capacity);
+    let waker = Arc::new(Mutex::new(None));
+    (
+        ScriptEventSender {
+            events: Some(sender),
+            waker: waker.clone(),
+        },
+        ScriptEvents { events, waker },
+    )
+}
+
+impl ScriptEventSender {
+    pub(crate) fn send(&self, event: ScriptEvent) {
+        self.events.as_ref().unwrap().send(event);
+        self.wake();
+    }
+
+    fn wake(&self) {
+        let waker = self.waker.lock().unwrap().clone();
+        if let Some(waker) = waker {
+            waker.wake();
+        }
+    }
+}
+
+impl Drop for ScriptEventSender {
+    fn drop(&mut self) {
+        self.events.take();
+        self.wake();
+    }
+}
+
+impl ScriptEvents {
+    pub(crate) fn try_recv(&self) -> Result<Option<ScriptEvent>, Error> {
+        self.events.try_recv()
+    }
+
+    pub(crate) fn overflowed(&self) -> bool {
+        self.events.overflow.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn set_waker(&self, waker: Waker) {
+        *self.waker.lock().unwrap() = Some(waker);
+    }
+}
+
 pub(crate) const EVENT_CAPACITY: usize = 1024;
 
 enum QueueEntry<T> {
@@ -144,20 +212,6 @@ impl<T> Events<T> {
             Ok(QueueEntry::Overflow) => Err(Error::Overflow),
             Err(mpsc::TryRecvError::Empty) => Ok(None),
             Err(mpsc::TryRecvError::Disconnected) => Err(Error::Stopped),
-        }
-    }
-
-    pub(crate) fn recv_timeout(&self, timeout: Duration) -> Result<T, Error> {
-        if self.take_overflow() {
-            return Err(Error::Overflow);
-        }
-        let entry = self.receiver.recv_timeout(timeout).map_err(receive_error)?;
-        if self.take_overflow() {
-            return Err(Error::Overflow);
-        }
-        match entry {
-            QueueEntry::Event(event) => Ok(event),
-            QueueEntry::Overflow => Err(Error::Overflow),
         }
     }
 }
@@ -239,5 +293,52 @@ fn into_external(value: Value) -> ExternalValue {
                 .collect(),
         ),
         Value::List(value) => ExternalValue::List(value.into_iter().map(into_external).collect()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Weak;
+    use std::task::Wake;
+
+    struct Observe {
+        events: Weak<Mutex<ScriptEvents>>,
+        seen: mpsc::Sender<Result<Option<ScriptEvent>, Error>>,
+    }
+
+    impl Wake for Observe {
+        fn wake(self: Arc<Self>) {
+            let events = self.events.upgrade().unwrap();
+            let events = events.lock().unwrap();
+            let event = events.try_recv();
+            events.set_waker(Waker::from(self.clone()));
+            self.seen.send(event).unwrap();
+        }
+    }
+
+    #[test]
+    fn the_latest_waker_observes_events_and_disconnection_and_can_register_again() {
+        let (producer, events) = script_events(1);
+        let events = Arc::new(Mutex::new(events));
+        let (old_sender, old) = mpsc::channel();
+        let (sender, current) = mpsc::channel();
+        for seen in [old_sender, sender] {
+            events
+                .lock()
+                .unwrap()
+                .set_waker(Waker::from(Arc::new(Observe {
+                    events: Arc::downgrade(&events),
+                    seen,
+                })));
+        }
+        producer.send(ScriptEvent::Invalidated);
+        assert_eq!(
+            current.try_recv().unwrap(),
+            Ok(Some(ScriptEvent::Invalidated))
+        );
+        assert_eq!(old.try_recv(), Err(mpsc::TryRecvError::Disconnected));
+        drop(producer);
+        assert_eq!(current.try_recv().unwrap(), Err(Error::Stopped));
     }
 }

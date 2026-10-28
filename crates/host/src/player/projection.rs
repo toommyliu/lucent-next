@@ -3,11 +3,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use lucent_protocol::{
     PacketDirection,
     bridge::{from_json, to_json},
+    event::ProjectionEvent,
     hydration::HydrationResult,
 };
 
-use super::{Running, SessionEvent};
-use crate::bridge::{self, Error, Event, Value};
+use super::Running;
+use crate::bridge::{self, Error, Event, ScriptEvent, Value};
 use crate::projection::{
     PacketProjection,
     packet::{PacketDecode, parse_packet},
@@ -16,63 +17,63 @@ use crate::projection::{
 impl Running {
     pub(super) fn drain_events(&mut self) {
         loop {
-            match self.streams.loader_events.try_recv() {
+            let epoch = self.projection.receipts.epoch();
+            match self.loader_events.try_recv() {
                 Err(Error::Overflow) => self.invalidate_projection(),
                 Ok(Some(event)) => {
-                    self.project_event(&event);
-                    self.streams.loader_notifications.send(event);
+                    let projected = self.project_event(&event);
+                    self.publish(ScriptEvent::Loader { event, projected });
                 }
                 Ok(None) | Err(_) => break,
+            }
+            if self.projection.receipts.epoch() != epoch {
+                self.publish(ScriptEvent::Invalidated);
             }
         }
     }
 
+    fn publish(&self, event: ScriptEvent) {
+        if let Some(stream) = &self.script_events {
+            stream.send(event);
+        }
+    }
+
     fn invalidate_projection(&mut self) {
-        self.streams.loader_notifications.mark_overflow();
         self.projection.connection("OnConnectionLost");
         tracing::debug!(
             epoch = self.projection.receipts.epoch(),
             "projection invalidated after event overflow"
         );
-        self.streams.notifications.send(SessionEvent::Invalidated);
     }
 
-    fn project_event(&mut self, event: &Event) {
+    fn project_event(&mut self, event: &Event) -> Vec<ProjectionEvent> {
         let Some(Value::String(raw)) = event.args.first() else {
-            return;
+            return vec![];
         };
         let direction = match event.name.as_str() {
             "onConnection" => {
-                let previous_epoch = self.projection.receipts.epoch();
                 self.projection.connection(raw);
-                let epoch = self.projection.receipts.epoch();
-                if epoch != previous_epoch {
-                    self.streams.notifications.send(SessionEvent::Invalidated);
-                }
                 tracing::debug!(
                     status = raw,
                     epoch = self.projection.receipts.epoch(),
                     "projection connection changed"
                 );
-                return;
+                return vec![];
             }
             "onExtensionResponse" => PacketDirection::Extension,
             "packetFromClient" => PacketDirection::Client,
             "packetFromServer" => PacketDirection::Server,
-            _ => return,
+            _ => return vec![],
         };
         let PacketDecode::Parsed(packet) = parse_packet(direction, raw) else {
-            return;
+            return vec![];
         };
         let mut progress = self.projection.packet(&packet, now_ms(), true);
+        let mut projected = vec![];
         loop {
             match progress {
                 PacketProjection::Applied(output) => {
-                    for event in output.events {
-                        self.streams
-                            .notifications
-                            .send(SessionEvent::Projection(event));
-                    }
+                    projected = output.events;
                     break;
                 }
                 PacketProjection::Unhandled => break,
@@ -116,6 +117,7 @@ impl Running {
             inventory = self.projection.items.all(lucent_protocol::item::ItemContainer::Inventory).len(),
             "projection processed packet"
         );
+        projected
     }
 }
 
@@ -130,10 +132,8 @@ fn now_ms() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bridge::{Bridge, Error as BridgeError, Events, event_queue};
-    use crate::player::{
-        EventStreams, Msg, Read, Surface, Tasks, Viewport, first_viewport, surface,
-    };
+    use crate::bridge::{Bridge, Error as BridgeError, ScriptEvents, script_events};
+    use crate::player::{Msg, Read, Surface, Tasks, Viewport, first_viewport, surface};
     use crate::projection::Projection;
     use lucent_protocol::{item::ItemContainer, readiness::ReadinessKey};
     use ruffle_core::{
@@ -146,18 +146,14 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    fn running(input: usize, output: usize) -> (Running, Bridge, Events, Events<SessionEvent>) {
+    fn running(input: usize, output: usize) -> (Running, Bridge, ScriptEvents) {
         let (bridge, loader_events) = Bridge::with_capacity(input);
-        let (loader_notifications, raw) = event_queue(output);
-        let (notifications, projected) = event_queue(output);
+        let (producer, events) = script_events(output);
         let now = Instant::now();
         (
             Running {
-                streams: EventStreams {
-                    loader_events,
-                    loader_notifications,
-                    notifications,
-                },
+                loader_events,
+                script_events: Some(producer),
                 projection: Projection::default(),
                 player: PlayerBuilder::new().build(),
                 tasks: Tasks::default(),
@@ -169,8 +165,7 @@ mod tests {
                 surface: Surface::textures(surface::noop_gpu(), || {}),
             },
             bridge,
-            raw,
-            projected,
+            events,
         )
     }
 
@@ -222,7 +217,7 @@ mod tests {
 
     #[test]
     fn session_read_observes_preceding_bridge_baseline_and_delta_without_polling_events() {
-        let (mut running, bridge, _raw, _projected) = running(16, 16);
+        let (mut running, bridge, _events) = running(16, 16);
         extension(
             &mut running,
             &bridge,
@@ -242,7 +237,7 @@ mod tests {
 
     #[test]
     fn session_unavailable_hydration_keeps_processing_following_events() {
-        let (mut running, bridge, _raw, _projected) = running(16, 16);
+        let (mut running, bridge, _events) = running(16, 16);
         area(&mut running, &bridge);
         extension(
             &mut running,
@@ -263,7 +258,7 @@ mod tests {
 
     #[test]
     fn session_input_overflow_invalidates_before_reads_and_fresh_baselines_recover() {
-        let (mut running, bridge, raw, projected) = running(2, 16);
+        let (mut running, bridge, events) = running(2, 16);
         running.projection.auth.username = "player-a".into();
         extension(
             &mut running,
@@ -271,6 +266,9 @@ mod tests {
             json!({"cmd":"initInventory", "items":[{"ItemID":1,"iQty":3}]}),
         );
         assert_eq!(read(&mut running, |state| quantity(state, 1)), Some(3.0));
+        assert!(
+            matches!(events.try_recv().unwrap(), Some(ScriptEvent::Loader { event, .. }) if event.name == "onExtensionResponse")
+        );
         area(&mut running, &bridge);
         extension(
             &mut running,
@@ -286,11 +284,7 @@ mod tests {
             )),
             (1, None, ReadinessKey::ALL.to_vec())
         );
-        assert_eq!(raw.try_recv(), Err(BridgeError::Overflow));
-        assert_eq!(
-            projected.try_recv().unwrap(),
-            Some(SessionEvent::Invalidated)
-        );
+        assert_eq!(events.try_recv().unwrap(), Some(ScriptEvent::Invalidated));
         extension(
             &mut running,
             &bridge,
@@ -308,7 +302,7 @@ mod tests {
 
     #[test]
     fn session_observer_overflow_reports_loss_without_invalidating_projection() {
-        let (mut running, bridge, raw, projected) = running(16, 1);
+        let (mut running, bridge, events) = running(16, 1);
         running.projection.auth.username = "player-a".into();
         area(&mut running, &bridge);
         extension(
@@ -323,13 +317,12 @@ mod tests {
             )),
             (0, Some(8.0))
         );
-        assert_eq!(raw.try_recv(), Err(BridgeError::Overflow));
-        assert_eq!(projected.try_recv(), Err(BridgeError::Overflow));
+        assert_eq!(events.try_recv(), Err(BridgeError::Overflow));
     }
 
     #[test]
     fn session_server_debug_packets_do_not_duplicate_extension_mutations() {
-        let (mut running, bridge, _raw, _projected) = running(16, 16);
+        let (mut running, bridge, _events) = running(16, 16);
         extension(
             &mut running,
             &bridge,
@@ -351,8 +344,8 @@ mod tests {
 
     #[test]
     fn session_projection_is_isolated_between_players() {
-        let (mut first, first_bridge, _first_raw, _first_projected) = running(16, 16);
-        let (mut second, second_bridge, _second_raw, _second_projected) = running(16, 16);
+        let (mut first, first_bridge, _first_events) = running(16, 16);
+        let (mut second, second_bridge, _second_events) = running(16, 16);
         extension(
             &mut first,
             &first_bridge,
@@ -373,7 +366,7 @@ mod tests {
         let (request, reply) = Read::new(|_| 42);
         sender.send(Msg::Read(request)).unwrap();
         sender.send(Msg::Stop).unwrap();
-        assert_eq!(first_viewport(&receiver, false), None);
+        assert!(first_viewport(&receiver, false).is_none());
         assert_eq!(
             reply.recv_timeout(Duration::ZERO),
             Err(BridgeError::NotReady)
@@ -389,7 +382,7 @@ mod tests {
 
     #[test]
     fn session_read_timeout_preserves_the_queued_reply() {
-        let (mut running, _bridge, _raw, _projected) = running(16, 16);
+        let (mut running, _bridge, _events) = running(16, 16);
         let (request, reply) = Read::new(|_| 42);
         assert_eq!(
             reply.recv_timeout(Duration::ZERO),
@@ -401,7 +394,7 @@ mod tests {
 
     #[test]
     fn panicking_read_returns_an_error_and_the_player_keeps_serving_reads() {
-        let (mut running, _bridge, _raw, _projected) = running(16, 16);
+        let (mut running, _bridge, _events) = running(16, 16);
         let (request, reply) = Read::new::<()>(|_| panic!("read failed"));
         let _ = running.handle(Msg::Read(request));
         assert_eq!(
@@ -413,7 +406,7 @@ mod tests {
 
     #[test]
     fn session_connection_loss_invalidates_preceding_baselines_and_old_world() {
-        let (mut running, bridge, _raw, _projected) = running(16, 16);
+        let (mut running, bridge, _events) = running(16, 16);
         running.projection.auth.username = "player-a".into();
         area(&mut running, &bridge);
         extension(
@@ -444,7 +437,7 @@ mod tests {
 
     #[test]
     fn session_connection_resets_notify_projected_event_consumers() {
-        let (mut running, bridge, _raw, projected) = running(16, 16);
+        let (mut running, bridge, events) = running(16, 16);
         for (status, epoch) in [
             ("OnConnection", 1),
             ("OnConnectionLost", 2),
@@ -456,16 +449,36 @@ mod tests {
                 json!({"cmd":"initInventory", "items":[{"ItemID":1,"iQty":3}]}),
             );
             assert_eq!(read(&mut running, |state| quantity(state, 1)), Some(3.0));
+            assert!(
+                matches!(events.try_recv().unwrap(), Some(ScriptEvent::Loader { event, .. }) if event.name == "onExtensionResponse")
+            );
             queue(&mut running, &bridge, "onConnection", status.into());
             assert_eq!(read(&mut running, |state| quantity(state, 1)), None);
             assert_eq!(read(&mut running, |state| state.receipts.epoch()), epoch);
             assert_eq!(
-                projected.try_recv().unwrap(),
-                Some(SessionEvent::Invalidated)
+                events.try_recv().unwrap(),
+                Some(ScriptEvent::Loader {
+                    event: Event {
+                        name: "onConnection".into(),
+                        args: vec![Value::String(status.into())]
+                    },
+                    projected: vec![],
+                })
             );
+            assert_eq!(events.try_recv().unwrap(), Some(ScriptEvent::Invalidated));
         }
         queue(&mut running, &bridge, "onConnection", "unknown".into());
         assert_eq!(read(&mut running, |state| state.receipts.epoch()), 3);
-        assert_eq!(projected.try_recv().unwrap(), None);
+        assert_eq!(
+            events.try_recv().unwrap(),
+            Some(ScriptEvent::Loader {
+                event: Event {
+                    name: "onConnection".into(),
+                    args: vec![Value::String("unknown".into())]
+                },
+                projected: vec![],
+            })
+        );
+        assert_eq!(events.try_recv().unwrap(), None);
     }
 }

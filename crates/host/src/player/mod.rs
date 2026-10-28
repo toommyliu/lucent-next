@@ -18,8 +18,7 @@ pub(crate) use surface::Surface;
 pub(crate) use view::{ViewEvent, Viewport};
 
 use crate::bridge::{
-    Bridge, Call, EVENT_CAPACITY, Error as BridgeError, Event, EventSender, Events, PendingCall,
-    PendingRead, Value, event_queue,
+    Bridge, Call, Error as BridgeError, Events, PendingCall, PendingRead, ScriptEventSender, Value,
 };
 use crate::projection::Projection;
 use backends::{Navigator, Tasks, Ui};
@@ -47,36 +46,13 @@ pub(crate) struct Options {
     pub(crate) muted: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum SessionEvent {
-    Projection(lucent_protocol::event::ProjectionEvent),
-    Invalidated,
-}
-
 pub(crate) struct Handle {
     pub(crate) inbox: Inbox,
     exited: mpsc::Receiver<Result<(), PlayerError>>,
     thread: Option<thread::JoinHandle<()>>,
-    events: Events,
-    projection_events: Events<SessionEvent>,
 }
 
 impl Handle {
-    pub(crate) fn try_event(&self) -> Result<Option<SessionEvent>, BridgeError> {
-        self.projection_events.try_recv()
-    }
-    pub(crate) fn recv_event(&self, timeout: Duration) -> Result<SessionEvent, BridgeError> {
-        self.projection_events.recv_timeout(timeout)
-    }
-
-    pub(crate) fn try_loader_event(&self) -> Result<Option<Event>, BridgeError> {
-        self.events.try_recv()
-    }
-
-    pub(crate) fn recv_loader_event(&self, timeout: Duration) -> Result<Event, BridgeError> {
-        self.events.recv_timeout(timeout)
-    }
-
     pub(crate) fn send(&self, event: ViewEvent) {
         self.inbox.post(Msg::View(event));
     }
@@ -114,15 +90,9 @@ pub(crate) fn spawn(
     let (exit_tx, exited) = mpsc::sync_channel(1);
     let outbox = inbox.clone();
     let (provider, loader_events) = Bridge::new();
-    let (loader_notifications, events) = event_queue(EVENT_CAPACITY);
-    let (notifications, projection_events) = event_queue(EVENT_CAPACITY);
     let bridge = PlayerBridge {
         provider,
-        streams: EventStreams {
-            loader_events,
-            loader_notifications,
-            notifications,
-        },
+        loader_events,
     };
     let thread = thread::Builder::new().name(name).spawn(move || {
         let result = run(rx, outbox, surface, net, options, bridge);
@@ -135,8 +105,6 @@ pub(crate) fn spawn(
         inbox,
         exited,
         thread: Some(thread),
-        events,
-        projection_events,
     })
 }
 
@@ -165,6 +133,7 @@ impl Read {
 pub(crate) enum Msg {
     Read(Read),
     Call(Call),
+    Attach(ScriptEventSender),
     View(ViewEvent),
     Mute(bool),
     Poll(async_task::Runnable),
@@ -218,10 +187,11 @@ fn run(
     options: Options,
     bridge: PlayerBridge,
 ) -> Result<(), PlayerError> {
-    let Some((viewport, muted)) = first_viewport(&inbox, options.muted) else {
+    let Some((viewport, muted, script_events)) = first_viewport(&inbox, options.muted) else {
         return Ok(());
     };
     let mut running = Running::build(viewport, &surface, Net::new(net)?, outbox, options, bridge)?;
+    running.script_events = script_events;
     running.set_muted(muted);
     let mut wait = Duration::ZERO;
     'running: loop {
@@ -255,11 +225,18 @@ fn run(
     Ok(())
 }
 
-fn first_viewport(inbox: &mpsc::Receiver<Msg>, mut muted: bool) -> Option<(Viewport, bool)> {
+fn first_viewport(
+    inbox: &mpsc::Receiver<Msg>,
+    mut muted: bool,
+) -> Option<(Viewport, bool, Option<ScriptEventSender>)> {
+    let mut script_events = None;
     loop {
         match inbox.recv().ok()? {
-            Msg::View(ViewEvent::Resized(viewport)) => return Some((viewport, muted)),
+            Msg::View(ViewEvent::Resized(viewport)) => {
+                return Some((viewport, muted, script_events));
+            }
             Msg::Mute(mute) => muted = mute,
+            Msg::Attach(producer) => script_events = Some(producer),
             Msg::Call(call) => call.reject(BridgeError::NotReady),
             Msg::Read(read) => (read.0)(Err(BridgeError::NotReady)),
             Msg::Stop => return None,
@@ -268,19 +245,14 @@ fn first_viewport(inbox: &mpsc::Receiver<Msg>, mut muted: bool) -> Option<(Viewp
     }
 }
 
-struct EventStreams {
-    loader_events: Events,
-    loader_notifications: EventSender<Event>,
-    notifications: EventSender<SessionEvent>,
-}
-
 struct PlayerBridge {
     provider: Bridge,
-    streams: EventStreams,
+    loader_events: Events,
 }
 
 struct Running {
-    streams: EventStreams,
+    loader_events: Events,
+    script_events: Option<ScriptEventSender>,
     projection: Projection,
     player: Arc<Mutex<Player>>,
     tasks: Tasks,
@@ -301,7 +273,10 @@ impl Running {
         options: Options,
         bridge: PlayerBridge,
     ) -> Result<Running, PlayerError> {
-        let PlayerBridge { provider, streams } = bridge;
+        let PlayerBridge {
+            provider,
+            loader_events,
+        } = bridge;
         let renderer = surface.renderer(viewport)?;
         let movie = SwfMovie::from_data(
             &options.movie.0,
@@ -324,7 +299,8 @@ impl Running {
             .build();
         let now = Instant::now();
         Ok(Running {
-            streams,
+            loader_events,
+            script_events: None,
             projection: Projection::default(),
             player,
             tasks,
@@ -341,6 +317,7 @@ impl Running {
         self.drain_events();
         match msg {
             Msg::Stop => return ControlFlow::Break(()),
+            Msg::Attach(producer) => self.script_events = Some(producer),
             Msg::Read(read) => (read.0)(Ok(&self.projection)),
             Msg::Mute(muted) => self.set_muted(muted),
             Msg::Call(mut call) => {
@@ -426,14 +403,9 @@ mod tests {
     fn running() -> Running {
         let now = Instant::now();
         let (_provider, loader_events) = Bridge::new();
-        let (loader_notifications, _) = event_queue(EVENT_CAPACITY);
-        let (notifications, _) = event_queue(EVENT_CAPACITY);
         Running {
-            streams: EventStreams {
-                loader_events,
-                loader_notifications,
-                notifications,
-            },
+            loader_events,
+            script_events: None,
             projection: Projection::default(),
             player: PlayerBuilder::new().build(),
             tasks: Tasks::default(),
@@ -447,12 +419,45 @@ mod tests {
     }
 
     #[test]
+    fn an_attachment_before_the_viewport_is_kept_until_the_player_stops() {
+        let viewport = Viewport::new(1024.0, 768.0, 1.0).unwrap();
+        let (producer, events) = crate::bridge::script_events(1);
+        let (tx, rx) = mpsc::channel();
+        tx.send(Msg::Attach(producer)).unwrap();
+        tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
+        let (received, muted, producer) = first_viewport(&rx, false).unwrap();
+        assert_eq!((received, muted), (viewport, false));
+        assert_eq!(events.try_recv(), Ok(None));
+        producer
+            .as_ref()
+            .unwrap()
+            .send(crate::bridge::ScriptEvent::Invalidated);
+        assert_eq!(
+            events.try_recv(),
+            Ok(Some(crate::bridge::ScriptEvent::Invalidated))
+        );
+        drop(producer);
+        assert_eq!(events.try_recv(), Err(BridgeError::Stopped));
+    }
+
+    #[test]
+    fn stopping_before_the_viewport_ends_an_attachment() {
+        let (producer, events) = crate::bridge::script_events(1);
+        let (tx, rx) = mpsc::channel();
+        tx.send(Msg::Stop).unwrap();
+        tx.send(Msg::Attach(producer)).unwrap();
+        assert!(first_viewport(&rx, false).is_none());
+        drop(rx);
+        assert_eq!(events.try_recv(), Err(BridgeError::Stopped));
+    }
+
+    #[test]
     fn calls_before_the_first_viewport_are_rejected() {
         let (tx, rx) = mpsc::channel();
         let (call, pending) = Call::new("player.rest".into(), vec![]);
         tx.send(Msg::Call(call)).unwrap();
         tx.send(Msg::Stop).unwrap();
-        assert_eq!(first_viewport(&rx, false), None);
+        assert!(first_viewport(&rx, false).is_none());
         assert_eq!(
             pending.recv_timeout(Duration::ZERO),
             Err(BridgeError::NotReady)
@@ -486,7 +491,10 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::Mute(true)).unwrap();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
-        assert_eq!(first_viewport(&rx, false), Some((viewport, true)));
+        assert_eq!(
+            first_viewport(&rx, false).map(|(viewport, muted, _)| (viewport, muted)),
+            Some((viewport, true))
+        );
     }
 
     #[test]
@@ -494,6 +502,9 @@ mod tests {
         let viewport = Viewport::new(1024.0, 768.0, 1.0).unwrap();
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
-        assert_eq!(first_viewport(&rx, true), Some((viewport, true)));
+        assert_eq!(
+            first_viewport(&rx, true).map(|(viewport, muted, _)| (viewport, muted)),
+            Some((viewport, true))
+        );
     }
 }

@@ -2,13 +2,12 @@ mod link;
 pub use link::ScriptLink;
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use crate::bridge::{Error as BridgeError, Event, PendingRead};
+use crate::bridge::{EVENT_CAPACITY, PendingRead, script_events};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::player::frames::FrameLease;
-use crate::player::{self, Audio, Clipboard, Movie, SessionEvent, Surface, ViewEvent};
+use crate::player::{self, Audio, Clipboard, Movie, Surface, ViewEvent};
 
 #[derive(Clone)]
 pub struct Host {
@@ -63,10 +62,10 @@ impl Host {
 
     pub(crate) fn start_movie(&self, surface: Surface, movie: Movie) -> Result<Session, HostError> {
         let id = self.shared.next_session.fetch_add(1, Ordering::Relaxed);
-        let (player, script_link) = self.spawn_player(id, &surface, false, &movie)?;
+        let player = self.spawn_player(id, &surface, false, &movie)?;
         Ok(Session {
+            unclaimed_link: Some(player.inbox.clone()),
             player: Some(player),
-            script_link: Some(script_link),
             movie,
             id,
             surface,
@@ -81,8 +80,8 @@ impl Host {
         surface: &Surface,
         muted: bool,
         movie: &Movie,
-    ) -> Result<(player::Handle, ScriptLink), HostError> {
-        let player = player::spawn(
+    ) -> Result<player::Handle, HostError> {
+        player::spawn(
             format!("player-{session}"),
             surface.share(),
             self.shared.net.handle().clone(),
@@ -93,15 +92,13 @@ impl Host {
                 muted,
             },
         )
-        .map_err(HostError::PlayerThread)?;
-        let link = ScriptLink::new(session, player.inbox.clone());
-        Ok((player, link))
+        .map_err(HostError::PlayerThread)
     }
 }
 
 pub struct Session {
     player: Option<player::Handle>,
-    script_link: Option<ScriptLink>,
+    unclaimed_link: Option<player::Inbox>,
     movie: Movie,
     id: u64,
     surface: Surface,
@@ -141,36 +138,11 @@ impl Session {
         }
     }
 
-    pub fn try_event(&self) -> Result<Option<SessionEvent>, BridgeError> {
-        self.player
-            .as_ref()
-            .ok_or(BridgeError::Stopped)?
-            .try_event()
-    }
-
-    pub fn recv_event(&self, timeout: Duration) -> Result<SessionEvent, BridgeError> {
-        self.player
-            .as_ref()
-            .ok_or(BridgeError::Stopped)?
-            .recv_event(timeout)
-    }
-
     pub fn take_script_link(&mut self) -> Option<ScriptLink> {
-        self.script_link.take()
-    }
-
-    pub fn try_loader_event(&self) -> Result<Option<Event>, BridgeError> {
-        self.player
-            .as_ref()
-            .ok_or(BridgeError::Stopped)?
-            .try_loader_event()
-    }
-
-    pub fn recv_loader_event(&self, timeout: Duration) -> Result<Event, BridgeError> {
-        self.player
-            .as_ref()
-            .ok_or(BridgeError::Stopped)?
-            .recv_loader_event(timeout)
+        let inbox = self.unclaimed_link.take()?;
+        let (producer, events) = script_events(EVENT_CAPACITY);
+        inbox.post(player::Msg::Attach(producer));
+        Some(ScriptLink::new(self.id, inbox, events))
     }
 
     pub fn send(&self, event: ViewEvent) {
@@ -184,14 +156,14 @@ impl Session {
     }
 
     pub fn restart(&mut self, surface: Surface) -> Result<(), HostError> {
-        self.script_link = None;
+        self.unclaimed_link = None;
         self.player = None;
         self.surface = surface;
-        let (player, script_link) =
-            self.host
-                .spawn_player(self.id, &self.surface, self.muted, &self.movie)?;
+        let player = self
+            .host
+            .spawn_player(self.id, &self.surface, self.muted, &self.movie)?;
+        self.unclaimed_link = Some(player.inbox.clone());
         self.player = Some(player);
-        self.script_link = Some(script_link);
         Ok(())
     }
 
