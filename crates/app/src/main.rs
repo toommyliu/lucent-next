@@ -11,7 +11,14 @@ fn main() -> Result<(), HostError> {
         .init();
 
     let host = Host::new()?;
-    gpui_platform::application().run(move |cx| {
+    let app = gpui_platform::application();
+    let reopen_host = host.clone();
+    app.on_reopen(move |cx| {
+        if let Err(error) = game_window::open(&reopen_host, cx) {
+            tracing::error!(%error, "couldn't reopen a game window");
+        }
+    });
+    app.run(move |cx| {
         if let Err(error) = game_window::open(&host, cx) {
             tracing::error!(%error, "couldn't open a game window");
             cx.quit();
