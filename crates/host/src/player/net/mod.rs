@@ -1,9 +1,11 @@
+mod http;
+
 use std::future::Future;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use url::Url;
+use url::{Host, Url};
 
 pub(crate) struct Timeouts {
     pub connect: Duration,
@@ -25,10 +27,45 @@ const USER_AGENT: &str = if cfg!(target_os = "macos") {
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
 };
 
+struct GameHost(String);
+
+impl GameHost {
+    fn parse(host: &str) -> Option<Self> {
+        let Host::Domain(host) = Host::parse(host).ok()? else {
+            return None;
+        };
+        let host = host.strip_suffix('.').unwrap_or(&host);
+        if !host.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        }) {
+            return None;
+        }
+        ["aq.com", "artix.com"]
+            .into_iter()
+            .any(|root| {
+                host == root
+                    || host
+                        .strip_suffix(root)
+                        .is_some_and(|prefix| prefix.ends_with('.'))
+            })
+            .then(|| Self(host.to_owned()))
+    }
+}
+
 pub(crate) struct Net {
     rt: tokio::runtime::Handle,
     http: reqwest::Client,
+    cookies: std::sync::Arc<reqwest::cookie::Jar>,
+    deadline: Duration,
     tasks: Mutex<Vec<tokio::task::AbortHandle>>,
+    #[cfg(test)]
+    routes: Vec<(&'static str, std::net::SocketAddr)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,7 +86,25 @@ pub(crate) struct HttpResponse {
     pub status: u16,
     pub content_type: Option<String>,
     pub length: Option<u64>,
-    pub body: async_channel::Receiver<Result<Vec<u8>, NetError>>,
+    pub body: HttpBody,
+}
+
+#[derive(Clone)]
+pub(crate) struct HttpBody {
+    chunks: async_channel::Receiver<Vec<u8>>,
+    failure: Arc<OnceLock<NetError>>,
+}
+
+impl HttpBody {
+    pub(crate) async fn next_chunk(&self) -> Result<Option<Vec<u8>>, NetError> {
+        match self.chunks.recv().await {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(_) => match self.failure.get() {
+                Some(error) => Err(error.clone()),
+                None => Ok(None),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -83,67 +138,50 @@ pub(crate) enum SocketEvent {
 
 impl Net {
     pub(crate) fn new(rt: tokio::runtime::Handle) -> Result<Net, NetError> {
-        Net::with_timeouts(rt, TIMEOUTS)
+        Self::build(rt, TIMEOUTS, reqwest::Client::builder())
     }
 
+    #[cfg(test)]
     pub(crate) fn with_timeouts(
         rt: tokio::runtime::Handle,
         timeouts: Timeouts,
     ) -> Result<Net, NetError> {
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            "artixmode",
-            reqwest::header::HeaderValue::from_static("launcher"),
-        );
-        let http = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .default_headers(headers)
-            .cookie_store(true)
+        Self::build(rt, timeouts, reqwest::Client::builder().no_proxy())
+    }
+
+    fn build(
+        rt: tokio::runtime::Handle,
+        timeouts: Timeouts,
+        builder: reqwest::ClientBuilder,
+    ) -> Result<Net, NetError> {
+        let http = builder
+            .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(timeouts.connect)
             .read_timeout(timeouts.read)
-            .timeout(timeouts.request)
             .build()?;
         Ok(Net {
             rt,
             http,
+            cookies: Default::default(),
+            deadline: timeouts.request,
             tasks: Mutex::new(Vec::new()),
+            #[cfg(test)]
+            routes: Vec::new(),
         })
     }
 
-    pub(crate) fn fetch(
-        &self,
-        request: HttpRequest,
-    ) -> impl Future<Output = Result<HttpResponse, NetError>> + 'static {
-        let http = self.http.clone();
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        self.track(self.rt.spawn(async move {
-            let method = match request.method { Method::Get => reqwest::Method::GET, Method::Post => reqwest::Method::POST };
-            let mut builder = http.request(method, request.url);
-            for (name, value) in request.headers { builder = builder.header(name, value); }
-            if let Some((body, mime)) = request.body {
-                builder = builder.header(reqwest::header::CONTENT_TYPE, mime).body(body);
-            }
-            let mut response = match builder.send().await {
-                Ok(response) => response,
-                Err(error) => { let _ = tx.send(Err(error.into())); return; }
-            };
-            tracing::debug!(url = %response.url(), status = response.status().as_u16(), "HTTP response");
-            let (chunks_tx, chunks_rx) = async_channel::bounded(16);
-            let head = HttpResponse {
-                url: response.url().clone(), status: response.status().as_u16(),
-                content_type: response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).map(str::to_owned),
-                length: response.content_length(), body: chunks_rx,
-            };
-            if tx.send(Ok(head)).is_err() { return; }
-            loop {
-                match response.chunk().await {
-                    Ok(Some(chunk)) => if chunks_tx.send(Ok(chunk.to_vec())).await.is_err() { break; },
-                    Ok(None) => break,
-                    Err(error) => { let _ = chunks_tx.send(Err(error.into())).await; break; }
-                }
-            }
-        }));
-        async move { rx.await.unwrap_or(Err(NetError::Shutdown)) }
+    #[cfg(test)]
+    fn for_test(
+        rt: tokio::runtime::Handle,
+        routes: Vec<(&'static str, std::net::SocketAddr)>,
+    ) -> Net {
+        let mut builder = reqwest::Client::builder().no_proxy();
+        for (host, addr) in &routes {
+            builder = builder.resolve(host, *addr);
+        }
+        let mut net = Self::build(rt, TIMEOUTS, builder).unwrap();
+        net.routes = routes;
+        net
     }
 
     pub(crate) fn connect(
@@ -154,16 +192,29 @@ impl Net {
         outgoing: async_channel::Receiver<Vec<u8>>,
         mut deliver: impl FnMut(SocketEvent) -> bool + Send + 'static,
     ) {
+        let Some(host) = GameHost::parse(&host) else {
+            tracing::warn!(%host, port, "socket host rejected");
+            deliver(SocketEvent::Failed);
+            return;
+        };
+        #[cfg(test)]
+        let address = self
+            .routes
+            .iter()
+            .find(|(name, _)| *name == host.0)
+            .map(|(_, addr)| *addr);
         self.track(self.rt.spawn(async move {
-            let stream = match tokio::time::timeout(
-                timeout,
-                tokio::net::TcpStream::connect((host.as_str(), port)),
-            )
-            .await
-            {
+            let connecting = async {
+                #[cfg(test)]
+                if let Some(address) = address {
+                    return tokio::net::TcpStream::connect(address).await;
+                }
+                tokio::net::TcpStream::connect((host.0.as_str(), port)).await
+            };
+            let stream = match tokio::time::timeout(timeout, connecting).await {
                 Ok(Ok(stream)) => stream,
                 Ok(Err(error)) => {
-                    tracing::warn!(%host, port, %error, "socket connection failed");
+                    tracing::warn!(host = %host.0, port, %error, "socket connection failed");
                     deliver(SocketEvent::Failed);
                     return;
                 }
@@ -219,68 +270,163 @@ impl Drop for Net {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{Read, Write};
-
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::mpsc;
 
-    fn request_headers() -> Vec<(String, String)> {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = Url::parse(&format!(
-            "http://{}/game.swf",
-            listener.local_addr().unwrap()
-        ))
-        .unwrap();
-        let server = std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut head = Vec::new();
-            let mut buf = [0; 4096];
-            while !head.ends_with(b"\r\n\r\n") {
-                let read = stream.read(&mut buf).unwrap();
-                head.extend_from_slice(&buf[..read]);
+    fn accept(listener: &TcpListener) -> TcpStream {
+        listener.set_nonblocking(true).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            match listener.accept() {
+                Ok((stream, _)) => {
+                    stream.set_nonblocking(false).unwrap();
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    stream
+                        .set_write_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    return stream;
+                }
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::WouldBlock
+                        && std::time::Instant::now() < deadline =>
+                {
+                    std::thread::sleep(Duration::from_millis(5))
+                }
+                Err(error) => panic!("expected a socket connection: {error}"),
             }
-            stream
-                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-                .unwrap();
-            String::from_utf8(head)
-                .unwrap()
-                .lines()
-                .skip(1)
-                .filter_map(|line| line.split_once(": "))
-                .map(|(name, value)| (name.to_ascii_lowercase(), value.to_owned()))
-                .collect()
-        });
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let net = Net::new(runtime.handle().clone()).unwrap();
-        let request = HttpRequest {
-            method: Method::Get,
-            url,
-            headers: Vec::new(),
-            body: None,
-        };
-        runtime.block_on(async {
-            let response = net.fetch(request).await.unwrap();
-            while response.body.recv().await.is_ok() {}
-        });
-        server.join().unwrap()
+        }
     }
 
     #[test]
-    fn a_request_carries_the_launcher_user_agent_and_mode() {
-        let headers = request_headers();
-        let header = |name: &str| {
-            headers
-                .iter()
-                .find(|(n, _)| n == name)
-                .map(|(_, value)| value.as_str())
-        };
-        let user_agent = if cfg!(target_os = "macos") {
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_16_0) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
-        } else if cfg!(target_os = "windows") {
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
-        } else {
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
-        };
-        assert_eq!(header("user-agent"), Some(user_agent));
-        assert_eq!(header("artixmode"), Some("launcher"));
+    fn socket_policy_uses_canonical_dns_label_boundaries() {
+        for host in [
+            "aq.com",
+            "sock7.aq.com",
+            "SOCK8.AQ.COM.",
+            "euro.aqw.artix.com",
+            "asia.game.artix.com",
+        ] {
+            assert!(GameHost::parse(host).is_some(), "{host}");
+        }
+        for host in [
+            "127.0.0.1",
+            "2130706433",
+            "[::1]",
+            "::1",
+            "evil-aq.com",
+            "aq.com.evil",
+            "artix.com.evil",
+            "aq.com:5588",
+            "aq.com/path",
+            "user@aq.com",
+            "aq.com..",
+            "",
+        ] {
+            assert!(GameHost::parse(host).is_none(), "{host}");
+        }
+    }
+
+    #[test]
+    fn forbidden_socket_hostnames_are_rejected_before_dialing() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let net = Net::for_test(runtime.handle().clone(), vec![("aq.com.evil", addr)]);
+        let (_tx, rx) = async_channel::unbounded();
+        let (events, received) = mpsc::channel();
+        net.connect(
+            "aq.com.evil".into(),
+            addr.port(),
+            Duration::from_secs(1),
+            rx,
+            move |event| events.send(event).is_ok(),
+        );
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(1)).unwrap(),
+            SocketEvent::Failed
+        );
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+    }
+
+    #[test]
+    fn allowed_sockets_forward_arbitrary_bytes_unchanged() {
+        const OUTBOUND: &[u8] = b"\xffclient\0unfinished";
+        const INBOUND: &[u8] = b"\x80server\0partial";
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let mut stream = accept(&listener);
+            let mut bytes = vec![0; OUTBOUND.len()];
+            stream.read_exact(&mut bytes).unwrap();
+            assert_eq!(bytes, OUTBOUND);
+            for chunk in INBOUND.chunks(3) {
+                stream.write_all(chunk).unwrap();
+            }
+        });
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let net = Net::for_test(runtime.handle().clone(), vec![("sock7.aq.com", addr)]);
+        let (tx, rx) = async_channel::unbounded();
+        let (events, received) = mpsc::channel();
+        net.connect(
+            "sock7.aq.com".into(),
+            addr.port(),
+            Duration::from_secs(5),
+            rx,
+            move |event| events.send(event).is_ok(),
+        );
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(5)).unwrap(),
+            SocketEvent::Connected
+        );
+        tx.send_blocking(OUTBOUND[..3].to_vec()).unwrap();
+        tx.send_blocking(OUTBOUND[3..].to_vec()).unwrap();
+        let mut bytes = Vec::new();
+        loop {
+            match received
+                .recv_timeout(Duration::from_secs(5))
+                .expect("the socket never reported Closed")
+            {
+                SocketEvent::Data(chunk) => bytes.extend(chunk),
+                SocketEvent::Closed => break,
+                other => panic!("unexpected socket event {other:?}"),
+            }
+        }
+        assert_eq!(bytes, INBOUND);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn dropping_the_backend_closes_its_sockets() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let mut stream = accept(&listener);
+            assert_eq!(stream.read(&mut [0]).unwrap(), 0);
+        });
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let net = Net::for_test(runtime.handle().clone(), vec![("sock7.aq.com", addr)]);
+        let (_tx, rx) = async_channel::unbounded();
+        let (events, received) = mpsc::channel();
+        net.connect(
+            "sock7.aq.com".into(),
+            addr.port(),
+            Duration::from_secs(5),
+            rx,
+            move |event| events.send(event).is_ok(),
+        );
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(5)).unwrap(),
+            SocketEvent::Connected
+        );
+        drop(net);
+        server.join().unwrap();
     }
 }
