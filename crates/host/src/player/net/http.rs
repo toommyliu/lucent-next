@@ -220,7 +220,7 @@ mod tests {
             let chunk = [b'x'; 65536];
             for _ in 0..1024 {
                 if let Err(error) = stream.write_all(&chunk) {
-                    return error.kind();
+                    return error;
                 }
             }
             panic!("the client consumed an unread 64 MiB response");
@@ -250,10 +250,16 @@ mod tests {
             .await
             .expect("the HTTP task outlived its deadline while the consumer retained its body");
         });
-        assert!(matches!(
-            server.join().unwrap(),
-            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset
-        ));
+        let error = server.join().unwrap();
+        assert!(
+            matches!(
+                error.kind(),
+                std::io::ErrorKind::BrokenPipe
+                    | std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::ConnectionAborted
+            ),
+            "expected the deadline to close the HTTP connection: {error:?}"
+        );
         let result = runtime.block_on(async {
             while response.body.next_chunk().await?.is_some() {}
             Ok::<(), NetError>(())
