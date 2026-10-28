@@ -17,6 +17,14 @@ const TIMEOUTS: Timeouts = Timeouts {
     request: Duration::from_secs(300),
 };
 
+const USER_AGENT: &str = if cfg!(target_os = "macos") {
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_16_0) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+} else if cfg!(target_os = "windows") {
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+} else {
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+};
+
 pub(crate) struct Net {
     rt: tokio::runtime::Handle,
     http: reqwest::Client,
@@ -82,7 +90,14 @@ impl Net {
         rt: tokio::runtime::Handle,
         timeouts: Timeouts,
     ) -> Result<Net, NetError> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            "artixmode",
+            reqwest::header::HeaderValue::from_static("launcher"),
+        );
         let http = reqwest::Client::builder()
+            .user_agent(USER_AGENT)
+            .default_headers(headers)
             .cookie_store(true)
             .connect_timeout(timeouts.connect)
             .read_timeout(timeouts.read)
@@ -103,11 +118,7 @@ impl Net {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.track(self.rt.spawn(async move {
             let method = match request.method { Method::Get => reqwest::Method::GET, Method::Post => reqwest::Method::POST };
-            let game_host = request.url.host_str() == Some("game.aq.com");
             let mut builder = http.request(method, request.url);
-            if game_host {
-                builder = builder.header(reqwest::header::USER_AGENT, concat!("Lucent/", env!("CARGO_PKG_VERSION")));
-            }
             for (name, value) in request.headers { builder = builder.header(name, value); }
             if let Some((body, mime)) = request.body {
                 builder = builder.header(reqwest::header::CONTENT_TYPE, mime).body(body);
@@ -203,5 +214,73 @@ impl Drop for Net {
         for task in self.tasks.get_mut().unwrap().drain(..) {
             task.abort();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{Read, Write};
+
+    use super::*;
+
+    fn request_headers() -> Vec<(String, String)> {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = Url::parse(&format!(
+            "http://{}/game.swf",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut head = Vec::new();
+            let mut buf = [0; 4096];
+            while !head.ends_with(b"\r\n\r\n") {
+                let read = stream.read(&mut buf).unwrap();
+                head.extend_from_slice(&buf[..read]);
+            }
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .unwrap();
+            String::from_utf8(head)
+                .unwrap()
+                .lines()
+                .skip(1)
+                .filter_map(|line| line.split_once(": "))
+                .map(|(name, value)| (name.to_ascii_lowercase(), value.to_owned()))
+                .collect()
+        });
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let net = Net::new(runtime.handle().clone()).unwrap();
+        let request = HttpRequest {
+            method: Method::Get,
+            url,
+            headers: Vec::new(),
+            body: None,
+        };
+        runtime.block_on(async {
+            let response = net.fetch(request).await.unwrap();
+            while response.body.recv().await.is_ok() {}
+        });
+        server.join().unwrap()
+    }
+
+    #[test]
+    fn a_request_carries_the_launcher_user_agent_and_mode() {
+        let headers = request_headers();
+        let header = |name: &str| {
+            headers
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, value)| value.as_str())
+        };
+        let user_agent = if cfg!(target_os = "macos") {
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_16_0) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+        } else if cfg!(target_os = "windows") {
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+        } else {
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+        };
+        assert_eq!(header("user-agent"), Some(user_agent));
+        assert_eq!(header("artixmode"), Some("launcher"));
     }
 }
