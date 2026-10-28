@@ -21,10 +21,14 @@ class BumpRuffleError extends Data.TaggedError("BumpRuffleError")<{
 }> {}
 
 const run = Effect.fn("run")(
-  function* (cwd: string, command: string, args: ReadonlyArray<string>) {
+  function* (cwd: string, command: string, args: ReadonlyArray<string>, stdin = "") {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const handle = yield* spawner.spawn(
-      ChildProcess.make(command, args, { cwd, stderr: "inherit" }),
+      ChildProcess.make(command, args, {
+        cwd,
+        stdin: Stream.make(stdin).pipe(Stream.encodeText),
+        stderr: "inherit",
+      }),
     );
     const stdout = yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString);
     const exitCode = yield* handle.exitCode;
@@ -38,7 +42,8 @@ const run = Effect.fn("run")(
   Effect.scoped,
 );
 
-const git = (cwd: string, args: ReadonlyArray<string>) => run(cwd, "git", args);
+const git = (cwd: string, args: ReadonlyArray<string>, stdin?: string) =>
+  run(cwd, "git", args, stdin);
 
 const lines = (output: string) => output.split("\n").filter((line) => line !== "");
 
@@ -52,7 +57,7 @@ const repin = (text: string, from: string, to: string) =>
   text.replaceAll(from, to).replaceAll(`#${from.slice(0, 8)}"`, `#${to.slice(0, 8)}"`);
 
 const fetchRuffle = (repo: string, refspecs: ReadonlyArray<string>) =>
-  git(repo, ["fetch", "--quiet", "--filter=tree:0", "--no-tags", RUFFLE_REMOTE, ...refspecs]);
+  git(repo, ["fetch", "--quiet", "--filter=blob:none", "--no-tags", "ruffle", ...refspecs]);
 
 const revParse = (repo: string, rev: string) =>
   git(repo, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]).pipe(
@@ -140,6 +145,7 @@ const bump = Effect.fn("bump")(function* (rev: Option.Option<string>) {
 
   const repo = yield* fs.makeTempDirectoryScoped({ prefix: "lucent-ruffle-" });
   yield* git(repo, ["init", "--quiet"]);
+  yield* git(repo, ["remote", "add", "ruffle", RUFFLE_REMOTE]);
   yield* Console.log(`Fetching ${RUFFLE_REMOTE}`);
   yield* fetchRuffle(repo, [pin, "+refs/heads/*:refs/remotes/ruffle/*"]);
 
@@ -151,24 +157,45 @@ const bump = Effect.fn("bump")(function* (rev: Option.Option<string>) {
     return yield* Console.log(`Ruffle is already pinned at ${pin}`);
   }
 
-  const incoming = commits(
-    yield* git(repo, ["log", "--no-merges", "--format=%h%x09%s", `${pin}..${target}`]),
+  const blobs = new Set(
+    lines(
+      yield* git(repo, ["log", "--no-merges", "--raw", "--no-abbrev", "--format=", `${pin}...${target}`]),
+    )
+      .flatMap((line) => line.split(" ").slice(2, 4))
+      .filter((oid) => !/^0+$/.test(oid)),
   );
-  const outgoing = commits(
-    yield* git(repo, ["log", "--no-merges", "--format=%h%x09%s", `${target}..${pin}`]),
+  // Without this, --cherry-pick fetches each commit's blobs in a separate request.
+  if (blobs.size > 0) {
+    yield* git(
+      repo,
+      [
+        "-c",
+        "fetch.negotiationAlgorithm=noop",
+        "fetch",
+        "--quiet",
+        "--no-tags",
+        "--no-write-fetch-head",
+        "--filter=blob:none",
+        "--stdin",
+        "ruffle",
+      ],
+      [...blobs].join("\n"),
+    );
+  }
+  const range = ["--no-merges", "--cherry-pick", "--format=%h%x09%s", `${pin}...${target}`];
+  const added = commits(yield* git(repo, ["log", "--right-only", ...range]));
+  const dropped = commits(yield* git(repo, ["log", "--left-only", ...range]));
+  const incoming = Number(
+    yield* git(repo, ["rev-list", "--count", "--no-merges", `${pin}..${target}`]),
   );
-  const outgoingSubjects = new Set(outgoing.map((commit) => commit.subject));
-  const incomingSubjects = new Set(incoming.map((commit) => commit.subject));
-  const added = incoming.filter((commit) => !outgoingSubjects.has(commit.subject));
-  const dropped = outgoing.filter((commit) => !incomingSubjects.has(commit.subject));
-  const rebased = incoming.length - added.length;
+  const rewritten = incoming - added.length;
 
   yield* Console.log(`\n${target.slice(0, 10)} adds ${added.length} commits:`);
   for (const commit of added) {
     yield* Console.log(`  ${commit.hash} ${commit.subject}`);
   }
-  if (rebased > 0) {
-    yield* Console.log(`${rebased} commits on the pin were rewritten and keep their subjects.`);
+  if (rewritten > 0) {
+    yield* Console.log(`${rewritten} commits on the pin come back with the same changes.`);
   }
   if (dropped.length > 0) {
     yield* Console.log(`${dropped.length} commits on the pin are not in ${target.slice(0, 10)}:`);
@@ -208,14 +235,17 @@ const bump = Effect.fn("bump")(function* (rev: Option.Option<string>) {
     yield* Console.log("The new revision changes Ruffle's dependencies. Letting cargo update Cargo.lock.");
     if ((yield* cargoMetadata([], "inherit")) !== 0) {
       return yield* new BumpRuffleError({
-        message: "cargo cannot resolve the new revision. Cargo.toml and Cargo.lock are unchanged",
+        message: "cargo cannot resolve the new revision",
       });
     }
     return false;
   }).pipe(
     Effect.onError(() =>
       Effect.all([fs.writeFileString(manifestPath, manifest), fs.writeFileString(lockPath, lock)]).pipe(
-        Effect.ignore(),
+        Effect.andThen(Console.error("Restored Cargo.toml and Cargo.lock")),
+        Effect.catch(() =>
+          Console.error("Could not restore Cargo.toml and Cargo.lock. Run git checkout -- Cargo.toml Cargo.lock"),
+        ),
       ),
     ),
   );
