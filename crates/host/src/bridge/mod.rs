@@ -125,8 +125,9 @@ impl ScriptEventSender {
     }
 
     fn wake(&self) {
-        if let Some(waker) = self.waker.lock().unwrap().as_ref() {
-            waker.wake_by_ref();
+        let waker = self.waker.lock().unwrap().clone();
+        if let Some(waker) = waker {
+            waker.wake();
         }
     }
 }
@@ -304,13 +305,16 @@ mod tests {
 
     impl Wake for Observe {
         fn wake(self: Arc<Self>) {
-            let event = self.events.upgrade().unwrap().lock().unwrap().try_recv();
+            let events = self.events.upgrade().unwrap();
+            let events = events.lock().unwrap();
+            let event = events.try_recv();
+            events.set_waker(Waker::from(self.clone()));
             self.seen.send(event).unwrap();
         }
     }
 
     #[test]
-    fn the_latest_waker_observes_sent_events_and_disconnection() {
+    fn the_latest_waker_observes_events_and_disconnection_and_can_register_again() {
         let (producer, events) = script_events(1);
         let events = Arc::new(Mutex::new(events));
         let (old_sender, old) = mpsc::channel();
