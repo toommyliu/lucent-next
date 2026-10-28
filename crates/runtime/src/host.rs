@@ -7,6 +7,7 @@ use lucent_protocol::event::ProjectionEvent;
 use lucent_protocol::query::{Query, answer};
 use serde::Serialize;
 
+use crate::RuntimeError;
 use crate::interrupt::Interrupt;
 
 const HOST_TIMEOUT: Duration = Duration::from_secs(5);
@@ -43,8 +44,8 @@ fn wait<T>(pending: Pending<T>, interrupt: &Interrupt) -> Result<T, String> {
     interrupt.block();
     let deadline = Instant::now() + HOST_TIMEOUT;
     let result = loop {
-        if interrupt.stop().is_some() {
-            break Err("the script was stopped".into());
+        if let Some(stop) = interrupt.stop() {
+            break Err(RuntimeError::from(stop).to_string());
         }
         let left = deadline.saturating_duration_since(Instant::now());
         if left.is_zero() {

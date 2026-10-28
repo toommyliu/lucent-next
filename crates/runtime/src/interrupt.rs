@@ -1,7 +1,10 @@
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::Kill;
+use crate::{Kill, RuntimeError};
+
+const TURN_LIMIT: Duration = Duration::from_millis(200);
+const RETERMINATE: Duration = Duration::from_millis(20);
 
 pub(crate) struct Interrupt {
     state: Mutex<State>,
@@ -42,13 +45,17 @@ impl Interrupt {
 
     pub(crate) fn attach(&self, isolate: v8::IsolateHandle) {
         let mut state = self.state.lock().unwrap();
+        if matches!(state.stop, Some(Stop::Shutdown)) {
+            isolate.terminate_execution();
+        }
         state.isolate = Some(isolate);
-        match state.stop {
-            Some(Stop::Kill(_)) => state.stop = None,
-            Some(Stop::Shutdown) => {
-                state.isolate.as_ref().unwrap().terminate_execution();
-            }
-            None => {}
+    }
+
+    pub(crate) fn detach(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.isolate = None;
+        if matches!(state.stop, Some(Stop::Kill(_))) {
+            state.stop = None;
         }
     }
 
@@ -67,7 +74,7 @@ impl Interrupt {
 
     pub(crate) fn begin_turn(&self) {
         let mut state = self.state.lock().unwrap();
-        state.clock = Clock::Running(Instant::now() + Duration::from_millis(200));
+        state.clock = Clock::Running(Instant::now() + TURN_LIMIT);
         self.rouse(&state);
     }
 
@@ -117,7 +124,7 @@ impl Interrupt {
                     let left = deadline.saturating_duration_since(Instant::now());
                     if left.is_zero() {
                         state.kill(Kill::Watchdog);
-                        state.clock = Clock::Idle;
+                        state.clock = Clock::Running(Instant::now() + RETERMINATE);
                         continue;
                     }
                     state.timed = true;
@@ -133,11 +140,21 @@ impl Interrupt {
 
 impl State {
     fn kill(&mut self, kill: Kill) {
+        let Some(isolate) = &self.isolate else {
+            return;
+        };
         if self.stop.is_none() {
             self.stop = Some(Stop::Kill(kill));
         }
-        if let Some(isolate) = &self.isolate {
-            isolate.terminate_execution();
+        isolate.terminate_execution();
+    }
+}
+
+impl From<Stop> for RuntimeError {
+    fn from(stop: Stop) -> Self {
+        match stop {
+            Stop::Kill(kill) => RuntimeError::Killed(kill),
+            Stop::Shutdown => RuntimeError::Stopped,
         }
     }
 }

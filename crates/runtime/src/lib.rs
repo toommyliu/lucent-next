@@ -174,12 +174,6 @@ fn run(
     let mut command = Ok(Command::Wake);
     let mut ready = Some(ready);
     loop {
-        if matches!(
-            command,
-            Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected)
-        ) {
-            return Ok(());
-        }
         interrupt.begin_turn();
         let items = match command {
             Ok(Command::Eval {
@@ -198,7 +192,7 @@ fn run(
                 items
             }
             Ok(Command::Kill) | Err(RecvTimeoutError::Timeout) => Vec::new(),
-            Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => unreachable!(),
+            Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => return Ok(()),
         };
         let mut deadline = engine.turn(&serde_json::to_string(&items).unwrap());
         match interrupt.end_turn() {

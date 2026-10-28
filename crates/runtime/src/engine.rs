@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use lucent_host::ScriptLink;
 use lucent_host::bridge::{Error as EventError, ScriptEvent};
 
-use crate::interrupt::{Interrupt, Stop};
+use crate::interrupt::Interrupt;
 use crate::{Kill, RuntimeError, host};
 
 const HEAP_LIMIT: usize = 64 << 20;
@@ -80,14 +80,11 @@ impl Engine {
     }
 
     pub(crate) fn kill(mut self, kill: Kill) -> ScriptLink {
+        self.isolate.get_slot::<Arc<Interrupt>>().unwrap().detach();
         for active in self.active.drain(..) {
             let _ = active.reply.send(Err(RuntimeError::Killed(kill)));
         }
         self.isolate.remove_slot::<ScriptLink>().unwrap()
-    }
-
-    fn stop(&self) -> Option<Stop> {
-        self.isolate.get_slot::<Arc<Interrupt>>().unwrap().stop()
     }
 
     pub(crate) fn try_event(&self) -> Result<Option<ScriptEvent>, EventError> {
@@ -99,24 +96,13 @@ impl Engine {
     }
 
     pub(crate) fn events_lost(&mut self) {
-        if self.stop().is_some() {
-            return;
-        }
         for active in self.active.drain(..) {
             let _ = active.reply.send(Err(RuntimeError::EventsLost));
         }
     }
 
     pub(crate) fn eval(&mut self, name: &str, source: &str, reply: EvalReply) {
-        let result = match self.stop() {
-            Some(stop) => Err(stop_error(stop)),
-            None => self.evaluate(name, source),
-        };
-        let result = match self.stop() {
-            Some(stop) => Err(stop_error(stop)),
-            None => result,
-        };
-        match result {
+        match self.evaluate(name, source) {
             Ok(Completion::Promise(promise)) => self.active.push(ActiveEval { promise, reply }),
             Ok(Completion::Value(json)) => {
                 let _ = reply.send(Ok(json));
@@ -130,13 +116,20 @@ impl Engine {
 
     fn in_context<R>(
         &mut self,
-        run: impl FnOnce(&mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>) -> R,
-    ) -> R {
-        v8::scope!(let scope, &mut self.isolate);
-        let context = v8::Local::new(scope, &self.context);
-        let scope = &mut v8::ContextScope::new(scope, context);
-        v8::tc_scope!(let tc, scope);
-        run(tc)
+        run: impl FnOnce(
+            &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
+        ) -> Result<R, RuntimeError>,
+    ) -> Result<R, RuntimeError> {
+        halted(&self.isolate)?;
+        let result = {
+            v8::scope!(let scope, &mut self.isolate);
+            let context = v8::Local::new(scope, &self.context);
+            let scope = &mut v8::ContextScope::new(scope, context);
+            v8::tc_scope!(let tc, scope);
+            run(tc)
+        };
+        halted(&self.isolate)?;
+        result
     }
 
     fn evaluate(&mut self, name: &str, source: &str) -> Result<Completion, RuntimeError> {
@@ -175,7 +168,7 @@ impl Engine {
                     (value, None)
                 }
             });
-            tc.perform_microtask_checkpoint();
+            checkpoint(tc)?;
             let result = result.and_then(|(value, promise)| {
                 if tc.has_caught() {
                     return Err(exception_text(tc));
@@ -193,24 +186,24 @@ impl Engine {
         loop {
             let remaining = self.active.len();
             for active in std::mem::take(&mut self.active) {
-                if self.stop().is_some() || self.overflowed() {
+                if self.overflowed() {
                     self.active.push(active);
                     continue;
                 }
                 let settled = self.in_context(|tc| {
                     let promise = v8::Local::new(tc, &active.promise);
                     let result = match promise.state() {
-                        v8::PromiseState::Pending => return None,
+                        v8::PromiseState::Pending => return Ok(None),
                         v8::PromiseState::Fulfilled => stringify(tc, promise.result(tc)),
                         v8::PromiseState::Rejected => {
                             let reason = v8::Global::new(tc, promise.result(tc));
                             Err(RuntimeError::JavaScript(rejection_text(tc, &reason)))
                         }
                     };
-                    Some(settle(tc, result))
+                    Ok(Some(settle(tc, result)))
                 });
                 match settled {
-                    Some(result) if self.stop().is_none() && !self.overflowed() => {
+                    Ok(Some(result)) if !self.overflowed() => {
                         let _ = active.reply.send(result);
                     }
                     _ => self.active.push(active),
@@ -223,47 +216,36 @@ impl Engine {
     }
 
     pub(crate) fn turn(&mut self, items: &str) -> Option<Instant> {
-        if self.stop().is_some() {
-            return None;
-        }
-        self.in_context(|tc| {
-            let result = (|| {
-                let items = v8::String::new(tc, items)
-                    .ok_or_else(|| RuntimeError::JavaScript("script events too large".into()))?;
-                let errors = call_lucent(tc, "turn", &[items.into()])?;
-                if let Ok(errors) = v8::Local::<v8::Array>::try_from(errors) {
-                    for index in 0..errors.length() {
-                        if let Some(error) = errors.get_index(tc, index) {
-                            tracing::error!(
-                                error = error.to_rust_string_lossy(tc),
-                                "script callback failed"
-                            );
+        let (result, rejections) = self
+            .in_context(|tc| {
+                let result = (|| {
+                    let items = v8::String::new(tc, items).ok_or_else(|| {
+                        RuntimeError::JavaScript("script events too large".into())
+                    })?;
+                    let errors = call_lucent(tc, "turn", &[items.into()])?;
+                    if let Ok(errors) = v8::Local::<v8::Array>::try_from(errors) {
+                        for index in 0..errors.length() {
+                            if let Some(error) = errors.get_index(tc, index) {
+                                tracing::error!(
+                                    error = error.to_rust_string_lossy(tc),
+                                    "script callback failed"
+                                );
+                            }
                         }
                     }
-                }
-                Ok::<_, RuntimeError>(())
-            })();
-            if let Err(error) = result
-                && tc.get_slot::<Arc<Interrupt>>().unwrap().stop().is_none()
-            {
-                tracing::error!(%error, "script turn failed");
-            }
-            if tc.get_slot::<Arc<Interrupt>>().unwrap().stop().is_some() {
-                return;
-            }
-            tc.perform_microtask_checkpoint();
-            if tc.get_slot::<Arc<Interrupt>>().unwrap().stop().is_none() {
-                for error in take_rejections(tc) {
-                    if tc.get_slot::<Arc<Interrupt>>().unwrap().stop().is_none() {
-                        tracing::error!(%error, "unhandled script rejection");
-                    }
-                }
-            }
-        });
-        self.check_pending();
-        if self.stop().is_some() {
-            return None;
+                    Ok::<_, RuntimeError>(())
+                })();
+                checkpoint(tc)?;
+                Ok((result, take_rejections(tc)))
+            })
+            .ok()?;
+        if let Err(error) = result {
+            tracing::error!(%error, "script turn failed");
         }
+        for error in rejections {
+            tracing::error!(%error, "unhandled script rejection");
+        }
+        self.check_pending();
         self.wake()
     }
 
@@ -275,11 +257,9 @@ impl Engine {
         });
         let deadline = match result {
             Ok(deadline) if deadline.is_finite() => deadline,
-            Ok(_) => return None,
+            Ok(_) | Err(RuntimeError::Killed(_) | RuntimeError::Stopped) => return None,
             Err(error) => {
-                if self.stop().is_none() {
-                    tracing::error!(%error, "script timer deadline failed");
-                }
+                tracing::error!(%error, "script timer deadline failed");
                 return None;
             }
         };
@@ -292,17 +272,7 @@ fn settle<T>(
     tc: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
     result: Result<T, RuntimeError>,
 ) -> Result<T, RuntimeError> {
-    if tc.is_execution_terminating()
-        && let Some(stop) = tc.get_slot::<Arc<Interrupt>>().unwrap().stop()
-    {
-        return Err(stop_error(stop));
-    }
-    tc.perform_microtask_checkpoint();
-    if tc.is_execution_terminating()
-        && let Some(stop) = tc.get_slot::<Arc<Interrupt>>().unwrap().stop()
-    {
-        return Err(stop_error(stop));
-    }
+    checkpoint(tc)?;
     let errors = take_rejections(tc);
     let value = result?;
     if tc.has_caught() {
@@ -318,6 +288,7 @@ fn stringify(
     scope: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
     value: v8::Local<v8::Value>,
 ) -> Result<String, RuntimeError> {
+    halted(scope)?;
     let json = v8::json::stringify(scope, value).ok_or_else(|| exception_text(scope))?;
     let json = json.to_rust_string_lossy(scope);
     Ok(if json == "undefined" {
@@ -354,18 +325,17 @@ fn take_rejections(
     let rejections = std::mem::take(scope.get_slot_mut::<Rejections>().unwrap());
     rejections
         .into_iter()
-        .map(|(_, reason)| rejection_text(scope, &reason))
+        .map_while(|(_, reason)| {
+            halted(scope)
+                .is_ok()
+                .then(|| rejection_text(scope, &reason))
+        })
         .collect()
 }
 
 fn exception_text(
     scope: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
 ) -> RuntimeError {
-    if scope.is_execution_terminating()
-        && let Some(stop) = scope.get_slot::<Arc<Interrupt>>().unwrap().stop()
-    {
-        return stop_error(stop);
-    }
     RuntimeError::JavaScript(
         scope
             .stack_trace()
@@ -375,11 +345,19 @@ fn exception_text(
     )
 }
 
-fn stop_error(stop: Stop) -> RuntimeError {
-    match stop {
-        Stop::Kill(kill) => RuntimeError::Killed(kill),
-        Stop::Shutdown => RuntimeError::Stopped,
+fn halted(isolate: &v8::Isolate) -> Result<(), RuntimeError> {
+    match isolate.get_slot::<Arc<Interrupt>>().unwrap().stop() {
+        Some(stop) => Err(stop.into()),
+        None => Ok(()),
     }
+}
+
+fn checkpoint(
+    scope: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
+) -> Result<(), RuntimeError> {
+    halted(scope)?;
+    scope.perform_microtask_checkpoint();
+    Ok(())
 }
 
 unsafe extern "C" fn near_heap_limit(data: *mut c_void, current: usize, _: usize) -> usize {
