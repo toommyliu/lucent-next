@@ -1,12 +1,15 @@
 use std::sync::Arc;
+use std::task::{Wake, Waker};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use ruffle_core::backend::audio::NullAudioBackend;
 use swf::avm1::types::{Action, DefineFunction, Push, Value};
 use swf::{Compression, Header, Rectangle, SwfStr, Tag, Twips};
 
+use crate::bridge::ScriptEvent;
 use crate::player::{Clipboard, Movie, surface::noop_gpu};
-use crate::{Host, Session, Surface, ViewEvent, Viewport};
+use crate::{Host, ScriptLink, Session, Surface, ViewEvent, Viewport};
 
 pub fn headless_host() -> Host {
     Host::with_services(
@@ -30,14 +33,32 @@ impl ProbeMovie {
     }
 }
 
-pub fn start_probe(host: &Host, movie: ProbeMovie) -> Session {
-    let surface = Surface::textures(noop_gpu(), || {});
-    let session = host
-        .start_movie(surface, movie.0)
+pub fn headless_surface() -> Surface {
+    Surface::textures(noop_gpu(), || {})
+}
+
+pub fn start_probe(host: &Host, movie: ProbeMovie) -> (Session, ScriptLink) {
+    let mut session = host
+        .start_movie(headless_surface(), movie.0)
         .expect("couldn't start the probe player");
+    let link = session.take_script_link().unwrap();
     session.send(ViewEvent::Resized(
         Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));
+    wait_loaded(&link);
+    (session, link)
+}
+
+struct Unpark(thread::Thread);
+
+impl Wake for Unpark {
+    fn wake(self: Arc<Self>) {
+        self.0.unpark();
+    }
+}
+
+fn wait_loaded(link: &ScriptLink) {
+    link.set_waker(Waker::from(Arc::new(Unpark(thread::current()))));
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
@@ -45,9 +66,10 @@ pub fn start_probe(host: &Host, movie: ProbeMovie) -> Session {
             !remaining.is_zero(),
             "probe did not emit onLoaded within 10 seconds"
         );
-        match session.recv_loader_event(remaining) {
-            Ok(event) if event.name == "onLoaded" => return session,
-            Ok(_) => {}
+        match link.try_event() {
+            Ok(Some(ScriptEvent::Loader { event, .. })) if event.name == "onLoaded" => return,
+            Ok(Some(_)) => {}
+            Ok(None) => thread::park_timeout(remaining),
             Err(error) => {
                 panic!("probe failed while waiting up to 10 seconds for onLoaded: {error}")
             }
@@ -172,12 +194,10 @@ mod tests {
     #[test]
     fn restart_reloads_the_movie_and_ends_the_previous_link() {
         let host = headless_host();
-        let mut session = start_probe(&host, ProbeMovie::new());
-        let old = session.take_script_link().unwrap();
+        let (mut session, old) = start_probe(&host, ProbeMovie::new());
         assert!(session.take_script_link().is_none());
-        session
-            .restart(Surface::textures(noop_gpu(), || {}))
-            .unwrap();
+        session.restart(headless_surface()).unwrap();
+        assert_eq!(old.try_event(), Err(Error::Stopped));
         assert_eq!(
             old.call_loader("probe.echo", vec![])
                 .recv_timeout(Duration::from_secs(1)),
@@ -193,13 +213,7 @@ mod tests {
         session.send(ViewEvent::Resized(
             Viewport::new(100.0, 100.0, 1.0).unwrap(),
         ));
-        assert_eq!(
-            session
-                .recv_loader_event(Duration::from_secs(10))
-                .unwrap()
-                .name,
-            "onLoaded"
-        );
+        wait_loaded(&current);
         assert_eq!(
             current
                 .call_loader("probe.echo", vec![Value::Number(42.0)])
