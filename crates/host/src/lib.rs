@@ -1,5 +1,6 @@
 pub mod bridge;
 mod player;
+pub mod projection;
 mod sessions;
 
 pub use player::frames::FrameLease;
