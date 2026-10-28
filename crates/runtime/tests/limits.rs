@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use std::sync::{Mutex, MutexGuard, PoisonError, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -10,6 +10,12 @@ use serde_json::{Value, json};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 const STOP_LIMIT: Duration = Duration::from_millis(250);
+
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn serial() -> MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 fn stall_player(session: &Session) -> mpsc::Sender<()> {
     let (entered, stalled) = mpsc::channel();
@@ -57,6 +63,7 @@ fn emit_after(runtime: &Runtime) {
 
 #[test]
 fn a_runaway_turn_is_killed_within_250_ms_and_the_runtime_keeps_running() {
+    let _serial = serial();
     let host = testing::headless_host();
     let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
     let runtime = Runtime::start(link).unwrap();
@@ -98,6 +105,7 @@ fn a_runaway_turn_is_killed_within_250_ms_and_the_runtime_keeps_running() {
 
 #[test]
 fn a_script_blocked_in_a_loader_call_is_killed_without_waiting_for_the_reply() {
+    let _serial = serial();
     let host = testing::headless_host();
     let (session, link) = testing::start_probe(&host, ProbeMovie::new());
     let runtime = Runtime::start(link).unwrap();
@@ -129,6 +137,7 @@ fn a_script_blocked_in_a_loader_call_is_killed_without_waiting_for_the_reply() {
 
 #[test]
 fn a_script_that_catches_out_of_memory_is_killed_at_the_heap_limit() {
+    let _serial = serial();
     let host = testing::headless_host();
     let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
     let runtime = Runtime::start(link).unwrap();
@@ -160,6 +169,7 @@ fn a_script_that_catches_out_of_memory_is_killed_at_the_heap_limit() {
 
 #[test]
 fn dropping_a_runtime_blocked_in_a_loader_call_returns_promptly() {
+    let _serial = serial();
     let host = testing::headless_host();
     let (session, link) = testing::start_probe(&host, ProbeMovie::new());
     let runtime = Runtime::start(link).unwrap();
@@ -197,6 +207,7 @@ fn dropping_a_runtime_blocked_in_a_loader_call_returns_promptly() {
 
 #[test]
 fn a_killed_script_runs_none_of_its_queued_callbacks() {
+    let _serial = serial();
     let host = testing::headless_host();
     let (session, link) = testing::start_probe(&host, ProbeMovie::new());
     let runtime = Runtime::start(link).unwrap();
@@ -238,4 +249,20 @@ fn a_killed_script_runs_none_of_its_queued_callbacks() {
     )
     .unwrap();
     assert_eq!(map["name"], "before");
+}
+
+#[test]
+fn an_eval_queued_behind_a_killed_turn_runs_in_the_rebuilt_context() {
+    let _serial = serial();
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+    let runaway = runtime.eval("runaway.js", "globalThis.marker = 1; while (true) {}");
+    let queued = runtime.eval("queued.js", "typeof globalThis.marker");
+    let error = runaway.wait::<Value>(TIMEOUT).unwrap_err();
+    assert!(
+        matches!(error, RuntimeError::Killed(Kill::Watchdog)),
+        "{error}"
+    );
+    assert_eq!(queued.wait::<String>(TIMEOUT).unwrap(), "undefined");
 }
