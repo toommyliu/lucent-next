@@ -3924,6 +3924,7 @@ dependencies = [
  "ruffle_frontend_utils",
  "ruffle_render",
  "ruffle_render_wgpu",
+ "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",

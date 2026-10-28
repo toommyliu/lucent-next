@@ -1,4 +1,8 @@
-use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::mpsc::{self, RecvTimeoutError, TrySendError};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::Duration;
 
 pub use lucent_protocol::bridge::{Event, Value};
@@ -16,13 +20,29 @@ pub enum Error {
     Unavailable(String),
     #[error("timed out waiting for the player")]
     Timeout,
+    #[error("events were discarded because the event queue overflowed")]
+    Overflow,
+    #[error("the projection read panicked")]
+    ReadPanicked,
 }
 
-pub struct PendingCall(mpsc::Receiver<Result<Value, Error>>);
+pub struct Pending<T>(mpsc::Receiver<Result<T, Error>>);
 
-impl PendingCall {
-    /// A timeout leaves the call queued. Wait on this reply again instead of retrying the action.
-    pub fn recv_timeout(&self, timeout: Duration) -> Result<Value, Error> {
+pub type PendingCall = Pending<Value>;
+pub type PendingRead<T> = Pending<T>;
+
+impl<T> Pending<T> {
+    pub(crate) fn channel() -> (mpsc::Sender<Result<T, Error>>, Self) {
+        let (sender, receiver) = mpsc::channel();
+        (sender, Self(receiver))
+    }
+
+    pub(crate) fn stopped() -> Self {
+        Self::channel().1
+    }
+
+    /// A timeout does not cancel the request. Keep using this reply to receive its result.
+    pub fn recv_timeout(&self, timeout: Duration) -> Result<T, Error> {
         self.0.recv_timeout(timeout).map_err(receive_error)?
     }
 }
@@ -35,42 +55,110 @@ pub(crate) struct Call {
 
 impl Call {
     pub(crate) fn new(name: String, args: Vec<Value>) -> (Call, PendingCall) {
-        let (reply, result) = mpsc::channel();
-        (Call { name, args, reply }, PendingCall(result))
+        let (reply, pending) = Pending::channel();
+        (Call { name, args, reply }, pending)
     }
 
     pub(crate) fn reject(self, error: Error) {
         let _ = self.reply.send(Err(error));
     }
 
-    pub(crate) fn dispatch(self, player: &mut Player) {
-        let result = player.mutate_with_update_context(|context| {
-            match context.external_interface.get_callback(&self.name) {
-                Some(callback) => Ok(from_external(callback.call(
-                    context,
-                    &self.name,
-                    self.args.into_iter().map(into_external),
-                ))),
-                None => Err(Error::Unavailable(self.name)),
-            }
-        });
+    pub(crate) fn dispatch(&mut self, player: &mut Player) -> Result<Value, Error> {
+        invoke(player, &self.name, std::mem::take(&mut self.args))
+    }
+
+    pub(crate) fn resolve(self, result: Result<Value, Error>) {
         let _ = self.reply.send(result);
     }
 }
 
-pub(crate) struct Events(mpsc::Receiver<Event>);
+pub(crate) fn invoke(player: &mut Player, name: &str, args: Vec<Value>) -> Result<Value, Error> {
+    player.mutate_with_update_context(|context| {
+        match context.external_interface.get_callback(name) {
+            Some(callback) => Ok(from_external(callback.call(
+                context,
+                name,
+                args.into_iter().map(into_external),
+            ))),
+            None => Err(Error::Unavailable(name.to_owned())),
+        }
+    })
+}
 
-impl Events {
-    pub(crate) fn try_recv(&self) -> Result<Option<Event>, Error> {
-        match self.0.try_recv() {
-            Ok(event) => Ok(Some(event)),
+pub(crate) const EVENT_CAPACITY: usize = 1024;
+
+enum QueueEntry<T> {
+    Event(T),
+    Overflow,
+}
+
+pub(crate) struct EventSender<T> {
+    sender: mpsc::SyncSender<QueueEntry<T>>,
+    overflow: Arc<AtomicBool>,
+}
+
+pub(crate) struct Events<T = Event> {
+    receiver: mpsc::Receiver<QueueEntry<T>>,
+    overflow: Arc<AtomicBool>,
+}
+
+pub(crate) fn event_queue<T>(capacity: usize) -> (EventSender<T>, Events<T>) {
+    let (sender, receiver) = mpsc::sync_channel(capacity);
+    let overflow = Arc::new(AtomicBool::new(false));
+    (
+        EventSender {
+            sender,
+            overflow: overflow.clone(),
+        },
+        Events { receiver, overflow },
+    )
+}
+
+impl<T> EventSender<T> {
+    pub(crate) fn mark_overflow(&self) {
+        self.overflow.store(true, Ordering::Release);
+        let _ = self.sender.try_send(QueueEntry::Overflow);
+    }
+    pub(crate) fn send(&self, event: T) {
+        if let Err(TrySendError::Full(_)) = self.sender.try_send(QueueEntry::Event(event)) {
+            self.mark_overflow();
+        }
+    }
+}
+
+impl<T> Events<T> {
+    fn take_overflow(&self) -> bool {
+        if !self.overflow.swap(false, Ordering::AcqRel) {
+            return false;
+        }
+        while self.receiver.try_recv().is_ok() {}
+        true
+    }
+
+    pub(crate) fn try_recv(&self) -> Result<Option<T>, Error> {
+        if self.take_overflow() {
+            return Err(Error::Overflow);
+        }
+        match self.receiver.try_recv() {
+            Ok(QueueEntry::Event(event)) => Ok(Some(event)),
+            Ok(QueueEntry::Overflow) => Err(Error::Overflow),
             Err(mpsc::TryRecvError::Empty) => Ok(None),
             Err(mpsc::TryRecvError::Disconnected) => Err(Error::Stopped),
         }
     }
 
-    pub(crate) fn recv_timeout(&self, timeout: Duration) -> Result<Event, Error> {
-        self.0.recv_timeout(timeout).map_err(receive_error)
+    pub(crate) fn recv_timeout(&self, timeout: Duration) -> Result<T, Error> {
+        if self.take_overflow() {
+            return Err(Error::Overflow);
+        }
+        let entry = self.receiver.recv_timeout(timeout).map_err(receive_error)?;
+        if self.take_overflow() {
+            return Err(Error::Overflow);
+        }
+        match entry {
+            QueueEntry::Event(event) => Ok(event),
+            QueueEntry::Overflow => Err(Error::Overflow),
+        }
     }
 }
 
@@ -82,13 +170,17 @@ fn receive_error(error: RecvTimeoutError) -> Error {
 }
 
 pub(crate) struct Bridge {
-    events: mpsc::Sender<Event>,
+    events: EventSender<Event>,
 }
 
 impl Bridge {
     pub(crate) fn new() -> (Bridge, Events) {
-        let (events, receiver) = mpsc::channel();
-        (Bridge { events }, Events(receiver))
+        Self::with_capacity(EVENT_CAPACITY)
+    }
+
+    pub(crate) fn with_capacity(capacity: usize) -> (Bridge, Events) {
+        let (events, receiver) = event_queue(capacity);
+        (Bridge { events }, receiver)
     }
 }
 
@@ -103,9 +195,7 @@ impl ExternalInterfaceProvider for Bridge {
             name: name.to_owned(),
             args: args.iter().cloned().map(from_external).collect(),
         };
-        if self.events.send(event).is_err() {
-            tracing::debug!(event = name, "loader event receiver closed");
-        }
+        self.events.send(event);
         ExternalValue::Undefined
     }
 
