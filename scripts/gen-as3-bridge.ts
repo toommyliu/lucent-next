@@ -1,20 +1,33 @@
 import fs from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_REPO_ROOT = join(SCRIPT_DIR, "..");
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Console from "effect/Console";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
+import { Command, Flag } from "effect/cli";
+
+const DEFAULT_REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
+
+class BridgeGenerationError extends Data.TaggedError("BridgeGenerationError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+type GenerateOptions = {
+  repoRoot?: string;
+  check?: boolean;
+  swfDtsPath?: string;
+};
 
 const BRIDGE_TS_RETURN_TYPE_METADATA = "BridgeTsReturnType";
 const BRIDGE_TS_PARAM_TYPE_METADATA = "BridgeTsParamType";
 const BRIDGE_TS_TYPES_ALIAS = "FlashTypes";
 const BRIDGE_TS_TYPES_MODULE = "./Types";
-
-type Metadata = {
-  name: string;
-  arg: string | null;
-  line: number;
-};
 
 type BridgeParameter = {
   name: string;
@@ -24,11 +37,16 @@ type BridgeParameter = {
   rest: boolean;
 };
 
+type Metadata = {
+  name: string;
+  arg: string | null;
+  line: number;
+};
+
 type ParsedMethod = {
   className: string;
   classNamespace: string | null;
-  packageName: string;
-  classFqn: string; // class fully qualified name (package + class)
+  classFqn: string;
   name: string;
   parameters: BridgeParameter[];
   returnType: string;
@@ -38,28 +56,8 @@ type ParsedMethod = {
   filePath: string;
 };
 
-type ParsedFile = {
-  filePath: string;
-  packageName: string;
-  className: string | null;
-  classNamespace: string | null;
-  methods: ParsedMethod[];
-};
-
-type BridgeExportEntry = {
-  externalName: string;
-  className: string;
-  classFqn: string;
-  methodName: string;
-  parameters: BridgeParameter[];
-  returnType: string;
-  tsReturnType: string | null;
-  filePath: string;
-  line: number;
-};
-
-type BridgeEventEntry = {
-  eventName: string;
+type BridgeEntry = {
+  name: string;
   className: string;
   classFqn: string;
   methodName: string;
@@ -71,25 +69,16 @@ type BridgeEventEntry = {
 };
 
 type BridgeModel = {
-  exports: BridgeExportEntry[];
-  events: BridgeEventEntry[];
+  exports: BridgeEntry[];
+  events: BridgeEntry[];
 };
 
-type GenerateOptions = {
-  repoRoot?: string;
-  check?: boolean;
-  swfDtsPath?: string;
+type As3Source = {
+  filePath: string;
+  source: string;
 };
 
-type GenerateResult = {
-  model: BridgeModel;
-  as3Registry: string;
-  swfDts: string;
-  as3OutputPath: string;
-  swfDtsOutputPath: string | null;
-};
-
-function isMetadataLine(line: string): Metadata | null {
+function parseMetadata(line: string, lineNumber: number): Metadata | null {
   const match = line.trim().match(/^\[(\w+)(?:\("([^"]*)"\))?\]$/);
   if (!match) {
     return null;
@@ -103,7 +92,7 @@ function isMetadataLine(line: string): Metadata | null {
   return {
     name,
     arg: match[2] ?? null,
-    line: 0,
+    line: lineNumber,
   };
 }
 
@@ -140,40 +129,13 @@ function splitTopLevel(text: string, separator: string): string[] {
       continue;
     }
 
-    if (char === "(") {
-      depthParen += 1;
-      current += char;
-      continue;
-    }
-
-    if (char === ")") {
-      depthParen -= 1;
-      current += char;
-      continue;
-    }
-
-    if (char === "{") {
-      depthBrace += 1;
-      current += char;
-      continue;
-    }
-
-    if (char === "}") {
-      depthBrace -= 1;
-      current += char;
-      continue;
-    }
-
-    if (char === "[") {
-      depthBracket += 1;
-      current += char;
-      continue;
-    }
-
-    if (char === "]") {
-      depthBracket -= 1;
-      current += char;
-      continue;
+    switch (char) {
+      case "(": depthParen += 1; break;
+      case ")": depthParen -= 1; break;
+      case "{": depthBrace += 1; break;
+      case "}": depthBrace -= 1; break;
+      case "[": depthBracket += 1; break;
+      case "]": depthBracket -= 1; break;
     }
 
     if (
@@ -197,7 +159,7 @@ function splitTopLevel(text: string, separator: string): string[] {
   return parts;
 }
 
-export function parseParameterList(rawParams: string): BridgeParameter[] {
+function parseParameterList(rawParams: string): BridgeParameter[] {
   const cleanedParams = removeBlockComments(rawParams).trim();
   if (!cleanedParams) {
     return [];
@@ -206,7 +168,6 @@ export function parseParameterList(rawParams: string): BridgeParameter[] {
   const chunks = splitTopLevel(cleanedParams, ",");
 
   return chunks
-    .map((chunk) => chunk.trim())
     .filter(Boolean)
     .map((chunk) => {
       if (chunk.startsWith("...")) {
@@ -243,7 +204,264 @@ export function parseParameterList(rawParams: string): BridgeParameter[] {
     });
 }
 
-export function mapAs3Type(type: string): string {
+function validateTsTypeMetadataValue(
+  metadata: Metadata,
+  filePath: string,
+): string {
+  const type = metadata.arg?.trim();
+  if (!type) {
+    throw new Error(
+      `${metadata.name} metadata requires a non-empty value in ${filePath}:${metadata.line}`,
+    );
+  }
+
+  if (type.includes("import(")) {
+    throw new Error(
+      `${metadata.name} in ${filePath}:${metadata.line} should not use import() expressions. Use ${BRIDGE_TS_TYPES_ALIAS}.TypeName (for example: ${BRIDGE_TS_TYPES_ALIAS}.TargetInfo | null).`,
+    );
+  }
+
+  return type;
+}
+
+function resolveTsParameterTypes(method: ParsedMethod): Map<string, string> {
+  const overrides = new Map<string, string>();
+
+  for (const metadata of method.metadata) {
+    if (metadata.name !== BRIDGE_TS_PARAM_TYPE_METADATA) {
+      continue;
+    }
+
+    const value = validateTsTypeMetadataValue(
+      metadata,
+      method.filePath,
+    );
+    const separatorIndex = value.indexOf(":");
+    if (separatorIndex <= 0) {
+      throw new Error(
+        `${BRIDGE_TS_PARAM_TYPE_METADATA} metadata must use "parameterName: Type" in ${method.filePath}:${metadata.line}`,
+      );
+    }
+
+    const parameterName = value.slice(0, separatorIndex).trim();
+    const tsType = value.slice(separatorIndex + 1).trim();
+    if (!parameterName || !tsType) {
+      throw new Error(
+        `${BRIDGE_TS_PARAM_TYPE_METADATA} metadata must use "parameterName: Type" in ${method.filePath}:${metadata.line}`,
+      );
+    }
+
+    if (!method.parameters.some((parameter) => parameter.name === parameterName)) {
+      throw new Error(
+        `${BRIDGE_TS_PARAM_TYPE_METADATA} references unknown parameter "${parameterName}" in ${method.filePath}:${metadata.line}`,
+      );
+    }
+
+    if (overrides.has(parameterName)) {
+      throw new Error(
+        `Duplicate ${BRIDGE_TS_PARAM_TYPE_METADATA} metadata for parameter "${parameterName}" in ${method.filePath}:${metadata.line}`,
+      );
+    }
+
+    overrides.set(parameterName, tsType);
+  }
+
+  return overrides;
+}
+
+function applyTsParameterTypes(method: ParsedMethod): BridgeParameter[] {
+  const overrides = resolveTsParameterTypes(method);
+  if (overrides.size === 0) {
+    return method.parameters;
+  }
+
+  return method.parameters.map((parameter) => ({
+    ...parameter,
+    tsType: overrides.get(parameter.name) ?? parameter.tsType,
+  }));
+}
+
+function parseAs3File(filePath: string, source: string): ParsedMethod[] {
+  const packageMatch = source.match(/package\s+([A-Za-z0-9_.]+)\s*\{/m);
+  const packageName = packageMatch?.[1] ?? "";
+
+  const lines = source.split(/\r?\n/);
+  const methods: ParsedMethod[] = [];
+
+  let pendingMetadata: Metadata[] = [];
+  let className: string | null = null;
+  let classNamespace: string | null = null;
+
+  lines.forEach((line, index) => {
+    const metadata = parseMetadata(line, index + 1);
+    if (metadata) {
+      pendingMetadata.push(metadata);
+      return;
+    }
+
+    const classMatch = line.match(
+      /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/,
+    );
+    if (classMatch) {
+      const matchedClassName = classMatch[1];
+      if (!matchedClassName) {
+        throw new Error(
+          `Unable to parse class declaration in ${filePath}:${index + 1}`,
+        );
+      }
+
+      className = matchedClassName;
+      const namespaceMetadata = findMetadata(pendingMetadata, "BridgeNamespace");
+      classNamespace = namespaceMetadata?.arg ?? null;
+      pendingMetadata = [];
+      return;
+    }
+
+    const methodMatch = line.match(
+      /^\s*public\s+(static\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?::\s*([A-Za-z0-9_*]+))?/,
+    );
+
+    if (methodMatch) {
+      if (!className) {
+        throw new Error(
+          `Found method before class declaration in ${filePath}:${index + 1}`,
+        );
+      }
+
+      const methodMetadata = pendingMetadata;
+      pendingMetadata = [];
+
+      const methodName = methodMatch[2];
+      if (!methodName) {
+        throw new Error(
+          `Unable to parse method declaration in ${filePath}:${index + 1}`,
+        );
+      }
+      const methodParameters = parseParameterList(methodMatch[3] ?? "");
+      const returnType = methodMatch[4] ?? "void";
+
+      methods.push({
+        className,
+        classNamespace,
+        classFqn: `${packageName}.${className}`,
+        name: methodName,
+        parameters: methodParameters,
+        returnType,
+        isStatic: Boolean(methodMatch[1]),
+        metadata: methodMetadata,
+        line: index + 1,
+        filePath,
+      });
+
+      return;
+    }
+
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("//")) {
+      return;
+    }
+
+    pendingMetadata = [];
+  });
+
+  return methods;
+}
+
+function parseBridgeModel(sources: As3Source[]): BridgeModel {
+  const exports: BridgeEntry[] = [];
+  const events: BridgeEntry[] = [];
+
+  for (const { filePath, source } of sources) {
+    for (const method of parseAs3File(filePath, source)) {
+      const exportMetadata = findMetadata(method.metadata, "BridgeExport");
+      const ignoreMetadata = findMetadata(method.metadata, "BridgeIgnore");
+      const eventMetadata = findMetadata(method.metadata, "BridgeEvent");
+
+      const returnMetadata = findMetadata(method.metadata, BRIDGE_TS_RETURN_TYPE_METADATA);
+      const tsReturnType = returnMetadata
+        ? validateTsTypeMetadataValue(returnMetadata, method.filePath)
+        : null;
+      const entry = {
+        className: method.className,
+        classFqn: method.classFqn,
+        methodName: method.name,
+        parameters: applyTsParameterTypes(method),
+        returnType: method.returnType,
+        tsReturnType,
+        filePath: method.filePath,
+        line: method.line,
+      };
+
+      if (eventMetadata) {
+        if (!eventMetadata.arg) {
+          throw new Error(
+            `BridgeEvent metadata requires a value in ${method.filePath}:${method.line}`,
+          );
+        }
+
+        events.push({ ...entry, name: eventMetadata.arg.trim() });
+      }
+
+      if (!method.isStatic) {
+        if (exportMetadata || ignoreMetadata) {
+          throw new Error(
+            `BridgeExport/BridgeIgnore can only be used on static methods: ${method.filePath}:${method.line}`,
+          );
+        }
+
+        continue;
+      }
+
+      if (!method.classNamespace) {
+        if (exportMetadata || ignoreMetadata) {
+          throw new Error(
+            `Class missing BridgeNamespace for exported method in ${method.filePath}:${method.line}`,
+          );
+        }
+        continue;
+      }
+
+      if (exportMetadata && ignoreMetadata) {
+        throw new Error(
+          `Method cannot have both BridgeExport and BridgeIgnore: ${method.filePath}:${method.line}`,
+        );
+      }
+
+      if (!exportMetadata && !ignoreMetadata) {
+        throw new Error(
+          `Missing BridgeExport/BridgeIgnore metadata for static method ${method.name} in ${method.filePath}:${method.line}`,
+        );
+      }
+
+      if (ignoreMetadata) {
+        continue;
+      }
+
+      const exportedMethodName = exportMetadata?.arg?.trim() || method.name;
+      exports.push({ ...entry, name: `${method.classNamespace}.${exportedMethodName}` });
+    }
+  }
+
+  for (const [kind, entries] of [["export", exports], ["event", events]] as const) {
+    const byName = new Map<string, BridgeEntry>();
+    for (const entry of entries) {
+      const existing = byName.get(entry.name);
+      if (existing) {
+        throw new Error([
+          `Duplicate bridge ${kind} name "${entry.name}"`,
+          `- ${existing.filePath}:${existing.line}`,
+          `- ${entry.filePath}:${entry.line}`,
+        ].join("\n"));
+      }
+      byName.set(entry.name, entry);
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return { exports, events };
+}
+
+function mapAs3Type(type: string): string {
   const normalized = type.trim();
 
   switch (normalized) {
@@ -270,109 +488,6 @@ export function mapAs3Type(type: string): string {
   }
 }
 
-function resolveTsReturnType(method: ParsedMethod): string | null {
-  const metadata = findMetadata(method.metadata, BRIDGE_TS_RETURN_TYPE_METADATA);
-  if (!metadata) {
-    return null;
-  }
-
-  const value = metadata.arg?.trim();
-  if (!value) {
-    throw new Error(
-      `${BRIDGE_TS_RETURN_TYPE_METADATA} metadata requires a non-empty value in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${metadata.line}`,
-    );
-  }
-
-  if (value.includes("import(")) {
-    throw new Error(
-      `${BRIDGE_TS_RETURN_TYPE_METADATA} in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${metadata.line} should not use import() expressions. Use ${BRIDGE_TS_TYPES_ALIAS}.TypeName (for example: ${BRIDGE_TS_TYPES_ALIAS}.TargetInfo | null).`,
-    );
-  }
-
-  return value;
-}
-
-function validateTsTypeMetadataValue(
-  metadataName: string,
-  value: string | null | undefined,
-  filePath: string,
-  line: number,
-): string {
-  const type = value?.trim();
-  if (!type) {
-    throw new Error(
-      `${metadataName} metadata requires a non-empty value in ${relative(DEFAULT_REPO_ROOT, filePath)}:${line}`,
-    );
-  }
-
-  if (type.includes("import(")) {
-    throw new Error(
-      `${metadataName} in ${relative(DEFAULT_REPO_ROOT, filePath)}:${line} should not use import() expressions. Use ${BRIDGE_TS_TYPES_ALIAS}.TypeName (for example: ${BRIDGE_TS_TYPES_ALIAS}.TargetInfo | null).`,
-    );
-  }
-
-  return type;
-}
-
-function resolveTsParameterTypes(method: ParsedMethod): Map<string, string> {
-  const overrides = new Map<string, string>();
-
-  for (const metadata of method.metadata) {
-    if (metadata.name !== BRIDGE_TS_PARAM_TYPE_METADATA) {
-      continue;
-    }
-
-    const value = validateTsTypeMetadataValue(
-      BRIDGE_TS_PARAM_TYPE_METADATA,
-      metadata.arg,
-      method.filePath,
-      metadata.line,
-    );
-    const separatorIndex = value.indexOf(":");
-    if (separatorIndex <= 0) {
-      throw new Error(
-        `${BRIDGE_TS_PARAM_TYPE_METADATA} metadata must use "parameterName: Type" in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${metadata.line}`,
-      );
-    }
-
-    const parameterName = value.slice(0, separatorIndex).trim();
-    const tsType = value.slice(separatorIndex + 1).trim();
-    if (!parameterName || !tsType) {
-      throw new Error(
-        `${BRIDGE_TS_PARAM_TYPE_METADATA} metadata must use "parameterName: Type" in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${metadata.line}`,
-      );
-    }
-
-    if (!method.parameters.some((parameter) => parameter.name === parameterName)) {
-      throw new Error(
-        `${BRIDGE_TS_PARAM_TYPE_METADATA} references unknown parameter "${parameterName}" in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${metadata.line}`,
-      );
-    }
-
-    if (overrides.has(parameterName)) {
-      throw new Error(
-        `Duplicate ${BRIDGE_TS_PARAM_TYPE_METADATA} metadata for parameter "${parameterName}" in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${metadata.line}`,
-      );
-    }
-
-    overrides.set(parameterName, tsType);
-  }
-
-  return overrides;
-}
-
-function applyTsParameterTypes(method: ParsedMethod): BridgeParameter[] {
-  const overrides = resolveTsParameterTypes(method);
-  if (overrides.size === 0) {
-    return method.parameters;
-  }
-
-  return method.parameters.map((parameter) => ({
-    ...parameter,
-    tsType: overrides.get(parameter.name) ?? parameter.tsType,
-  }));
-}
-
 function formatFunctionParameter(parameter: BridgeParameter): string {
   if (parameter.rest) {
     const baseType = parameter.tsType ?? mapAs3Type(parameter.type);
@@ -382,17 +497,6 @@ function formatFunctionParameter(parameter: BridgeParameter): string {
 
   const suffix = parameter.optional ? "?" : "";
   return `${parameter.name}${suffix}: ${parameter.tsType ?? mapAs3Type(parameter.type)}`;
-}
-
-function formatFunctionParameters(parameters: BridgeParameter[]): string {
-  return parameters.map(formatFunctionParameter).join(", ");
-}
-
-function formatFunctionSignature(
-  parameters: BridgeParameter[],
-  returnType: string,
-): string {
-  return `(${formatFunctionParameters(parameters)}) => ${returnType}`;
 }
 
 function formatFunctionProperty(
@@ -406,7 +510,8 @@ function formatFunctionProperty(
   const canUseIdentifier = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name);
   const renderedName = quoteName || !canUseIdentifier ? JSON.stringify(name) : name;
   const propertyName = `${renderedName}${optional ? "?" : ""}`;
-  const singleLine = `${indent}${propertyName}: ${formatFunctionSignature(parameters, returnType)};`;
+  const renderedParameters = parameters.map(formatFunctionParameter);
+  const singleLine = `${indent}${propertyName}: (${renderedParameters.join(", ")}) => ${returnType};`;
   if (singleLine.length <= 80 || parameters.length === 0) {
     return [singleLine];
   }
@@ -414,9 +519,7 @@ function formatFunctionProperty(
   const parameterIndent = `${indent}  `;
   return [
     `${indent}${propertyName}: (`,
-    ...parameters.map(
-      (parameter) => `${parameterIndent}${formatFunctionParameter(parameter)},`,
-    ),
+    ...renderedParameters.map((parameter) => `${parameterIndent}${parameter},`),
     `${indent}) => ${returnType};`,
   ];
 }
@@ -439,271 +542,12 @@ function resolveRenderedReturnType(
 function shouldImportFlashTypes(model: BridgeModel): boolean {
   const usesAlias = (tsReturnType: string | null) =>
     tsReturnType?.includes(`${BRIDGE_TS_TYPES_ALIAS}.`) ?? false;
-  const parameterUsesAlias = (parameters: BridgeParameter[]) =>
-    parameters.some((parameter) => usesAlias(parameter.tsType));
-
-  return (
-    model.exports.some((entry) => usesAlias(entry.tsReturnType)) ||
-    model.exports.some((entry) => parameterUsesAlias(entry.parameters)) ||
-    model.events.some((entry) => usesAlias(entry.tsReturnType)) ||
-    model.events.some((entry) => parameterUsesAlias(entry.parameters))
+  return [...model.exports, ...model.events].some((entry) =>
+    usesAlias(entry.tsReturnType) || entry.parameters.some((parameter) => usesAlias(parameter.tsType)),
   );
 }
 
-function parseAs3File(filePath: string, source: string): ParsedFile {
-  const packageMatch = source.match(/package\s+([A-Za-z0-9_.]+)\s*\{/m);
-  const packageName = packageMatch?.[1] ?? "";
-
-  const lines = source.split(/\r?\n/);
-  const methods: ParsedMethod[] = [];
-
-  let pendingMetadata: Metadata[] = [];
-  let className: string | null = null;
-  let classNamespace: string | null = null;
-
-  lines.forEach((line, index) => {
-    const metadata = isMetadataLine(line);
-    if (metadata) {
-      metadata.line = index + 1;
-      pendingMetadata.push(metadata);
-      return;
-    }
-
-    const classMatch = line.match(
-      /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/,
-    );
-    if (classMatch) {
-      const matchedClassName = classMatch[1];
-      if (!matchedClassName) {
-        throw new Error(
-          `Unable to parse class declaration in ${relative(DEFAULT_REPO_ROOT, filePath)}:${index + 1}`,
-        );
-      }
-
-      className = matchedClassName;
-      const namespaceMetadata = findMetadata(pendingMetadata, "BridgeNamespace");
-      classNamespace = namespaceMetadata?.arg ?? null;
-      pendingMetadata = [];
-      return;
-    }
-
-    const methodMatch = line.match(
-      /^\s*public\s+(static\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?::\s*([A-Za-z0-9_*]+))?/,
-    );
-
-    if (methodMatch) {
-      if (!className) {
-        throw new Error(
-          `Found method before class declaration in ${relative(DEFAULT_REPO_ROOT, filePath)}:${index + 1}`,
-        );
-      }
-
-      const methodMetadata = pendingMetadata;
-      pendingMetadata = [];
-
-      const methodName = methodMatch[2];
-      if (!methodName) {
-        throw new Error(
-          `Unable to parse method declaration in ${relative(DEFAULT_REPO_ROOT, filePath)}:${index + 1}`,
-        );
-      }
-      const methodParameters = parseParameterList(methodMatch[3] ?? "");
-      const returnType = methodMatch[4] ?? "void";
-
-      methods.push({
-        className,
-        classNamespace,
-        packageName,
-        classFqn: `${packageName}.${className}`,
-        name: methodName,
-        parameters: methodParameters,
-        returnType,
-        isStatic: Boolean(methodMatch[1]),
-        metadata: methodMetadata,
-        line: index + 1,
-        filePath,
-      });
-
-      return;
-    }
-
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("//")) {
-      return;
-    }
-
-    pendingMetadata = [];
-  });
-
-  return {
-    filePath,
-    packageName,
-    className,
-    classNamespace,
-    methods,
-  };
-}
-
-async function collectAs3Files(rootDir: string): Promise<string[]> {
-  const files: string[] = [];
-
-  async function walk(dir: string): Promise<void> {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-        continue;
-      }
-
-      if (!entry.isFile() || !entry.name.endsWith(".as")) {
-        continue;
-      }
-
-      if (fullPath.endsWith("generated/BridgeRegistryGenerated.as")) {
-        continue;
-      }
-
-      files.push(fullPath);
-    }
-  }
-
-  await walk(rootDir);
-  files.sort((a, b) => a.localeCompare(b));
-  return files;
-}
-
-function buildBridgeModel(parsedFiles: ParsedFile[]): BridgeModel {
-  const exports: BridgeExportEntry[] = [];
-  const events: BridgeEventEntry[] = [];
-
-  for (const parsedFile of parsedFiles) {
-    for (const method of parsedFile.methods) {
-      const exportMetadata = findMetadata(method.metadata, "BridgeExport");
-      const ignoreMetadata = findMetadata(method.metadata, "BridgeIgnore");
-      const eventMetadata = findMetadata(method.metadata, "BridgeEvent");
-
-      const tsReturnType = resolveTsReturnType(method);
-      const parameters = applyTsParameterTypes(method);
-
-      if (eventMetadata) {
-        if (!eventMetadata.arg) {
-          throw new Error(
-            `BridgeEvent metadata requires a value in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${method.line}`,
-          );
-        }
-
-        const eventName = eventMetadata.arg.trim();
-        // if (!eventName.includes(".")) {
-        //   throw new Error(
-        //     `BridgeEvent name must be namespaced in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${method.line}`,
-        //   );
-        // }
-
-        events.push({
-          eventName,
-          className: method.className,
-          classFqn: method.classFqn,
-          methodName: method.name,
-          parameters,
-          returnType: method.returnType,
-          tsReturnType,
-          filePath: method.filePath,
-          line: method.line,
-        });
-      }
-
-      if (!method.isStatic) {
-        if (exportMetadata || ignoreMetadata) {
-          throw new Error(
-            `BridgeExport/BridgeIgnore can only be used on static methods: ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${method.line}`,
-          );
-        }
-
-        continue;
-      }
-
-      if (!method.classNamespace) {
-        if (exportMetadata || ignoreMetadata) {
-          throw new Error(
-            `Class missing BridgeNamespace for exported method in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${method.line}`,
-          );
-        }
-        continue;
-      }
-
-      if (exportMetadata && ignoreMetadata) {
-        throw new Error(
-          `Method cannot have both BridgeExport and BridgeIgnore: ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${method.line}`,
-        );
-      }
-
-      if (!exportMetadata && !ignoreMetadata) {
-        throw new Error(
-          `Missing BridgeExport/BridgeIgnore metadata for static method ${method.name} in ${relative(DEFAULT_REPO_ROOT, method.filePath)}:${method.line}`,
-        );
-      }
-
-      if (ignoreMetadata) {
-        continue;
-      }
-
-      const exportedMethodName = exportMetadata?.arg?.trim() || method.name;
-      const externalName = `${method.classNamespace}.${exportedMethodName}`;
-
-      exports.push({
-        externalName,
-        className: method.className,
-        classFqn: method.classFqn,
-        methodName: method.name,
-        parameters,
-        returnType: method.returnType,
-        tsReturnType,
-        filePath: method.filePath,
-        line: method.line,
-      });
-    }
-  }
-
-  const exportByName = new Map<string, BridgeExportEntry>();
-  for (const entry of exports) {
-    const existing = exportByName.get(entry.externalName);
-    if (existing) {
-      throw new Error(
-        [
-          `Duplicate bridge export name "${entry.externalName}"`,
-          `- ${relative(DEFAULT_REPO_ROOT, existing.filePath)}:${existing.line}`,
-          `- ${relative(DEFAULT_REPO_ROOT, entry.filePath)}:${entry.line}`,
-        ].join("\n"),
-      );
-    }
-    exportByName.set(entry.externalName, entry);
-  }
-
-  const eventByName = new Map<string, BridgeEventEntry>();
-  for (const entry of events) {
-    const existing = eventByName.get(entry.eventName);
-    if (existing) {
-      throw new Error(
-        [
-          `Duplicate bridge event name "${entry.eventName}"`,
-          `- ${relative(DEFAULT_REPO_ROOT, existing.filePath)}:${existing.line}`,
-          `- ${relative(DEFAULT_REPO_ROOT, entry.filePath)}:${entry.line}`,
-        ].join("\n"),
-      );
-    }
-    eventByName.set(entry.eventName, entry);
-  }
-
-  exports.sort((a, b) => a.externalName.localeCompare(b.externalName));
-  events.sort((a, b) => a.eventName.localeCompare(b.eventName));
-
-  return { exports, events };
-}
-
-export function renderAs3Registry(model: BridgeModel): string {
+function renderAs3Registry(model: BridgeModel): string {
   const importSet = new Set<string>();
   for (const entry of model.exports) {
     importSet.add(entry.classFqn);
@@ -732,7 +576,7 @@ export function renderAs3Registry(model: BridgeModel): string {
 
   for (const entry of model.exports) {
     lines.push(
-      `      external.externalize("${entry.externalName}", ${entry.className}.${entry.methodName});`,
+      `      external.externalize("${entry.name}", ${entry.className}.${entry.methodName});`,
     );
   }
 
@@ -740,7 +584,7 @@ export function renderAs3Registry(model: BridgeModel): string {
   return lines.join("\n");
 }
 
-export function renderWindowSwfDts(model: BridgeModel): string {
+function renderWindowSwfDts(model: BridgeModel): string {
   const lines: string[] = [
     "// AUTO-GENERATED FILE. DO NOT EDIT.",
     "",
@@ -761,7 +605,7 @@ export function renderWindowSwfDts(model: BridgeModel): string {
   for (const entry of model.exports) {
     lines.push(
       ...formatFunctionProperty(
-        entry.externalName,
+        entry.name,
         entry.parameters,
         resolveRenderedReturnType(entry.returnType, entry.tsReturnType),
         "      ",
@@ -774,7 +618,7 @@ export function renderWindowSwfDts(model: BridgeModel): string {
   for (const entry of model.events) {
     lines.push(
       ...formatFunctionProperty(
-        entry.eventName,
+        entry.name,
         entry.parameters,
         resolveRenderedReturnType(entry.returnType, entry.tsReturnType),
         "    ",
@@ -789,104 +633,122 @@ export function renderWindowSwfDts(model: BridgeModel): string {
   return lines.join("\n");
 }
 
-async function writeOrCheckFile(
+const writeOrCheckFile = Effect.fn("writeOrCheckFile")(function* (
   filePath: string,
   content: string,
   check: boolean,
   repoRoot: string,
-): Promise<void> {
-  let existing = "";
-  try {
-    existing = await fs.readFile(filePath, "utf8");
-  }
-  catch (cause) {
-    if (check) {
-      throw new Error(
-        `Unable to read generated file: ${relative(repoRoot, filePath)}`,
-        { cause },
-      );
-    }
-    existing = "";
-  }
-
-  if (check) {
-    if (existing !== content) {
-      throw new Error(`Generated file is out of date: ${relative(repoRoot, filePath)}`);
-    }
-    return;
-  }
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const existing = yield* fs.readFileString(filePath).pipe(
+    Effect.catchIf(
+      (error) => !check && error.reason._tag === "NotFound",
+      () => Effect.succeed(null),
+    ),
+    Effect.mapError((cause) => check
+      ? new BridgeGenerationError({
+        message: `Unable to read generated file: ${relative(repoRoot, filePath)}`,
+        cause,
+      })
+      : cause),
+  );
 
   if (existing === content) {
     return;
   }
-
-  await fs.mkdir(dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, content, "utf8");
-}
-
-export async function generateBridgeArtifacts(
-  options: GenerateOptions = {},
-): Promise<GenerateResult> {
-  const repoRoot = options.repoRoot ?? DEFAULT_REPO_ROOT;
-  const as3Root = join(repoRoot, "as3", "src", "lucent");
-  const as3OutputPath = join(
-    as3Root,
-    "generated",
-    "BridgeRegistryGenerated.as",
-  );
-  const swfDtsOutputPath = options.swfDtsPath ?? null;
-
-  const as3Files = await collectAs3Files(as3Root);
-  const parsedFiles: ParsedFile[] = [];
-
-  for (const filePath of as3Files) {
-    const source = await fs.readFile(filePath, "utf8");
-    parsedFiles.push(parseAs3File(filePath, source));
+  if (check) {
+    return yield* new BridgeGenerationError({
+      message: `Generated file is out of date: ${relative(repoRoot, filePath)}`,
+    });
   }
 
-  const model = buildBridgeModel(parsedFiles);
+  yield* fs.makeDirectory(dirname(filePath), { recursive: true });
+  yield* fs.writeFileString(filePath, content);
+});
+
+export const generateBridgeArtifacts = Effect.fn("generateBridgeArtifacts")(function* (
+  options: GenerateOptions = {},
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const repoRoot = resolve(options.repoRoot ?? DEFAULT_REPO_ROOT);
+  const as3Root = join(repoRoot, "as3", "src", "lucent");
+  const as3OutputPath = join(as3Root, "generated", "BridgeRegistryGenerated.as");
+  const swfDtsOutputPath = options.swfDtsPath ? resolve(options.swfDtsPath) : null;
+  const entries = yield* Effect.tryPromise({
+    try: () => fs.readdir(as3Root, { recursive: true, withFileTypes: true }),
+    catch: (cause) => new BridgeGenerationError({
+      message: `Unable to list AS3 sources: ${relative(repoRoot, as3Root)}`,
+      cause,
+    }),
+  });
+  const files = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".as"))
+    .map((entry) => join(entry.parentPath, entry.name))
+    .filter((filePath) => filePath !== as3OutputPath)
+    .sort((a, b) => a.localeCompare(b));
+  const sources = yield* Effect.forEach(files, (filePath) =>
+    fileSystem.readFileString(filePath).pipe(
+      Effect.map((source) => ({ filePath: relative(repoRoot, filePath), source })),
+    ),
+  );
+  const model = yield* Effect.try({
+    try: () => parseBridgeModel(sources),
+    catch: (cause) => new BridgeGenerationError({
+      message: cause instanceof Error ? cause.message : String(cause),
+      cause,
+    }),
+  });
   const as3Registry = renderAs3Registry(model);
   const swfDts = renderWindowSwfDts(model);
-
   const check = options.check ?? false;
-  await writeOrCheckFile(as3OutputPath, as3Registry, check, repoRoot);
-  if (swfDtsOutputPath) {
-    await writeOrCheckFile(swfDtsOutputPath, swfDts, check, repoRoot);
+
+  yield* writeOrCheckFile(as3OutputPath, as3Registry, check, repoRoot);
+  if (swfDtsOutputPath !== null) {
+    yield* writeOrCheckFile(swfDtsOutputPath, swfDts, check, repoRoot);
   }
 
-  return {
-    model,
-    as3Registry,
-    swfDts,
-    as3OutputPath,
-    swfDtsOutputPath,
-  };
-}
+  return { model, as3Registry, swfDts, as3OutputPath, swfDtsOutputPath };
+});
 
-async function main(): Promise<void> {
-  const check = process.argv.includes("--check");
-  const result = await generateBridgeArtifacts({ check });
-
+const command = Command.make("gen-as3-bridge", {
+  check: Flag.Boolean("check").pipe(
+    Flag.withDescription("Check generated artifacts without writing files"),
+    Flag.withDefault(false),
+  ),
+  repoRoot: Flag.Directory("repo-root", { mustExist: true }).pipe(
+    Flag.withDescription("Repository root containing as3/src/lucent"),
+    Flag.withDefault(DEFAULT_REPO_ROOT),
+  ),
+  swfDtsPath: Flag.String("swf-dts").pipe(
+    Flag.withDescription("Also generate Window.swf and event declarations at this path"),
+    Flag.optional,
+  ),
+}, ({ check, repoRoot, swfDtsPath }) => Effect.gen(function* () {
+  const result = yield* generateBridgeArtifacts({
+    check,
+    repoRoot,
+    ...(Option.isSome(swfDtsPath) ? { swfDtsPath: swfDtsPath.value } : {}),
+  });
   if (check) {
-    process.stdout.write("Bridge artifacts are up to date.\n");
+    yield* Console.log("Bridge artifacts are up to date.");
     return;
   }
-
-  process.stdout.write(
-    [
-      `Generated ${relative(DEFAULT_REPO_ROOT, result.as3OutputPath)}`,
-      ...(result.swfDtsOutputPath
-        ? [`Generated ${relative(DEFAULT_REPO_ROOT, result.swfDtsOutputPath)}`]
-        : []),
-      `Exports: ${result.model.exports.length}`,
-      `Events: ${result.model.events.length}`,
-    ].join("\n") + "\n",
-  );
-}
+  yield* Console.log([
+    `Generated ${relative(repoRoot, result.as3OutputPath)}`,
+    ...(result.swfDtsOutputPath ? [`Generated ${relative(repoRoot, result.swfDtsOutputPath)}`] : []),
+    `Exports: ${result.model.exports.length}`,
+    `Events: ${result.model.events.length}`,
+  ].join("\n"));
+})).pipe(
+  Command.withDescription("Generate bridge registrations and TypeScript declarations from AS3 metadata"),
+);
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+  Command.run(command, { version: "1.0.0" }).pipe(
+    Effect.catchTag("BridgeGenerationError", (error) => Console.error(error.message).pipe(
+      Effect.andThen(Effect.sync(() => { process.exitCode = 1; })),
+    )),
+    Effect.provide(NodeServices.layer),
+    NodeRuntime.runMain,
+  );
 }

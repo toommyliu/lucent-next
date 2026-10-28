@@ -245,7 +245,7 @@ const resolveAsconfigArgs = (input: CliInput, repoRoot: string): Effect.Effect<s
     return asconfigArgs;
   });
 
-const main = (input: CliInput): Effect.Effect<void, unknown> =>
+const main = (input: CliInput) =>
   Effect.gen(function* () {
     const repoRoot = DEFAULT_REPO_ROOT;
     process.chdir(repoRoot);
@@ -260,9 +260,7 @@ const main = (input: CliInput): Effect.Effect<void, unknown> =>
     ]);
 
     if (!input.skipBridge && !isHelpOrVersionRequest) {
-      yield* Effect.tryPromise(() =>
-        generateBridgeArtifacts({ check: input.checkBridge, repoRoot })
-      );
+      yield* generateBridgeArtifacts({ check: input.checkBridge, repoRoot });
     }
 
     const projectPath = resolveProjectPath(repoRoot, asconfigArgs);
