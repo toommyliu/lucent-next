@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc6 -p tsconfig.json --noEmit"
+    "typecheck": "tsc6 -p tsconfig.json --noEmit",
+    "bundle": "node scripts/bundle.mjs",
+    "check:bundle": "node scripts/bundle.mjs --check"
   },
   "dependencies": {
     "@lucent/game": "workspace:*",
@@ -16,6 +18,7 @@
     "@effect/vitest": "4.0.3",
     "@types/node": "24.12.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vitest": "^5.0.4"
+    "vitest": "^5.0.4",
+    "esbuild": "0.28.2"
   }
 }
