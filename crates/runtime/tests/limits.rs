@@ -24,8 +24,6 @@ fn stall_player(session: &Session) -> mpsc::Sender<()> {
     release
 }
 
-// Nothing public reports that a script is inside a loader call. The assertions that follow
-// prove the call reached the player before the script stopped.
 fn let_the_script_reach_the_player() {
     thread::sleep(Duration::from_millis(100));
 }

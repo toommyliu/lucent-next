@@ -15,7 +15,7 @@ struct State {
     isolate: Option<v8::IsolateHandle>,
     clock: Clock,
     stop: Option<Stop>,
-    timed: bool,
+    armed: Option<Instant>,
 }
 
 enum Clock {
@@ -37,7 +37,7 @@ impl Interrupt {
                 isolate: None,
                 clock: Clock::Idle,
                 stop: None,
-                timed: false,
+                armed: None,
             }),
             alarm: Condvar::new(),
         }
@@ -74,8 +74,9 @@ impl Interrupt {
 
     pub(crate) fn begin_turn(&self) {
         let mut state = self.state.lock().unwrap();
-        state.clock = Clock::Running(Instant::now() + TURN_LIMIT);
-        self.rouse(&state);
+        let deadline = Instant::now() + TURN_LIMIT;
+        state.clock = Clock::Running(deadline);
+        self.rouse(&state, deadline);
     }
 
     pub(crate) fn block(&self) {
@@ -88,8 +89,9 @@ impl Interrupt {
     pub(crate) fn unblock(&self) {
         let mut state = self.state.lock().unwrap();
         if let Clock::Blocked(left) = state.clock {
-            state.clock = Clock::Running(Instant::now() + left);
-            self.rouse(&state);
+            let deadline = Instant::now() + left;
+            state.clock = Clock::Running(deadline);
+            self.rouse(&state, deadline);
         }
     }
 
@@ -106,9 +108,8 @@ impl Interrupt {
         self.state.lock().unwrap().stop
     }
 
-    // Deadlines only move later, so a watchdog already waiting on a timer re-reads the clock in time.
-    fn rouse(&self, state: &State) {
-        if !state.timed {
+    fn rouse(&self, state: &State, deadline: Instant) {
+        if state.armed.is_none_or(|armed| deadline < armed) {
             self.alarm.notify_one();
         }
     }
@@ -127,9 +128,9 @@ impl Interrupt {
                         state.clock = Clock::Running(Instant::now() + RETERMINATE);
                         continue;
                     }
-                    state.timed = true;
+                    state.armed = Some(deadline);
                     let mut state = self.alarm.wait_timeout(state, left).unwrap().0;
-                    state.timed = false;
+                    state.armed = None;
                     state
                 }
                 Clock::Idle | Clock::Blocked(_) => self.alarm.wait(state).unwrap(),
