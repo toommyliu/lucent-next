@@ -3,7 +3,7 @@ mod common;
 use common::TIMEOUT;
 use lucent_host::testing;
 use lucent_protocol::script::ScriptOutcome;
-use lucent_runtime::Runtime;
+use lucent_runtime::{Kill, Runtime, RuntimeError};
 use serde_json::{Value, json};
 
 fn area() -> String {
@@ -122,4 +122,72 @@ fn the_api_layer_reads_and_changes_host_state_through_its_services() {
             "servers": [["Artix", true], ["Yorumi", false]],
         })
     );
+}
+
+fn read_settings() -> lucent_protocol::script::Script {
+    common::loose(&[(
+        "read.js",
+        r#"
+        import * as api from "lucent/api";
+        import * as script from "lucent/script";
+        export default function* () {
+            const s = yield* api.settings.get();
+            yield* script.stop(JSON.stringify({ walkSpeed: s.walkSpeed, animations: s.animations, customName: s.customName }));
+        }
+        "#,
+    )])
+}
+
+#[test]
+fn settings_survive_a_kill() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(
+        &host,
+        common::ready_movie()
+            .constant("settings.setWalkSpeed", json!(null))
+            .constant("settings.setAnimationsEnabled", json!(null))
+            .constant("settings.setCustomName", json!(null)),
+    );
+    let runtime = Runtime::start(link).unwrap();
+    common::ready(&runtime);
+    let set = common::loose(&[(
+        "set.js",
+        r#"
+        import * as api from "lucent/api";
+        export default function* () {
+            yield* api.settings.update({ walkSpeed: 20, animations: false, customName: "Tommy" });
+        }
+        "#,
+    )]);
+    let initial = runtime
+        .run_script(read_settings(), Default::default())
+        .wait(TIMEOUT)
+        .unwrap();
+    assert_eq!(
+        runtime.run_script(set, Default::default()).wait(TIMEOUT).unwrap(),
+        ScriptOutcome::Completed
+    );
+    let before = runtime
+        .run_script(read_settings(), Default::default())
+        .wait(TIMEOUT)
+        .unwrap();
+    let error = runtime
+        .run_script(
+            common::loose(&[("loop.js", "export default function* () { while (true) {} }")]),
+            Default::default(),
+        )
+        .wait(TIMEOUT)
+        .unwrap_err();
+    assert!(matches!(error, RuntimeError::Killed(Kill::Watchdog)));
+    common::ready(&runtime);
+    let after = runtime
+        .run_script(read_settings(), Default::default())
+        .wait(TIMEOUT)
+        .unwrap();
+    println!("initial={initial:?}\nbefore={before:?}\nafter={after:?}");
+    let expected = ScriptOutcome::StoppedByScript {
+        reason: Some(r#"{"walkSpeed":20,"animations":false,"customName":"Tommy"}"#.into()),
+    };
+    assert_eq!(before, expected);
+    assert_eq!(after, expected, "settings changed across the kill");
 }
