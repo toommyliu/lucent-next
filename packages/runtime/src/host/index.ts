@@ -1,3 +1,5 @@
+import "./globals";
+
 import { turn, wake } from "./loop";
 import { run } from "./run";
 

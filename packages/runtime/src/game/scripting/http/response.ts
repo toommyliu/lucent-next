@@ -6,8 +6,6 @@ import {
 } from "../../../shared/http";
 import type { HttpResponse } from "../ScriptApi";
 
-const decoder = new TextDecoder();
-
 export const makeHttpResponse = (
   payload: HttpResponsePayload,
 ): HttpResponse => {
@@ -44,8 +42,8 @@ export const makeHttpResponse = (
     get bodyUsed() {
       return bytes === undefined;
     },
-    json: () => read((body): unknown => JSON.parse(decoder.decode(body))),
-    text: () => read((body) => decoder.decode(body)),
+    json: () => read((body): unknown => JSON.parse(new TextDecoder().decode(body))),
+    text: () => read((body) => new TextDecoder().decode(body)),
     arrayBuffer: () => read((body) => new Uint8Array(body).buffer),
   });
 };

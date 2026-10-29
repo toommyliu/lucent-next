@@ -13,7 +13,7 @@ One line per shim in `src/shims/`, then the globals the code reads from the DOM 
 The tsconfig uses `lib: dom`. These are typed by the DOM lib and resolved at run time by whatever hosts the code.
 
 - `window` (assigned `onConnection`, `onDebug`, `onExtensionResponse`, `onLoaded`, `onProgress`, `packetFromClient`, `packetFromServer`; read for `swf` and `desktop`): `game/flash/bridge/Gateway.ts`, `Bridge.ts`, and the modules above.
-- `AudioContext`, `window.setTimeout`: `game/audio/beep.ts`.
+- `AudioContext`, `window.setTimeout`: the desktop dialog implementation uses `game/audio/beep.ts`. The host dialog implementation reports beep as unavailable.
 - `globalThis.setTimeout`: `game/groupCommandQueue.ts`.
 - `Headers`, `TextDecoder`, `AbortSignal` events: `game/scripting/http/*`.
 
@@ -25,3 +25,5 @@ The tsconfig uses `lib: dom`. These are typed by the DOM lib and resolved at run
 The Rust host owns both sides of those tests.
 
 The host service implementations in `host/services.ts` fail explicitly until their host operations are available. They do not build desktop automation or return fabricated state.
+
+`host/globals.ts` supplies `Event`, `EventTarget`, `AbortController`, `AbortSignal`, `TextEncoder`, and the console methods `log`, `info`, `warn`, `error`, and `debug`. Console messages reach `__host.log` and Rust tracing with target `lucent_runtime::script`. `host/loop.ts` supplies `window`, timers, and `window.swf`. HTTP response decoding creates `TextDecoder` only when a body is read.

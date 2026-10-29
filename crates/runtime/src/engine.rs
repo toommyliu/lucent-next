@@ -59,6 +59,7 @@ impl Engine {
                 ("read", v8::Function::new(scope, host_read)),
                 ("command", v8::Function::new(scope, host_command)),
                 ("now", v8::Function::new(scope, host_now)),
+                ("log", v8::Function::new(scope, host_log)),
             ] {
                 let key = v8::String::new(scope, name).unwrap();
                 let function = function.ok_or_else(|| {
@@ -498,4 +499,19 @@ fn host_now(
     mut reply: v8::ReturnValue<v8::Value>,
 ) {
     reply.set_double(scope.get_slot::<Instant>().unwrap().elapsed().as_secs_f64() * 1000.0);
+}
+
+fn host_log(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    _reply: v8::ReturnValue<v8::Value>,
+) {
+    let level = args.get(0).to_rust_string_lossy(scope);
+    let text = args.get(1).to_rust_string_lossy(scope);
+    match level.as_str() {
+        "debug" => tracing::debug!(target: "lucent_runtime::script", "{text}"),
+        "warn" => tracing::warn!(target: "lucent_runtime::script", "{text}"),
+        "error" => tracing::error!(target: "lucent_runtime::script", "{text}"),
+        _ => tracing::info!(target: "lucent_runtime::script", "{text}"),
+    }
 }

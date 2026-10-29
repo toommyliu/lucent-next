@@ -9,6 +9,7 @@ declare global {
     read(queryJson: string): string;
     command(commandJson: string): string;
     now(): number;
+    log(level: "info" | "warn" | "error" | "debug", text: string): void;
   };
   var __lucent: Readonly<{
     run<A, E>(program: (api: ApiService) => Effect.Effect<A, E>): Promise<A>;
@@ -57,15 +58,6 @@ const schedule = (
   timers.set(timer.id, timer);
   return timer.id;
 };
-
-class Utf8Encoder {
-  readonly encoding = "utf-8";
-
-  encode(input = ""): Uint8Array {
-    const bytes = unescape(encodeURIComponent(input.toWellFormed()));
-    return Uint8Array.from(bytes, (byte) => byte.charCodeAt(0));
-  }
-}
 
 const clear = (id: number | undefined): void => {
   if (id !== undefined) timers.delete(id);
@@ -134,7 +126,6 @@ Object.assign(globalThis, {
     schedule(callback, delay, args, true),
   clearTimeout: clear,
   clearInterval: clear,
-  TextEncoder: Utf8Encoder,
 });
 
 window.swf = new Proxy({} as Window["swf"], {

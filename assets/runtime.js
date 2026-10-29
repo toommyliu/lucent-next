@@ -3,6 +3,191 @@
   var __defProp = Object.defineProperty;
   var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+  // packages/runtime/src/host/globals.ts
+  var Event = class {
+    static {
+      __name(this, "Event");
+    }
+    type;
+    cancelable;
+    target = null;
+    currentTarget = null;
+    defaultPrevented = false;
+    immediatePropagationStopped = false;
+    constructor(type, options = {}) {
+      this.type = type;
+      this.cancelable = options.cancelable === true;
+    }
+    preventDefault() {
+      if (this.cancelable) this.defaultPrevented = true;
+    }
+    stopImmediatePropagation() {
+      this.immediatePropagationStopped = true;
+    }
+  };
+  var EventTarget = class {
+    static {
+      __name(this, "EventTarget");
+    }
+    #listeners = /* @__PURE__ */ new Map();
+    addEventListener(type, listener, options = {}) {
+      if (listener === null) return;
+      const capture = typeof options === "boolean" ? options : options.capture === true;
+      const registrations = this.#listeners.get(type) ?? [];
+      if (registrations.some(
+        (entry) => entry.listener === listener && entry.capture === capture
+      ))
+        return;
+      registrations.push({
+        listener,
+        capture,
+        once: typeof options === "object" && options.once === true
+      });
+      this.#listeners.set(type, registrations);
+    }
+    removeEventListener(type, listener, options = {}) {
+      const capture = typeof options === "boolean" ? options : options.capture === true;
+      const registrations = this.#listeners.get(type);
+      const index = registrations?.findIndex(
+        (entry) => entry.listener === listener && entry.capture === capture
+      ) ?? -1;
+      if (index !== -1) registrations?.splice(index, 1);
+    }
+    dispatchEvent(event) {
+      if (event.currentTarget !== null)
+        throw new Error("The event is already being dispatched.");
+      event.target = this;
+      event.currentTarget = this;
+      event.immediatePropagationStopped = false;
+      try {
+        const registrations = this.#listeners.get(event.type) ?? [];
+        for (const entry of [...registrations]) {
+          if (!registrations.includes(entry)) continue;
+          if (entry.once)
+            this.removeEventListener(event.type, entry.listener, entry.capture);
+          try {
+            if (typeof entry.listener === "function")
+              entry.listener.call(this, event);
+            else entry.listener.handleEvent(event);
+          } catch (error) {
+            console.error(error);
+          }
+          if (event.immediatePropagationStopped) break;
+        }
+      } finally {
+        event.currentTarget = null;
+      }
+      return !event.defaultPrevented;
+    }
+  };
+  var defaultAbortReason = /* @__PURE__ */ __name(() => {
+    const error = new Error("This operation was aborted");
+    error.name = "AbortError";
+    return error;
+  }, "defaultAbortReason");
+  var abort = /* @__PURE__ */ Symbol("abort");
+  var AbortSignal = class _AbortSignal extends EventTarget {
+    static {
+      __name(this, "AbortSignal");
+    }
+    #aborted = false;
+    #reason;
+    #onabort = null;
+    #onabortRegistered = false;
+    #dispatchOnabort = /* @__PURE__ */ __name((event) => this.#onabort?.call(this, event), "#dispatchOnabort");
+    get aborted() {
+      return this.#aborted;
+    }
+    get reason() {
+      return this.#reason;
+    }
+    get onabort() {
+      return this.#onabort;
+    }
+    set onabort(listener) {
+      if (listener !== null && !this.#onabortRegistered) {
+        this.addEventListener("abort", this.#dispatchOnabort);
+        this.#onabortRegistered = true;
+      }
+      this.#onabort = listener;
+    }
+    throwIfAborted() {
+      if (this.#aborted) throw this.#reason;
+    }
+    [abort](reason) {
+      if (this.#aborted) return;
+      this.#aborted = true;
+      this.#reason = reason === void 0 ? defaultAbortReason() : reason;
+      this.dispatchEvent(new Event("abort"));
+    }
+    static abort(reason) {
+      const signal = new _AbortSignal();
+      signal[abort](reason);
+      return signal;
+    }
+  };
+  var AbortController2 = class {
+    static {
+      __name(this, "AbortController");
+    }
+    #signal = new AbortSignal();
+    get signal() {
+      return this.#signal;
+    }
+    abort(reason) {
+      this.#signal[abort](reason);
+    }
+  };
+  var TextEncoder2 = class {
+    static {
+      __name(this, "TextEncoder");
+    }
+    encoding = "utf-8";
+    encode(input = "") {
+      const bytes = unescape(encodeURIComponent(input.toWellFormed()));
+      return Uint8Array.from(bytes, (byte) => byte.charCodeAt(0));
+    }
+  };
+  var format = /* @__PURE__ */ __name((value) => {
+    if (typeof value === "string") return value;
+    if (value instanceof Error) return value.stack ?? String(value);
+    try {
+      const ancestors = [];
+      return JSON.stringify(value, function(_key, entry) {
+        if (entry === null || typeof entry !== "object") return entry;
+        while (ancestors.length > 0 && ancestors.at(-1) !== this)
+          ancestors.pop();
+        if (ancestors.includes(entry)) return "[Circular]";
+        ancestors.push(entry);
+        return entry;
+      }) ?? String(value);
+    } catch {
+      try {
+        return String(value);
+      } catch {
+        return "[Unserializable]";
+      }
+    }
+  }, "format");
+  var log = /* @__PURE__ */ __name((level) => (...values2) => __host.log(level, values2.map(format).join(" ")), "log");
+  var runtimeConsole = Object.freeze({
+    log: log("info"),
+    info: log("info"),
+    warn: log("warn"),
+    error: log("error"),
+    debug: log("debug")
+  });
+  if (typeof __host !== "undefined") {
+    Object.assign(globalThis, {
+      Event,
+      EventTarget,
+      AbortController: AbortController2,
+      AbortSignal,
+      TextEncoder: TextEncoder2,
+      console: runtimeConsole
+    });
+  }
+
   // packages/runtime/src/host/loop.ts
   var timers = /* @__PURE__ */ new Map();
   var nextId = 1;
@@ -17,16 +202,6 @@
     timers.set(timer.id, timer);
     return timer.id;
   }, "schedule");
-  var Utf8Encoder = class {
-    static {
-      __name(this, "Utf8Encoder");
-    }
-    encoding = "utf-8";
-    encode(input = "") {
-      const bytes = unescape(encodeURIComponent(input.toWellFormed()));
-      return Uint8Array.from(bytes, (byte) => byte.charCodeAt(0));
-    }
-  };
   var clear = /* @__PURE__ */ __name((id) => {
     if (id !== void 0) timers.delete(id);
   }, "clear");
@@ -84,8 +259,7 @@
     setTimeout: /* @__PURE__ */ __name((callback3, delay3, ...args2) => schedule(callback3, delay3, args2, false), "setTimeout"),
     setInterval: /* @__PURE__ */ __name((callback3, delay3, ...args2) => schedule(callback3, delay3, args2, true), "setInterval"),
     clearTimeout: clear,
-    clearInterval: clear,
-    TextEncoder: Utf8Encoder
+    clearInterval: clear
   });
   window.swf = new Proxy({}, {
     get(_target, method) {
@@ -605,7 +779,7 @@
   };
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Formatter.js
-  function format(input, options) {
+  function format2(input, options) {
     const space = options?.space ?? 0;
     const ancestors = /* @__PURE__ */ new WeakSet();
     const gap = !space ? "" : typeof space === "number" ? " ".repeat(space) : space;
@@ -671,7 +845,7 @@ ${ind(d)}}`;
     __name(recurUnsafe, "recurUnsafe");
     return recur(input, 0);
   }
-  __name(format, "format");
+  __name(format2, "format");
   var CIRCULAR = "[Circular]";
   function formatPropertyKey(name) {
     return typeof name === "string" ? JSON.stringify(name) : String(name);
@@ -712,7 +886,7 @@ ${ind(d)}}`;
       const original = Object.getOwnPropertyDescriptor(this, key)?.value;
       const redacted = hasProperty(original, symbolRedactable) ? redact(original) : redact(value);
       if (typeof redacted === "bigint") {
-        return format(redacted);
+        return format2(redacted);
       }
       if (typeof redacted !== "object" || redacted === null) {
         return redacted;
@@ -789,7 +963,7 @@ ${ind(d)}}`;
     try {
       return typeof u === "object" ? formatJson(u, {
         space: whitespace
-      }) : format(u, {
+      }) : format2(u, {
         space: whitespace
       });
     } catch {
@@ -804,7 +978,7 @@ ${ind(d)}}`;
       return this.toJSON();
     },
     toString() {
-      return format(this.toJSON());
+      return format2(this.toJSON());
     }
   };
   var Class2 = class {
@@ -833,7 +1007,7 @@ ${ind(d)}}`;
      * @since 2.0.0
      */
     toString() {
-      return format(this.toJSON());
+      return format2(this.toJSON());
     }
   };
 
@@ -954,7 +1128,7 @@ ${ind(d)}}`;
       };
     },
     toString() {
-      return format(this.toJSON(), {
+      return format2(this.toJSON(), {
         ignoreToString: true,
         space: 2
       });
@@ -1018,7 +1192,7 @@ ${ind(d)}}`;
       };
     }
     toString() {
-      return `Cause(${format(this.reasons)})`;
+      return `Cause(${format2(this.reasons)})`;
     }
     [NodeInspectSymbol]() {
       return this.toJSON();
@@ -1065,7 +1239,7 @@ ${ind(d)}}`;
       return pipeArguments(this, arguments);
     }
     toString() {
-      return format(this);
+      return format2(this);
     }
     [NodeInspectSymbol]() {
       return this.toString();
@@ -1081,7 +1255,7 @@ ${ind(d)}}`;
       this.error = error;
     }
     toString() {
-      return `Fail(${format(this.error)})`;
+      return `Fail(${format2(this.error)})`;
     }
     toJSON() {
       return {
@@ -1134,7 +1308,7 @@ ${ind(d)}}`;
       this.defect = defect;
     }
     toString() {
-      return `Die(${format(this.defect)})`;
+      return `Die(${format2(this.defect)})`;
     }
     toJSON() {
       return {
@@ -1188,7 +1362,7 @@ ${ind(d)}}`;
       },
       ...makePrimitiveProto(options),
       toString() {
-        return `${options.op}(${format(this[args])})`;
+        return `${options.op}(${format2(this[args])})`;
       },
       toJSON() {
         return {
@@ -1384,7 +1558,7 @@ ${ind(d)}}`;
       return combine(hash(this._tag))(hash(this.value));
     },
     toString() {
-      return `some(${format(this.value)})`;
+      return `some(${format2(this.value)})`;
     },
     toJSON() {
       return {
@@ -1452,7 +1626,7 @@ ${ind(d)}}`;
       return combine(hash(this._tag))(hash(this.success));
     },
     toString() {
-      return `success(${format(this.success)})`;
+      return `success(${format2(this.success)})`;
     },
     toJSON() {
       return {
@@ -1472,7 +1646,7 @@ ${ind(d)}}`;
       return combine(hash(this._tag))(hash(this.failure));
     },
     toString() {
-      return `failure(${format(this.failure)})`;
+      return `failure(${format2(this.failure)})`;
     },
     toJSON() {
       return {
@@ -3997,11 +4171,11 @@ ${prefix}}`;
       if (options.signal.aborted) {
         fiber2.interruptUnsafe();
       } else {
-        const abort = /* @__PURE__ */ __name(() => fiber2.interruptUnsafe(), "abort");
-        options.signal.addEventListener("abort", abort, {
+        const abort2 = /* @__PURE__ */ __name(() => fiber2.interruptUnsafe(), "abort");
+        options.signal.addEventListener("abort", abort2, {
           once: true
         });
-        fiber2.addObserver(() => options.signal.removeEventListener("abort", abort));
+        fiber2.addObserver(() => options.signal.removeEventListener("abort", abort2));
       }
     }
     if (options?.onFiberStart) {
@@ -4420,9 +4594,9 @@ ${prefix}}`;
       return pipeArguments(this, arguments);
     }
   };
-  var loggerMake = /* @__PURE__ */ __name((log) => {
+  var loggerMake = /* @__PURE__ */ __name((log2) => {
     const self = Object.create(LoggerProto);
-    self.log = log;
+    self.log = log2;
     return self;
   }, "loggerMake");
   var formatLabel = /* @__PURE__ */ __name((key) => key.replace(/[\s="]/g, "_"), "formatLabel");
@@ -4515,8 +4689,8 @@ ${prefix}}`;
       message_.push(annotations);
     }
     const console2 = fiber2.getRef(ConsoleRef);
-    const log = fiber2.getRef(LogToStderr) ? console2.error : console2.log;
-    log(`[${defaultDateFormat(date)}] ${logLevel.toUpperCase()} (#${fiber2.id})${spanString}:`, ...message_);
+    const log2 = fiber2.getRef(LogToStderr) ? console2.error : console2.log;
+    log2(`[${defaultDateFormat(date)}] ${logLevel.toUpperCase()} (#${fiber2.id})${spanString}:`, ...message_);
   });
   var tracerLogger = /* @__PURE__ */ loggerMake(({
     cause,
@@ -5462,7 +5636,7 @@ ${prefix}}`;
   }, "defaultLeafHook");
   var defaultCheckHook = /* @__PURE__ */ __name((issue) => findMessage(issue.issue) ?? findMessage(issue), "defaultCheckHook");
   function formatInput(issue) {
-    return hasInput(issue) ? format(issue.input) : void 0;
+    return hasInput(issue) ? format2(issue.input) : void 0;
   }
   __name(formatInput, "formatInput");
   function findExpected(issue) {
@@ -5819,7 +5993,7 @@ ${prefix}}`;
     constructor(literal, annotations, checks, encoding, context3) {
       super(annotations, checks, encoding, context3);
       if (typeof literal === "number" && !globalThis.Number.isFinite(literal)) {
-        throw new Error(`A numeric literal must be finite, got ${format(literal)}`);
+        throw new Error(`A numeric literal must be finite, got ${format2(literal)}`);
       }
       this.literal = literal;
     }
@@ -8003,7 +8177,7 @@ ${prefix}}`;
     const source = regExp.source;
     const flags = regExp.flags;
     const canExport = /^[dg]*uy?$/.test(flags);
-    const runtimeRegExp = flags === "" ? `new RegExp(${format(source)})` : `new RegExp(${format(source)}, ${format(flags)})`;
+    const runtimeRegExp = flags === "" ? `new RegExp(${format2(source)})` : `new RegExp(${format2(source)}, ${format2(flags)})`;
     return isPattern(regExp, {
       toJsonSchema: /* @__PURE__ */ __name(() => canExport ? {
         pattern: flags.endsWith("y") ? `^(?:${source})` : source
@@ -8036,7 +8210,7 @@ ${prefix}}`;
   var Finite = /* @__PURE__ */ make8(finite);
   function makeIsGreaterThanOrEqualTo(options) {
     const gte = isGreaterThanOrEqualTo(options.order);
-    const formatter = options.formatter ?? format;
+    const formatter = options.formatter ?? format2;
     return (minimum, annotations) => {
       return makeFilter2((input) => gte(input, minimum), {
         expected: `a value greater than or equal to ${formatter(minimum)}`,
@@ -8055,7 +8229,7 @@ ${prefix}}`;
     const greaterThan = isGreaterThan(deriveOptions.order);
     const lessThanOrEqualTo = isLessThanOrEqualTo(deriveOptions.order);
     const lessThan = isLessThan(deriveOptions.order);
-    const formatter = deriveOptions.formatter ?? format;
+    const formatter = deriveOptions.formatter ?? format2;
     return (options, annotations) => {
       const gte = options.exclusiveMinimum ? greaterThan : greaterThanOrEqualTo;
       const lte = options.exclusiveMaximum ? lessThan : lessThanOrEqualTo;
@@ -8080,7 +8254,7 @@ ${prefix}}`;
   __name(makeIsBetween, "makeIsBetween");
   function encodeNumberPayload(number3) {
     if (!globalThis.Number.isFinite(number3)) {
-      throw new globalThis.RangeError(`Expected a finite number, got ${format(number3)}`);
+      throw new globalThis.RangeError(`Expected a finite number, got ${format2(number3)}`);
     }
     return number3;
   }
@@ -8098,7 +8272,7 @@ ${prefix}}`;
         minimum
       }), "toJsonSchema"),
       toCode: /* @__PURE__ */ __name(() => ({
-        runtime: `Schema.isGreaterThanOrEqualTo(${format(minimum)})`
+        runtime: `Schema.isGreaterThanOrEqualTo(${format2(minimum)})`
       }), "toCode")
     }), "annotate")
   });
@@ -8127,7 +8301,7 @@ ${prefix}}`;
           [exclusiveMaximum ? "exclusiveMaximum" : "maximum"]: options.maximum
         }), "toJsonSchema"),
         toCode: /* @__PURE__ */ __name(() => ({
-          runtime: `Schema.isBetween({ minimum: ${format(options.minimum)}, maximum: ${format(options.maximum)}, exclusiveMinimum: ${format(exclusiveMinimum)}, exclusiveMaximum: ${format(exclusiveMaximum)} })`
+          runtime: `Schema.isBetween({ minimum: ${format2(options.minimum)}, maximum: ${format2(options.maximum)}, exclusiveMinimum: ${format2(exclusiveMinimum)}, exclusiveMaximum: ${format2(exclusiveMaximum)} })`
         }), "toCode")
       };
     }, "annotate")
@@ -9672,7 +9846,7 @@ ${prefix}}`;
       return this.backing[Symbol.iterator]();
     },
     toString() {
-      return `MutableHashMap(${format(Array.from(this))})`;
+      return `MutableHashMap(${format2(Array.from(this))})`;
     },
     toJSON() {
       return {
