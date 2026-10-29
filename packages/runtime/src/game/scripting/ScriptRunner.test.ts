@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, expectTypeOf, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
@@ -38,7 +38,6 @@ describe("ScriptRunner", () => {
         restart: {
           disconnectedAt: "2026-07-26T12:00:00.000Z",
           name: "Reconnect repro",
-          path: "/scripts/reconnect-repro.js",
         },
       },
       {
@@ -47,10 +46,13 @@ describe("ScriptRunner", () => {
       },
     );
 
+    expectTypeOf(status)
+      .extract<{ readonly state: "waiting-to-restart" }>()
+      .not.toHaveProperty("path");
+
     expect(status).toEqual({
       disconnectedAt: "2026-07-26T12:00:00.000Z",
       name: "Reconnect repro",
-      path: "/scripts/reconnect-repro.js",
       state: "waiting-to-restart",
     });
   });

@@ -22,7 +22,6 @@ const completed = (script: ScriptFile): ScriptRunTerminalOutcome => ({
   status: {
     completedAt: "2026-08-18T12:00:00.000Z",
     name: script.name,
-    path: script.path,
     state: "completed",
   },
 });
@@ -33,7 +32,6 @@ const failed = (script: ScriptFile): ScriptRunTerminalOutcome => ({
     failedAt: "2026-08-18T12:00:00.000Z",
     message: "boom",
     name: script.name,
-    path: script.path,
     state: "failed",
   },
 });

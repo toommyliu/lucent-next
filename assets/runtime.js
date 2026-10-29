@@ -20464,13 +20464,9 @@ ${prefix}}`;
   }), "makeRunHandle");
   var externalStopOutcome = /* @__PURE__ */ __name((status) => ({ kind: "externally-stopped", status }), "externalStopOutcome");
   var statusName = /* @__PURE__ */ __name((source) => source.name.trim() === "" ? "script" : source.name, "statusName");
-  var activeStatusFields = /* @__PURE__ */ __name((active) => ({
-    name: active.name,
-    ...active.path === void 0 ? {} : { path: active.path }
-  }), "activeStatusFields");
   var normalizeUsername = /* @__PURE__ */ __name((username) => username.trim().toLowerCase(), "normalizeUsername");
   var statusFromStartingCancellation = /* @__PURE__ */ __name((starting, cancellation) => cancellation.retryAfterReconnect === true && starting.restart !== void 0 ? {
-    ...activeStatusFields(starting.restart),
+    name: starting.restart.name,
     disconnectedAt: starting.restart.disconnectedAt,
     state: "waiting-to-restart"
   } : {
@@ -20736,7 +20732,7 @@ ${prefix}}`;
             const done4 = yield* beginFinalization(active, {
               awaitFiber: true,
               intermediateStatus: {
-                ...activeStatusFields(active),
+                name: active.name,
                 state: "stopping"
               },
               interrupt: true,
@@ -20791,7 +20787,7 @@ ${prefix}}`;
                 interrupt: true,
                 result: /* @__PURE__ */ __name(() => {
                   const status = {
-                    ...activeStatusFields(active),
+                    name: active.name,
                     ...detailsText === void 0 ? {} : { detailsText },
                     failedAt: nowIso(),
                     message: causeMessage(cause),
@@ -20989,13 +20985,12 @@ ${prefix}}`;
             id: starting.id,
             inputs: { ...inputs },
             name: starting.name,
-            ...starting.path === void 0 ? {} : { path: starting.path },
             scope: scriptScope,
             terminal: starting.terminal,
             username
           };
           const status2 = {
-            ...activeStatusFields(active),
+            name: active.name,
             startedAt: nowIso(),
             state: "running"
           };
@@ -21051,7 +21046,7 @@ ${prefix}}`;
               }
               if (starting.restart !== void 0 && isScriptNotReadyCause(cause)) {
                 return {
-                  ...activeStatusFields(starting.restart),
+                  name: starting.restart.name,
                   disconnectedAt: starting.restart.disconnectedAt,
                   state: "waiting-to-restart"
                 };
@@ -21063,7 +21058,6 @@ ${prefix}}`;
                 failedAt: nowIso(),
                 message: causeMessage(cause),
                 name: starting.name,
-                ...starting.path === void 0 ? {} : { path: starting.path },
                 state: "failed"
               };
             }), "onFailure"),
@@ -21095,7 +21089,7 @@ ${prefix}}`;
             };
             yield* set3(startingRef, starting);
             yield* setStatus({
-              ...activeStatusFields(starting),
+              name: starting.name,
               startedAt: nowIso(),
               state: "starting"
             });
@@ -21249,7 +21243,6 @@ ${prefix}}`;
                     id: active.id,
                     inputs: { ...active.inputs },
                     name: active.name,
-                    ...active.path === void 0 ? {} : { path: active.path },
                     terminal: active.terminal,
                     username: active.username
                   } : null;
@@ -21259,7 +21252,7 @@ ${prefix}}`;
                   const finalized = yield* beginFinalization(active, {
                     awaitFiber: true,
                     intermediateStatus: {
-                      ...activeStatusFields(active),
+                      name: active.name,
                       state: "stopping"
                     },
                     interrupt: true,
@@ -21273,7 +21266,7 @@ ${prefix}}`;
                       }
                       return {
                         status: {
-                          ...activeStatusFields(restart),
+                          name: restart.name,
                           disconnectedAt: restart.disconnectedAt,
                           state: "waiting-to-restart"
                         }
@@ -21351,7 +21344,7 @@ ${prefix}}`;
                   const done4 = yield* beginFinalization(active, {
                     awaitFiber: true,
                     intermediateStatus: {
-                      ...activeStatusFields(active),
+                      name: active.name,
                       state: "stopping"
                     },
                     interrupt: true,

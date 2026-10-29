@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, expectTypeOf, it } from "@effect/vitest";
 
 import {
   fatalScriptAlertFromError,
@@ -18,21 +18,20 @@ describe("fatal script alerts", () => {
       error.stack = stack;
       const alert =
         kind === "error"
-          ? fatalScriptAlertFromError("error.js", error, "/scripts/error.js")
+          ? fatalScriptAlertFromError("error.js", error)
           : fatalScriptAlertFromStatus({
               state: "failed",
               name: "error.js",
-              path: "/scripts/error.js",
               failedAt: "now",
               message,
               detailsText: stack,
             });
       expect(alert).toMatchObject({
         sourceName: "error.js",
-        sourcePath: "/scripts/error.js",
         message: "error.js:2:9: hello world",
         detailsText: "Error: error.js:2:9: hello world\n    at error.js:2:9",
       });
+      expectTypeOf(alert).not.toHaveProperty("sourcePath");
       if (kind === "status") expect(alert.key).toBe("status:now:error.js");
     },
   );

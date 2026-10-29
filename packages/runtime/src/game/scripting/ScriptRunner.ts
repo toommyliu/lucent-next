@@ -60,20 +60,17 @@ export type ScriptRunnerStatus =
   | { readonly state: "idle" }
   | {
       readonly name: string;
-      readonly path?: string;
       readonly startedAt: string;
       readonly state: "starting";
     }
   | {
       readonly name: string;
-      readonly path?: string;
       readonly startedAt: string;
       readonly state: "running";
     }
   | {
       readonly completedAt: string;
       readonly name: string;
-      readonly path?: string;
       readonly state: "completed";
     }
   | {
@@ -81,7 +78,6 @@ export type ScriptRunnerStatus =
       readonly failedAt: string;
       readonly message: string;
       readonly name: string;
-      readonly path?: string;
       readonly state: "failed";
     }
   | {
@@ -91,13 +87,11 @@ export type ScriptRunnerStatus =
     }
   | {
       readonly name: string;
-      readonly path?: string;
       readonly state: "stopping";
     }
   | {
       readonly disconnectedAt: string;
       readonly name: string;
-      readonly path?: string;
       readonly state: "waiting-to-restart";
     };
 
@@ -191,7 +185,6 @@ interface ActiveScript {
   readonly id: number;
   readonly inputs: ScriptInputValues;
   readonly name: string;
-  readonly path?: string;
   readonly scope: ScriptAsyncScope;
   readonly terminal: Deferred.Deferred<ScriptRunTerminalOutcome>;
   readonly username: string;
@@ -211,7 +204,6 @@ interface PendingRestart {
   readonly id: number;
   readonly inputs: ScriptInputValues;
   readonly name: string;
-  readonly path?: string;
   readonly terminal: Deferred.Deferred<ScriptRunTerminalOutcome>;
   readonly username: string;
 }
@@ -227,7 +219,6 @@ interface StartingScript {
   readonly done: Deferred.Deferred<ScriptRunnerStatus>;
   readonly id: number;
   readonly name: string;
-  readonly path?: string;
   readonly restart?: PendingRestart;
   readonly terminal: Deferred.Deferred<ScriptRunTerminalOutcome>;
 }
@@ -263,25 +254,18 @@ const externalStopOutcome = (
 const statusName = (source: Pick<ScriptSource, "name">) =>
   source.name.trim() === "" ? "script" : source.name;
 
-const activeStatusFields = (
-  active: Pick<ActiveScript | PendingRestart | StartingScript, "name" | "path">,
-) => ({
-  name: active.name,
-  ...(active.path === undefined ? {} : { path: active.path }),
-});
-
 const normalizeUsername = (username: string): string =>
   username.trim().toLowerCase();
 
 export const statusFromStartingCancellation = (
   starting: {
-    readonly restart?: Pick<PendingRestart, "disconnectedAt" | "name" | "path">;
+    readonly restart?: Pick<PendingRestart, "disconnectedAt" | "name">;
   },
   cancellation: StartingCancellation,
 ): ScriptRunnerStatus =>
   cancellation.retryAfterReconnect === true && starting.restart !== undefined
     ? {
-        ...activeStatusFields(starting.restart),
+        name: starting.restart.name,
         disconnectedAt: starting.restart.disconnectedAt,
         state: "waiting-to-restart",
       }
@@ -657,7 +641,7 @@ export const layer = Layer.effect(
           const done = yield* beginFinalization(active, {
             awaitFiber: true,
             intermediateStatus: {
-              ...activeStatusFields(active),
+              name: active.name,
               state: "stopping",
             },
             interrupt: true,
@@ -728,7 +712,7 @@ export const layer = Layer.effect(
               interrupt: true,
               result: () => {
                 const status = {
-                  ...activeStatusFields(active),
+                  name: active.name,
                   ...(detailsText === undefined ? {} : { detailsText }),
                   failedAt: nowIso(),
                   message: causeMessage(cause),
@@ -968,13 +952,12 @@ export const layer = Layer.effect(
           id: starting.id,
           inputs: { ...inputs },
           name: starting.name,
-          ...(starting.path === undefined ? {} : { path: starting.path }),
           scope: scriptScope,
           terminal: starting.terminal,
           username,
         };
         const status: ScriptRunnerStatus = {
-          ...activeStatusFields(active),
+          name: active.name,
           startedAt: nowIso(),
           state: "running",
         };
@@ -1050,10 +1033,10 @@ export const layer = Layer.effect(
                 isScriptNotReadyCause(cause)
               ) {
                 return {
-                  ...activeStatusFields(starting.restart),
+                  name: starting.restart.name,
                   disconnectedAt: starting.restart.disconnectedAt,
                   state: "waiting-to-restart",
-                } as ScriptRunnerStatus;
+                } satisfies ScriptRunnerStatus;
               }
 
               yield* logScriptFailureCause(cause);
@@ -1063,9 +1046,8 @@ export const layer = Layer.effect(
                 failedAt: nowIso(),
                 message: causeMessage(cause),
                 name: starting.name,
-                ...(starting.path === undefined ? {} : { path: starting.path }),
                 state: "failed",
-              } as ScriptRunnerStatus;
+              } satisfies ScriptRunnerStatus;
             }),
           onSuccess: (outcome) =>
             outcome.kind === "started"
@@ -1112,7 +1094,7 @@ export const layer = Layer.effect(
           };
           yield* Ref.set(startingRef, starting);
           yield* setStatus({
-            ...activeStatusFields(starting),
+            name: starting.name,
             startedAt: nowIso(),
             state: "starting",
           });
@@ -1306,9 +1288,6 @@ export const layer = Layer.effect(
                       id: active.id,
                       inputs: { ...active.inputs },
                       name: active.name,
-                      ...(active.path === undefined
-                        ? {}
-                        : { path: active.path }),
                       terminal: active.terminal,
                       username: active.username,
                     }
@@ -1320,7 +1299,7 @@ export const layer = Layer.effect(
                 const finalized = yield* beginFinalization(active, {
                   awaitFiber: true,
                   intermediateStatus: {
-                    ...activeStatusFields(active),
+                    name: active.name,
                     state: "stopping",
                   },
                   interrupt: true,
@@ -1334,7 +1313,7 @@ export const layer = Layer.effect(
                     }
                     return {
                       status: {
-                        ...activeStatusFields(restart),
+                        name: restart.name,
                         disconnectedAt: restart.disconnectedAt,
                         state: "waiting-to-restart",
                       },
@@ -1426,7 +1405,7 @@ export const layer = Layer.effect(
                 const done = yield* beginFinalization(active, {
                   awaitFiber: true,
                   intermediateStatus: {
-                    ...activeStatusFields(active),
+                    name: active.name,
                     state: "stopping",
                   },
                   interrupt: true,

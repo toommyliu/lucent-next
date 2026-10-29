@@ -323,7 +323,6 @@ export const makeScriptQueue = (
       failedAt: new Date(now()).toISOString(),
       message: errorMessage(cause, "Unexpected queue failure"),
       name: item.file.name,
-      path: item.file.path,
       state: "failed",
     },
   });
