@@ -18,12 +18,13 @@ export const makeDrops = Effect.fnUntraced(function* (
   host: HostStateService,
   auth: Auth,
 ) {
+  const operationHost = globalThis.__host;
   const get = (selector: ItemQuery) => readItem(host, "drop", selector);
 
   const accept = (selector: ItemQuery) =>
     isSelectable(selector)
       ? Effect.promise(() =>
-          operate({ kind: "acceptDrop", selector })
+          operate({ kind: "acceptDrop", selector }, operationHost)
             .then((answer) => answer.value)
             .catch(() => false),
         )

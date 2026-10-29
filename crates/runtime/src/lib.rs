@@ -58,10 +58,9 @@ pub struct Runtime {
 enum Command {
     Wake,
     StopScript,
-    Run {
+    Start {
         script: Script,
         inputs: ScriptInputs,
-        kills: u64,
         reply: mpsc::Sender<Result<String, RuntimeError>>,
     },
     Stop,
@@ -69,7 +68,6 @@ enum Command {
     Eval {
         name: String,
         source: String,
-        kills: u64,
         reply: mpsc::Sender<Result<String, RuntimeError>>,
     },
 }
@@ -103,16 +101,61 @@ impl PendingEval {
     }
 }
 
-pub struct ScriptRun(PendingEval);
+pub struct ScriptRun {
+    runtime: Runtime,
+    outcome: PendingEval,
+}
+
+enum Execution {
+    Evals,
+    Script,
+    StartScript {
+        script: Script,
+        inputs: ScriptInputs,
+        reply: mpsc::Sender<Result<String, RuntimeError>>,
+    },
+}
 
 impl ScriptRun {
+    pub fn start(
+        link: ScriptLink,
+        script: Script,
+        inputs: ScriptInputs,
+    ) -> Result<Self, RuntimeError> {
+        let (reply, pending) = mpsc::channel();
+        let runtime = Runtime::spawn(
+            link,
+            Execution::StartScript {
+                script,
+                inputs,
+                reply,
+            },
+        )?;
+        Ok(Self {
+            runtime,
+            outcome: PendingEval(pending),
+        })
+    }
+
+    pub fn stop_script(&self) {
+        let _ = self.runtime.commands.send(Command::StopScript);
+    }
+
+    pub fn kill(&self) {
+        self.runtime.kill();
+    }
+
     pub fn wait(&self, timeout: Duration) -> Result<ScriptOutcome, RuntimeError> {
-        self.0.wait(timeout)
+        self.outcome.wait(timeout)
     }
 }
 
 impl Runtime {
     pub fn start(link: ScriptLink) -> Result<Self, RuntimeError> {
+        Self::spawn(link, Execution::Evals)
+    }
+
+    fn spawn(link: ScriptLink, execution: Execution) -> Result<Self, RuntimeError> {
         let interrupt = Arc::new(Interrupt::new()?);
         let thread_interrupt = interrupt.clone();
         let (commands, incoming) = mpsc::channel();
@@ -121,9 +164,11 @@ impl Runtime {
             commands: commands.clone(),
             queued: AtomicBool::new(false),
         });
+        let dispatch = tracing::dispatcher::get_default(Clone::clone);
         let thread = thread::Builder::new()
             .name(format!("lucent-js-{}", link.id()))
             .spawn(move || {
+                let _dispatch = tracing::dispatcher::set_default(&dispatch);
                 let interrupt = thread_interrupt;
                 let watchdog_interrupt = interrupt.clone();
                 let watchdog = thread::Builder::new()
@@ -140,7 +185,7 @@ impl Runtime {
                 let result = (|| {
                     link.set_waker(Waker::from(wake.clone()));
                     let engine = Engine::new(link, interrupt.clone())?;
-                    run(engine, &incoming, &wake, &interrupt, &ready)
+                    run(engine, execution, &incoming, &wake, &interrupt, &ready)
                 })();
                 if let Err(error) = result {
                     let _ = ready.send(Err(error));
@@ -159,28 +204,16 @@ impl Runtime {
 
     pub fn eval(&self, name: impl Into<String>, source: impl Into<String>) -> PendingEval {
         let (reply, pending) = mpsc::channel();
+        if self.interrupt.stop().is_some() {
+            let _ = reply.send(Err(RuntimeError::Stopped));
+            return PendingEval(pending);
+        }
         let _ = self.commands.send(Command::Eval {
             name: name.into(),
             source: source.into(),
-            kills: self.interrupt.kills(),
             reply,
         });
         PendingEval(pending)
-    }
-
-    pub fn run_script(&self, script: Script, inputs: ScriptInputs) -> ScriptRun {
-        let (reply, pending) = mpsc::channel();
-        let _ = self.commands.send(Command::Run {
-            script,
-            inputs,
-            kills: self.interrupt.kills(),
-            reply,
-        });
-        ScriptRun(PendingEval(pending))
-    }
-
-    pub fn stop_script(&self) {
-        let _ = self.commands.send(Command::StopScript);
     }
 
     pub fn kill(&self) {
@@ -201,6 +234,7 @@ impl Drop for Runtime {
 
 fn run(
     mut engine: Engine,
+    mut execution: Execution,
     incoming: &mpsc::Receiver<Command>,
     wake: &EventWake,
     interrupt: &Arc<Interrupt>,
@@ -214,29 +248,17 @@ fn run(
             Ok(Command::Eval {
                 name,
                 source,
-                kills,
                 reply,
             }) => {
-                match interrupt.killed_since(kills) {
-                    Some(kill) => {
-                        let _ = reply.send(Err(RuntimeError::Killed(kill)));
-                    }
-                    None => engine.eval(&name, &source, reply),
-                }
+                engine.eval(&name, &source, reply);
                 Vec::new()
             }
-            Ok(Command::Run {
+            Ok(Command::Start {
                 script,
                 inputs,
-                kills,
                 reply,
             }) => {
-                match interrupt.killed_since(kills) {
-                    Some(kill) => {
-                        let _ = reply.send(Err(RuntimeError::Killed(kill)));
-                    }
-                    None => engine.start(script, inputs, reply),
-                }
+                engine.start(script, inputs, reply);
                 Vec::new()
             }
             Ok(Command::StopScript) => {
@@ -253,21 +275,40 @@ fn run(
             Ok(Command::Kill) | Err(RecvTimeoutError::Timeout) => Vec::new(),
             Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => return Ok(()),
         };
-        let mut deadline = engine.turn(&serde_json::to_string(&items).unwrap());
+        let deadline = engine.turn(&serde_json::to_string(&items).unwrap());
         match interrupt.end_turn() {
             None => {}
             Some(Stop::Kill(kill)) => {
                 tracing::warn!(%kill, "script runtime killed");
-                engine = Engine::new(engine.kill(kill), interrupt.clone()).map_err(|error| {
-                    tracing::error!(%error, "couldn't rebuild the script runtime");
-                    error
-                })?;
-                deadline = None;
+                engine.kill(kill);
+                while let Ok(command) = incoming.try_recv() {
+                    if let Command::Eval { reply, .. } = command {
+                        let _ = reply.send(Err(RuntimeError::Killed(kill)));
+                    }
+                }
+                return Ok(());
             }
             Some(Stop::Shutdown) => return Ok(()),
         }
         if let Some(ready) = ready.take() {
             let _ = ready.send(Ok(()));
+            if let Execution::StartScript {
+                script,
+                inputs,
+                reply,
+            } = execution
+            {
+                execution = Execution::Script;
+                command = Ok(Command::Start {
+                    script,
+                    inputs,
+                    reply,
+                });
+                continue;
+            }
+        }
+        if matches!(execution, Execution::Script) && engine.is_idle() {
+            return Ok(());
         }
         command = match deadline {
             Some(deadline) => {

@@ -11,6 +11,7 @@ import {
   type ScriptSource,
 } from "../game/scripting/ScriptRunner";
 import { ScriptServices } from "../game/scripting/ScriptServices";
+import { hideInternals } from "./loop";
 import { unavailableScriptDialogs, unavailableScriptServices } from "./services";
 
 const api = ManagedRuntime.make(apiLayer);
@@ -32,8 +33,9 @@ export const start = (
   load: ScriptSource["load"],
   name: string,
   inputsJson: string,
-): Promise<ScriptOutcome> =>
-  runtime.runPromise(
+): Promise<ScriptOutcome> => {
+  hideInternals();
+  return runtime.runPromise(
     Effect.gen(function* () {
       const runner = yield* ScriptRunner;
       const handle = yield* runner.start({ name, load }, JSON.parse(inputsJson));
@@ -55,6 +57,7 @@ export const start = (
       }
     }),
   );
+};
 
 export const stop = (reason?: string): Promise<void> =>
   runtime.runPromise(

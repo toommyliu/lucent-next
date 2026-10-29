@@ -6,7 +6,6 @@ import {
   Event as RuntimeEvent,
   EventTarget as RuntimeEventTarget,
   TextEncoder as RuntimeTextEncoder,
-  runtimeConsole,
 } from "./globals";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -92,11 +91,13 @@ describe("runtime globals", () => {
     expect(calls).toEqual(["first", "once", "first", "added"]);
   });
 
-  it("formats console values and forwards each log level", () => {
+  it("formats console values and forwards each log level", async () => {
     const records: unknown[] = [];
     vi.stubGlobal("__host", {
       log: (level: string, text: string) => records.push([level, text]),
     });
+    vi.resetModules();
+    const { runtimeConsole } = await import("./globals");
     const error = new Error("broken");
     error.stack = "Error: broken\n    at farm.js:2:3";
     const cycle: { self?: unknown } = {};

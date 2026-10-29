@@ -6,15 +6,15 @@ use std::time::Duration;
 
 #[test]
 fn the_daily_package_runs_and_reports_its_maxed_reward() {
-    let (_host, _session, runtime) = ready_runtime();
+    let (_host, mut session, _runtime) = ready_runtime();
     assert_eq!(
-        runtime
-            .run_script(
-                package("lucent-dailies", "scripts/farm-elders-blood.js", &[]),
-                Default::default()
-            )
-            .wait(TIMEOUT)
-            .unwrap(),
+        start(
+            &mut session,
+            package("lucent-dailies", "scripts/farm-elders-blood.js", &[]),
+            Default::default()
+        )
+        .wait(TIMEOUT)
+        .unwrap(),
         ScriptOutcome::Completed
     );
     let wrapper = package(
@@ -37,8 +37,7 @@ fn the_daily_package_runs_and_reports_its_maxed_reward() {
         )],
     );
     assert_eq!(
-        runtime
-            .run_script(wrapper, Default::default())
+        start(&mut session, wrapper, Default::default())
             .wait(TIMEOUT)
             .unwrap(),
         ScriptOutcome::StoppedByScript {
@@ -49,7 +48,7 @@ fn the_daily_package_runs_and_reports_its_maxed_reward() {
 
 #[test]
 fn inputs_apply_defaults_and_report_missing_required_values() {
-    let (_host, _session, runtime) = ready_runtime();
+    let (_host, mut session, _runtime) = ready_runtime();
     let defaults = loose(&[(
         "inputs.js",
         r#"
@@ -64,8 +63,7 @@ fn inputs_apply_defaults_and_report_missing_required_values() {
     "#,
     )]);
     assert_eq!(
-        runtime
-            .run_script(defaults, Default::default())
+        start(&mut session, defaults, Default::default())
             .wait(TIMEOUT)
             .unwrap(),
         ScriptOutcome::StoppedByScript {
@@ -82,8 +80,7 @@ fn inputs_apply_defaults_and_report_missing_required_values() {
         export default function* () {}
     "#,
     )]);
-    let outcome = runtime
-        .run_script(required, Default::default())
+    let outcome = start(&mut session, required, Default::default())
         .wait(TIMEOUT)
         .unwrap();
     match outcome {
@@ -96,7 +93,7 @@ fn inputs_apply_defaults_and_report_missing_required_values() {
 
 #[test]
 fn module_errors_name_the_script_and_location() {
-    let (_host, _session, runtime) = ready_runtime();
+    let (_host, mut session, _runtime) = ready_runtime();
     for (path, source, expected) in [
         (
             "syntax.js",
@@ -129,8 +126,7 @@ fn module_errors_name_the_script_and_location() {
             "await.js: Scripts can't use top-level await.",
         ),
     ] {
-        match runtime
-            .run_script(loose(&[(path, source)]), Default::default())
+        match start(&mut session, loose(&[(path, source)]), Default::default())
             .wait(TIMEOUT)
             .unwrap()
         {
@@ -143,8 +139,7 @@ fn module_errors_name_the_script_and_location() {
         "tests/broken.js",
         &[("tests/broken.js", "export const x = ;")],
     );
-    match runtime
-        .run_script(broken, Default::default())
+    match start(&mut session, broken, Default::default())
         .wait(TIMEOUT)
         .unwrap()
     {
@@ -158,7 +153,7 @@ fn module_errors_name_the_script_and_location() {
 
 #[test]
 fn a_nested_module_evaluation_error_keeps_the_throwing_module_in_its_details() {
-    let (_host, _session, runtime) = ready_runtime();
+    let (_host, mut session, _runtime) = ready_runtime();
     let script = package(
         "lucent-dailies",
         "tests/entry.js",
@@ -168,8 +163,7 @@ fn a_nested_module_evaluation_error_keeps_the_throwing_module_in_its_details() {
             ("tests/throwing.js", "throw new Error('nested failure');"),
         ],
     );
-    match runtime
-        .run_script(script, Default::default())
+    match start(&mut session, script, Default::default())
         .wait(TIMEOUT)
         .unwrap()
     {
@@ -190,7 +184,7 @@ fn a_nested_module_evaluation_error_keeps_the_throwing_module_in_its_details() {
 
 #[test]
 fn two_importers_evaluate_their_shared_module_once() {
-    let (_host, _session, runtime) = ready_runtime();
+    let (_host, mut session, _runtime) = ready_runtime();
     let script = loose(&[
         (
             "entry.js",
@@ -211,8 +205,7 @@ fn two_importers_evaluate_their_shared_module_once() {
         ),
     ]);
     assert_eq!(
-        runtime
-            .run_script(script, Default::default())
+        start(&mut session, script, Default::default())
             .wait(TIMEOUT)
             .unwrap(),
         ScriptOutcome::StoppedByScript {
@@ -223,7 +216,7 @@ fn two_importers_evaluate_their_shared_module_once() {
 
 #[test]
 fn builtin_default_named_and_namespace_exports_share_members() {
-    let (_host, _session, runtime) = ready_runtime();
+    let (_host, mut session, _runtime) = ready_runtime();
     let script = loose(&[(
         "builtins.js",
         r#"
@@ -244,8 +237,7 @@ fn builtin_default_named_and_namespace_exports_share_members() {
     "#,
     )]);
     assert_eq!(
-        runtime
-            .run_script(script, Default::default())
+        start(&mut session, script, Default::default())
             .wait(TIMEOUT)
             .unwrap(),
         ScriptOutcome::StoppedByScript {
@@ -255,57 +247,46 @@ fn builtin_default_named_and_namespace_exports_share_members() {
 }
 
 #[test]
-fn replacing_a_script_stops_the_first_run_with_a_replacement_reason() {
-    let (_host, _session, runtime) = ready_runtime();
-    let first = yielding(&runtime);
-    completed(&runtime);
+fn replacing_a_run_drops_it_before_starting_the_next() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    let first = yielding(&mut session);
+    drop(first);
+    completed(&mut session);
     assert_eq!(
-        first.wait(TIMEOUT).unwrap(),
-        ScriptOutcome::Stopped {
-            reason: Some("Replaced by another script".into())
-        }
+        session.attached_link_count().recv_timeout(TIMEOUT).unwrap(),
+        1
     );
 }
 
 #[test]
-fn a_replaced_run_reports_its_stop_despite_an_async_abort_listener_rejection() {
-    let (_host, _session, runtime) = ready_runtime();
-    let started = runtime.eval(
-        "listen.js",
-        "new Promise(resolve => { globalThis.started = resolve; })",
+fn a_cooperative_stop_survives_an_async_abort_listener_rejection() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    let first = started_run(
+        &mut session,
+        r#"
+        import * as api from "lucent/api";
+        import * as script from "lucent/script";
+        export default function* () {
+            script.signal.addEventListener("abort", async () => { throw new Error("late"); });
+            yield* api.packet.sendToClient("started");
+            yield* script.sleep("1 hour");
+        }
+    "#,
     );
-    let first = runtime.run_script(
-        loose(&[(
-            "abort.js",
-            r#"
-            import * as script from "lucent/script";
-            export default function* () {
-                script.signal.addEventListener("abort", async () => { throw new Error("late"); });
-                globalThis.started("running");
-                yield* script.sleep("1 hour");
-            }
-            "#,
-        )]),
-        Default::default(),
-    );
-    assert_eq!(started.wait::<String>(TIMEOUT).unwrap(), "running");
-    let second = runtime.run_script(
-        loose(&[("replacement.js", "export default function* () {}")]),
-        Default::default(),
-    );
+    first.stop_script();
     assert_eq!(
         first.wait(TIMEOUT).unwrap(),
-        ScriptOutcome::Stopped {
-            reason: Some("Replaced by another script".into())
-        }
+        ScriptOutcome::Stopped { reason: None }
     );
-    assert_eq!(second.wait(TIMEOUT).unwrap(), ScriptOutcome::Completed);
+    drop(first);
+    completed(&mut session);
 }
 
 #[test]
 fn a_script_outcome_survives_an_unhandled_rejection_during_serialization() {
-    let (_host, _session, runtime) = ready_runtime();
-    let run = runtime.run_script(
+    let (_host, mut session, _runtime) = ready_runtime();
+    let run = start(
+        &mut session,
         loose(&[(
             "serialize.js",
             r#"
@@ -323,31 +304,33 @@ fn a_script_outcome_survives_an_unhandled_rejection_during_serialization() {
         Default::default(),
     );
     assert_eq!(run.wait(TIMEOUT).unwrap(), ScriptOutcome::Completed);
-    completed(&runtime);
+    drop(run);
+    completed(&mut session);
 }
 
 #[test]
 fn cooperative_stop_settles_a_yielding_script_and_allows_another_run() {
-    let (_host, _session, runtime) = ready_runtime();
-    let run = yielding(&runtime);
-    runtime.stop_script();
-    runtime.stop_script();
+    let (_host, mut session, _runtime) = ready_runtime();
+    let run = yielding(&mut session);
+    run.stop_script();
+    run.stop_script();
     assert_eq!(
         run.wait(TIMEOUT).unwrap(),
         ScriptOutcome::Stopped { reason: None }
     );
-    completed(&runtime);
+    drop(run);
+    completed(&mut session);
 }
 
 #[test]
 fn a_timed_out_wait_leaves_the_script_run_usable() {
-    let (_host, _session, runtime) = ready_runtime();
-    let run = yielding(&runtime);
+    let (_host, mut session, _runtime) = ready_runtime();
+    let run = yielding(&mut session);
     assert!(matches!(
         run.wait(Duration::from_millis(1)),
         Err(RuntimeError::Timeout)
     ));
-    runtime.stop_script();
+    run.stop_script();
     assert_eq!(
         run.wait(TIMEOUT).unwrap(),
         ScriptOutcome::Stopped { reason: None }
@@ -355,69 +338,125 @@ fn a_timed_out_wait_leaves_the_script_run_usable() {
 }
 
 #[test]
-fn the_watchdog_kills_a_script_and_rebuilds_for_the_next_run() {
-    let (_host, _session, runtime) = ready_runtime();
-    let error = runtime
-        .run_script(
-            loose(&[("loop.js", "export default function* () { while (true) {} }")]),
-            Default::default(),
-        )
-        .wait(TIMEOUT)
-        .unwrap_err();
+fn the_watchdog_kills_a_script_and_a_fresh_run_completes() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    let error = start(
+        &mut session,
+        loose(&[("loop.js", "export default function* () { while (true) {} }")]),
+        Default::default(),
+    )
+    .wait(TIMEOUT)
+    .unwrap_err();
     assert!(matches!(error, RuntimeError::Killed(Kill::Watchdog)));
-    completed(&runtime);
+    completed(&mut session);
 }
 
 #[test]
-fn an_explicit_kill_ends_a_script_and_rebuilds_for_the_next_run() {
-    let (_host, _session, runtime) = ready_runtime();
-    let run = yielding(&runtime);
-    runtime.kill();
+fn an_explicit_kill_ends_a_script_and_a_fresh_run_completes() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    let run = yielding(&mut session);
+    run.kill();
     assert!(matches!(
         run.wait(TIMEOUT),
         Err(RuntimeError::Killed(Kill::Requested))
     ));
-    completed(&runtime);
+    drop(run);
+    completed(&mut session);
 }
 
 #[test]
 fn event_overflow_finishes_script_cleanup_before_reporting_loss() {
-    let (_host, _session, runtime) = ready_runtime();
-    let script = loose(&[(
-        "overflow.js",
+    use std::sync::{Arc, Mutex};
+    use tracing_subscriber::prelude::*;
+    #[derive(Clone)]
+    struct Cleanup(Arc<Mutex<bool>>);
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Cleanup {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            struct Message(bool);
+            impl tracing::field::Visit for Message {
+                fn record_debug(
+                    &mut self,
+                    field: &tracing::field::Field,
+                    value: &dyn std::fmt::Debug,
+                ) {
+                    if field.name() == "message"
+                        && format!("{value:?}").contains("overflow cleanup")
+                    {
+                        self.0 = true;
+                    }
+                }
+            }
+            let mut message = Message(false);
+            event.record(&mut message);
+            if message.0 {
+                *self.0.lock().unwrap() = true;
+            }
+        }
+    }
+    let cleaned = Arc::new(Mutex::new(false));
+    let subscriber = tracing_subscriber::registry().with(Cleanup(cleaned.clone()));
+    let dispatch = tracing::Dispatch::new(subscriber);
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let host = lucent_host::testing::headless_host();
+    let (mut session, link) = lucent_host::testing::start_probe(&host, ready_movie());
+    let setup = lucent_runtime::Runtime::start(link).unwrap();
+    ready(&setup);
+    let emitter = session.attach().unwrap();
+    let run = started_run(
+        &mut session,
         r#"
+        import * as api from "lucent/api";
         import * as script from "lucent/script";
         export default function* () {
-            script.signal.addEventListener("abort", () => { globalThis.cleaned = true; });
-            for (let i = 0; i < 1100; i++) {
-                window.swf["probe.emit"]("onDebug", String(i));
-            }
+            script.signal.addEventListener("abort", () => console.log("overflow cleanup"));
+            yield* api.packet.sendToClient("started");
+            const until = Date.now() + 150;
+            while (Date.now() < until) {}
             yield* script.sleep("1 hour");
         }
     "#,
-    )]);
-    let run = runtime.run_script(script, Default::default());
-    assert!(matches!(run.wait(TIMEOUT), Err(RuntimeError::EventsLost)));
-    assert!(
-        runtime
-            .eval("cleaned.js", "globalThis.cleaned")
-            .wait::<bool>(TIMEOUT)
-            .unwrap()
     );
-    completed(&runtime);
+    for index in 0..1100 {
+        emitter
+            .call_loader(
+                "probe.emit",
+                vec![
+                    lucent_protocol::bridge::Value::String("onDebug".into()),
+                    lucent_protocol::bridge::Value::String(index.to_string()),
+                ],
+            )
+            .recv_timeout(TIMEOUT)
+            .unwrap();
+    }
+    let outcome = run.wait(TIMEOUT);
+    assert!(
+        matches!(outcome, Err(RuntimeError::EventsLost)),
+        "{outcome:?}"
+    );
+    assert!(*cleaned.lock().unwrap());
+    drop(run);
+    completed(&mut session);
 }
 
 #[test]
-fn dropping_the_runtime_settles_a_pending_script() {
-    let (_host, _session, runtime) = ready_runtime();
-    let run = yielding(&runtime);
-    drop(runtime);
-    assert!(matches!(run.wait(TIMEOUT), Err(RuntimeError::Stopped)));
+fn dropping_a_script_run_detaches_its_link() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    let run = yielding(&mut session);
+    drop(run);
+    assert_eq!(
+        session.attached_link_count().recv_timeout(TIMEOUT).unwrap(),
+        1
+    );
+    completed(&mut session);
 }
 
 #[test]
 fn an_unavailable_host_service_fails_the_script_with_its_name() {
-    let (_host, _session, runtime) = ready_runtime();
+    let (_host, mut session, _runtime) = ready_runtime();
     let script = loose(&[(
         "http.js",
         r#"
@@ -427,8 +466,7 @@ fn an_unavailable_host_service_fails_the_script_with_its_name() {
         }
     "#,
     )]);
-    match runtime
-        .run_script(script, Default::default())
+    match start(&mut session, script, Default::default())
         .wait(TIMEOUT)
         .unwrap()
     {
@@ -444,35 +482,29 @@ fn an_unavailable_host_service_fails_the_script_with_its_name() {
 
 #[test]
 fn a_stopped_run_leaves_no_globals_or_timers() {
-    let (_host, _session, runtime) = ready_runtime();
-    let started = runtime.eval(
-        "started.js",
-        "new Promise(resolve => { globalThis.started = resolve; })",
-    );
-    let run = runtime.run_script(
-        loose(&[(
-            "leak.js",
-            r#"
+    let (_host, mut session, _runtime) = ready_runtime();
+    let run = started_run(
+        &mut session,
+        r#"
+        import * as api from "lucent/api";
         import * as script from "lucent/script";
         export default function* () {
             globalThis.leak = 1;
             globalThis.ticks = 0;
             setInterval(() => globalThis.ticks++, 1);
-            globalThis.started(true);
+            yield* api.packet.sendToClient("started");
             yield* script.sleep("1 hour");
         }
     "#,
-        )]),
-        Default::default(),
     );
-    assert!(started.wait::<bool>(TIMEOUT).unwrap());
-    runtime.stop_script();
+    run.stop_script();
     assert_eq!(
         run.wait(TIMEOUT).unwrap(),
         ScriptOutcome::Stopped { reason: None }
     );
     drop(run);
-    let next = runtime.run_script(
+    let next = start(
+        &mut session,
         loose(&[(
             "inspect.js",
             r#"
@@ -495,8 +527,9 @@ fn a_stopped_run_leaves_no_globals_or_timers() {
 
 #[test]
 fn user_modules_cannot_reach_host_internals() {
-    let (_host, _session, runtime) = ready_runtime();
-    let run = runtime.run_script(
+    let (_host, mut session, _runtime) = ready_runtime();
+    let run = start(
+        &mut session,
         loose(&[(
             "internals.js",
             r#"
@@ -517,4 +550,24 @@ fn user_modules_cannot_reach_host_internals() {
             reason: Some(r#"["undefined","undefined","undefined","player-a"]"#.into()),
         }
     );
+}
+
+#[test]
+fn restarting_the_player_stops_a_run_and_a_new_link_runs_again() {
+    let (_host, mut session, runtime) = ready_runtime();
+    let run = yielding(&mut session);
+    session
+        .restart(lucent_host::testing::headless_surface())
+        .unwrap();
+    assert!(matches!(run.wait(TIMEOUT), Err(RuntimeError::Stopped)));
+    drop(run);
+    drop(runtime);
+    let link = session.attach().unwrap();
+    session.send(lucent_host::ViewEvent::Resized(
+        lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
+    ));
+    await_event(&link, "onLoaded");
+    let setup = lucent_runtime::Runtime::start(link).unwrap();
+    ready(&setup);
+    completed(&mut session);
 }

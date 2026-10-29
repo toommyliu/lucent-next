@@ -1,3 +1,5 @@
+mod common;
+
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -57,10 +59,10 @@ fn emit_after(runtime: &Runtime) {
 }
 
 #[test]
-fn a_runaway_turn_is_killed_within_250_ms_and_the_runtime_keeps_running() {
+fn a_runaway_turn_is_killed_within_250_ms_and_a_new_runtime_works() {
     let host = testing::headless_host();
-    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
-    let runtime = Runtime::start(link).unwrap();
+    let (mut session, link) = testing::start_probe(&host, ProbeMovie::new());
+    drop(link);
     for source in [
         "while (true) {}",
         "while (true) { try { while (true) {} } catch {} finally { while (true) {} } }",
@@ -69,13 +71,27 @@ fn a_runaway_turn_is_killed_within_250_ms_and_the_runtime_keeps_running() {
         "Promise.resolve().then(() => { while (true) {} }); while (true) {}",
         "for (let i = 0; i < 2; i++) Promise.reject({ get stack() { while (true) {} } })",
     ] {
+        let runtime = Runtime::start(session.attach().unwrap()).unwrap();
         let waiting = runtime.eval("wait.js", "globalThis.marker = 1; new Promise(() => {})");
-        let started = Instant::now();
-        let error = runtime
-            .eval("runaway.js", source)
-            .wait::<Value>(TIMEOUT)
-            .unwrap_err();
-        let elapsed = started.elapsed();
+        let observer = session.attach().unwrap();
+        let runaway = runtime.eval(
+            "runaway.js",
+            format!(r#"window.swf["probe.emit"]("onDebug", String(Date.now())); {source}"#),
+        );
+        let event = common::await_event(&observer, "onDebug");
+        let lucent_protocol::bridge::Value::String(began) = &event.args[0] else {
+            panic!("{event:?}")
+        };
+        let began = began.parse::<u128>().unwrap();
+        let error = runaway.wait::<Value>(TIMEOUT).unwrap_err();
+        let elapsed = Duration::from_millis(
+            (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+                - began) as u64,
+        );
+        drop(observer);
         assert!(
             matches!(error, RuntimeError::Killed(Kill::Watchdog)),
             "{source}: {error}"
@@ -87,6 +103,12 @@ fn a_runaway_turn_is_killed_within_250_ms_and_the_runtime_keeps_running() {
             "{source}: {error}"
         );
 
+        drop(runtime);
+        assert_eq!(
+            session.attached_link_count().recv_timeout(TIMEOUT).unwrap(),
+            0
+        );
+        let runtime = Runtime::start(session.attach().unwrap()).unwrap();
         let heard = listen(&runtime);
         emit_after(&runtime);
         assert_eq!(
@@ -100,7 +122,7 @@ fn a_runaway_turn_is_killed_within_250_ms_and_the_runtime_keeps_running() {
 #[test]
 fn a_script_blocked_in_a_loader_call_is_killed_without_waiting_for_the_reply() {
     let host = testing::headless_host();
-    let (session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let (mut session, link) = testing::start_probe(&host, ProbeMovie::new());
     let runtime = Runtime::start(link).unwrap();
     let release = stall_player(&session);
     let blocked = runtime.eval(
@@ -119,19 +141,23 @@ fn a_script_blocked_in_a_loader_call_is_killed_without_waiting_for_the_reply() {
     );
     assert!(elapsed < STOP_LIMIT, "stopped after {elapsed:?}");
 
-    let heard = listen(&runtime);
+    drop(runtime);
     drop(release);
+    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+    drop(runtime);
+    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+    let heard = listen(&runtime);
     emit_after(&runtime);
     assert_eq!(
         heard.wait::<Value>(TIMEOUT).unwrap(),
-        json!(["undefined", "issued", "after"])
+        json!(["undefined", "after"])
     );
 }
 
 #[test]
 fn a_script_that_catches_out_of_memory_is_killed_at_the_heap_limit() {
     let host = testing::headless_host();
-    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let (mut session, link) = testing::start_probe(&host, ProbeMovie::new());
     let runtime = Runtime::start(link).unwrap();
     let error = runtime
         .eval(
@@ -151,6 +177,8 @@ fn a_script_that_catches_out_of_memory_is_killed_at_the_heap_limit() {
         "{error}"
     );
 
+    drop(runtime);
+    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
     let heard = listen(&runtime);
     emit_after(&runtime);
     assert_eq!(
@@ -242,9 +270,9 @@ fn a_killed_script_runs_none_of_its_queued_callbacks() {
 }
 
 #[test]
-fn evals_sent_before_a_kill_fail_with_it_and_later_ones_run_fresh() {
+fn evals_sent_before_a_kill_fail_with_it_and_the_runtime_ends() {
     let host = testing::headless_host();
-    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let (mut session, link) = testing::start_probe(&host, ProbeMovie::new());
     let runtime = Runtime::start(link).unwrap();
     let runaway = runtime.eval("runaway.js", "globalThis.marker = 1; while (true) {}");
     let queued = runtime.eval("queued.js", "typeof globalThis.marker");
@@ -255,6 +283,12 @@ fn evals_sent_before_a_kill_fail_with_it_and_later_ones_run_fresh() {
             "{error}"
         );
     }
+    assert!(matches!(
+        runtime.eval("ended.js", "42").wait::<i64>(TIMEOUT),
+        Err(RuntimeError::Stopped)
+    ));
+    drop(runtime);
+    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
     assert_eq!(
         runtime
             .eval("after.js", "typeof globalThis.marker")
@@ -262,4 +296,73 @@ fn evals_sent_before_a_kill_fail_with_it_and_later_ones_run_fresh() {
             .unwrap(),
         "undefined"
     );
+}
+
+#[test]
+fn killed_runs_return_within_250_ms_and_drop_their_threads() {
+    if std::env::var_os("LUCENT_RUN_LIMIT_CHILD").is_none() {
+        assert!(
+            std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "killed_runs_return_within_250_ms_and_drop_their_threads"
+                ])
+                .env("LUCENT_RUN_LIMIT_CHILD", "1")
+                .status()
+                .unwrap()
+                .success()
+        );
+        return;
+    }
+    let (_host, mut session, _runtime) = common::ready_runtime();
+    #[cfg(target_os = "macos")]
+    let before = common::js_threads();
+    for (body, expected) in [
+        ("while (true) {}", Kill::Watchdog),
+        (
+            "const hoard = []; for (;;) { try { hoard.push(new Array(100000).fill(1.5)); } catch {} }",
+            Kill::HeapLimit,
+        ),
+    ] {
+        let run = common::started_run(
+            &mut session,
+            &format!(
+                r#"
+            import * as api from "lucent/api";
+            export default function* () {{
+                yield* api.packet.sendToClient("started");
+                {body}
+            }}
+        "#
+            ),
+        );
+        let began = Instant::now();
+        assert!(matches!(run.wait(TIMEOUT), Err(RuntimeError::Killed(kill)) if kill == expected));
+        assert!(
+            began.elapsed() < STOP_LIMIT,
+            "stopped after {:?}",
+            began.elapsed()
+        );
+        drop(run);
+        assert_eq!(
+            session.attached_link_count().recv_timeout(TIMEOUT).unwrap(),
+            1
+        );
+        #[cfg(target_os = "macos")]
+        {
+            let deadline = Instant::now() + Duration::from_millis(5);
+            loop {
+                let threads = common::js_threads();
+                if threads == before {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "threads after drop: {threads:?}, before: {before:?}"
+                );
+                thread::yield_now();
+            }
+        }
+        common::completed(&mut session);
+    }
 }

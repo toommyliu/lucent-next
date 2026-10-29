@@ -18,7 +18,6 @@ struct State {
     clock: Clock,
     stop: Option<Stop>,
     armed: Option<Instant>,
-    last_kill: Option<(u64, Kill)>,
 }
 
 enum Clock {
@@ -41,7 +40,6 @@ impl Interrupt {
                 clock: Clock::Idle,
                 stop: None,
                 armed: None,
-                last_kill: None,
             }),
             alarm: Alarm::new()?,
         })
@@ -49,7 +47,7 @@ impl Interrupt {
 
     pub(crate) fn attach(&self, isolate: v8::IsolateHandle) {
         let mut state = self.state.lock().unwrap();
-        if matches!(state.stop, Some(Stop::Shutdown)) {
+        if state.stop.is_some() {
             isolate.terminate_execution();
         }
         state.isolate = Some(isolate);
@@ -58,9 +56,6 @@ impl Interrupt {
     pub(crate) fn detach(&self) {
         let mut state = self.state.lock().unwrap();
         state.isolate = None;
-        if matches!(state.stop, Some(Stop::Kill(_))) {
-            state.stop = None;
-        }
     }
 
     pub(crate) fn kill(&self, kill: Kill) {
@@ -102,27 +97,11 @@ impl Interrupt {
     pub(crate) fn end_turn(&self) -> Option<Stop> {
         let mut state = self.state.lock().unwrap();
         state.clock = Clock::Idle;
-        match state.stop {
-            Some(Stop::Kill(_)) => state.stop.take(),
-            stop => stop,
-        }
+        state.stop
     }
 
     pub(crate) fn stop(&self) -> Option<Stop> {
         self.state.lock().unwrap().stop
-    }
-
-    pub(crate) fn kills(&self) -> u64 {
-        self.state.lock().unwrap().kills()
-    }
-
-    pub(crate) fn killed_since(&self, kills: u64) -> Option<Kill> {
-        self.state
-            .lock()
-            .unwrap()
-            .last_kill
-            .filter(|(count, _)| *count > kills)
-            .map(|(_, kill)| kill)
     }
 
     fn rouse(&self, state: &State, deadline: Instant) {
@@ -160,13 +139,8 @@ impl State {
         };
         if self.stop.is_none() {
             self.stop = Some(Stop::Kill(kill));
-            self.last_kill = Some((self.kills() + 1, kill));
         }
         isolate.terminate_execution();
-    }
-
-    fn kills(&self) -> u64 {
-        self.last_kill.map_or(0, |(count, _)| count)
     }
 }
 

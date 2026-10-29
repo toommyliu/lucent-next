@@ -46,14 +46,14 @@ describe("HostState", () => {
           return '{"id":5,"name":"battleon","roomNumber":1}';
         },
       });
-      const host = yield* HostState;
+      const host = yield* HostState.pipe(Effect.provide(live));
       expect(yield* host.read({ kind: "map" })).toEqual({
         id: 5,
         name: "battleon",
         roomNumber: 1,
       });
       expect(queries).toEqual(['{"kind":"map"}']);
-    }).pipe(Effect.provide(live)),
+    }),
   );
 
   it.effect("turns a failed command into none and reports why", () =>
@@ -63,7 +63,7 @@ describe("HostState", () => {
           throw new Error("auth.getServers has no loader callback");
         },
       });
-      const host = yield* HostState;
+      const host = yield* HostState.pipe(Effect.provide(live));
       expect(yield* host.command({ kind: "refreshServers" })).toEqual(
         Option.none(),
       );
@@ -75,7 +75,7 @@ describe("HostState", () => {
           [{ kind: "refreshServers" }],
         ],
       ]);
-    }).pipe(Effect.provide(live)),
+    }),
   );
 
   it.effect("keeps login credentials out of a failed command report", () =>
@@ -85,7 +85,7 @@ describe("HostState", () => {
           throw new Error("auth.login has no loader callback");
         },
       });
-      const host = yield* HostState;
+      const host = yield* HostState.pipe(Effect.provide(live));
       expect(
         yield* host.command({
           kind: "login",
@@ -101,17 +101,17 @@ describe("HostState", () => {
           undefined,
         ],
       ]);
-    }).pipe(Effect.provide(live)),
+    }),
   );
 
   it.effect("returns a successful command's answer", () =>
     Effect.gen(function* () {
       stubHost({ command: () => "3" });
-      const host = yield* HostState;
+      const host = yield* HostState.pipe(Effect.provide(live));
       expect(
         yield* host.command({ kind: "refreshContainer", container: "bank" }),
       ).toEqual(Option.some(3));
-    }).pipe(Effect.provide(live)),
+    }),
   );
 
   it.effect("reads the quantity of the matched item, else zero", () =>
@@ -123,21 +123,21 @@ describe("HostState", () => {
         '{"kind":"item","container":"bank","selector":"Gem"}': "null",
       };
       stubHost({ read: (query) => answers[query] ?? "unexpected" });
-      const host = yield* HostState;
+      const host = yield* HostState.pipe(Effect.provide(live));
       expect(yield* itemQuantity(host, "bank", "Ore")).toBe(3);
       expect(yield* itemQuantity(host, "bank", "Gem")).toBe(0);
-    }).pipe(Effect.provide(live)),
+    }),
   );
 
   it.effect("treats a container as hydrated once it has been replaced", () =>
     Effect.gen(function* () {
       let version = 0;
       stubHost({ read: () => String(version) });
-      const host = yield* HostState;
+      const host = yield* HostState.pipe(Effect.provide(live));
       expect(yield* isHydrated(host, "inventory")).toBe(false);
       version = 2;
       expect(yield* isHydrated(host, "inventory")).toBe(true);
-    }).pipe(Effect.provide(live)),
+    }),
   );
 
   it.effect("misses a selector the host cannot parse without asking it", () =>
@@ -151,7 +151,7 @@ describe("HostState", () => {
           );
         },
       });
-      const host = yield* HostState;
+      const host = yield* HostState.pipe(Effect.provide(live));
       expect(yield* readItem(host, "inventory", Number.NaN)).toBeNull();
       expect(
         yield* readItem(host, "inventory", { itemId: Number.NaN }),
@@ -167,6 +167,6 @@ describe("HostState", () => {
       expect(queries).toEqual([
         '{"kind":"item","container":"inventory","selector":{"itemId":5}}',
       ]);
-    }).pipe(Effect.provide(live)),
+    }),
   );
 });

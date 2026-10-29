@@ -34,7 +34,7 @@ fn area() -> String {
 #[test]
 fn the_api_layer_reads_and_changes_host_state_through_its_services() {
     let host = testing::headless_host();
-    let (_session, link) = testing::start_probe(
+    let (mut session, link) = testing::start_probe(
         &host,
         common::ready_movie()
             .raising("flash.sendClientPacket", "onExtensionResponse", area())
@@ -96,8 +96,7 @@ fn the_api_layer_reads_and_changes_host_state_through_its_services() {
             }
             "#,
     )]);
-    let outcome = runtime
-        .run_script(script, Default::default())
+    let outcome = common::start(&mut session, script, Default::default())
         .wait(TIMEOUT)
         .unwrap();
 
@@ -141,7 +140,7 @@ fn read_settings() -> lucent_protocol::script::Script {
 #[test]
 fn settings_survive_a_kill() {
     let host = testing::headless_host();
-    let (_session, link) = testing::start_probe(
+    let (mut session, link) = testing::start_probe(
         &host,
         common::ready_movie()
             .constant("settings.setWalkSpeed", json!(null))
@@ -159,8 +158,7 @@ fn settings_survive_a_kill() {
         }
         "#,
     )]);
-    let initial = runtime
-        .run_script(read_settings(), Default::default())
+    let initial = common::start(&mut session, read_settings(), Default::default())
         .wait(TIMEOUT)
         .unwrap();
     assert_eq!(
@@ -170,27 +168,24 @@ fn settings_survive_a_kill() {
         }
     );
     assert_eq!(
-        runtime
-            .run_script(set, Default::default())
+        common::start(&mut session, set, Default::default())
             .wait(TIMEOUT)
             .unwrap(),
         ScriptOutcome::Completed
     );
-    let before = runtime
-        .run_script(read_settings(), Default::default())
+    let before = common::start(&mut session, read_settings(), Default::default())
         .wait(TIMEOUT)
         .unwrap();
-    let error = runtime
-        .run_script(
-            common::loose(&[("loop.js", "export default function* () { while (true) {} }")]),
-            Default::default(),
-        )
-        .wait(TIMEOUT)
-        .unwrap_err();
+    let error = common::start(
+        &mut session,
+        common::loose(&[("loop.js", "export default function* () { while (true) {} }")]),
+        Default::default(),
+    )
+    .wait(TIMEOUT)
+    .unwrap_err();
     assert!(matches!(error, RuntimeError::Killed(Kill::Watchdog)));
     common::ready(&runtime);
-    let after = runtime
-        .run_script(read_settings(), Default::default())
+    let after = common::start(&mut session, read_settings(), Default::default())
         .wait(TIMEOUT)
         .unwrap();
 
@@ -204,7 +199,7 @@ fn settings_survive_a_kill() {
 #[test]
 fn settings_updates_report_rejected_patches_without_changing_the_record() {
     let host = testing::headless_host();
-    let (_session, link) = testing::start_probe(&host, common::ready_movie());
+    let (mut session, link) = testing::start_probe(&host, common::ready_movie());
     let runtime = Runtime::start(link).unwrap();
     common::ready(&runtime);
     for (patch, expected) in [
@@ -247,19 +242,19 @@ fn settings_updates_report_rejected_patches_without_changing_the_record() {
             export default function* () {{ yield* api.settings.update({patch}); }}
         "#
         );
-        let outcome = runtime
-            .run_script(
-                common::loose(&[("invalid.js", &source)]),
-                Default::default(),
-            )
-            .wait(TIMEOUT)
-            .unwrap();
+        let outcome = common::start(
+            &mut session,
+            common::loose(&[("invalid.js", &source)]),
+            Default::default(),
+        )
+        .wait(TIMEOUT)
+        .unwrap();
         let ScriptOutcome::Failed { message, .. } = outcome else {
             panic!("accepted {patch}: {outcome:?}")
         };
         assert!(message.contains(expected), "{patch}: {message}");
     }
-    let outcome = runtime.run_script(common::loose(&[("read.js", r#"
+    let outcome = common::start(&mut session, common::loose(&[("read.js", r#"
         import * as api from "lucent/api";
         import * as script from "lucent/script";
         export default function* () { yield* script.stop(JSON.stringify(yield* api.settings.get())); }
@@ -286,7 +281,7 @@ fn a_killed_runs_accept_finishes_before_the_next_starts() {
         "cmd":"getDrop", "ItemID":70, "bSuccess":0, "iQtyNow":1
     }})
     .to_string();
-    let (_session, link) = testing::start_probe(
+    let (mut session, link) = testing::start_probe(
         &host,
         common::ready_movie()
             .constant(
@@ -325,14 +320,15 @@ fn a_killed_runs_accept_finishes_before_the_next_starts() {
         }
     "#,
     )]);
-    let first = runtime.run_script(script.clone(), Default::default());
+    let first = common::start(&mut session, script.clone(), Default::default());
     assert!(started.wait::<bool>(TIMEOUT).unwrap());
     thread::sleep(Duration::from_millis(500));
-    runtime.kill();
+    first.kill();
     assert!(matches!(
         first.wait(TIMEOUT),
         Err(RuntimeError::Killed(Kill::Requested))
     ));
+    drop(first);
     let order = runtime.eval(
         "order.js",
         r#"
@@ -351,7 +347,7 @@ fn a_killed_runs_accept_finishes_before_the_next_starts() {
         })
     "#,
     );
-    let second = runtime.run_script(script, Default::default());
+    let second = common::start(&mut session, script, Default::default());
     assert_eq!(
         order.wait::<Vec<String>>(TIMEOUT).unwrap(),
         ["packet", "accept"]

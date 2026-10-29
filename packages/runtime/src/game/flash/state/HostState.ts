@@ -33,18 +33,19 @@ export class HostState extends Context.Service<HostState, HostStateService>()(
 export const layer = Layer.effect(
   HostState,
   Effect.gen(function* () {
+    const host = __host;
     const diagnosticSink = yield* DiagnosticSink;
 
     const read = <K extends Query["kind"]>(query: QueryOf<K>) =>
       Effect.sync(
-        () => JSON.parse(__host.read(JSON.stringify(query))) as QueryOutputs[K],
+        () => JSON.parse(host.read(JSON.stringify(query))) as QueryOutputs[K],
       );
 
     const command = <K extends Command["kind"]>(command: CommandOf<K>) =>
       Effect.sync((): Option.Option<CommandOutputs[K]> => {
         try {
           return Option.some(
-            JSON.parse(__host.command(JSON.stringify(command))),
+            JSON.parse(host.command(JSON.stringify(command))),
           );
         } catch (cause) {
           diagnosticSink.report(

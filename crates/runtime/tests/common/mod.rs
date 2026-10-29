@@ -3,7 +3,7 @@
 use lucent_host::testing::{self, ProbeMovie};
 use lucent_host::{Host, Session};
 use lucent_protocol::script::{ModulePath, Script};
-use lucent_runtime::Runtime;
+use lucent_runtime::{Runtime, ScriptRun};
 use serde_json::json;
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
@@ -71,6 +71,7 @@ pub fn package(dir: &str, entry: &str, extra: &[(&str, &str)]) -> Script {
 
 pub fn ready_movie() -> ProbeMovie {
     ProbeMovie::new()
+        .raising("flash.sendClientPacket", "onDebug", "started")
         .constant("auth.isLoggedIn", json!(true))
         .constant("flash.getGameObjectS", json!("\"player-a\""))
         .constant("flash.callGameFunction0", json!("true"))
@@ -128,35 +129,72 @@ pub fn ready(runtime: &Runtime) {
         .unwrap();
 }
 
-pub fn yielding(runtime: &Runtime) -> lucent_runtime::ScriptRun {
-    let started = runtime.eval(
-        "listen.js",
-        "new Promise(resolve => { globalThis.started = resolve; })",
-    );
-    let script = loose(&[(
-        "wait.js",
-        r#"
-        import * as script from "lucent/script";
-        export default function* () {
-            globalThis.started("running");
-            yield* script.sleep("1 hour");
+pub fn start(
+    session: &mut Session,
+    script: Script,
+    inputs: lucent_protocol::script::ScriptInputs,
+) -> ScriptRun {
+    ScriptRun::start(session.attach().unwrap(), script, inputs).unwrap()
+}
+
+pub fn await_event(link: &lucent_host::ScriptLink, name: &str) -> lucent_protocol::bridge::Event {
+    use std::sync::Arc;
+    use std::task::{Wake, Waker};
+    use std::time::Instant;
+    struct Unpark(std::thread::Thread);
+    impl Wake for Unpark {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
         }
-    "#,
-    )]);
-    let run = runtime.run_script(script, BTreeMap::new());
-    assert_eq!(started.wait::<String>(TIMEOUT).unwrap(), "running");
+    }
+    link.set_waker(Waker::from(Arc::new(Unpark(std::thread::current()))));
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        assert!(!remaining.is_zero(), "did not receive {name}");
+        match link.try_event().unwrap() {
+            Some(lucent_host::bridge::ScriptEvent::Loader { event, .. }) if event.name == name => {
+                return event;
+            }
+            Some(_) => {}
+            None => std::thread::park_timeout(remaining),
+        }
+    }
+}
+
+pub fn started_run(session: &mut Session, source: &str) -> ScriptRun {
+    let observer = session.attach().unwrap();
+    let run = start(session, loose(&[("wait.js", source)]), BTreeMap::new());
+    assert_eq!(
+        await_event(&observer, "onDebug").args,
+        vec![lucent_protocol::bridge::Value::String("started".into())]
+    );
     run
 }
 
-pub fn completed(runtime: &Runtime) {
+pub fn yielding(session: &mut Session) -> ScriptRun {
+    started_run(
+        session,
+        r#"
+        import * as api from "lucent/api";
+        import * as script from "lucent/script";
+        export default function* () {
+            yield* api.packet.sendToClient("started");
+            yield* script.sleep("1 hour");
+        }
+    "#,
+    )
+}
+
+pub fn completed(session: &mut Session) {
     assert_eq!(
-        runtime
-            .run_script(
-                loose(&[("done.js", "export default function* () {}")]),
-                BTreeMap::new()
-            )
-            .wait(TIMEOUT)
-            .unwrap(),
+        start(
+            session,
+            loose(&[("done.js", "export default function* () {}")]),
+            BTreeMap::new()
+        )
+        .wait(TIMEOUT)
+        .unwrap(),
         lucent_protocol::script::ScriptOutcome::Completed
     );
 }
@@ -167,4 +205,49 @@ pub fn ready_runtime() -> (Host, Session, Runtime) {
     let runtime = Runtime::start(link).unwrap();
     ready(&runtime);
     (host, session, runtime)
+}
+
+#[cfg(target_os = "macos")]
+pub fn js_threads() -> Vec<String> {
+    const PROC_PIDTHREADINFO: i32 = 5;
+    const PROC_PIDLISTTHREADS: i32 = 6;
+    unsafe {
+        let pid = libc::getpid();
+        let mut ids = [0u64; 512];
+        let bytes = libc::proc_pidinfo(
+            pid,
+            PROC_PIDLISTTHREADS,
+            0,
+            ids.as_mut_ptr().cast(),
+            (ids.len() * 8) as i32,
+        );
+        let mut names: Vec<String> = ids[..bytes as usize / 8]
+            .iter()
+            .map(|id| {
+                let mut info: libc::proc_threadinfo = std::mem::zeroed();
+                let size = std::mem::size_of_val(&info) as i32;
+                if libc::proc_pidinfo(
+                    pid,
+                    PROC_PIDTHREADINFO,
+                    *id,
+                    (&mut info as *mut libc::proc_threadinfo).cast(),
+                    size,
+                ) != size
+                {
+                    return "<exited>".into();
+                }
+                let name = std::ffi::CStr::from_ptr(info.pth_name.as_ptr())
+                    .to_string_lossy()
+                    .into_owned();
+                if name.is_empty() {
+                    "<unnamed>".into()
+                } else {
+                    name
+                }
+            })
+            .collect();
+        names.retain(|name| name.starts_with("lucent-js-"));
+        names.sort();
+        names
+    }
 }

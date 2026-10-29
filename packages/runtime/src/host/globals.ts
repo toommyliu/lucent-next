@@ -190,10 +190,12 @@ const format = (value: unknown): string => {
   }
 };
 
+const host = typeof __host === "undefined" ? undefined : __host;
+
 const log =
   (level: "info" | "warn" | "error" | "debug") =>
   (...values: unknown[]): void =>
-    __host.log(level, values.map(format).join(" "));
+    host?.log(level, values.map(format).join(" "));
 
 export const runtimeConsole = Object.freeze({
   log: log("info"),
