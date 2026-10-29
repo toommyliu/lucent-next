@@ -402,7 +402,15 @@ fn event_overflow_finishes_script_cleanup_before_reporting_loss() {
     let dispatch = tracing::Dispatch::new(subscriber);
     let _guard = tracing::dispatcher::set_default(&dispatch);
     let host = lucent_host::testing::headless_host();
-    let (mut session, link) = lucent_host::testing::start_probe(&host, ready_movie());
+    let (mut session, link) = lucent_host::testing::start_probe(
+        &host,
+        ready_movie().raising_many(
+            "flash.sendClientPacket",
+            "onConnection",
+            "OnConnection",
+            600,
+        ),
+    );
     let setup = lucent_runtime::Runtime::start(link).unwrap();
     ready(&setup);
     let run = start(
@@ -414,9 +422,8 @@ fn event_overflow_finishes_script_cleanup_before_reporting_loss() {
         import * as script from "lucent/script";
         export default function* () {
             script.signal.addEventListener("abort", () => console.log("overflow cleanup"));
-            for (let index = 0; index < 1100; index++) {
-                yield* api.packet.sendToClient("burst");
-            }
+            yield* script.options.update({ safeStartStop: false });
+            yield* api.packet.sendToClient("burst");
             yield* script.sleep("1 hour");
         }
     "#,
@@ -430,6 +437,7 @@ fn event_overflow_finishes_script_cleanup_before_reporting_loss() {
     );
     assert!(*cleaned.lock().unwrap());
     drop(run);
+    ready(&setup);
     completed(&mut session);
 }
 
