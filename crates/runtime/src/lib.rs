@@ -60,6 +60,7 @@ enum Command {
     Eval {
         name: String,
         source: String,
+        kills: u64,
         reply: mpsc::Sender<Result<String, RuntimeError>>,
     },
 }
@@ -144,6 +145,7 @@ impl Runtime {
         let _ = self.commands.send(Command::Eval {
             name: name.into(),
             source: source.into(),
+            kills: self.interrupt.kills(),
             reply,
         });
         PendingEval(pending)
@@ -180,9 +182,15 @@ fn run(
             Ok(Command::Eval {
                 name,
                 source,
+                kills,
                 reply,
             }) => {
-                engine.eval(&name, &source, reply);
+                match interrupt.killed_since(kills) {
+                    Some(kill) => {
+                        let _ = reply.send(Err(RuntimeError::Killed(kill)));
+                    }
+                    None => engine.eval(&name, &source, reply),
+                }
                 Vec::new()
             }
             Ok(Command::Wake) => {

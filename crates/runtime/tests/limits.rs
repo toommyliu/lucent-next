@@ -241,16 +241,24 @@ fn a_killed_script_runs_none_of_its_queued_callbacks() {
 }
 
 #[test]
-fn an_eval_queued_behind_a_killed_turn_runs_in_the_rebuilt_context() {
+fn evals_sent_before_a_kill_fail_with_it_and_later_ones_run_fresh() {
     let host = testing::headless_host();
     let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
     let runtime = Runtime::start(link).unwrap();
     let runaway = runtime.eval("runaway.js", "globalThis.marker = 1; while (true) {}");
     let queued = runtime.eval("queued.js", "typeof globalThis.marker");
-    let error = runaway.wait::<Value>(TIMEOUT).unwrap_err();
-    assert!(
-        matches!(error, RuntimeError::Killed(Kill::Watchdog)),
-        "{error}"
+    for pending in [runaway, queued] {
+        let error = pending.wait::<Value>(TIMEOUT).unwrap_err();
+        assert!(
+            matches!(error, RuntimeError::Killed(Kill::Watchdog)),
+            "{error}"
+        );
+    }
+    assert_eq!(
+        runtime
+            .eval("after.js", "typeof globalThis.marker")
+            .wait::<String>(TIMEOUT)
+            .unwrap(),
+        "undefined"
     );
-    assert_eq!(queued.wait::<String>(TIMEOUT).unwrap(), "undefined");
 }
