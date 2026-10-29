@@ -259,58 +259,116 @@ fn descriptor(key: Key) -> ruffle_core::events::KeyDescriptor {
     use ruffle_core::events::{
         KeyDescriptor, KeyLocation, LogicalKey, NamedKey as RuffleKey, PhysicalKey,
     };
-    let logical_key = match key.code {
-        KeyCode::Char(c) => LogicalKey::Character(c),
-        KeyCode::Named(named) => LogicalKey::Named(match named {
-            NamedKey::Enter => RuffleKey::Enter,
-            NamedKey::Tab => RuffleKey::Tab,
-            NamedKey::Backspace => RuffleKey::Backspace,
-            NamedKey::Delete => RuffleKey::Delete,
-            NamedKey::Escape => RuffleKey::Escape,
-            NamedKey::Insert => RuffleKey::Insert,
-            NamedKey::Home => RuffleKey::Home,
-            NamedKey::End => RuffleKey::End,
-            NamedKey::PageUp => RuffleKey::PageUp,
-            NamedKey::PageDown => RuffleKey::PageDown,
-            NamedKey::ArrowLeft => RuffleKey::ArrowLeft,
-            NamedKey::ArrowRight => RuffleKey::ArrowRight,
-            NamedKey::ArrowUp => RuffleKey::ArrowUp,
-            NamedKey::ArrowDown => RuffleKey::ArrowDown,
-            NamedKey::Shift => RuffleKey::Shift,
-            NamedKey::Control => RuffleKey::Control,
-            NamedKey::Alt => RuffleKey::Alt,
-            NamedKey::Command => RuffleKey::Super,
-            NamedKey::CapsLock => RuffleKey::CapsLock,
-            NamedKey::F1 => RuffleKey::F1,
-            NamedKey::F2 => RuffleKey::F2,
-            NamedKey::F3 => RuffleKey::F3,
-            NamedKey::F4 => RuffleKey::F4,
-            NamedKey::F5 => RuffleKey::F5,
-            NamedKey::F6 => RuffleKey::F6,
-            NamedKey::F7 => RuffleKey::F7,
-            NamedKey::F8 => RuffleKey::F8,
-            NamedKey::F9 => RuffleKey::F9,
-            NamedKey::F10 => RuffleKey::F10,
-            NamedKey::F11 => RuffleKey::F11,
-            NamedKey::F12 => RuffleKey::F12,
-            NamedKey::F13 => RuffleKey::F13,
-            NamedKey::F14 => RuffleKey::F14,
-            NamedKey::F15 => RuffleKey::F15,
-            NamedKey::F16 => RuffleKey::F16,
-            NamedKey::F17 => RuffleKey::F17,
-            NamedKey::F18 => RuffleKey::F18,
-            NamedKey::F19 => RuffleKey::F19,
-            NamedKey::F20 => RuffleKey::F20,
-            NamedKey::F21 => RuffleKey::F21,
-            NamedKey::F22 => RuffleKey::F22,
-            NamedKey::F23 => RuffleKey::F23,
-            NamedKey::F24 => RuffleKey::F24,
-        }),
+    let (logical_key, physical_key) = match key.code {
+        KeyCode::Char(c) => (LogicalKey::Character(c), physical_character(c)),
+        KeyCode::Named(named) => {
+            let (logical, physical) = match named {
+                NamedKey::Enter => (RuffleKey::Enter, PhysicalKey::Enter),
+                NamedKey::Tab => (RuffleKey::Tab, PhysicalKey::Tab),
+                NamedKey::Backspace => (RuffleKey::Backspace, PhysicalKey::Backspace),
+                NamedKey::Delete => (RuffleKey::Delete, PhysicalKey::Delete),
+                NamedKey::Escape => (RuffleKey::Escape, PhysicalKey::Escape),
+                NamedKey::Insert => (RuffleKey::Insert, PhysicalKey::Insert),
+                NamedKey::Home => (RuffleKey::Home, PhysicalKey::Home),
+                NamedKey::End => (RuffleKey::End, PhysicalKey::End),
+                NamedKey::PageUp => (RuffleKey::PageUp, PhysicalKey::PageUp),
+                NamedKey::PageDown => (RuffleKey::PageDown, PhysicalKey::PageDown),
+                NamedKey::ArrowLeft => (RuffleKey::ArrowLeft, PhysicalKey::ArrowLeft),
+                NamedKey::ArrowRight => (RuffleKey::ArrowRight, PhysicalKey::ArrowRight),
+                NamedKey::ArrowUp => (RuffleKey::ArrowUp, PhysicalKey::ArrowUp),
+                NamedKey::ArrowDown => (RuffleKey::ArrowDown, PhysicalKey::ArrowDown),
+                NamedKey::Shift => (RuffleKey::Shift, PhysicalKey::ShiftLeft),
+                NamedKey::Control => (RuffleKey::Control, PhysicalKey::ControlLeft),
+                NamedKey::Alt => (RuffleKey::Alt, PhysicalKey::AltLeft),
+                NamedKey::Command => (RuffleKey::Super, PhysicalKey::SuperLeft),
+                NamedKey::CapsLock => (RuffleKey::CapsLock, PhysicalKey::CapsLock),
+                NamedKey::F1 => (RuffleKey::F1, PhysicalKey::F1),
+                NamedKey::F2 => (RuffleKey::F2, PhysicalKey::F2),
+                NamedKey::F3 => (RuffleKey::F3, PhysicalKey::F3),
+                NamedKey::F4 => (RuffleKey::F4, PhysicalKey::F4),
+                NamedKey::F5 => (RuffleKey::F5, PhysicalKey::F5),
+                NamedKey::F6 => (RuffleKey::F6, PhysicalKey::F6),
+                NamedKey::F7 => (RuffleKey::F7, PhysicalKey::F7),
+                NamedKey::F8 => (RuffleKey::F8, PhysicalKey::F8),
+                NamedKey::F9 => (RuffleKey::F9, PhysicalKey::F9),
+                NamedKey::F10 => (RuffleKey::F10, PhysicalKey::F10),
+                NamedKey::F11 => (RuffleKey::F11, PhysicalKey::F11),
+                NamedKey::F12 => (RuffleKey::F12, PhysicalKey::F12),
+                NamedKey::F13 => (RuffleKey::F13, PhysicalKey::F13),
+                NamedKey::F14 => (RuffleKey::F14, PhysicalKey::F14),
+                NamedKey::F15 => (RuffleKey::F15, PhysicalKey::F15),
+                NamedKey::F16 => (RuffleKey::F16, PhysicalKey::F16),
+                NamedKey::F17 => (RuffleKey::F17, PhysicalKey::F17),
+                NamedKey::F18 => (RuffleKey::F18, PhysicalKey::F18),
+                NamedKey::F19 => (RuffleKey::F19, PhysicalKey::F19),
+                NamedKey::F20 => (RuffleKey::F20, PhysicalKey::F20),
+                NamedKey::F21 => (RuffleKey::F21, PhysicalKey::F21),
+                NamedKey::F22 => (RuffleKey::F22, PhysicalKey::F22),
+                NamedKey::F23 => (RuffleKey::F23, PhysicalKey::F23),
+                NamedKey::F24 => (RuffleKey::F24, PhysicalKey::F24),
+            };
+            (LogicalKey::Named(logical), physical)
+        }
     };
     KeyDescriptor {
-        physical_key: PhysicalKey::Unknown,
+        physical_key,
         logical_key,
         key_location: KeyLocation::Standard,
+    }
+}
+
+fn physical_character(c: char) -> ruffle_core::events::PhysicalKey {
+    use ruffle_core::events::PhysicalKey as P;
+    match c.to_ascii_lowercase() {
+        'a' => P::KeyA,
+        'b' => P::KeyB,
+        'c' => P::KeyC,
+        'd' => P::KeyD,
+        'e' => P::KeyE,
+        'f' => P::KeyF,
+        'g' => P::KeyG,
+        'h' => P::KeyH,
+        'i' => P::KeyI,
+        'j' => P::KeyJ,
+        'k' => P::KeyK,
+        'l' => P::KeyL,
+        'm' => P::KeyM,
+        'n' => P::KeyN,
+        'o' => P::KeyO,
+        'p' => P::KeyP,
+        'q' => P::KeyQ,
+        'r' => P::KeyR,
+        's' => P::KeyS,
+        't' => P::KeyT,
+        'u' => P::KeyU,
+        'v' => P::KeyV,
+        'w' => P::KeyW,
+        'x' => P::KeyX,
+        'y' => P::KeyY,
+        'z' => P::KeyZ,
+        '0' | ')' => P::Digit0,
+        '1' | '!' => P::Digit1,
+        '2' | '@' => P::Digit2,
+        '3' | '#' => P::Digit3,
+        '4' | '$' => P::Digit4,
+        '5' | '%' => P::Digit5,
+        '6' | '^' => P::Digit6,
+        '7' | '&' => P::Digit7,
+        '8' | '*' => P::Digit8,
+        '9' | '(' => P::Digit9,
+        '`' | '~' => P::Backquote,
+        '-' | '_' => P::Minus,
+        '=' | '+' => P::Equal,
+        '[' | '{' => P::BracketLeft,
+        ']' | '}' => P::BracketRight,
+        '\\' | '|' => P::Backslash,
+        ';' | ':' => P::Semicolon,
+        '\'' | '"' => P::Quote,
+        ',' | '<' => P::Comma,
+        '.' | '>' => P::Period,
+        '/' | '?' => P::Slash,
+        ' ' => P::Space,
+        _ => P::Unknown,
     }
 }
 
@@ -382,6 +440,87 @@ mod tests {
     use super::*;
 
     #[test]
+    fn releasing_a_movement_shortcut_does_not_leave_modifiers_held() {
+        use ruffle_core::events::KeyCode as FlashKey;
+
+        for modifier in [NamedKey::Control, NamedKey::Alt] {
+            let player = ruffle_core::PlayerBuilder::new().build();
+            let mut player = player.lock().unwrap();
+            let mut effects = Vec::new();
+            let key = |code| Key {
+                code,
+                modifiers: Modifiers::default(),
+            };
+            for event in [
+                ViewEvent::KeyDown(key(KeyCode::Named(modifier))),
+                ViewEvent::KeyDown(key(KeyCode::Char('w'))),
+                ViewEvent::KeyUp(key(KeyCode::Char('w'))),
+                ViewEvent::KeyUp(key(KeyCode::Named(modifier))),
+                ViewEvent::KeyDown(key(KeyCode::Char('w'))),
+            ] {
+                translate(
+                    event,
+                    Viewport::new(100.0, 100.0, 1.0).unwrap(),
+                    &mut effects,
+                );
+                for effect in effects.drain(..) {
+                    if let Effect::Event(event) = effect {
+                        player.handle_event(event);
+                    }
+                }
+            }
+            assert_eq!(
+                player.mutate_with_update_context(|context| (
+                    context.input.is_key_down(FlashKey::CONTROL),
+                    context.input.is_key_down(FlashKey::ALT),
+                    context.input.is_key_down(FlashKey::W),
+                )),
+                (false, false, true),
+                "{modifier:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn overlapping_movement_keys_release_independently() {
+        use ruffle_core::events::KeyCode as FlashKey;
+
+        let player = ruffle_core::PlayerBuilder::new().build();
+        let mut player = player.lock().unwrap();
+        let mut effects = Vec::new();
+        let key = |c| Key {
+            code: KeyCode::Char(c),
+            modifiers: Modifiers::default(),
+        };
+        for (event, expected) in [
+            (ViewEvent::KeyDown(key('w')), (true, false)),
+            (ViewEvent::KeyDown(key('d')), (true, true)),
+            (ViewEvent::KeyUp(key('w')), (false, true)),
+            (ViewEvent::KeyUp(key('d')), (false, false)),
+            (ViewEvent::KeyDown(key('W')), (true, false)),
+            (ViewEvent::KeyUp(key('w')), (false, false)),
+        ] {
+            translate(
+                event,
+                Viewport::new(100.0, 100.0, 1.0).unwrap(),
+                &mut effects,
+            );
+            for effect in effects.drain(..) {
+                if let Effect::Event(event) = effect {
+                    player.handle_event(event);
+                }
+            }
+            assert_eq!(
+                player.mutate_with_update_context(|context| (
+                    context.input.is_key_down(FlashKey::W),
+                    context.input.is_key_down(FlashKey::D),
+                )),
+                expected,
+            );
+        }
+    }
+
+    #[test]
     fn view_events_translate_to_literal_player_effects() {
         let cases = [
             (
@@ -397,7 +536,7 @@ mod tests {
                     code: KeyCode::Named(NamedKey::Backspace),
                     modifiers: Modifiers::default(),
                 }),
-                "[Event(KeyDown { key: KeyDescriptor { physical_key: Unknown, logical_key: Named(Backspace), key_location: Standard } }), Event(TextControl { code: Backspace })]",
+                "[Event(KeyDown { key: KeyDescriptor { physical_key: Backspace, logical_key: Named(Backspace), key_location: Standard } }), Event(TextControl { code: Backspace })]",
             ),
             (
                 ViewEvent::Text("é\n".into()),
@@ -433,7 +572,7 @@ mod tests {
         );
         assert_eq!(
             format!("{effects:?}"),
-            "[Event(KeyDown { key: KeyDescriptor { physical_key: Unknown, logical_key: Character('c'), key_location: Standard } }), Event(TextControl { code: Copy })]"
+            "[Event(KeyDown { key: KeyDescriptor { physical_key: KeyC, logical_key: Character('c'), key_location: Standard } }), Event(TextControl { code: Copy })]"
         );
     }
 
