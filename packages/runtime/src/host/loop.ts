@@ -1,7 +1,6 @@
-import type { ProjectionEvent } from "@lucent/game/protocol";
-import type * as Effect from "effect/Effect";
+import type { ProjectionEvent, ScriptOutcome } from "@lucent/game/protocol";
 
-import type { ApiService } from "../game/flash/api/Api";
+import type { ScriptSource } from "../game/scripting/ScriptRunner";
 
 declare global {
   var __host: {
@@ -12,7 +11,12 @@ declare global {
     log(level: "info" | "warn" | "error" | "debug", text: string): void;
   };
   var __lucent: Readonly<{
-    run<A, E>(program: (api: ApiService) => Effect.Effect<A, E>): Promise<A>;
+    start(
+      load: ScriptSource["load"],
+      name: string,
+      inputsJson: string,
+    ): Promise<ScriptOutcome>;
+    stop(reason?: string): Promise<void>;
     turn(itemsJson: string): string[];
     wake(): number;
   }>;

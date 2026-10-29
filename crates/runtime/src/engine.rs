@@ -2,8 +2,10 @@ use std::ffi::c_void;
 use std::sync::{Arc, Once, mpsc};
 use std::time::{Duration, Instant};
 
+use crate::modules::{self, Scripts};
 use lucent_host::ScriptLink;
 use lucent_host::bridge::{Error as EventError, ScriptEvent};
+use lucent_protocol::script::{Script, ScriptInputs};
 
 use crate::interrupt::Interrupt;
 use crate::{Kill, RuntimeError, host};
@@ -19,13 +21,15 @@ enum Completion {
     Promise(v8::Global<v8::Promise>),
 }
 
-struct ActiveEval {
+struct Active {
     promise: v8::Global<v8::Promise>,
     reply: EvalReply,
+    run: Option<u64>,
+    lost: bool,
 }
 
 pub(crate) struct Engine {
-    active: Vec<ActiveEval>,
+    active: Vec<Active>,
     context: v8::Global<v8::Context>,
     isolate: v8::OwnedIsolate,
 }
@@ -48,6 +52,7 @@ impl Engine {
         isolate.set_slot(link);
         isolate.set_slot(Instant::now());
         isolate.set_slot(Rejections::new());
+        isolate.set_slot(Scripts::default());
         isolate.set_promise_reject_callback(promise_rejected);
         let context = {
             v8::scope!(let scope, &mut isolate);
@@ -98,14 +103,30 @@ impl Engine {
     }
 
     pub(crate) fn events_lost(&mut self) {
-        for active in self.active.drain(..) {
-            let _ = active.reply.send(Err(RuntimeError::EventsLost));
+        let mut running = false;
+        self.active.retain_mut(|active| {
+            if active.run.is_some() {
+                active.lost = true;
+                running = true;
+                true
+            } else {
+                let _ = active.reply.send(Err(RuntimeError::EventsLost));
+                false
+            }
+        });
+        if running {
+            self.stop(Some("Script events overflowed and were lost"));
         }
     }
 
     pub(crate) fn eval(&mut self, name: &str, source: &str, reply: EvalReply) {
         match self.evaluate(name, source) {
-            Ok(Completion::Promise(promise)) => self.active.push(ActiveEval { promise, reply }),
+            Ok(Completion::Promise(promise)) => self.active.push(Active {
+                promise,
+                reply,
+                run: None,
+                lost: false,
+            }),
             Ok(Completion::Value(json)) => {
                 let _ = reply.send(Ok(json));
             }
@@ -114,6 +135,61 @@ impl Engine {
             }
         }
         self.check_pending();
+    }
+
+    pub(crate) fn start(&mut self, script: Script, inputs: ScriptInputs, reply: EvalReply) {
+        let name = script.entry().to_string();
+        let id = self
+            .isolate
+            .get_slot_mut::<Scripts>()
+            .unwrap()
+            .insert(script);
+        let result = self.in_context(|tc| {
+            let data = v8::BigInt::new_from_u64(tc, id);
+            let load = v8::Function::builder(modules::load)
+                .data(data.into())
+                .build(tc)
+                .ok_or_else(|| exception_text(tc))?;
+            let name = v8::String::new(tc, &name).unwrap();
+            let inputs = v8::String::new(tc, &serde_json::to_string(&inputs).unwrap()).unwrap();
+            let value = call_lucent(tc, "start", &[load.into(), name.into(), inputs.into()])?;
+            let promise =
+                v8::Local::<v8::Promise>::try_from(value).map_err(|_| exception_text(tc))?;
+            promise.mark_as_handled();
+            let promise = v8::Global::new(tc, promise);
+            checkpoint(tc)?;
+            Ok(promise)
+        });
+        match result {
+            Ok(promise) => self.active.push(Active {
+                promise,
+                reply,
+                run: Some(id),
+                lost: false,
+            }),
+            Err(error) => {
+                self.isolate.get_slot_mut::<Scripts>().unwrap().remove(id);
+                let _ = reply.send(Err(error));
+            }
+        }
+        self.check_pending();
+    }
+
+    pub(crate) fn stop(&mut self, reason: Option<&str>) {
+        let result = self.in_context(|tc| {
+            let args: Vec<v8::Local<v8::Value>> = reason
+                .into_iter()
+                .map(|reason| v8::String::new(tc, reason).unwrap().into())
+                .collect();
+            let value = call_lucent(tc, "stop", &args)?;
+            if let Ok(promise) = v8::Local::<v8::Promise>::try_from(value) {
+                promise.mark_as_handled();
+            }
+            checkpoint(tc)
+        });
+        if let Err(error) = result {
+            tracing::error!(%error, "couldn't stop the script");
+        }
     }
 
     fn in_context<R>(
@@ -141,19 +217,7 @@ impl Engine {
                     .ok_or_else(|| RuntimeError::JavaScript("script too large".into()))?;
                 let name = v8::String::new(tc, name)
                     .ok_or_else(|| RuntimeError::JavaScript("script name too large".into()))?;
-                let origin = v8::ScriptOrigin::new(
-                    tc,
-                    name.into(),
-                    0,
-                    0,
-                    false,
-                    0,
-                    None,
-                    false,
-                    false,
-                    false,
-                    None,
-                );
+                let origin = origin(tc, name, false);
                 let script = v8::Script::compile(tc, source, Some(&origin))
                     .ok_or_else(|| exception_text(tc))?;
                 script.run(tc).ok_or_else(|| exception_text(tc))
@@ -161,11 +225,7 @@ impl Engine {
             let result = result.map(|value| {
                 if let Ok(promise) = v8::Local::<v8::Promise>::try_from(value) {
                     promise.mark_as_handled();
-                    let promise = v8::Global::new(tc, promise);
-                    tc.get_slot_mut::<Rejections>()
-                        .unwrap()
-                        .retain(|(pending, _)| *pending != promise);
-                    (value, Some(promise))
+                    (value, Some(v8::Global::new(tc, promise)))
                 } else {
                     (value, None)
                 }
@@ -206,7 +266,14 @@ impl Engine {
                 });
                 match settled {
                     Ok(Some(result)) if !self.overflowed() => {
-                        let _ = active.reply.send(result);
+                        if let Some(id) = active.run {
+                            self.isolate.get_slot_mut::<Scripts>().unwrap().remove(id);
+                        }
+                        let _ = active.reply.send(if active.lost {
+                            Err(RuntimeError::EventsLost)
+                        } else {
+                            result
+                        });
                     }
                     _ => self.active.push(active),
                 }
@@ -324,7 +391,10 @@ fn call_lucent<'s>(
 fn take_rejections(
     scope: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
 ) -> Vec<String> {
-    let rejections = std::mem::take(scope.get_slot_mut::<Rejections>().unwrap());
+    let rejections: Vec<_> = std::mem::take(scope.get_slot_mut::<Rejections>().unwrap())
+        .into_iter()
+        .filter(|(promise, _)| !v8::Local::new(scope, promise).has_handler())
+        .collect();
     rejections
         .into_iter()
         .map_while(|(_, reason)| {
@@ -333,6 +403,26 @@ fn take_rejections(
                 .then(|| rejection_text(scope, &reason))
         })
         .collect()
+}
+
+pub(crate) fn origin<'s>(
+    scope: &v8::PinScope<'s, '_>,
+    name: v8::Local<'s, v8::String>,
+    is_module: bool,
+) -> v8::ScriptOrigin<'s> {
+    v8::ScriptOrigin::new(
+        scope,
+        name.into(),
+        0,
+        0,
+        false,
+        0,
+        None,
+        false,
+        false,
+        is_module,
+        None,
+    )
 }
 
 fn exception_text(
@@ -428,7 +518,7 @@ fn return_reply(
     }
 }
 
-fn throw(scope: &mut v8::PinScope, message: &str) {
+pub(crate) fn throw(scope: &mut v8::PinScope, message: &str) {
     if let Some(message) = v8::String::new(scope, message) {
         let error = v8::Exception::error(scope, message);
         scope.throw_exception(error);
@@ -506,12 +596,12 @@ fn host_log(
     args: v8::FunctionCallbackArguments,
     _reply: v8::ReturnValue<v8::Value>,
 ) {
-    let level = args.get(0).to_rust_string_lossy(scope);
-    let text = args.get(1).to_rust_string_lossy(scope);
-    match level.as_str() {
-        "debug" => tracing::debug!(target: "lucent_runtime::script", "{text}"),
-        "warn" => tracing::warn!(target: "lucent_runtime::script", "{text}"),
-        "error" => tracing::error!(target: "lucent_runtime::script", "{text}"),
-        _ => tracing::info!(target: "lucent_runtime::script", "{text}"),
+    const TARGET: &str = "lucent_runtime::script";
+    let text = args.get(1);
+    match args.get(0).to_rust_string_lossy(scope).as_str() {
+        "debug" => tracing::debug!(target: TARGET, "{}", text.to_rust_string_lossy(scope)),
+        "warn" => tracing::warn!(target: TARGET, "{}", text.to_rust_string_lossy(scope)),
+        "error" => tracing::error!(target: TARGET, "{}", text.to_rust_string_lossy(scope)),
+        _ => tracing::info!(target: TARGET, "{}", text.to_rust_string_lossy(scope)),
     }
 }

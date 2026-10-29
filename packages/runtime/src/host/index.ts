@@ -1,6 +1,6 @@
 import "./globals";
 
 import { turn, wake } from "./loop";
-import { run } from "./run";
+import { start, stop } from "./scripts";
 
-Object.assign(globalThis, { __lucent: Object.freeze({ run, turn, wake }) });
+Object.assign(globalThis, { __lucent: Object.freeze({ start, stop, turn, wake }) });

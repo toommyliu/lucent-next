@@ -366,6 +366,10 @@
   var constNull = /* @__PURE__ */ constant(null);
   var constUndefined = /* @__PURE__ */ constant(void 0);
   var constVoid = constUndefined;
+  function pipe(a, ...args2) {
+    return pipeArguments(a, args2);
+  }
+  __name(pipe, "pipe");
   function memoize(f) {
     const cache2 = /* @__PURE__ */ new WeakMap();
     return (a) => {
@@ -451,19 +455,36 @@
     return input != null;
   }
   __name(isNotNullish, "isNotNullish");
+  function isNever(_) {
+    return false;
+  }
+  __name(isNever, "isNever");
   function isUnknown(_) {
     return true;
   }
   __name(isUnknown, "isUnknown");
+  function isObject(input) {
+    return typeof input === "object" && input !== null && !Array.isArray(input);
+  }
+  __name(isObject, "isObject");
   function isObjectKeyword(input) {
     return typeof input === "object" && input !== null || isFunction(input);
   }
   __name(isObjectKeyword, "isObjectKeyword");
   var hasProperty = /* @__PURE__ */ dual(2, (self, property) => isObjectKeyword(self) && property in self);
+  var isTagged = /* @__PURE__ */ dual(2, (self, tag2) => hasProperty(self, "_tag") && self["_tag"] === tag2);
+  function isError(input) {
+    return input instanceof Error;
+  }
+  __name(isError, "isError");
   function isIterable(input) {
     return hasProperty(input, Symbol.iterator) || isString(input);
   }
   __name(isIterable, "isIterable");
+  function isPromiseLike(input) {
+    return hasProperty(input, "then") && isFunction(input.then);
+  }
+  __name(isPromiseLike, "isPromiseLike");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Hash.js
   var symbol = "~effect/Hash";
@@ -855,9 +876,9 @@ ${ind(d)}}`;
     return path.map((key) => `[${formatPropertyKey(key)}]`).join("");
   }
   __name(formatPath, "formatPath");
-  function formatDate(date) {
+  function formatDate(date2) {
     try {
-      return date.toISOString();
+      return date2.toISOString();
     } catch {
       return "Invalid Date";
     }
@@ -1303,9 +1324,9 @@ ${ind(d)}}`;
     static {
       __name(this, "Die");
     }
-    constructor(defect, annotations = constEmptyAnnotations) {
-      super("Die", annotations, defect);
-      this.defect = defect;
+    constructor(defect2, annotations = constEmptyAnnotations) {
+      super("Die", annotations, defect2);
+      this.defect = defect2;
     }
     toString() {
       return `Die(${format2(this.defect)})`;
@@ -1323,7 +1344,7 @@ ${ind(d)}}`;
       return combine(string(this._tag))(combine(hash(this.defect))(hash(this.annotations)));
     }
   };
-  var causeDie = /* @__PURE__ */ __name((defect) => new CauseImpl([new Die(defect)]), "causeDie");
+  var causeDie = /* @__PURE__ */ __name((defect2) => new CauseImpl([new Die(defect2)]), "causeDie");
   var causeAnnotate = /* @__PURE__ */ dual((args2) => isCause(args2[0]), (self, annotations, options) => {
     if (annotations.mapUnsafe.size === 0) return self;
     return new CauseImpl(self.reasons.map((f) => f.annotate(annotations, options)));
@@ -1430,7 +1451,7 @@ ${ind(d)}}`;
     }
   });
   var exitFail = /* @__PURE__ */ __name((e) => exitFailCause(causeFail(e)), "exitFail");
-  var exitDie = /* @__PURE__ */ __name((defect) => exitFailCause(causeDie(defect)), "exitDie");
+  var exitDie = /* @__PURE__ */ __name((defect2) => exitFailCause(causeDie(defect2)), "exitDie");
   var withFiber = /* @__PURE__ */ makePrimitive({
     op: "WithFiber",
     [evaluate](fiber2) {
@@ -1504,9 +1525,9 @@ ${ind(d)}}`;
       __name(this, "NoSuchElementError");
     }
     [NoSuchElementErrorTypeId] = NoSuchElementErrorTypeId;
-    constructor(message) {
+    constructor(message2) {
       super({
-        message
+        message: message2
       });
     }
   };
@@ -1659,11 +1680,11 @@ ${ind(d)}}`;
   var isResult = /* @__PURE__ */ __name((input) => hasProperty(input, TypeId2), "isResult");
   var isFailure = /* @__PURE__ */ __name((result2) => result2._tag === "Failure", "isFailure");
   var isSuccess = /* @__PURE__ */ __name((result2) => result2._tag === "Success", "isSuccess");
-  var FailureImpl = /* @__PURE__ */ __name(function(failure) {
-    this.failure = failure;
+  var FailureImpl = /* @__PURE__ */ __name(function(failure2) {
+    this.failure = failure2;
   }, "FailureImpl");
   FailureImpl.prototype = FailureProto;
-  var fail = /* @__PURE__ */ __name((failure) => new FailureImpl(failure), "fail");
+  var fail = /* @__PURE__ */ __name((failure2) => new FailureImpl(failure2), "fail");
   var SuccessImpl = /* @__PURE__ */ __name(function(success) {
     this.success = success;
   }, "SuccessImpl");
@@ -1707,6 +1728,7 @@ ${ind(d)}}`;
       return none2();
     }
   }, "liftThrowable");
+  var map = /* @__PURE__ */ dual(2, (self, f) => isNone2(self) ? none2() : some2(f(self.value)));
   var flatMap = /* @__PURE__ */ dual(2, (self, f) => isNone2(self) ? none2() : f(self.value));
   var flatten = /* @__PURE__ */ flatMap(identity);
 
@@ -1777,22 +1799,22 @@ ${ind(d)}}`;
     self.baseHits = 0;
     return self;
   }, "makeImpl");
-  var applyOverlays = /* @__PURE__ */ __name((map7, overlay) => {
+  var applyOverlays = /* @__PURE__ */ __name((map8, overlay) => {
     if (!overlay) return;
-    applyOverlays(map7, overlay.parent);
-    map7.set(overlay.key, overlay.value);
+    applyOverlays(map8, overlay.parent);
+    map8.set(overlay.key, overlay.value);
   }, "applyOverlays");
   var flatten2 = /* @__PURE__ */ __name((self) => {
     if (self._flat) return self._flat;
     if (!self.overlay) return self._flat = self.base;
-    const map7 = new Map(self.base);
-    applyOverlays(map7, self.overlay);
-    return self._flat = map7;
+    const map8 = new Map(self.base);
+    applyOverlays(map8, self.overlay);
+    return self._flat = map8;
   }, "flatten");
   var withFlat = /* @__PURE__ */ __name((self, f) => {
-    const map7 = new Map(self.mapUnsafe);
-    f(map7);
-    return makeUnsafe(map7);
+    const map8 = new Map(self.mapUnsafe);
+    f(map8);
+    return makeUnsafe(map8);
   }, "withFlat");
   var notFound = /* @__PURE__ */ Symbol();
   var lookup = /* @__PURE__ */ __name((self, key) => {
@@ -1852,10 +1874,10 @@ ${ind(d)}}`;
     const impl = self;
     const cacheRoot = cacheKeys.has(key) ? void 0 : impl.cacheRoot;
     if (impl.depth >= MaxDepth) {
-      const map7 = new Map(impl._flat ?? impl.base);
-      if (!impl._flat) applyOverlays(map7, impl.overlay);
-      map7.set(key, service3);
-      return makeImpl(cacheRoot, map7, void 0, 0);
+      const map8 = new Map(impl._flat ?? impl.base);
+      if (!impl._flat) applyOverlays(map8, impl.overlay);
+      map8.set(key, service3);
+      return makeImpl(cacheRoot, map8, void 0, 0);
     }
     return makeImpl(cacheRoot, impl.base, {
       key,
@@ -1896,16 +1918,16 @@ ${ind(d)}}`;
   var merge = /* @__PURE__ */ dual(2, (self, that) => {
     if (self.mapUnsafe.size === 0) return that;
     if (that.mapUnsafe.size === 0) return self;
-    return withFlat(self, (map7) => that.mapUnsafe.forEach((value, key) => map7.set(key, value)));
+    return withFlat(self, (map8) => that.mapUnsafe.forEach((value, key) => map8.set(key, value)));
   });
   var mergeAll = /* @__PURE__ */ __name((...ctxs) => {
-    const map7 = /* @__PURE__ */ new Map();
+    const map8 = /* @__PURE__ */ new Map();
     for (let i = 0; i < ctxs.length; i++) {
       ctxs[i].mapUnsafe.forEach((value, key) => {
-        map7.set(key, value);
+        map8.set(key, value);
       });
     }
-    return makeUnsafe(map7);
+    return makeUnsafe(map8);
   }, "mergeAll");
   var Reference = Service;
 
@@ -2164,11 +2186,23 @@ ${ind(d)}}`;
       return options.onNanos(self.value.nanos, toNanosUnsafe(that));
     }
   });
+  var Order = /* @__PURE__ */ make((self, that) => matchPair(self, that, {
+    onMillis: /* @__PURE__ */ __name((self2, that2) => self2 < that2 ? -1 : self2 > that2 ? 1 : 0, "onMillis"),
+    onNanos: /* @__PURE__ */ __name((self2, that2) => self2 < that2 ? -1 : self2 > that2 ? 1 : 0, "onNanos"),
+    onInfinity: /* @__PURE__ */ __name((self2, that2) => {
+      if (self2.value._tag === that2.value._tag) return 0;
+      if (self2.value._tag === "Infinity") return 1;
+      if (self2.value._tag === "NegativeInfinity") return -1;
+      if (that2.value._tag === "Infinity") return -1;
+      return 1;
+    }, "onInfinity")
+  }));
   var Equivalence = /* @__PURE__ */ __name((self, that) => matchPair(self, that, {
     onMillis: /* @__PURE__ */ __name((self2, that2) => self2 === that2, "onMillis"),
     onNanos: /* @__PURE__ */ __name((self2, that2) => self2 === that2, "onNanos"),
     onInfinity: /* @__PURE__ */ __name((self2, that2) => self2.value._tag === that2.value._tag, "onInfinity")
   }), "Equivalence");
+  var isLessThanOrEqualTo2 = /* @__PURE__ */ isLessThanOrEqualTo(Order);
   var equals2 = /* @__PURE__ */ dual(2, (self, that) => Equivalence(self, that));
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/array.js
@@ -2182,6 +2216,7 @@ ${ind(d)}}`;
   var succeed2 = succeed;
   var fail2 = fail;
   var isFailure2 = isFailure;
+  var isSuccess2 = isSuccess;
   var match3 = /* @__PURE__ */ dual(2, (self, {
     onFailure,
     onSuccess
@@ -2267,7 +2302,7 @@ ${ind(d)}}`;
   }, "hashBucketsAdd");
   var empty3 = /* @__PURE__ */ __name(() => [], "empty");
   var of = /* @__PURE__ */ __name((a) => [a], "of");
-  var map = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
+  var map2 = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
   var dedupe = /* @__PURE__ */ __name((self) => {
     const input = fromIterable(self);
     if (input.length < 2) {
@@ -2641,9 +2676,9 @@ ${ind(d)}}`;
     static {
       __name(this, "Interrupt");
     }
-    constructor(fiberId2, annotations = constEmptyAnnotations) {
+    constructor(fiberId3, annotations = constEmptyAnnotations) {
       super("Interrupt", annotations, "Interrupted");
-      this.fiberId = fiberId2;
+      this.fiberId = fiberId3;
     }
     toString() {
       return `Interrupt(${this.fiberId})`;
@@ -2661,7 +2696,7 @@ ${ind(d)}}`;
       return combine(string(`${this._tag}:${this.fiberId}`))(random(this.annotations));
     }
   };
-  var causeInterrupt = /* @__PURE__ */ __name((fiberId2) => new CauseImpl([new Interrupt(fiberId2)]), "causeInterrupt");
+  var causeInterrupt = /* @__PURE__ */ __name((fiberId3) => new CauseImpl([new Interrupt(fiberId3)]), "causeInterrupt");
   var findError = /* @__PURE__ */ __name((self) => {
     for (let i = 0; i < self.reasons.length; i++) {
       const reason = self.reasons[i];
@@ -2671,6 +2706,7 @@ ${ind(d)}}`;
     }
     return fail2(self);
   }, "findError");
+  var hasDies = /* @__PURE__ */ __name((self) => self.reasons.some(isDieReason), "hasDies");
   var hasInterrupts = /* @__PURE__ */ __name((self) => self.reasons.some(isInterruptReason), "hasInterrupts");
   var causeFilterInterruptors = /* @__PURE__ */ __name((self) => {
     let interruptors;
@@ -2687,12 +2723,12 @@ ${ind(d)}}`;
   var hasInterruptsOnly = /* @__PURE__ */ __name((self) => self.reasons.length > 0 && self.reasons.every(isInterruptReason), "hasInterruptsOnly");
   var causeMap = /* @__PURE__ */ dual(2, (self, f) => {
     let hasFail = false;
-    const failures = self.reasons.map((failure) => {
-      if (isFailReason(failure)) {
+    const failures = self.reasons.map((failure2) => {
+      if (isFailReason(failure2)) {
         hasFail = true;
-        return new Fail(f(failure.error), failure.annotations);
+        return new Fail(f(failure2.error), failure2.annotations);
       }
-      return failure;
+      return failure2;
     });
     return hasFail ? causeFromReasons(failures) : self;
   });
@@ -2713,12 +2749,12 @@ ${ind(d)}}`;
     const prevStackLimit = getStackTraceLimit();
     if (prevStackLimit !== 0) setStackTraceLimit(1);
     try {
-      for (const failure of self.reasons) {
-        if (failure._tag === "Interrupt") {
-          interrupts.push(failure);
+      for (const failure2 of self.reasons) {
+        if (failure2._tag === "Interrupt") {
+          interrupts.push(failure2);
           continue;
         }
-        errors.push(causePrettyError(failure._tag === "Die" ? failure.defect : failure.error, failure.annotations, options));
+        errors.push(causePrettyError(failure2._tag === "Die" ? failure2.defect : failure2.error, failure2.annotations, options));
       }
       if (errors.length === 0) {
         const cause = new Error("The fiber was interrupted by:");
@@ -2781,9 +2817,9 @@ ${ind(d)}}`;
   }, "causePrettyMessage");
   var locationRegExp = /\((.*)\)/g;
   var cleanErrorStack = /* @__PURE__ */ __name((stack, error, annotations) => {
-    const message = `${error.name}: ${error.message}`;
-    const lines = (stack.startsWith(message) ? stack.slice(message.length) : stack).split("\n");
-    const out = [message];
+    const message2 = `${error.name}: ${error.message}`;
+    const lines = (stack.startsWith(message2) ? stack.slice(message2.length) : stack).split("\n");
+    const out = [message2];
     for (let i = 1; i < lines.length; i++) {
       if (/Generator\.next|~effect\/(?:Effect|Utils)/.test(lines[i])) {
         break;
@@ -2803,9 +2839,9 @@ ${currentStackTrace(frame)}`;
   var interruptCauseStack = /* @__PURE__ */ __name((error, interrupts) => {
     const out = [`${error.name}: ${error.message}`];
     for (const current of interrupts) {
-      const fiberId2 = current.fiberId !== void 0 ? `#${current.fiberId}` : "unknown";
+      const fiberId3 = current.fiberId !== void 0 ? `#${current.fiberId}` : "unknown";
       const frame = current.annotations.get(InterruptorStackTrace.key);
-      out.push(`    at fiber (${fiberId2})`);
+      out.push(`    at fiber (${fiberId3})`);
       if (frame) out.push(currentStackTrace(frame));
     }
     return out.join("\n");
@@ -2918,11 +2954,11 @@ ${prefix}}`;
         this._observers.splice(index, 1);
       }
     }
-    interruptUnsafe(fiberId2, annotations) {
+    interruptUnsafe(fiberId3, annotations) {
       if (this._exit) {
         return;
       }
-      let cause = causeInterrupt(fiberId2);
+      let cause = causeInterrupt(fiberId3);
       if (this.cache.stackFrame) {
         cause = causeAnnotate(cause, make2(StackTraceKey, this.cache.stackFrame));
       }
@@ -3159,10 +3195,10 @@ ${prefix}}`;
     });
   }, "fiberJoin");
   var fiberInterrupt = /* @__PURE__ */ __name((self) => withFiber((fiber2) => fiberInterruptAs(self, fiber2.id)), "fiberInterrupt");
-  var fiberInterruptAs = /* @__PURE__ */ dual((args2) => hasProperty(args2[0], FiberTypeId), (self, fiberId2, annotations) => withFiber((parent) => {
+  var fiberInterruptAs = /* @__PURE__ */ dual((args2) => hasProperty(args2[0], FiberTypeId), (self, fiberId3, annotations) => withFiber((parent) => {
     let ann = fiberStackAnnotations(parent);
     ann = ann && annotations ? merge(ann, annotations) : ann ?? annotations;
-    self.interruptUnsafe(fiberId2, ann);
+    self.interruptUnsafe(fiberId3, ann);
     return asVoid(fiberAwait(self));
   }));
   var fiberInterruptAll = /* @__PURE__ */ __name((fibers) => withFiber((parent) => {
@@ -3212,7 +3248,7 @@ ${prefix}}`;
   var yieldNow = /* @__PURE__ */ yieldNowWith(0);
   var succeedNone = /* @__PURE__ */ succeed3(/* @__PURE__ */ none2());
   var failCauseSync = /* @__PURE__ */ __name((evaluate2) => suspend(() => failCause(evaluate2())), "failCauseSync");
-  var die = /* @__PURE__ */ __name((defect) => exitDie(defect), "die");
+  var die = /* @__PURE__ */ __name((defect2) => exitDie(defect2), "die");
   var failSync = /* @__PURE__ */ __name((error) => suspend(() => fail3(error())), "failSync");
   var void_ = /* @__PURE__ */ succeed3(void 0);
   var try_ = /* @__PURE__ */ __name((options) => {
@@ -3245,6 +3281,7 @@ ${prefix}}`;
     }, f.length !== 0);
   }, "tryPromise");
   var withFiberId = /* @__PURE__ */ __name((f) => withFiber((fiber2) => f(fiber2.id)), "withFiberId");
+  var fiberId = /* @__PURE__ */ withFiberId(succeed3);
   var callbackOptions = /* @__PURE__ */ (function() {
     const Proto4 = /* @__PURE__ */ makePrimitiveProto({
       op: "Async",
@@ -3277,13 +3314,13 @@ ${prefix}}`;
         return Yield;
       }
     });
-    const AsyncImpl = /* @__PURE__ */ __name(function(register, withSignal) {
-      this.register = register;
+    const AsyncImpl = /* @__PURE__ */ __name(function(register2, withSignal) {
+      this.register = register2;
       this.withSignal = withSignal;
     }, "AsyncImpl");
     AsyncImpl.prototype = Proto4;
-    return function(register, withSignal) {
-      return new AsyncImpl(register, withSignal);
+    return function(register2, withSignal) {
+      return new AsyncImpl(register2, withSignal);
     };
   })();
   var asyncFinalizer = /* @__PURE__ */ makePrimitive({
@@ -3298,7 +3335,7 @@ ${prefix}}`;
       return hasInterrupts(cause) ? flatMap2(combineFinalizerCause(exitFailCause(cause), this[args]()), () => failCause(cause)) : failCause(cause);
     }
   });
-  var callback = /* @__PURE__ */ __name((register) => callbackOptions(register, register.length >= 2), "callback");
+  var callback = /* @__PURE__ */ __name((register2) => callbackOptions(register2, register2.length >= 2), "callback");
   var never = /* @__PURE__ */ callback(constVoid);
   var gen = /* @__PURE__ */ __name((...args2) => {
     if (args2.length === 1) {
@@ -3392,11 +3429,11 @@ ${prefix}}`;
         if (state.done) {
           return succeed3(state.value);
         }
-        const primitive = state.value;
-        if (primitive && primitive._tag === "Success") {
-          value = primitive.value;
+        const primitive2 = state.value;
+        if (primitive2 && primitive2._tag === "Success") {
+          value = primitive2.value;
           continue;
-        } else if (primitive && primitive._tag === "Failure") {
+        } else if (primitive2 && primitive2._tag === "Failure") {
           return state.value;
         } else {
           let isFirstExecution = true;
@@ -3490,7 +3527,7 @@ ${prefix}}`;
   var tapEffectCont = /* @__PURE__ */ __name(function(value) {
     return new ContImpl(this.payload, succeedPayload, value);
   }, "tapEffectCont");
-  var asSome = /* @__PURE__ */ __name((self) => map2(self, some2), "asSome");
+  var asSome = /* @__PURE__ */ __name((self) => map3(self, some2), "asSome");
   var andThen = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? returnPayload : andThenCont, f));
   var tap = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? tapEffectCont : tapCont, f));
   var asVoid = /* @__PURE__ */ __name((self) => new ContImpl(self, returnPayload, exitVoid), "asVoid");
@@ -3531,10 +3568,10 @@ ${prefix}}`;
     return flatMap2(self, f);
   });
   var flatten3 = /* @__PURE__ */ __name((self) => flatMap2(self, identity), "flatten");
-  var map2 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
-  var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map2(self, f));
+  var map3 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
+  var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map3(self, f));
   var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError2(self, f));
-  var exitInterrupt = /* @__PURE__ */ __name((fiberId2) => exitFailCause(causeInterrupt(fiberId2)), "exitInterrupt");
+  var exitInterrupt = /* @__PURE__ */ __name((fiberId3) => exitFailCause(causeInterrupt(fiberId3)), "exitInterrupt");
   var exitIsSuccess = /* @__PURE__ */ __name((self) => self._tag === "Success", "exitIsSuccess");
   var exitIsFailure = /* @__PURE__ */ __name((self) => self._tag === "Failure", "exitIsFailure");
   var exitFilterCause = /* @__PURE__ */ __name((self) => self._tag === "Failure" ? succeed2(self.cause) : fail2(self), "exitFilterCause");
@@ -3587,9 +3624,9 @@ ${prefix}}`;
     return dual(3, (self, service3, impl) => provideServiceImpl(self, service3, impl)).apply(this, arguments);
   }, "provideService");
   var provideServiceImpl = /* @__PURE__ */ __name((self, service3, implementation) => updateContext(self, add(service3, implementation)), "provideServiceImpl");
-  var zipWith = /* @__PURE__ */ dual((args2) => isEffect(args2[1]), (self, that, f, options) => options?.concurrent ? map2(all([self, that], {
+  var zipWith = /* @__PURE__ */ dual((args2) => isEffect(args2[1]), (self, that, f, options) => options?.concurrent ? map3(all([self, that], {
     concurrency: 2
-  }), ([a, a2]) => f(a, a2)) : flatMap2(self, (a) => map2(that, (a2) => f(a, a2))));
+  }), ([a, a2]) => f(a, a2)) : flatMap2(self, (a) => map3(that, (a2) => f(a, a2))));
   var when = /* @__PURE__ */ dual(2, (self, condition) => flatMap2(condition, (pass) => pass ? asSome(self) : succeedNone));
   var forever = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self, options) => whileLoop({
     while: constTrue,
@@ -3611,6 +3648,18 @@ ${prefix}}`;
     return isFailure2(eb) ? failCause(eb.failure) : f(eb.success, cause);
   }));
   var catch_ = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
+  var catchIf = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self, predicate, f, orElse) => catchCause(self, (cause) => {
+    const error = findError(cause);
+    if (isFailure2(error)) return failCause(error.failure);
+    if (!predicate(error.success)) {
+      return orElse ? orElse(error.success) : failCause(cause);
+    }
+    return f(error.success);
+  }));
+  var catchTag = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self, k, f, orElse) => {
+    const pred = Array.isArray(k) ? (e) => hasProperty(e, "_tag") && k.includes(e._tag) : isTagged(k);
+    return catchIf(self, pred, f, orElse);
+  });
   var mapError2 = /* @__PURE__ */ dual(2, (self, f) => catch_(self, (error) => failSync(() => f(error))));
   var orDie = /* @__PURE__ */ __name((self) => catch_(self, die), "orDie");
   var result = /* @__PURE__ */ __name((self) => matchEager(self, {
@@ -3707,8 +3756,8 @@ ${prefix}}`;
   var runFinalizer = /* @__PURE__ */ __name((finalizer, exit_) => {
     try {
       return finalizer(exit_);
-    } catch (defect) {
-      return exitDie(defect);
+    } catch (defect2) {
+      return exitDie(defect2);
     }
   }, "runFinalizer");
   var combineFinalizerCause = /* @__PURE__ */ __name((exit_, finalizer) => exitIsSuccess(exit_) ? finalizer : catchCause(finalizer, (cause) => failCause(causeCombine(exit_.cause, cause))), "combineFinalizerCause");
@@ -3731,13 +3780,13 @@ ${prefix}}`;
     return yield* exitAsVoidAll(exits);
   });
   var scopeForkUnsafe = /* @__PURE__ */ __name((scope3, finalizerStrategy) => {
-    const child = makeScope(finalizerStrategy, scope3);
+    const child2 = makeScope(finalizerStrategy, scope3);
     if (scope3.state._tag === "Closed") {
-      child.state = scope3.state;
-      return child;
+      child2.state = scope3.state;
+      return child2;
     }
-    scopeAddFinalizerUnsafe(scope3, child, (exit3) => scopeClose(child, exit3));
-    return child;
+    scopeAddFinalizerUnsafe(scope3, child2, (exit3) => scopeClose(child2, exit3));
+    return child2;
   }, "scopeForkUnsafe");
   var scopeAddFinalizerExit = /* @__PURE__ */ __name((scope3, finalizer) => {
     return suspend(() => {
@@ -3824,8 +3873,8 @@ ${prefix}}`;
         let eff;
         try {
           eff = this.onExit(exit3);
-        } catch (defect) {
-          eff = exitDie(defect);
+        } catch (defect2) {
+          eff = exitDie(defect2);
         }
         return eff ? flatMap2(eff, (_2) => exit3) : exit3;
       },
@@ -3834,8 +3883,8 @@ ${prefix}}`;
         let eff;
         try {
           eff = this.onExit(exit3);
-        } catch (defect) {
-          eff = exitDie(defect);
+        } catch (defect2) {
+          eff = exitDie(defect2);
         }
         return eff ? flatMap2(combineFinalizerCause(exit3, eff), (_2) => exit3) : exit3;
       }
@@ -3868,6 +3917,7 @@ ${prefix}}`;
     return isFailure2(result2) ? void_ : f(result2.success, exit3.cause);
   }));
   var onInterrupt = /* @__PURE__ */ dual(2, (self, finalizer) => onErrorFilter(causeFilterInterruptors, finalizer)(self));
+  var acquireUseRelease = /* @__PURE__ */ __name((acquire, use, release) => uninterruptibleMask((restore) => flatMap2(acquire, (a) => onExitPrimitive(suspend(() => restore(use(a))), (exit3) => release(a, exit3), true))), "acquireUseRelease");
   var interrupt = /* @__PURE__ */ withFiber((fiber2) => failCause(causeInterrupt(fiber2.id)));
   var uninterruptible = /* @__PURE__ */ __name((self) => withFiber((fiber2) => {
     if (!fiber2.interruptible) return self;
@@ -3915,7 +3965,7 @@ ${prefix}}`;
     }
     return suspend(() => {
       const out = {};
-      return as(forEach(Object.entries(arg), ([key, effect2]) => map2(options?.mode === "result" ? result(effect2) : effect2, (value) => {
+      return as(forEach(Object.entries(arg), ([key, effect2]) => map3(options?.mode === "result" ? result(effect2) : effect2, (value) => {
         assignProperty(out, key, value);
       }), {
         discard: true,
@@ -4006,10 +4056,10 @@ ${prefix}}`;
       let terminal;
       let effect2;
       const failDefect = /* @__PURE__ */ __name((error) => {
-        const defect = exitDie(error);
-        terminal = defect;
+        const defect2 = exitDie(error);
+        terminal = defect2;
         done4 = true;
-        return fibers && fibers.size > 0 ? flatMap2(uninterruptible(fiberInterruptAll(Array.from(fibers))), () => terminal ?? defect) : defect;
+        return fibers && fibers.size > 0 ? flatMap2(uninterruptible(fiberInterruptAll(Array.from(fibers))), () => terminal ?? defect2) : defect2;
       }, "failDefect");
       const go = /* @__PURE__ */ __name(() => {
         let paused = false;
@@ -4122,7 +4172,7 @@ ${prefix}}`;
         if (result2) out.push(a);
         return void_;
       }
-      return map2(result2, (keep) => {
+      return map3(result2, (keep) => {
         if (keep) {
           out.push(a);
         }
@@ -4135,19 +4185,20 @@ ${prefix}}`;
   var forkUnsafe = /* @__PURE__ */ __name((parent, effect2, immediate = false, daemon = false, uninterruptible3 = false) => {
     const parentRuntime = parent;
     const interruptible2 = uninterruptible3 === "inherit" ? parentRuntime.interruptible : !uninterruptible3;
-    const child = new FiberImpl(parentRuntime.context, interruptible2);
+    const child2 = new FiberImpl(parentRuntime.context, interruptible2);
     if (!daemon) {
-      parentRuntime.children().add(child);
-      child._parent = parentRuntime;
+      parentRuntime.children().add(child2);
+      child2._parent = parentRuntime;
     }
     if (immediate) {
-      child.evaluate(effect2);
+      child2.evaluate(effect2);
     } else {
-      child._asyncContext = captureAsyncContext();
-      parentRuntime.currentDispatcher.scheduleTask(() => child.evaluate(effect2), 0);
+      child2._asyncContext = captureAsyncContext();
+      parentRuntime.currentDispatcher.scheduleTask(() => child2.evaluate(effect2), 0);
     }
-    return child;
+    return child2;
   }, "forkUnsafe");
+  var forkDetach = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self, options) => withFiber((fiber2) => succeed3(forkUnsafe(fiber2, self, options?.startImmediately, true, options?.uninterruptible))));
   var forkIn = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self, scope3, options) => withFiber((parent) => {
     const fiber2 = forkUnsafe(parent, self, options?.startImmediately, true, options?.uninterruptible);
     if (!fiber2._exit) {
@@ -4497,9 +4548,9 @@ ${prefix}}`;
       __name(this, "TimeoutError");
     }
     [TimeoutErrorTypeId] = TimeoutErrorTypeId;
-    constructor(message) {
+    constructor(message2) {
       super({
-        message
+        message: message2
       });
     }
   };
@@ -4509,9 +4560,9 @@ ${prefix}}`;
       __name(this, "IllegalArgumentError");
     }
     [IllegalArgumentErrorTypeId] = IllegalArgumentErrorTypeId;
-    constructor(message) {
+    constructor(message2) {
       super({
-        message
+        message: message2
       });
     }
   };
@@ -4521,9 +4572,9 @@ ${prefix}}`;
       __name(this, "ExceededCapacityError");
     }
     [ExceededCapacityErrorTypeId] = ExceededCapacityErrorTypeId;
-    constructor(message) {
+    constructor(message2) {
       super({
-        message
+        message: message2
       });
     }
   };
@@ -4546,9 +4597,9 @@ ${prefix}}`;
       __name(this, "UnknownError");
     }
     [UnknownErrorTypeId] = UnknownErrorTypeId;
-    constructor(cause, message) {
+    constructor(cause, message2) {
       super({
-        message,
+        message: message2,
         cause
       });
     }
@@ -4604,16 +4655,16 @@ ${prefix}}`;
     const label = formatLabel(self[0]);
     return `${label}=${now - self[1]}ms`;
   }, "formatLogSpan");
-  var logWithLevel = /* @__PURE__ */ __name((level) => (...message) => {
+  var logWithLevel = /* @__PURE__ */ __name((level) => (...message2) => {
     let cause = void 0;
-    for (let i = 0, len = message.length; i < len; i++) {
-      const msg = message[i];
+    for (let i = 0, len = message2.length; i < len; i++) {
+      const msg = message2[i];
       if (isCause(msg)) {
         if (cause) {
           ;
-          message.splice(i, 1);
+          message2.splice(i, 1);
         } else {
-          message = message.slice(0, i).concat(message.slice(i + 1));
+          message2 = message2.slice(0, i).concat(message2.slice(i + 1));
         }
         cause = cause ? causeFromReasons(cause.reasons.concat(msg.reasons)) : msg;
         i--;
@@ -4630,14 +4681,14 @@ ${prefix}}`;
       const clock = fiber2.getRef(ClockRef);
       const loggers = fiber2.getRef(CurrentLoggers);
       if (loggers.size > 0) {
-        const date = new Date(clock.currentTimeMillisUnsafe());
+        const date2 = new Date(clock.currentTimeMillisUnsafe());
         for (const logger of loggers) {
           logger.log({
             cause,
             fiber: fiber2,
-            date,
+            date: date2,
             logLevel,
-            message
+            message: message2
           });
         }
       }
@@ -4666,19 +4717,19 @@ ${prefix}}`;
     Error: [colors.red],
     Fatal: [colors.bgBrightRed, colors.black]
   };
-  var defaultDateFormat = /* @__PURE__ */ __name((date) => `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}:${date.getSeconds().toString().padStart(2, "0")}.${date.getMilliseconds().toString().padStart(3, "0")}`, "defaultDateFormat");
+  var defaultDateFormat = /* @__PURE__ */ __name((date2) => `${date2.getHours().toString().padStart(2, "0")}:${date2.getMinutes().toString().padStart(2, "0")}:${date2.getSeconds().toString().padStart(2, "0")}.${date2.getMilliseconds().toString().padStart(3, "0")}`, "defaultDateFormat");
   var defaultLogger = /* @__PURE__ */ loggerMake(({
     cause,
-    date,
+    date: date2,
     fiber: fiber2,
     logLevel,
-    message
+    message: message2
   }) => {
-    const message_ = Array.isArray(message) ? message.slice() : [message];
+    const message_ = Array.isArray(message2) ? message2.slice() : [message2];
     if (cause.reasons.length > 0) {
       message_.push(causePretty(cause));
     }
-    const now = date.getTime();
+    const now = date2.getTime();
     const spans = fiber2.getRef(CurrentLogSpans);
     let spanString = "";
     for (const span of spans) {
@@ -4690,13 +4741,13 @@ ${prefix}}`;
     }
     const console2 = fiber2.getRef(ConsoleRef);
     const log2 = fiber2.getRef(LogToStderr) ? console2.error : console2.log;
-    log2(`[${defaultDateFormat(date)}] ${logLevel.toUpperCase()} (#${fiber2.id})${spanString}:`, ...message_);
+    log2(`[${defaultDateFormat(date2)}] ${logLevel.toUpperCase()} (#${fiber2.id})${spanString}:`, ...message_);
   });
   var tracerLogger = /* @__PURE__ */ loggerMake(({
     cause,
     fiber: fiber2,
     logLevel,
-    message
+    message: message2
   }) => {
     const clock = fiber2.getRef(ClockRef);
     const annotations = fiber2.getRef(CurrentLogAnnotations);
@@ -4711,7 +4762,7 @@ ${prefix}}`;
     if (cause.reasons.length > 0) {
       attributes["effect.cause"] = causePretty(cause);
     }
-    span.event(toStringUnknown(Array.isArray(message) && message.length === 1 ? message[0] : message), clock.currentTimeNanosUnsafe(), attributes);
+    span.event(toStringUnknown(Array.isArray(message2) && message2.length === 1 ? message2[0] : message2), clock.currentTimeNanosUnsafe(), attributes);
   });
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Exit.js
@@ -4740,6 +4791,7 @@ ${prefix}}`;
   }, "DeferredImpl");
   DeferredImpl.prototype = DeferredProto;
   var makeUnsafe2 = /* @__PURE__ */ __name(() => new DeferredImpl(), "makeUnsafe");
+  var make5 = /* @__PURE__ */ __name(() => sync(() => makeUnsafe2()), "make");
   var _await = /* @__PURE__ */ __name((self) => callback((resume) => {
     if (self.effect) return resume(self.effect);
     self.resumes ??= [];
@@ -4754,7 +4806,9 @@ ${prefix}}`;
   var completeWith = /* @__PURE__ */ dual(2, (self, effect2) => sync(() => doneUnsafe(self, effect2)));
   var done2 = completeWith;
   var failCause3 = /* @__PURE__ */ dual(2, (self, cause) => done2(self, exitFailCause(cause)));
-  var interruptWith = /* @__PURE__ */ dual(2, (self, fiberId2) => failCause3(self, causeInterrupt(fiberId2)));
+  var interruptWith = /* @__PURE__ */ dual(2, (self, fiberId3) => failCause3(self, causeInterrupt(fiberId3)));
+  var isDone2 = /* @__PURE__ */ __name((self) => sync(() => isDoneUnsafe(self)), "isDone");
+  var isDoneUnsafe = /* @__PURE__ */ __name((self) => self.effect !== void 0, "isDoneUnsafe");
   var succeed5 = /* @__PURE__ */ dual(2, (self, value) => done2(self, exitSucceed(value)));
   var doneUnsafe = /* @__PURE__ */ __name((self, effect2) => {
     if (self.effect) return false;
@@ -4785,14 +4839,14 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Layer.js
   var TypeId6 = "~effect/Layer";
   var MemoMapTypeId = "~effect/Layer/MemoMap";
-  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer5) => {
+  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer7) => {
     const entry = {
       observers: 0,
       deferred: makeUnsafe2(),
       scope: makeUnsafe3(),
       finalizer: /* @__PURE__ */ __name((exit3) => suspend(() => {
         if (--entry.observers > 0) return void_;
-        memoMap.map.delete(layer5);
+        memoMap.map.delete(layer7);
         return close(entry.scope, exit3);
       }), "finalizer")
     };
@@ -4839,24 +4893,24 @@ ${prefix}}`;
       this.parent = parent;
     }
     map = /* @__PURE__ */ new Map();
-    get(layer5, scope3) {
-      const local = this.map.get(layer5);
+    get(layer7, scope3) {
+      const local = this.map.get(layer7);
       if (local) {
         memoMapObserve(local, scope3);
         return local.deferred.effect ?? _await(local.deferred);
       }
-      return this.parent?.get(layer5, scope3);
+      return this.parent?.get(layer7, scope3);
     }
-    getOrElseMemoize(layer5, scope3, build) {
+    getOrElseMemoize(layer7, scope3, build) {
       return suspend(() => {
         let deferred;
         return onExitPrimitive(suspend(() => {
-          const existing = this.get(layer5, scope3);
+          const existing = this.get(layer7, scope3);
           if (existing) return existing;
-          const entry = makeMemoMapEntry(this, layer5);
+          const entry = makeMemoMapEntry(this, layer7);
           if (!memoMapObserve(entry, scope3)) return build(this, scope3);
           deferred = entry.deferred;
-          this.map.set(layer5, entry);
+          this.map.set(layer7, entry);
           return build(this, entry.scope);
         }), (exit3) => {
           if (deferred) doneUnsafe(deferred, exit3);
@@ -4875,7 +4929,7 @@ ${prefix}}`;
       return current ? forkMemoMapUnsafe(current) : makeMemoMapUnsafe();
     }
   };
-  var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope3) => provideService(map2(suspend(() => self.build(memoMap, scope3)), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
+  var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope3) => provideService(map3(suspend(() => self.build(memoMap, scope3)), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
   var succeed6 = /* @__PURE__ */ __name(function() {
     if (arguments.length === 1) {
       return (resource) => succeedContext(make2(arguments[0], resource));
@@ -4889,31 +4943,68 @@ ${prefix}}`;
     }
     return effectImpl(arguments[0], arguments[1]);
   }, "effect");
-  var effectImpl = /* @__PURE__ */ __name((service3, effect2) => effectContext(map2(effect2, (value) => make2(service3, value))), "effectImpl");
+  var effectImpl = /* @__PURE__ */ __name((service3, effect2) => effectContext(map3(effect2, (value) => make2(service3, value))), "effectImpl");
   var effectContext = /* @__PURE__ */ __name((effect2) => fromBuildMemo((_, scope3) => provide(effect2, scope3)), "effectContext");
   var mergeAllEffect = /* @__PURE__ */ __name((layers, memoMap, scope3) => {
     const parentScope = forkUnsafe2(scope3, "parallel");
-    return forEach(layers, (layer5) => layer5.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
+    return forEach(layers, (layer7) => layer7.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
       concurrency: layers.length
-    }).pipe(map2((context3) => mergeAll(...context3)));
+    }).pipe(map3((context3) => mergeAll(...context3)));
   }, "mergeAllEffect");
-  var provideWith = /* @__PURE__ */ __name((self, that, f) => fromBuild((memoMap, scope3) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope3) : that.build(memoMap, scope3), (context3) => self.build(memoMap, scope3).pipe(provideContext(context3), map2((merged) => f(merged, context3))))), "provideWith");
+  var mergeAll2 = /* @__PURE__ */ __name((...layers) => fromBuild((memoMap, scope3) => mergeAllEffect(layers, memoMap, scope3)), "mergeAll");
+  var provideWith = /* @__PURE__ */ __name((self, that, f) => fromBuild((memoMap, scope3) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope3) : that.build(memoMap, scope3), (context3) => self.build(memoMap, scope3).pipe(provideContext(context3), map3((merged) => f(merged, context3))))), "provideWith");
+  var provide2 = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, identity));
   var provideMerge = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, (self2, that2) => merge(that2, self2)));
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Cause.js
   var isFailReason2 = isFailReason;
+  var isInterruptReason2 = isInterruptReason;
   var fromReasons = causeFromReasons;
   var die2 = causeDie;
   var hasInterruptsOnly2 = hasInterruptsOnly;
-  var map3 = causeMap;
+  var map4 = causeMap;
   var squash = causeSquash;
+  var hasDies2 = hasDies;
   var filterInterruptors = causeFilterInterruptors;
   var pretty = causePretty;
-  var isDone2 = isDone;
+  var isDone3 = isDone;
   var done3 = done;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Clock.js
   var currentTimeMillis2 = currentTimeMillis;
+
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Number.js
+  var Number3 = globalThis.Number;
+  var remainder = /* @__PURE__ */ dual(2, (self, divisor) => {
+    if (!globalThis.Number.isFinite(self) || !globalThis.Number.isFinite(divisor) || divisor === 0) {
+      return NaN;
+    }
+    if (globalThis.Number.isInteger(self) && globalThis.Number.isInteger(divisor)) {
+      return self % divisor;
+    }
+    const [selfCoefficient, selfExponent] = toScientificInteger(self);
+    const [divisorCoefficient, divisorExponent] = toScientificInteger(divisor);
+    const exponent = Math.min(selfExponent, divisorExponent);
+    const selfInteger = selfCoefficient * BigInt(10) ** BigInt(selfExponent - exponent);
+    const divisorInteger = divisorCoefficient * BigInt(10) ** BigInt(divisorExponent - exponent);
+    const out = selfInteger % divisorInteger;
+    if (out === BigInt(0)) {
+      return self < 0 || Object.is(self, -0) ? -0 : 0;
+    }
+    const remainder2 = globalThis.Number(`${out}e${exponent}`);
+    return remainder2 === 0 ? Math.sign(self) * globalThis.Number.MIN_VALUE : remainder2;
+  });
+  function toScientificInteger(n) {
+    if (globalThis.Number.isInteger(n)) {
+      return [BigInt(n), 0];
+    }
+    const scientific = Math.abs(n).toExponential();
+    const eIndex = scientific.indexOf("e");
+    const digits = scientific.slice(0, eIndex).replace(".", "");
+    const coefficient = BigInt(digits) * (n < 0 ? -BigInt(1) : BigInt(1));
+    return [coefficient, globalThis.Number(scientific.slice(eIndex + 1)) - digits.length + 1];
+  }
+  __name(toScientificInteger, "toScientificInteger");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/random.js
   var Random = /* @__PURE__ */ Reference("effect/Random", {
@@ -4930,7 +5021,7 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Pull.js
   var catchDone = /* @__PURE__ */ dual(2, (effect2, f) => catchCauseFilter(effect2, filterDoneLeftover, (l) => f(l)));
   var isDoneCause = /* @__PURE__ */ __name((cause) => cause.reasons.some(isDoneFailure), "isDoneCause");
-  var isDoneFailure = /* @__PURE__ */ __name((failure) => failure._tag === "Fail" && isDone2(failure.error), "isDoneFailure");
+  var isDoneFailure = /* @__PURE__ */ __name((failure2) => failure2._tag === "Fail" && isDone3(failure2.error), "isDoneFailure");
   var filterDone = /* @__PURE__ */ __name((cause) => {
     let done4;
     let hasFailure = false;
@@ -4994,28 +5085,28 @@ ${prefix}}`;
   var metadataFn = /* @__PURE__ */ __name(() => {
     let n = 0;
     let previous;
-    let start;
+    let start2;
     return (now, input) => {
-      if (start === void 0) start = now;
-      const elapsed = now - start;
+      if (start2 === void 0) start2 = now;
+      const elapsed = now - start2;
       const elapsedSincePrevious = previous === void 0 ? 0 : now - previous;
       previous = now;
       return {
         input,
         attempt: ++n,
-        start,
+        start: start2,
         now,
         elapsed,
         elapsedSincePrevious
       };
     };
   }, "metadataFn");
-  var fromStepWithMetadata = /* @__PURE__ */ __name((step) => fromStep(map2(step, (f) => {
+  var fromStepWithMetadata = /* @__PURE__ */ __name((step) => fromStep(map3(step, (f) => {
     const meta = metadataFn();
     return (now, input) => f(meta(now, input));
   })), "fromStepWithMetadata");
   var toStep = /* @__PURE__ */ __name((schedule4) => catchCause(schedule4.step, (cause) => succeed3(() => failCause(cause))), "toStep");
-  var toStepWithMetadata = /* @__PURE__ */ __name((schedule4) => clockWith((clock) => map2(toStep(schedule4), (step) => {
+  var toStepWithMetadata = /* @__PURE__ */ __name((schedule4) => clockWith((clock) => map3(toStep(schedule4), (step) => {
     const metaFn = metadataFn();
     return (input) => suspend(() => {
       const now = clock.currentTimeMillisUnsafe();
@@ -5027,10 +5118,17 @@ ${prefix}}`;
       });
     });
   })), "toStepWithMetadata");
-  var toStepWithSleep = /* @__PURE__ */ __name((schedule4) => map2(toStepWithMetadata(schedule4), (step) => (input) => map2(step(input), (meta) => meta.output)), "toStepWithSleep");
-  var modifyDelay = /* @__PURE__ */ dual(2, (self, f) => fromStep(map2(toStep(self), (step) => {
+  var toStepWithSleep = /* @__PURE__ */ __name((schedule4) => map3(toStepWithMetadata(schedule4), (step) => (input) => map3(step(input), (meta) => meta.output)), "toStepWithSleep");
+  var exponential = /* @__PURE__ */ __name((base, factor = 2) => {
+    const baseMillis = toMillis(fromInputUnsafe(base));
+    return fromStepWithMetadata(succeed3((meta) => {
+      const duration = millis(baseMillis * Math.pow(factor, meta.attempt - 1));
+      return succeed3([duration, duration]);
+    }));
+  }, "exponential");
+  var modifyDelay = /* @__PURE__ */ dual(2, (self, f) => fromStep(map3(toStep(self), (step) => {
     const meta = metadataFn();
-    return (now, input) => flatMap2(step(now, input), ([output, duration]) => map2(f({
+    return (now, input) => flatMap2(step(now, input), ([output, duration]) => map3(f({
       ...meta(now, input),
       output,
       duration
@@ -5038,11 +5136,11 @@ ${prefix}}`;
   })));
   var jittered = /* @__PURE__ */ __name((self) => modifyDelay(self, ({
     duration
-  }) => map2(randomNext, (random3) => {
+  }) => map3(randomNext, (random3) => {
     const millis2 = toMillis(duration);
     return millis(millis2 * 0.8 * (1 - random3) + millis2 * 1.2 * random3);
   })), "jittered");
-  var passthrough = /* @__PURE__ */ __name((self) => fromStep(map2(toStep(self), (step) => (now, input) => matchEffect(step(now, input), {
+  var passthrough = /* @__PURE__ */ __name((self) => fromStep(map3(toStep(self), (step) => (now, input) => matchEffect(step(now, input), {
     onSuccess: /* @__PURE__ */ __name((result2) => succeed3([input, result2[1]]), "onSuccess"),
     onFailure: failCause,
     onDone: /* @__PURE__ */ __name(() => done3(input), "onDone")
@@ -5051,7 +5149,14 @@ ${prefix}}`;
     const decoded = fromInputUnsafe(duration);
     return fromStepWithMetadata(succeed3((meta) => succeed3([meta.attempt - 1, decoded])));
   }, "spaced");
-  var while_ = /* @__PURE__ */ dual(2, (self, predicate) => fromStep(map2(toStep(self), (step) => {
+  var upTo = /* @__PURE__ */ dual(2, (self, options) => {
+    const duration = options.duration === void 0 ? void 0 : fromInputUnsafe(options.duration);
+    return while_(self, ({
+      attempt,
+      elapsed
+    }) => succeed3((options.times === void 0 || attempt <= options.times) && (duration === void 0 || isLessThanOrEqualTo2(millis(elapsed), duration))));
+  });
+  var while_ = /* @__PURE__ */ dual(2, (self, predicate) => fromStep(map3(toStep(self), (step) => {
     const meta = metadataFn();
     return (now, input) => flatMap2(step(now, input), (result2) => {
       const [output, duration] = result2;
@@ -5075,9 +5180,25 @@ ${prefix}}`;
       disableYield: true
     }), (out) => succeed3(out)), findErrorOnly, (error) => orElse(error, meta.attempt === 0 ? none2() : some2(meta)));
   }));
+  var retryOrElse = /* @__PURE__ */ dual(3, (self, policy, orElse) => flatMap2(toStepWithMetadata(policy), (step) => {
+    let meta = CurrentMetadata.defaultValue();
+    let lastError;
+    const loop = catchCauseFilter(suspend(() => provideService(self, CurrentMetadata, meta)), findErrorOnly, (error) => {
+      lastError = error;
+      return flatMap2(step(error), (meta_) => {
+        meta = meta_;
+        return loop;
+      });
+    });
+    return catchDone(loop, (out) => internalCall(() => orElse(lastError, out)));
+  }));
   var repeat = /* @__PURE__ */ dual(2, (self, options) => {
     const schedule4 = typeof options === "function" ? options(identity) : isSchedule(options) ? options : buildFromOptions(options);
     return repeatOrElse(self, schedule4, fail3);
+  });
+  var retry = /* @__PURE__ */ dual(2, (self, options) => {
+    const schedule4 = typeof options === "function" ? options(identity) : isSchedule(options) ? options : buildFromOptions(options);
+    return retryOrElse(self, schedule4, fail3);
   });
   var passthroughForever = /* @__PURE__ */ passthrough(forever2);
   var buildFromOptions = /* @__PURE__ */ __name((options) => {
@@ -5095,7 +5216,7 @@ ${prefix}}`;
         input
       }) => {
         const applied = options.until(input);
-        return isEffect(applied) ? map2(applied, (b) => !b) : succeed3(!applied);
+        return isEffect(applied) ? map3(applied, (b) => !b) : succeed3(!applied);
       });
     }
     if (options.times !== void 0) {
@@ -5131,13 +5252,16 @@ ${prefix}}`;
   var andThen2 = andThen;
   var tap2 = tap;
   var exit2 = exit;
-  var map4 = map2;
+  var map5 = map3;
   var as2 = as;
   var asVoid2 = asVoid;
   var zipWith2 = zipWith;
   var catch_2 = catch_;
+  var catchTag2 = catchTag;
   var catchCause2 = catchCause;
+  var mapError3 = mapError2;
   var orDie2 = orDie;
+  var retry2 = retry;
   var timeoutOption2 = timeoutOption;
   var sleep2 = sleep;
   var raceFirst2 = raceFirst;
@@ -5150,6 +5274,7 @@ ${prefix}}`;
   var scope2 = scope;
   var scoped2 = scoped;
   var acquireRelease2 = acquireRelease;
+  var acquireUseRelease2 = acquireUseRelease;
   var addFinalizer3 = addFinalizer;
   var ensuring2 = ensuring;
   var onError2 = onError;
@@ -5161,6 +5286,8 @@ ${prefix}}`;
   var repeat2 = repeat;
   var forkIn2 = forkIn;
   var forkScoped2 = forkScoped;
+  var forkDetach2 = forkDetach;
+  var fiberId2 = fiberId;
   var runFork2 = runFork;
   var runForkWith2 = runForkWith;
   var runCallbackWith2 = runCallbackWith;
@@ -5177,6 +5304,7 @@ ${prefix}}`;
   var fn2 = fn;
   var logWarning = /* @__PURE__ */ logWithLevel("Warn");
   var logError = /* @__PURE__ */ logWithLevel("Error");
+  var logDebug = /* @__PURE__ */ logWithLevel("Debug");
   var annotateLogs = /* @__PURE__ */ dual((args2) => isEffect2(args2[0]), (effect2, ...args2) => updateService(effect2, CurrentLogAnnotations2, (annotations) => {
     const newAnnotations = args2.length === 1 ? {
       ...annotations,
@@ -5206,7 +5334,7 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/ManagedRuntime.js
   var TypeId8 = "~effect/ManagedRuntime";
-  var make5 = /* @__PURE__ */ __name((layer5, options) => {
+  var make6 = /* @__PURE__ */ __name((layer7, options) => {
     const memoMap = options?.memoMap ?? makeMemoMapUnsafe();
     const scope3 = makeUnsafe3("sequential");
     const layerScope = forkUnsafe2(scope3, "sequential");
@@ -5224,7 +5352,7 @@ ${prefix}}`;
     let buildFiber;
     const contextEffect = withFiber2((fiber2) => {
       if (!buildFiber) {
-        buildFiber = runFork2(tap2(buildWithMemoMap(layer5, memoMap, layerScope), (context3) => sync2(() => {
+        buildFiber = runFork2(tap2(buildWithMemoMap(layer7, memoMap, layerScope), (context3) => sync2(() => {
           self.cachedContext = context3;
         })), {
           ...defaultRunOptions,
@@ -5258,30 +5386,30 @@ ${prefix}}`;
         return close(self.scope, void_2);
       }),
       runFork(effect2, options2) {
-        return self.cachedContext === void 0 ? runFork2(provide2(self, effect2), mergeRunOptions(options2)) : runForkWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
+        return self.cachedContext === void 0 ? runFork2(provide3(self, effect2), mergeRunOptions(options2)) : runForkWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
       },
       runCallback(effect2, options2) {
-        return self.cachedContext === void 0 ? runCallback2(provide2(self, effect2), mergeRunOptions(options2)) : runCallbackWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
+        return self.cachedContext === void 0 ? runCallback2(provide3(self, effect2), mergeRunOptions(options2)) : runCallbackWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
       },
       runSyncExit(effect2) {
-        return self.cachedContext === void 0 ? runSyncExit2(provide2(self, effect2)) : runSyncExitWith2(self.cachedContext)(effect2);
+        return self.cachedContext === void 0 ? runSyncExit2(provide3(self, effect2)) : runSyncExitWith2(self.cachedContext)(effect2);
       },
       runSync(effect2) {
-        return self.cachedContext === void 0 ? runSync2(provide2(self, effect2)) : runSyncWith2(self.cachedContext)(effect2);
+        return self.cachedContext === void 0 ? runSync2(provide3(self, effect2)) : runSyncWith2(self.cachedContext)(effect2);
       },
       runPromiseExit(effect2, options2) {
-        return self.cachedContext === void 0 ? runPromiseExit2(provide2(self, effect2), mergeRunOptions(options2)) : runPromiseExitWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
+        return self.cachedContext === void 0 ? runPromiseExit2(provide3(self, effect2), mergeRunOptions(options2)) : runPromiseExitWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
       },
       runPromise(effect2, options2) {
-        return self.cachedContext === void 0 ? runPromise2(provide2(self, effect2), mergeRunOptions(options2)) : runPromiseWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
+        return self.cachedContext === void 0 ? runPromise2(provide3(self, effect2), mergeRunOptions(options2)) : runPromiseWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
       }
     };
     return self;
   }, "make");
-  function provide2(managed, effect2) {
+  function provide3(managed, effect2) {
     return flatMap3(managed.contextEffect, (context3) => provideContext2(effect2, context3));
   }
-  __name(provide2, "provide");
+  __name(provide3, "provide");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/encoding/Base64.js
   var encode = /* @__PURE__ */ __name((input) => encodeBytes(typeof input === "string" ? encoder.encode(input) : input), "encode");
@@ -5388,8 +5516,8 @@ ${prefix}}`;
     return hasProperty(u, TypeId9) && u[TypeId9] === TypeId9;
   }
   __name(isIssue, "isIssue");
-  function hasInput(issue) {
-    return Object.hasOwn(issue, "input");
+  function hasInput(issue2) {
+    return Object.hasOwn(issue2, "input");
   }
   __name(hasInput, "hasInput");
   var IssueNodeImpl = class {
@@ -5416,10 +5544,10 @@ ${prefix}}`;
      * The issue that occurred.
      */
     issue;
-    constructor(filter7, issue, input, options) {
+    constructor(filter7, issue2, input, options) {
       super(input, options);
       this.filter = filter7;
-      this.issue = issue;
+      this.issue = issue2;
     }
   };
   var Encoding = class extends IssueNodeImpl {
@@ -5435,10 +5563,10 @@ ${prefix}}`;
      * The issue that occurred.
      */
     issue;
-    constructor(ast, issue, input, options) {
+    constructor(ast, issue2, input, options) {
       super(input, options);
       this.ast = ast;
-      this.issue = issue;
+      this.issue = issue2;
     }
   };
   var Pointer = class extends IssueNodeImpl {
@@ -5454,10 +5582,10 @@ ${prefix}}`;
      * The issue that occurred.
      */
     issue;
-    constructor(path, issue) {
+    constructor(path, issue2) {
       super();
       this.path = path;
-      this.issue = issue;
+      this.issue = issue2;
     }
   };
   var MissingKey = class extends IssueNodeImpl {
@@ -5603,49 +5731,49 @@ ${prefix}}`;
       if (!isReadonlyArrayNonEmpty(out)) {
         return void 0;
       }
-      return out.length === 1 ? makeFilterIssue(out[0], input, options) : new Composite(ast, map(out, (entry) => makeFilterIssue(entry, input, options)), input, options);
+      return out.length === 1 ? makeFilterIssue(out[0], input, options) : new Composite(ast, map2(out, (entry) => makeFilterIssue(entry, input, options)), input, options);
     }
     return makeSingle(out, input, options);
   }
   __name(normalizeFilterOutput, "normalizeFilterOutput");
-  var defaultLeafHook = /* @__PURE__ */ __name((issue) => {
-    const message = findMessage(issue);
-    if (message !== void 0) return message;
-    switch (issue._tag) {
+  var defaultLeafHook = /* @__PURE__ */ __name((issue2) => {
+    const message2 = findMessage(issue2);
+    if (message2 !== void 0) return message2;
+    switch (issue2._tag) {
       case "InvalidType":
-        return getExpectedMessage(getExpected(issue.ast), issue);
+        return getExpectedMessage(getExpected(issue2.ast), issue2);
       case "InvalidValue": {
-        const expected = findExpected(issue);
-        if (expected !== void 0) return getExpectedMessage(expected, issue);
-        const input = formatInput(issue);
+        const expected = findExpected(issue2);
+        if (expected !== void 0) return getExpectedMessage(expected, issue2);
+        const input = formatInput(issue2);
         return input === void 0 ? "Expected a valid value" : `Invalid data ${input}`;
       }
       case "MissingKey":
         return "Missing key";
       case "UnexpectedKey": {
-        const input = formatInput(issue);
+        const input = formatInput(issue2);
         return input === void 0 ? "Expected no excess property" : `Unexpected key with value ${input}`;
       }
       case "Forbidden":
         return "Forbidden operation";
       case "OneOf": {
-        const input = formatInput(issue);
+        const input = formatInput(issue2);
         return input === void 0 ? "Expected exactly one member to match" : `Expected exactly one member to match the input ${input}`;
       }
     }
   }, "defaultLeafHook");
-  var defaultCheckHook = /* @__PURE__ */ __name((issue) => findMessage(issue.issue) ?? findMessage(issue), "defaultCheckHook");
-  function formatInput(issue) {
-    return hasInput(issue) ? format2(issue.input) : void 0;
+  var defaultCheckHook = /* @__PURE__ */ __name((issue2) => findMessage(issue2.issue) ?? findMessage(issue2), "defaultCheckHook");
+  function formatInput(issue2) {
+    return hasInput(issue2) ? format2(issue2.input) : void 0;
   }
   __name(formatInput, "formatInput");
-  function findExpected(issue) {
-    const expected = issue.annotations?.expected;
+  function findExpected(issue2) {
+    const expected = issue2.annotations?.expected;
     return typeof expected === "string" ? expected : void 0;
   }
   __name(findExpected, "findExpected");
-  function getExpectedMessage(expected, issue) {
-    const input = formatInput(issue);
+  function getExpectedMessage(expected, issue2) {
+    const input = formatInput(issue2);
     return input === void 0 ? `Expected ${expected}` : `Expected ${expected}, got ${input}`;
   }
   __name(getExpectedMessage, "getExpectedMessage");
@@ -5661,75 +5789,75 @@ ${prefix}}`;
   }
   __name(formatCheck, "formatCheck");
   function makeFormatterDefault() {
-    return (issue) => formatIssue(issue, "");
+    return (issue2) => formatIssue(issue2, "");
   }
   __name(makeFormatterDefault, "makeFormatterDefault");
   var defaultFormatter = /* @__PURE__ */ makeFormatterDefault();
-  function formatIssue(issue, path) {
-    let message;
-    switch (issue._tag) {
+  function formatIssue(issue2, path) {
+    let message2;
+    switch (issue2._tag) {
       case "Filter": {
-        const annotated = defaultCheckHook(issue);
+        const annotated = defaultCheckHook(issue2);
         if (annotated !== void 0) {
-          message = annotated;
+          message2 = annotated;
         } else {
-          if (issue.issue._tag !== "InvalidValue") {
-            return formatIssue(issue.issue, path);
+          if (issue2.issue._tag !== "InvalidValue") {
+            return formatIssue(issue2.issue, path);
           }
-          const expected = findExpected(issue.issue);
-          message = expected === void 0 ? getExpectedMessage(formatCheck(issue.filter), issue) : getExpectedMessage(expected, issue.issue);
+          const expected = findExpected(issue2.issue);
+          message2 = expected === void 0 ? getExpectedMessage(formatCheck(issue2.filter), issue2) : getExpectedMessage(expected, issue2.issue);
         }
         break;
       }
       case "Encoding":
-        return formatIssue(issue.issue, path);
+        return formatIssue(issue2.issue, path);
       case "Pointer":
-        return formatIssue(issue.issue, path + formatPath(issue.path));
+        return formatIssue(issue2.issue, path + formatPath(issue2.path));
       case "Composite":
       case "AnyOf": {
-        if (issue._tag === "Composite" || issue.issues.length > 0) {
-          return issue.issues.map((issue2) => formatIssue(issue2, path)).join("\n");
+        if (issue2._tag === "Composite" || issue2.issues.length > 0) {
+          return issue2.issues.map((issue3) => formatIssue(issue3, path)).join("\n");
         }
-        message = findMessage(issue) ?? getExpectedMessage(getExpected(issue.ast), issue);
+        message2 = findMessage(issue2) ?? getExpectedMessage(getExpected(issue2.ast), issue2);
         break;
       }
       default:
-        message = defaultLeafHook(issue);
+        message2 = defaultLeafHook(issue2);
         break;
     }
-    return path ? `${message}
-  at ${path}` : message;
+    return path ? `${message2}
+  at ${path}` : message2;
   }
   __name(formatIssue, "formatIssue");
-  function findMessage(issue) {
-    if (issue._tag === "Pointer") return;
-    if (issue._tag === "Encoding") return findMessage(issue.issue);
-    const annotations = issue._tag === "Filter" ? issue.filter.annotations : "annotations" in issue ? issue.annotations : issue.ast.annotations;
-    const message = annotations?.[issue._tag === "MissingKey" ? "messageMissingKey" : issue._tag === "UnexpectedKey" ? "messageUnexpectedKey" : "message"];
-    if (typeof message === "string") return message;
+  function findMessage(issue2) {
+    if (issue2._tag === "Pointer") return;
+    if (issue2._tag === "Encoding") return findMessage(issue2.issue);
+    const annotations = issue2._tag === "Filter" ? issue2.filter.annotations : "annotations" in issue2 ? issue2.annotations : issue2.ast.annotations;
+    const message2 = annotations?.[issue2._tag === "MissingKey" ? "messageMissingKey" : issue2._tag === "UnexpectedKey" ? "messageUnexpectedKey" : "message"];
+    if (typeof message2 === "string") return message2;
   }
   __name(findMessage, "findMessage");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/schema/cause.js
   function getSchemaIssue(cause) {
-    let issue;
+    let issue2;
     for (const reason of cause.reasons) {
       if (!isFailReason2(reason) || !isIssue(reason.error)) {
         return void 0;
       }
-      issue ??= reason.error;
+      issue2 ??= reason.error;
     }
-    return issue;
+    return issue2;
   }
   __name(getSchemaIssue, "getSchemaIssue");
-  function getSchemaIssueOrThrow(cause, message) {
-    const issue = getSchemaIssue(cause);
-    if (issue === void 0) {
-      throw new Error(message, {
+  function getSchemaIssueOrThrow(cause, message2) {
+    const issue2 = getSchemaIssue(cause);
+    if (issue2 === void 0) {
+      throw new Error(message2, {
         cause
       });
     }
-    return issue;
+    return issue2;
   }
   __name(getSchemaIssueOrThrow, "getSchemaIssueOrThrow");
 
@@ -5760,10 +5888,14 @@ ${prefix}}`;
     return transform(globalThis.String);
   }
   __name(String2, "String");
-  function Number3() {
+  function Number4() {
     return transform(globalThis.Number);
   }
-  __name(Number3, "Number");
+  __name(Number4, "Number");
+  function Date2() {
+    return transform((u) => new globalThis.Date(u));
+  }
+  __name(Date2, "Date");
   function encodeBase64() {
     return transform(encode);
   }
@@ -5785,9 +5917,9 @@ ${prefix}}`;
     _tag = "Transformation";
     decode;
     encode;
-    constructor(decode2, encode2) {
+    constructor(decode3, encode2) {
       super();
-      this.decode = decode2;
+      this.decode = decode3;
       this.encode = encode2;
     }
     flip() {
@@ -5817,7 +5949,60 @@ ${prefix}}`;
     return passthrough_2;
   }
   __name(passthrough3, "passthrough");
-  var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ String2());
+  var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number4(), /* @__PURE__ */ String2());
+  var dateFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Date2(), /* @__PURE__ */ transform(formatDate));
+  var isJsonError = /* @__PURE__ */ __name((input) => isObject(input) && typeof input["message"] === "string", "isJsonError");
+  var decodeJsonError = /* @__PURE__ */ __name((input) => {
+    const hasCause = Object.hasOwn(input, "cause");
+    const err = hasCause ? new Error(input.message, {
+      cause: decodeDefect(input.cause)
+    }) : new Error(input.message);
+    if (typeof input.name === "string" && input.name !== "Error") err.name = input.name;
+    if (typeof input.stack === "string") err.stack = input.stack;
+    return err;
+  }, "decodeJsonError");
+  var encodeUnknownAsJson = /* @__PURE__ */ __name((input) => {
+    try {
+      const json2 = formatJson(input);
+      return json2 === void 0 ? format2(input) : JSON.parse(json2);
+    } catch {
+      return format2(input);
+    }
+  }, "encodeUnknownAsJson");
+  var encodeJsonError = /* @__PURE__ */ __name((input, options, encodeDefect) => {
+    const encoded = {
+      name: input.name,
+      message: typeof input.message === "string" ? input.message : ""
+    };
+    if (options?.includeStack && typeof input.stack === "string") {
+      encoded.stack = input.stack;
+    }
+    if (!options?.excludeCause && input.cause !== void 0) {
+      encoded.cause = encodeDefect(input.cause);
+    }
+    return encoded;
+  }, "encodeJsonError");
+  var makeEncodeDefect = /* @__PURE__ */ __name((options) => {
+    const seen = /* @__PURE__ */ new WeakSet();
+    const encode2 = /* @__PURE__ */ __name((input) => {
+      if (isError(input)) {
+        if (seen.has(input)) {
+          return "[Circular]";
+        }
+        seen.add(input);
+        const encoded = encodeJsonError(input, options, encode2);
+        seen.delete(input);
+        return encoded;
+      }
+      return encodeUnknownAsJson(input);
+    }, "encode");
+    return encode2;
+  }, "makeEncodeDefect");
+  var decodeDefect = /* @__PURE__ */ __name((input) => isJsonError(input) ? decodeJsonError(input) : input, "decodeDefect");
+  var defectFromJson = /* @__PURE__ */ __name((options) => transform2({
+    decode: decodeDefect,
+    encode: makeEncodeDefect(options)
+  }), "defectFromJson");
   var urlFromString = /* @__PURE__ */ transformEffect2({
     decode: /* @__PURE__ */ __name((s, options) => URL.canParse(s) ? succeed7(new URL(s)) : fail5(new InvalidValue({
       expected: "a valid URL string"
@@ -5899,24 +6084,24 @@ ${prefix}}`;
      * differently when encoding. `undefined` reuses `run`.
      */
     encodingRun;
-    constructor(typeParameters, run4, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
+    constructor(typeParameters, run3, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
       super(annotations, checks, encoding, context3);
       this.typeParameters = typeParameters;
-      this.run = run4;
+      this.run = run3;
       this.encodingChecks = encodingChecks;
       this.encodingRun = encodingRun;
     }
     /** @internal */
     getParser() {
-      let run4;
+      let run3;
       return (input, options) => {
         if (input === missing) return missingExit;
-        return (run4 ??= this.run(this.typeParameters))(input, this, options);
+        return (run3 ??= this.run(this.typeParameters))(input, this, options);
       };
     }
-    _rebuild(recur, checks, encodingChecks, run4, encodingRun) {
+    _rebuild(recur, checks, encodingChecks, run3, encodingRun) {
       const tps = mapOrSame(this.typeParameters, recur);
-      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run4 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run4, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
+      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run3 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run3, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
     }
     /** @internal */
     recur(recur) {
@@ -5948,7 +6133,26 @@ ${prefix}}`;
     }
   };
   var null_ = /* @__PURE__ */ new Null();
+  var Undefined = class extends ASTNodeImpl {
+    static {
+      __name(this, "Undefined");
+    }
+    _tag = "Undefined";
+    /** @internal */
+    getParser() {
+      return fromConst(this, void 0);
+    }
+    /** @internal */
+    toCodecJson() {
+      return replaceEncoding(this, [undefinedToNull]);
+    }
+    /** @internal */
+    getExpected() {
+      return "undefined";
+    }
+  };
   var undefinedToNull = /* @__PURE__ */ new Link(null_, /* @__PURE__ */ new Transformation(/* @__PURE__ */ transform(() => void 0), /* @__PURE__ */ transform(() => null)));
+  var undefined_2 = /* @__PURE__ */ new Undefined();
   var Void = class extends ASTNodeImpl {
     static {
       __name(this, "Void");
@@ -5969,6 +6173,21 @@ ${prefix}}`;
     }
   };
   var void_4 = /* @__PURE__ */ new Void();
+  var Never = class extends ASTNodeImpl {
+    static {
+      __name(this, "Never");
+    }
+    _tag = "Never";
+    /** @internal */
+    getParser() {
+      return fromRefinement(this, isNever);
+    }
+    /** @internal */
+    getExpected() {
+      return "never";
+    }
+  };
+  var never2 = /* @__PURE__ */ new Never();
   var Unknown = class extends ASTNodeImpl {
     static {
       __name(this, "Unknown");
@@ -5990,12 +6209,12 @@ ${prefix}}`;
     }
     _tag = "Literal";
     literal;
-    constructor(literal, annotations, checks, encoding, context3) {
+    constructor(literal2, annotations, checks, encoding, context3) {
       super(annotations, checks, encoding, context3);
-      if (typeof literal === "number" && !globalThis.Number.isFinite(literal)) {
-        throw new Error(`A numeric literal must be finite, got ${format2(literal)}`);
+      if (typeof literal2 === "number" && !globalThis.Number.isFinite(literal2)) {
+        throw new Error(`A numeric literal must be finite, got ${format2(literal2)}`);
       }
-      this.literal = literal;
+      this.literal = literal2;
     }
     /** @internal */
     getParser() {
@@ -6043,7 +6262,7 @@ ${prefix}}`;
     }
   };
   var string2 = /* @__PURE__ */ new String3();
-  var Number4 = class extends ASTNodeImpl {
+  var Number5 = class extends ASTNodeImpl {
     static {
       __name(this, "Number");
     }
@@ -6089,7 +6308,7 @@ ${prefix}}`;
     return checks.some((check) => check.annotations?.representation?.id === id || check._tag === "FilterGroup" && hasCheck(check.checks, id));
   }
   __name(hasCheck, "hasCheck");
-  var number2 = /* @__PURE__ */ new Number4();
+  var number2 = /* @__PURE__ */ new Number5();
   var Boolean2 = class extends ASTNodeImpl {
     static {
       __name(this, "Boolean");
@@ -6162,12 +6381,12 @@ ${prefix}}`;
         if (ast.rest.length === 0 && len > elementLen) {
           for (let i = elementLen; i < len; i++) {
             const unexpected = new UnexpectedKey(ast, input[i], options);
-            const issue = new Pointer([i], unexpected);
+            const issue2 = new Pointer([i], unexpected);
             if (options.errors === "all") {
-              if (state.issues) state.issues.push(issue);
-              else state.issues = [issue];
+              if (state.issues) state.issues.push(issue2);
+              else state.issues = [issue2];
             } else {
-              return fail5(new Composite(ast, [issue], input, options));
+              return fail5(new Composite(ast, [issue2], input, options));
             }
           }
         }
@@ -6253,12 +6472,12 @@ ${prefix}}`;
     } else {
       const p = s.getParser(s.tailThreshold, i);
       if (isOptional(p.ast)) return;
-      const issue = new Pointer([i], new MissingKey(p.ast.context?.annotations));
+      const issue2 = new Pointer([i], new MissingKey(p.ast.context?.annotations));
       if (s.options.errors === "all") {
-        if (s.issues) s.issues.push(issue);
-        else s.issues = [issue];
+        if (s.issues) s.issues.push(issue2);
+        else s.issues = [issue2];
       } else {
-        return fail4(new Composite(s.ast, [issue], s.input, s.options));
+        return fail4(new Composite(s.ast, [issue2], s.input, s.options));
       }
     }
   }
@@ -6276,11 +6495,11 @@ ${prefix}}`;
     if (exit3.cause.reasons.length === 0) {
       return exit3;
     }
-    const issue = getSchemaIssue(exit3.cause);
-    if (issue === void 0) {
-      return failCause2(map3(exit3.cause, (issue2) => new Composite(ast, [new Pointer([key], issue2)], s.input, s.options)));
+    const issue2 = getSchemaIssue(exit3.cause);
+    if (issue2 === void 0) {
+      return failCause2(map4(exit3.cause, (issue3) => new Composite(ast, [new Pointer([key], issue3)], s.input, s.options)));
     }
-    const pointer = new Pointer([key], issue);
+    const pointer = new Pointer([key], issue2);
     if (s.options.errors === "all") {
       if (s.issues) s.issues.push(pointer);
       else s.issues = [pointer];
@@ -6403,10 +6622,10 @@ ${prefix}}`;
             name: ps.name,
             type: ps.type
           }));
-          indexes = indexCount ? ast.indexSignatures.map((is2) => ({
-            is: is2,
-            parserKey: compile2(parameterFromPropertyKey(is2.parameter)),
-            parserValue: compileField2(is2.type)
+          indexes = indexCount ? ast.indexSignatures.map((is3) => ({
+            is: is3,
+            parserKey: compile2(parameterFromPropertyKey(is3.parameter)),
+            parserValue: compileField2(is3.type)
           })) : void 0;
         }
         return properties;
@@ -6457,11 +6676,11 @@ ${prefix}}`;
             return yield* fail5(new InvalidType(ast, input, options));
           }
           compileMembers();
-          const record2 = input;
+          const record3 = input;
           const out = {};
           const state = {
             ast,
-            input: record2,
+            input: record3,
             out,
             issues: void 0,
             options
@@ -6469,7 +6688,7 @@ ${prefix}}`;
           const errorsAllOption = options.errors === "all";
           const onExcessPropertyError = options.onExcessProperty === "error";
           const concurrency = options.concurrency === void 0 ? 1 : resolveConcurrency(options.concurrency);
-          const indexKeys = indexCount && onExcessPropertyError ? ast.indexSignatures.map((index) => getIndexSignatureKeys(record2, index.parameter, options)) : void 0;
+          const indexKeys = indexCount && onExcessPropertyError ? ast.indexSignatures.map((index) => getIndexSignatureKeys(record3, index.parameter, options)) : void 0;
           if (onExcessPropertyError) {
             const coveredKeys = indexKeys ? new Set(expectedKeys) : expectedKeys;
             if (indexKeys) {
@@ -6477,21 +6696,21 @@ ${prefix}}`;
                 for (const key of keys) coveredKeys.add(key);
               }
             }
-            const inputKeys = Reflect.ownKeys(record2);
+            const inputKeys = Reflect.ownKeys(record3);
             for (let i = 0; i < inputKeys.length; i++) {
               const key = inputKeys[i];
-              if (!coveredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(record2, key)) {
-                const unexpected = new UnexpectedKey(ast, record2[key], options);
-                const issue = new Pointer([key], unexpected);
+              if (!coveredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(record3, key)) {
+                const unexpected = new UnexpectedKey(ast, record3[key], options);
+                const issue2 = new Pointer([key], unexpected);
                 if (errorsAllOption) {
                   if (state.issues) {
-                    state.issues.push(issue);
+                    state.issues.push(issue2);
                   } else {
-                    state.issues = [issue];
+                    state.issues = [issue2];
                   }
                   continue;
                 } else {
-                  return yield* fail5(new Composite(ast, [issue], input, options));
+                  return yield* fail5(new Composite(ast, [issue2], input, options));
                 }
               }
             }
@@ -6506,7 +6725,7 @@ ${prefix}}`;
             for (let i = 0; i < indexCount; i++) {
               const index = indexes[i];
               const parse = index.is.parameter === string2 ? parseStringIndex : parseIndex;
-              const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record2) : getIndexSignatureKeys(record2, index.is.parameter, options));
+              const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record3) : getIndexSignatureKeys(record3, index.is.parameter, options));
               for (let j = 0; j < keys.length; j++) {
                 const eff = parse(state, keys[j], index);
                 if (!effectIsExit(eff)) yield* eff;
@@ -6517,7 +6736,7 @@ ${prefix}}`;
             const keyPairs = empty3();
             for (let i = 0; i < indexCount; i++) {
               const index = indexes[i];
-              const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record2) : getIndexSignatureKeys(record2, index.is.parameter, options));
+              const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record3) : getIndexSignatureKeys(record3, index.is.parameter, options));
               for (let j = 0; j < keys.length; j++) {
                 keyPairs.push([keys[j], index]);
               }
@@ -6554,11 +6773,11 @@ ${prefix}}`;
           return fail5(new InvalidType(ast, input, options));
         }
         const props = compileMembers();
-        const record2 = input;
+        const record3 = input;
         const out = {};
         const state = {
           ast,
-          input: record2,
+          input: record3,
           out,
           issues: void 0,
           options
@@ -6567,8 +6786,8 @@ ${prefix}}`;
           for (let index = 0; index < props.length; index++) {
             const property = props[index];
             const name = property.name;
-            const hasKey = hasPropertySignature(record2, name);
-            const value = hasKey ? record2[name] : missing;
+            const hasKey = hasPropertySignature(record3, name);
+            const value = hasKey ? record3[name] : missing;
             const exit3 = property.parser(value, options);
             if (!effectIsExit(exit3)) {
               return resume(state, index, exit3);
@@ -6591,10 +6810,10 @@ ${prefix}}`;
         const t = recur(ps.type);
         return t === ps.type ? ps : new PropertySignature(ps.name, t);
       });
-      const indexes = mapOrSame(this.indexSignatures, (is2) => {
-        const p = recurParameter(is2.parameter);
-        const t = recur(is2.type);
-        return p === is2.parameter && t === is2.type ? is2 : new IndexSignature(p, t);
+      const indexes = mapOrSame(this.indexSignatures, (is3) => {
+        const p = recurParameter(is3.parameter);
+        const t = recur(is3.type);
+        return p === is3.parameter && t === is3.type ? is3 : new IndexSignature(p, t);
       });
       return props === this.propertySignatures && indexes === this.indexSignatures && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Objects(props, indexes, this.annotations, checks, void 0, this.context, encodingChecks);
     }
@@ -6624,13 +6843,13 @@ ${prefix}}`;
     }
     delete s.out[p.name];
     if (!isOptional(p.type)) {
-      const issue = new Pointer([p.name], new MissingKey(p.type.context?.annotations));
+      const issue2 = new Pointer([p.name], new MissingKey(p.type.context?.annotations));
       if (s.options.errors === "all") {
-        if (s.issues) s.issues.push(issue);
-        else s.issues = [issue];
+        if (s.issues) s.issues.push(issue2);
+        else s.issues = [issue2];
         return;
       } else {
-        return fail4(new Composite(s.ast, [issue], s.input, s.options));
+        return fail4(new Composite(s.ast, [issue2], s.input, s.options));
       }
     }
   }
@@ -6792,10 +7011,10 @@ ${prefix}}`;
       if (isNever2(encoded)) continue;
       if (isLiteral(encoded) || isUniqueSymbol(encoded)) {
         literalCandidates ??= /* @__PURE__ */ new Map();
-        const literal = isLiteral(encoded) ? encoded.literal : encoded.symbol;
-        literalOf[i] = literal;
-        let arr = literalCandidates.get(literal);
-        if (!arr) literalCandidates.set(literal, arr = []);
+        const literal2 = isLiteral(encoded) ? encoded.literal : encoded.symbol;
+        literalOf[i] = literal2;
+        let arr = literalCandidates.get(literal2);
+        if (!arr) literalCandidates.set(literal2, arr = []);
         arr.push(i);
       } else {
         onlyLiterals = false;
@@ -6806,13 +7025,13 @@ ${prefix}}`;
         sentinelCandidateCount++;
         for (const {
           key,
-          literal
+          literal: literal2
         } of sentinels) {
           let entry = bySentinel.get(key);
           if (!entry) bySentinel.set(key, entry = [/* @__PURE__ */ new Map(), /* @__PURE__ */ new Set()]);
           entry[1].add(i);
-          let indexes = entry[0].get(literal);
-          if (!indexes) entry[0].set(literal, indexes = /* @__PURE__ */ new Set());
+          let indexes = entry[0].get(literal2);
+          if (!indexes) entry[0].set(literal2, indexes = /* @__PURE__ */ new Set());
           indexes.add(i);
         }
       } else {
@@ -6829,8 +7048,8 @@ ${prefix}}`;
     } else if (bySentinel?.size === 1 && !otherwise) {
       const [key, [byValue]] = bySentinel.entries().next().value;
       const candidates = /* @__PURE__ */ new Map();
-      for (const [literal, indexes] of byValue) {
-        candidates.set(literal, Object.freeze(Array.from(indexes)));
+      for (const [literal2, indexes] of byValue) {
+        candidates.set(literal2, Object.freeze(Array.from(indexes)));
       }
       const all3 = Object.freeze(types.map((_, i) => i));
       index = /* @__PURE__ */ __name((input, isConstructor) => {
@@ -6919,8 +7138,8 @@ ${prefix}}`;
     getParser(compile2, compileField2) {
       const ast = this;
       const isConstructor = compileField2 !== void 0;
-      const parsers = [];
-      const parser = /* @__PURE__ */ __name((i) => parsers[i] ??= compile2(ast.types[i]), "parser");
+      const parsers2 = [];
+      const parser = /* @__PURE__ */ __name((i) => parsers2[i] ??= compile2(ast.types[i]), "parser");
       let index;
       return (input, options) => {
         if (input === missing) {
@@ -6987,9 +7206,9 @@ ${prefix}}`;
     }
   };
   function failSingleUnionCandidate(ast, cause, input, options) {
-    const issue = getSchemaIssue(cause);
-    if (!issue) return failCause2(cause);
-    return fail4(new AnyOf(ast, [issue], input, options));
+    const issue2 = getSchemaIssue(cause);
+    if (!issue2) return failCause2(cause);
+    return fail4(new AnyOf(ast, [issue2], input, options));
   }
   __name(failSingleUnionCandidate, "failSingleUnionCandidate");
   function catchSingleUnionCandidate(ast, result2, input, options) {
@@ -7034,12 +7253,12 @@ ${prefix}}`;
     },
     step(s, i, exit3) {
       if (exit3._tag === "Failure") {
-        const issue = getSchemaIssue(exit3.cause);
-        if (issue === void 0) {
+        const issue2 = getSchemaIssue(exit3.cause);
+        if (issue2 === void 0) {
           return exit3;
         }
-        if (s.issues) s.issues.push(issue);
-        else s.issues = [issue];
+        if (s.issues) s.issues.push(issue2);
+        else s.issues = [issue2];
       } else {
         if (s.out && s.successes) {
           s.successes.push(s.ast.types[i]);
@@ -7074,9 +7293,9 @@ ${prefix}}`;
      * Whether the parsing process should be aborted after this check has failed.
      */
     aborted;
-    constructor(run4, annotations = void 0, aborted = false) {
+    constructor(run3, annotations = void 0, aborted = false) {
       super();
-      this.run = run4;
+      this.run = run3;
       this.annotations = annotations;
       this.aborted = aborted;
     }
@@ -7140,7 +7359,7 @@ ${prefix}}`;
   }
   __name(isFinite, "isFinite");
   var finite = /* @__PURE__ */ appendChecks(number2, [/* @__PURE__ */ isFinite()]);
-  var numberToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finite, nonFiniteLiterals]), /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
+  var numberToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finite, nonFiniteLiterals]), /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number4(), /* @__PURE__ */ transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
   function isPattern(regExp, annotations) {
     const copy3 = new globalThis.RegExp(regExp);
     const payload = {
@@ -7350,7 +7569,7 @@ ${prefix}}`;
       literals,
       parameters: indexSignatures
     } = parseParameter(key);
-    return new Objects(literals.map((literal) => new PropertySignature(literal, value)), indexSignatures.map((parameter) => new IndexSignature(parameter, value)));
+    return new Objects(literals.map((literal2) => new PropertySignature(literal2, value)), indexSignatures.map((parameter) => new IndexSignature(parameter, value)));
   }
   __name(record, "record");
   function isOptional(ast) {
@@ -7373,10 +7592,10 @@ ${prefix}}`;
   __name(extractStructuralChecks, "extractStructuralChecks");
   function canPreserveEncodingChecks(ast) {
     let preserve = true;
-    function visit(child) {
-      preserve = preserve && !child.encoding && !isSuspend(child);
-      if (preserve && "recur" in child) child.recur(visit);
-      return child;
+    function visit(child2) {
+      preserve = preserve && !child2.encoding && !isSuspend(child2);
+      if (preserve && "recur" in child2) child2.recur(visit);
+      return child2;
     }
     __name(visit, "visit");
     if ("recur" in ast) ast.recur(visit);
@@ -7499,9 +7718,9 @@ ${prefix}}`;
           return issues;
         }
       } else {
-        const issue = check.run(value, ast, options);
-        if (issue) {
-          const filter7 = new Filter(check, issue, value, options);
+        const issue2 = check.run(value, ast, options);
+        if (issue2) {
+          const filter7 = new Filter(check, issue2, value, options);
           if (issues) issues.push(filter7);
           else issues = [filter7];
           if (options.errors !== "all" || check.aborted) {
@@ -7519,6 +7738,85 @@ ${prefix}}`;
     return isFunction(getDescriptor) ? getDescriptor(ast.typeParameters) : void 0;
   }
   __name(getConstructorDescriptor, "getConstructorDescriptor");
+  function isJsonLeaf(u) {
+    return u === null || typeof u === "string" || typeof u === "boolean" || typeof u === "number" && globalThis.Number.isFinite(u);
+  }
+  __name(isJsonLeaf, "isJsonLeaf");
+  function isStringTreeLeaf(u) {
+    return u === void 0 || typeof u === "string";
+  }
+  __name(isStringTreeLeaf, "isStringTreeLeaf");
+  function isTree(u, isLeaf) {
+    const cache2 = /* @__PURE__ */ new WeakMap();
+    const stack = [];
+    outer: while (true) {
+      if (typeof u !== "object" || u === null) {
+        if (!isLeaf(u)) {
+          return false;
+        }
+      } else {
+        const value = u;
+        const cached2 = cache2.get(value);
+        if (cached2 === false) {
+          return false;
+        }
+        if (cached2 === void 0) {
+          const isArray2 = Array.isArray(value);
+          if (!isArray2) {
+            const prototype = Object.getPrototypeOf(value);
+            if (prototype !== null && prototype !== Object.prototype && Object.getPrototypeOf(prototype) !== null) {
+              return false;
+            }
+          }
+          cache2.set(value, false);
+          stack.push({
+            value,
+            keys: isArray2 ? value.length : Object.keys(value),
+            index: 0
+          });
+        }
+      }
+      while (stack.length > 0) {
+        const frame = stack[stack.length - 1];
+        const keys = frame.keys;
+        if (typeof keys === "number") {
+          if (frame.index < keys) {
+            u = frame.value[frame.index++];
+            continue outer;
+          }
+        } else if (frame.index < keys.length) {
+          u = frame.value[keys[frame.index++]];
+          continue outer;
+        }
+        cache2.set(frame.value, true);
+        stack.pop();
+      }
+      return true;
+    }
+  }
+  __name(isTree, "isTree");
+  function isJson(u) {
+    return isTree(u, isJsonLeaf);
+  }
+  __name(isJson, "isJson");
+  var Json = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isJson(input) ? sameExit : fail5(new InvalidType(ast, input, options)), {
+    representation: {
+      id: "effect/schema/Json",
+      payload: null
+    },
+    expected: "JSON value",
+    toCodecJson: /* @__PURE__ */ __name(() => void 0, "toCodecJson"),
+    toCodecStringTree: /* @__PURE__ */ __name(() => unknownToStringTree, "toCodecStringTree")
+  });
+  function isStringTree(u) {
+    return isTree(u, isStringTreeLeaf);
+  }
+  __name(isStringTree, "isStringTree");
+  var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isStringTree(input) ? sameExit : fail5(new InvalidType(ast, input, options)), {
+    expected: "StringTree",
+    toCodecStringTree: /* @__PURE__ */ __name(() => void 0, "toCodecStringTree")
+  });
+  var unknownToStringTree = /* @__PURE__ */ new Link(StringTree, /* @__PURE__ */ passthrough3());
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/schema/interpreter.js
   var flatMapTransformation = /* @__PURE__ */ __name((result2, current, f) => result2 === sameExit ? f(current) : flatMapEager2(result2, f), "flatMapTransformation");
@@ -7549,7 +7847,7 @@ ${prefix}}`;
   }
   __name(compileTransformation, "compileTransformation");
   var fromOptionalEffect = /* @__PURE__ */ __name((effect2) => flatMapEager2(effect2, fromOptionExit), "fromOptionalEffect");
-  var wrapEncoding = /* @__PURE__ */ __name((ast, input, options, effect2) => catchCause2(effect2, (cause) => failCauseSync2(() => map3(cause, (issue) => new Encoding(ast, issue, input, options)))), "wrapEncoding");
+  var wrapEncoding = /* @__PURE__ */ __name((ast, input, options, effect2) => catchCause2(effect2, (cause) => failCauseSync2(() => map4(cause, (issue2) => new Encoding(ast, issue2, input, options)))), "wrapEncoding");
   function makeConstructorParser(descriptor, compile2) {
     const transform3 = compileTransformation(descriptor.link.transformation);
     let sourceParser;
@@ -7650,13 +7948,13 @@ ${prefix}}`;
       return parseLocal;
     }
     return (input, options) => {
-      const parsers = encodingParsers ??= links.map((link2) => compile2(link2.to));
+      const parsers2 = encodingParsers ??= links.map((link2) => compile2(link2.to));
       let current = input;
-      let result2 = parsers[parsers.length - 1](input, options);
+      let result2 = parsers2[parsers2.length - 1](input, options);
       for (let i = links.length - 1; i >= 0; i--) {
         result2 = transformations[i](result2, current, options);
         if (i !== 0) {
-          const next = parsers[i - 1];
+          const next = parsers2[i - 1];
           if (result2._tag === "Success") {
             current = result2[args];
             result2 = next(current, options);
@@ -7742,14 +8040,14 @@ ${prefix}}`;
       return this.save("decodeEffect", this.operation("decodeEffect") ?? compile(this.ast, (ast) => lazyParser(this.resolve, ast, "parser")));
     }
     get parser() {
-      const decode2 = this.decode;
-      return decode2 === void 0 ? this.decodeEffect : this.save("parser", withDecode(decode2, () => this.decodeEffect));
+      const decode3 = this.decode;
+      return decode3 === void 0 ? this.decodeEffect : this.save("parser", withDecode(decode3, () => this.decodeEffect));
     }
     get makeEffect() {
       const makeEffect2 = this.operation("makeEffect");
       if (makeEffect2 !== void 0) return this.save("makeEffect", makeEffect2);
-      const child = /* @__PURE__ */ __name((ast) => lazyParser(this.resolve, ast, "makeEffect"), "child");
-      return this.save("makeEffect", compile(this.ast, child, (ast) => compileField(ast, child)));
+      const child2 = /* @__PURE__ */ __name((ast) => lazyParser(this.resolve, ast, "makeEffect"), "child");
+      return this.save("makeEffect", compile(this.ast, child2, (ast) => compileField(ast, child2)));
     }
   };
   function withDecode(fastDecode, decodeEffect2) {
@@ -7811,10 +8109,56 @@ ${prefix}}`;
     };
   }
   __name(makeOption, "makeOption");
-  function make6(schema) {
+  function make7(schema) {
     return makeConstructorSync(toType(schema.ast));
   }
-  __name(make6, "make");
+  __name(make7, "make");
+  function is(schema) {
+    return _is(schema.ast);
+  }
+  __name(is, "is");
+  function makeIs(ast) {
+    if (!compilerAdaptersEnabled) {
+      const parser2 = asExit(run(ast));
+      return (input) => {
+        const exit3 = parser2(input, defaultParseOptions);
+        if (isSuccess3(exit3)) return true;
+        getSchemaIssueOrThrow(exit3.cause, "Type guard adapter can only return false for schema issues");
+        return false;
+      };
+    }
+    const entry = resolve2(ast);
+    const guard = entry.is;
+    if (guard !== void 0) {
+      return (input) => {
+        try {
+          return guard(input, defaultParseOptions);
+        } catch (error) {
+          getSchemaIssueOrThrow(die2(error), "Type guard adapter can only return false for schema issues");
+          return false;
+        }
+      };
+    }
+    const parser = entry.parser;
+    return (input) => {
+      const exit3 = runSyncExit2(parserResult(parser(input, defaultParseOptions), input));
+      if (isSuccess3(exit3)) return true;
+      getSchemaIssueOrThrow(exit3.cause, "Type guard adapter can only return false for schema issues");
+      return false;
+    };
+  }
+  __name(makeIs, "makeIs");
+  function _is(ast) {
+    const typeAST = toType(ast);
+    let guard = /* @__PURE__ */ __name((input) => {
+      guard = makeIs(typeAST);
+      return guard(input);
+    }, "guard");
+    return (input) => {
+      return guard(input);
+    };
+  }
+  __name(_is, "_is");
   function decodeUnknownEffect(schema, options) {
     const parser = run(schema.ast);
     return options === void 0 ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
@@ -7824,6 +8168,10 @@ ${prefix}}`;
     return asOption(decodeUnknownEffect(schema, options));
   }
   __name(decodeUnknownOption, "decodeUnknownOption");
+  function decodeUnknownResult(schema, options) {
+    return asResult(decodeUnknownEffect(schema, options));
+  }
+  __name(decodeUnknownResult, "decodeUnknownResult");
   var mergeParseOptions = /* @__PURE__ */ __name((options, overrideOptions) => overrideOptions ? {
     ...options,
     ...overrideOptions
@@ -7878,14 +8226,25 @@ ${prefix}}`;
     };
   }
   __name(asOption, "asOption");
-  function runSync3(effect2, message) {
+  function asResult(parser) {
+    const parserExit = asExit(parser);
+    return (input, options) => {
+      const exit3 = parserExit(input, options);
+      if (isSuccess3(exit3)) {
+        return succeed2(exit3.value);
+      }
+      return fail2(getSchemaIssueOrThrow(exit3.cause, "Result adapter can only return schema issues"));
+    };
+  }
+  __name(asResult, "asResult");
+  function runSync3(effect2, message2) {
     const exit3 = runSyncExit2(effect2);
     if (isSuccess3(exit3)) {
       return exit3.value;
     }
-    const issue = getSchemaIssueOrThrow(exit3.cause, message);
+    const issue2 = getSchemaIssueOrThrow(exit3.cause, message2);
     throw new Error("Schema validation failed", {
-      cause: issue
+      cause: issue2
     });
   }
   __name(runSync3, "runSync");
@@ -7900,11 +8259,11 @@ ${prefix}}`;
       } : {
         disableChecks: true
       } : options?.parseOptions ?? defaultParseOptions;
-      const make17 = entry.make;
-      if (make17 !== void 0 && input !== missing) {
+      const make18 = entry.make;
+      if (make18 !== void 0 && input !== missing) {
         let output;
         try {
-          output = make17(input, parseOptions);
+          output = make18(input, parseOptions);
         } catch (error) {
           getSchemaIssueOrThrow(die2(error), "Constructor adapter can only throw schema issues");
           throw error;
@@ -7925,7 +8284,7 @@ ${prefix}}`;
   var SchemaProto = {
     [TypeId12]: TypeId12,
     get make() {
-      const value = make6(this);
+      const value = make7(this);
       Object.defineProperty(this, "make", {
         value,
         enumerable: true
@@ -7961,10 +8320,10 @@ ${prefix}}`;
       return this.rebuild(appendChecks(this.ast, checks));
     },
     rebuild(ast) {
-      return make7(ast, this[RebuildOptions]);
+      return make8(ast, this[RebuildOptions]);
     }
   };
-  function make7(ast, options) {
+  function make8(ast, options) {
     function Schema() {
     }
     __name(Schema, "Schema");
@@ -7980,7 +8339,7 @@ ${prefix}}`;
     self.ast = ast;
     return self;
   }
-  __name(make7, "make");
+  __name(make8, "make");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Struct.js
   var lambda = /* @__PURE__ */ __name((f) => f, "lambda");
@@ -7989,14 +8348,15 @@ ${prefix}}`;
   var SchemaErrorTypeId = "~effect/Schema/SchemaError";
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Schema.js
+  var TypeId13 = TypeId12;
   function declareConstructor() {
-    return (typeParameters, run4, annotations) => {
-      return make8(new Declaration(typeParameters.map(getAST), (typeParameters2) => run4(typeParameters2.map((ast) => make8(ast))), annotations));
+    return (typeParameters, run3, annotations) => {
+      return make9(new Declaration(typeParameters.map(getAST), (typeParameters2) => run3(typeParameters2.map((ast) => make9(ast))), annotations));
     };
   }
   __name(declareConstructor, "declareConstructor");
-  function declare(is2, annotations) {
-    return declareConstructor()([], () => (input, ast, options) => is2(input) ? succeed7(input) : fail5(new InvalidType(ast, input, options)), annotations);
+  function declare(is3, annotations) {
+    return declareConstructor()([], () => (input, ast, options) => is3(input) ? succeed7(input) : fail5(new InvalidType(ast, input, options)), annotations);
   }
   __name(declare, "declare");
   var SchemaError = class extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
@@ -8004,12 +8364,12 @@ ${prefix}}`;
       __name(this, "SchemaError");
     }
     [SchemaErrorTypeId] = SchemaErrorTypeId;
-    constructor(issue) {
+    constructor(issue2) {
       const stackTraceLimit = getStackTraceLimit();
       setStackTraceLimit(0);
       try {
         super({
-          issue
+          issue: issue2
         });
       } finally {
         setStackTraceLimit(stackTraceLimit);
@@ -8035,13 +8395,14 @@ ${prefix}}`;
     if (effectIsExit(self)) {
       return fromIssueExit(self);
     }
-    return catchCause2(self, (cause) => failCauseSync2(() => map3(cause, (issue) => new SchemaError(issue))));
+    return catchCause2(self, (cause) => failCauseSync2(() => map4(cause, (issue2) => new SchemaError(issue2))));
   }
   __name(fromIssueEffect, "fromIssueEffect");
   function fromIssueExit(exit3) {
-    return isSuccess3(exit3) ? exit3 : failCause2(map3(exit3.cause, (issue) => new SchemaError(issue)));
+    return isSuccess3(exit3) ? exit3 : failCause2(map4(exit3.cause, (issue2) => new SchemaError(issue2)));
   }
   __name(fromIssueExit, "fromIssueExit");
+  var is2 = is;
   function decodeUnknownEffect2(schema, options) {
     const parser = decodeUnknownEffect(schema, options);
     return (input, options2) => {
@@ -8050,31 +8411,37 @@ ${prefix}}`;
   }
   __name(decodeUnknownEffect2, "decodeUnknownEffect");
   var decodeUnknownOption2 = decodeUnknownOption;
-  var make8 = make7;
-  var optionalKey2 = /* @__PURE__ */ lambda((schema) => make8(optionalKey(schema.ast), {
+  var make9 = make8;
+  function isSchema(u) {
+    return hasProperty(u, TypeId13) && u[TypeId13] === TypeId13;
+  }
+  __name(isSchema, "isSchema");
+  var optionalKey2 = /* @__PURE__ */ lambda((schema) => make9(optionalKey(schema.ast), {
     schema
   }));
-  function Literal2(literal) {
-    const out = make8(new Literal(literal), {
-      literal,
+  function Literal2(literal2) {
+    const out = make9(new Literal(literal2), {
+      literal: literal2,
       transform(to) {
         return out.pipe(decodeTo2(Literal2(to), {
           decode: transform(() => to),
-          encode: transform(() => literal)
+          encode: transform(() => literal2)
         }));
       }
     });
     return out;
   }
   __name(Literal2, "Literal");
-  var Unknown2 = /* @__PURE__ */ make8(unknown);
-  var Null2 = /* @__PURE__ */ make8(null_);
-  var String4 = /* @__PURE__ */ make8(string2);
-  var Number5 = /* @__PURE__ */ make8(number2);
-  var Boolean3 = /* @__PURE__ */ make8(boolean);
-  var Void2 = /* @__PURE__ */ make8(void_4);
+  var Never2 = /* @__PURE__ */ make9(never2);
+  var Unknown2 = /* @__PURE__ */ make9(unknown);
+  var Null2 = /* @__PURE__ */ make9(null_);
+  var Undefined2 = /* @__PURE__ */ make9(undefined_2);
+  var String4 = /* @__PURE__ */ make9(string2);
+  var Number6 = /* @__PURE__ */ make9(number2);
+  var Boolean3 = /* @__PURE__ */ make9(boolean);
+  var Void2 = /* @__PURE__ */ make9(void_4);
   function makeStruct(ast, fields) {
-    return make8(ast, {
+    return make9(ast, {
       fields,
       mapFields(f, options) {
         const fields2 = f(this.fields);
@@ -8088,14 +8455,14 @@ ${prefix}}`;
   }
   __name(Struct, "Struct");
   function Record(key, value) {
-    return make8(record(key.ast, value.ast), {
+    return make9(record(key.ast, value.ast), {
       key,
       value
     });
   }
   __name(Record, "Record");
   function makeTuple(ast, elements) {
-    return make8(ast, {
+    return make9(ast, {
       elements,
       mapElements(f, options) {
         const elements2 = f(this.elements);
@@ -8108,11 +8475,11 @@ ${prefix}}`;
     return makeTuple(tuple(elements), elements);
   }
   __name(Tuple, "Tuple");
-  var ArraySchema = /* @__PURE__ */ lambda((schema) => make8(new Arrays(false, [], [schema.ast]), {
+  var ArraySchema = /* @__PURE__ */ lambda((schema) => make9(new Arrays(false, [], [schema.ast]), {
     value: schema
   }));
   function makeUnion(ast, members) {
-    return make8(ast, {
+    return make9(ast, {
       members,
       mapMembers(f, options) {
         const members2 = f(this.members);
@@ -8127,7 +8494,7 @@ ${prefix}}`;
   __name(Union2, "Union");
   function Literals(literals) {
     const members = literals.map(Literal2);
-    return make8(union(members, void 0, void 0), {
+    return make9(union(members, void 0, void 0), {
       literals,
       members,
       mapMembers(f) {
@@ -8145,7 +8512,7 @@ ${prefix}}`;
   var NullOr = /* @__PURE__ */ lambda((self) => Union2([self, Null2]));
   function decodeTo2(to, transformation) {
     return (from) => {
-      return make8(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough3()), {
+      return make9(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough3()), {
         from,
         to
       });
@@ -8153,15 +8520,22 @@ ${prefix}}`;
   }
   __name(decodeTo2, "decodeTo");
   function withConstructorDefault2(defaultValue) {
-    return (schema) => make8(withConstructorDefault(schema.ast, defaultValue), {
+    return (schema) => make9(withConstructorDefault(schema.ast, defaultValue), {
       schema
     });
   }
   __name(withConstructorDefault2, "withConstructorDefault");
-  function tag(literal) {
-    return Literal2(literal).pipe(withConstructorDefault2(succeed7(literal)));
+  function tag(literal2) {
+    return Literal2(literal2).pipe(withConstructorDefault2(succeed7(literal2)));
   }
   __name(tag, "tag");
+  function TaggedStruct(value, fields) {
+    return Struct({
+      _tag: tag(value),
+      ...fields
+    });
+  }
+  __name(TaggedStruct, "TaggedStruct");
   function instanceOf(constructor, annotations) {
     return declare((u) => u instanceof constructor, annotations);
   }
@@ -8207,7 +8581,24 @@ ${prefix}}`;
     });
   }
   __name(isBase64, "isBase64");
-  var Finite = /* @__PURE__ */ make8(finite);
+  var Finite = /* @__PURE__ */ make9(finite);
+  function makeIsGreaterThan(options) {
+    const gt = isGreaterThan(options.order);
+    const formatter = options.formatter ?? format2;
+    return (exclusiveMinimum, annotations) => {
+      return makeFilter2((input) => gt(input, exclusiveMinimum), {
+        expected: `a value greater than ${formatter(exclusiveMinimum)}`,
+        arbitraryConstraint: {
+          order: options.order,
+          minimum: exclusiveMinimum,
+          exclusiveMinimum: true
+        },
+        ...options.annotate?.(exclusiveMinimum),
+        ...annotations
+      });
+    };
+  }
+  __name(makeIsGreaterThan, "makeIsGreaterThan");
   function makeIsGreaterThanOrEqualTo(options) {
     const gte = isGreaterThanOrEqualTo(options.order);
     const formatter = options.formatter ?? format2;
@@ -8252,13 +8643,30 @@ ${prefix}}`;
     };
   }
   __name(makeIsBetween, "makeIsBetween");
-  function encodeNumberPayload(number3) {
-    if (!globalThis.Number.isFinite(number3)) {
-      throw new globalThis.RangeError(`Expected a finite number, got ${format2(number3)}`);
+  function encodeNumberPayload(number4) {
+    if (!globalThis.Number.isFinite(number4)) {
+      throw new globalThis.RangeError(`Expected a finite number, got ${format2(number4)}`);
     }
-    return number3;
+    return number4;
   }
   __name(encodeNumberPayload, "encodeNumberPayload");
+  var isGreaterThan2 = /* @__PURE__ */ makeIsGreaterThan({
+    order: Number2,
+    annotate: /* @__PURE__ */ __name((exclusiveMinimum) => ({
+      representation: {
+        id: "effect/schema/isGreaterThan",
+        payload: {
+          exclusiveMinimum: encodeNumberPayload(exclusiveMinimum)
+        }
+      },
+      toJsonSchema: /* @__PURE__ */ __name(() => ({
+        exclusiveMinimum
+      }), "toJsonSchema"),
+      toCode: /* @__PURE__ */ __name(() => ({
+        runtime: `Schema.isGreaterThan(${format2(exclusiveMinimum)})`
+      }), "toCode")
+    }), "annotate")
+  });
   var isGreaterThanOrEqualTo2 = /* @__PURE__ */ makeIsGreaterThanOrEqualTo({
     order: Number2,
     annotate: /* @__PURE__ */ __name((minimum) => ({
@@ -8276,7 +8684,7 @@ ${prefix}}`;
       }), "toCode")
     }), "annotate")
   });
-  var isBetween = /* @__PURE__ */ makeIsBetween({
+  var isBetween2 = /* @__PURE__ */ makeIsBetween({
     order: Number2,
     annotate: /* @__PURE__ */ __name((options) => {
       const exclusiveMinimum = options.exclusiveMinimum ? true : void 0;
@@ -8328,7 +8736,7 @@ ${prefix}}`;
     });
   }
   __name(isInt, "isInt");
-  var Int = /* @__PURE__ */ Number5.check(/* @__PURE__ */ isInt());
+  var Int = /* @__PURE__ */ Number6.check(/* @__PURE__ */ isInt());
   function makeIsMinLength(minLength, minCodePoints, annotations) {
     return makeFilter2((input) => input.length >= minLength, {
       expected: `a value with a length of at least ${minLength}`,
@@ -8365,6 +8773,38 @@ ${prefix}}`;
     return makeIsMinLength(1, 1, annotations);
   }
   __name(isNonEmpty, "isNonEmpty");
+  var getErrorOptionsKey = /* @__PURE__ */ __name((options) => (options?.includeStack === true ? 1 : 0) | (options?.excludeCause === true ? 2 : 0), "getErrorOptionsKey");
+  var getErrorOptions = /* @__PURE__ */ __name((key) => {
+    switch (key) {
+      case 0:
+        return void 0;
+      case 1:
+        return {
+          includeStack: true
+        };
+      case 2:
+        return {
+          excludeCause: true
+        };
+      case 3:
+        return {
+          includeStack: true,
+          excludeCause: true
+        };
+    }
+  }, "getErrorOptions");
+  var defectSchemaCache = [];
+  function Defect(options) {
+    const key = getErrorOptionsKey(options);
+    const cached2 = defectSchemaCache[key];
+    if (cached2 !== void 0) {
+      return cached2;
+    }
+    const schema = Json2.pipe(decodeTo2(Unknown2, defectFromJson(getErrorOptions(key))));
+    defectSchemaCache[key] = schema;
+    return schema;
+  }
+  __name(Defect, "Defect");
   var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
     representation: {
       id: "effect/schema/RegExp",
@@ -8405,6 +8845,21 @@ ${prefix}}`;
     }), "toCode"),
     expected: "URL",
     toCodecJson: /* @__PURE__ */ __name(() => link()(URLString, urlFromString), "toCodecJson")
+  });
+  var DateString = /* @__PURE__ */ String4.annotate({
+    expected: "a string that will be decoded as a Date"
+  });
+  var Date4 = /* @__PURE__ */ declare((input) => input instanceof globalThis.Date && !globalThis.Number.isNaN(input.getTime()), {
+    representation: {
+      id: "effect/schema/Date",
+      payload: null
+    },
+    toCode: /* @__PURE__ */ __name(() => ({
+      runtime: `Schema.Date`,
+      Type: `globalThis.Date`
+    }), "toCode"),
+    expected: "a valid Date",
+    toCodecJson: /* @__PURE__ */ __name(() => link()(DateString, dateFromString), "toCodecJson")
   });
   var File = /* @__PURE__ */ instanceOf(globalThis.File, {
     representation: {
@@ -8531,6 +8986,153 @@ ${prefix}}`;
   var arbitraryMaximumZonedDateTimeTimestamp = arbitraryMaximumDateTimestamp - 14 * 60 * 60 * 1e3;
   var arbitraryMinimumTimeZoneOffset = -12 * 60 * 60 * 1e3;
   var arbitraryMaximumTimeZoneOffset = 14 * 60 * 60 * 1e3;
+  var immerable = /* @__PURE__ */ globalThis.Symbol.for("immer-draftable");
+  var payloadToken = {};
+  function makeClass(Inherited, identifier2, struct2, annotations, proto) {
+    const getClassSchema = getClassSchemaFactory(struct2, identifier2, annotations);
+    const ClassTypeId = getClassTypeId(identifier2);
+    const out = class extends Inherited {
+      static {
+        __name(this, "out");
+      }
+      constructor(...[input, options]) {
+        const internalOptions = options;
+        const payload = internalOptions?.["~payload"];
+        const value = payload?.token === payloadToken ? payload.value : struct2.make(input ?? {}, options);
+        super(value, {
+          ...options,
+          disableChecks: true,
+          "~payload": {
+            token: payloadToken,
+            value
+          }
+        });
+      }
+      static [TypeId13] = TypeId13;
+      get [ClassTypeId]() {
+        return ClassTypeId;
+      }
+      static [immerable] = true;
+      static identifier = identifier2;
+      static fields = struct2.fields;
+      static get ast() {
+        return getClassSchema(this).ast;
+      }
+      static pipe() {
+        return pipeArguments(this, arguments);
+      }
+      static rebuild(ast) {
+        return getClassSchema(this).rebuild(ast);
+      }
+      static make(input, options) {
+        return make7(getClassSchema(this))(input ?? {}, options);
+      }
+      static makeOption(input, options) {
+        return makeOption(getClassSchema(this))(input ?? {}, options);
+      }
+      static makeEffect(input, options) {
+        return getClassSchema(this).makeEffect(input ?? {}, options);
+      }
+      static annotate(annotations2) {
+        return this.rebuild(annotate(this.ast, annotations2));
+      }
+      static annotateKey(annotations2) {
+        return this.rebuild(annotateKey(this.ast, annotations2));
+      }
+      static check(...checks) {
+        return this.rebuild(appendChecks(this.ast, checks));
+      }
+      static extend(identifier3) {
+        return (schema, annotations2) => {
+          const extension = isStruct(schema) ? schema : Struct(schema);
+          const fields = {
+            ...struct2.fields,
+            ...extension.fields
+          };
+          const ast = struct(fields, struct2.ast.checks, {
+            identifier: identifier3
+          });
+          return makeClass(this, identifier3, makeStruct(appendChecks(ast, extension.ast.checks), fields), annotations2, proto);
+        };
+      }
+      static mapFields(f, options) {
+        return struct2.mapFields(f, options);
+      }
+    };
+    if (proto !== void 0) {
+      Object.assign(out.prototype, proto(identifier2));
+    }
+    return out;
+  }
+  __name(makeClass, "makeClass");
+  function getClassTransformation(self) {
+    return new Transformation(transform((input) => new self(input, {
+      "~payload": {
+        token: payloadToken,
+        value: input
+      }
+    })), passthrough2());
+  }
+  __name(getClassTransformation, "getClassTransformation");
+  function getClassTypeId(identifier2) {
+    return `~effect/Schema/Class/${identifier2}`;
+  }
+  __name(getClassTypeId, "getClassTypeId");
+  function getClassSchemaFactory(from, identifier2, annotations) {
+    let memo;
+    return (self) => {
+      if (memo !== void 0) {
+        return memo;
+      }
+      const ClassTypeId = getClassTypeId(identifier2);
+      const isClassValue = /* @__PURE__ */ __name((input) => input instanceof self || hasProperty(input, ClassTypeId), "isClassValue");
+      const transformation = getClassTransformation(self);
+      const to = make9(new Declaration([from.ast], () => (input, ast, options) => {
+        return isClassValue(input) ? succeed7(input) : fail5(new InvalidType(ast, input, options));
+      }, {
+        identifier: identifier2,
+        [CONSTRUCTOR_ANNOTATION_KEY]: ([from2]) => ({
+          isConstructed: isClassValue,
+          link: new Link(from2, transformation)
+        }),
+        toCodec: /* @__PURE__ */ __name(([from2]) => new Link(from2.ast, transformation), "toCodec"),
+        toEquivalence: /* @__PURE__ */ __name(([from2]) => from2, "toEquivalence"),
+        toFormatter: /* @__PURE__ */ __name(([from2]) => (t) => `${self.identifier}(${from2(t)})`, "toFormatter"),
+        [SENTINELS_ANNOTATION_KEY]: collectSentinels(from.ast),
+        ...annotations
+      }));
+      return memo = decodeTo2(to, transformation)(from);
+    };
+  }
+  __name(getClassSchemaFactory, "getClassSchemaFactory");
+  function isStruct(schema) {
+    return isSchema(schema);
+  }
+  __name(isStruct, "isStruct");
+  var Error3 = /* @__PURE__ */ __name((identifier2) => (schema, annotations) => {
+    const struct2 = isStruct(schema) ? schema : Struct(schema);
+    const self = makeClass(Error2, identifier2, struct2, annotations, (identifier3) => ({
+      name: identifier3
+    }));
+    return self;
+  }, "Error");
+  var TaggedError3 = /* @__PURE__ */ __name((identifier2) => {
+    return (tagValue, schema, annotations) => {
+      const struct2 = isStruct(schema) ? schema.mapFields((fields) => ({
+        _tag: tag(tagValue),
+        ...fields
+      }), {
+        unsafePreserveChecks: true
+      }) : TaggedStruct(tagValue, schema);
+      return Error3(identifier2 ?? tagValue)(struct2, annotations);
+    };
+  }, "TaggedError");
+  var Json2 = /* @__PURE__ */ make9(/* @__PURE__ */ annotate(Json, {
+    toCode: /* @__PURE__ */ __name(() => ({
+      runtime: "Schema.Json",
+      Type: "Schema.Json"
+    }), "toCode")
+  }));
 
   // packages/runtime/src/game/flash/contract/Diagnostic.ts
   var diagnosticTimestamp = /* @__PURE__ */ __name(() => performance.timeOrigin + performance.now(), "diagnosticTimestamp");
@@ -8595,7 +9197,7 @@ ${prefix}}`;
       catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
     }).pipe(
       flatMap3(decodeUnknownEffect2(schema)),
-      map4(some2),
+      map5(some2),
       catch_2((cause) => fail7(method, cause, args2))
     ), "invoke");
     const invokeJson = /* @__PURE__ */ __name((method, args2, schema) => invoke(method, args2, Union2([String4, Unknown2])).pipe(
@@ -8605,7 +9207,7 @@ ${prefix}}`;
           onSome: /* @__PURE__ */ __name((value) => {
             if (typeof value !== "string") {
               return decodeUnknownEffect2(schema)(value).pipe(
-                map4(some2),
+                map5(some2),
                 catch_2((cause) => fail7(method, cause, args2))
               );
             }
@@ -8614,7 +9216,7 @@ ${prefix}}`;
               catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
             }).pipe(
               flatMap3(decodeUnknownEffect2(schema)),
-              map4(some2),
+              map5(some2),
               catch_2((cause) => fail7(method, cause, args2))
             );
           }, "onSome")
@@ -8641,7 +9243,7 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableList.js
   var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
-  var make9 = /* @__PURE__ */ __name(() => ({
+  var make10 = /* @__PURE__ */ __name(() => ({
     head: void 0,
     tail: void 0,
     length: 0
@@ -8663,19 +9265,19 @@ ${prefix}}`;
     offset: 0,
     next: void 0
   }), "emptyBucket");
-  var append2 = /* @__PURE__ */ __name((self, message) => {
+  var append2 = /* @__PURE__ */ __name((self, message2) => {
     if (!self.tail) {
       self.head = self.tail = emptyBucket();
     } else if (!self.tail.mutable) {
       self.tail.next = emptyBucket();
       self.tail = self.tail.next;
     }
-    self.tail.array.push(message);
+    self.tail.array.push(message2);
     self.length++;
   }, "append");
-  var prepend2 = /* @__PURE__ */ __name((self, message) => {
+  var prepend2 = /* @__PURE__ */ __name((self, message2) => {
     self.head = {
-      array: [message],
+      array: [message2],
       mutable: true,
       offset: 0,
       next: self.head
@@ -8720,7 +9322,7 @@ ${prefix}}`;
   var takeAll = /* @__PURE__ */ __name((self) => takeN(self, self.length), "takeAll");
   var take = /* @__PURE__ */ __name((self) => {
     if (!self.head) return Empty;
-    const message = self.head.array[self.head.offset];
+    const message2 = self.head.array[self.head.offset];
     if (self.head.mutable) self.head.array[self.head.offset] = void 0;
     self.head.offset++;
     self.length--;
@@ -8733,7 +9335,7 @@ ${prefix}}`;
     } else {
       compactHead(self);
     }
-    return message;
+    return message2;
   }, "take");
   var filter3 = /* @__PURE__ */ __name((self, f) => {
     const array2 = [];
@@ -8762,9 +9364,9 @@ ${prefix}}`;
   var remove = /* @__PURE__ */ __name((self, value) => filter3(self, (v) => v !== value), "remove");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableRef.js
-  var TypeId13 = "~effect/MutableRef";
+  var TypeId14 = "~effect/MutableRef";
   var MutableRefProto = {
-    [TypeId13]: TypeId13,
+    [TypeId14]: TypeId14,
     ...PipeInspectableProto,
     toJSON() {
       return {
@@ -8773,7 +9375,7 @@ ${prefix}}`;
       };
     }
   };
-  var make10 = /* @__PURE__ */ __name((value) => {
+  var make11 = /* @__PURE__ */ __name((value) => {
     const ref = Object.create(MutableRefProto);
     ref.current = value;
     return ref;
@@ -8784,10 +9386,10 @@ ${prefix}}`;
   });
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/PubSub.js
-  var TypeId14 = "~effect/PubSub";
+  var TypeId15 = "~effect/PubSub";
   var SubscriptionTypeId = "~effect/PubSub/Subscription";
-  var make11 = /* @__PURE__ */ __name((options) => sync2(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe4(false), make10(false), options.strategy(), make10(none2()))), "make");
-  var unbounded = /* @__PURE__ */ __name((options) => make11({
+  var make12 = /* @__PURE__ */ __name((options) => sync2(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe4(false), make11(false), options.strategy(), make11(none2()))), "make");
+  var unbounded = /* @__PURE__ */ __name((options) => make12({
     atomicPubSub: /* @__PURE__ */ __name(() => makeAtomicUnbounded(options), "atomicPubSub"),
     strategy: /* @__PURE__ */ __name(() => new DroppingStrategy(), "strategy")
   }), "unbounded");
@@ -8840,15 +9442,15 @@ ${prefix}}`;
       return interrupt3;
     }
     if (self.replayWindow.remaining > 0) {
-      const message2 = self.replayWindow.take();
-      return succeed7(message2);
+      const message3 = self.replayWindow.take();
+      return succeed7(message3);
     }
-    const message = self.pollers.length === 0 ? self.subscription.poll() : Empty;
-    if (message === Empty) {
+    const message2 = self.pollers.length === 0 ? self.subscription.poll() : Empty;
+    if (message2 === Empty) {
       return pollForItem(self);
     } else {
       self.strategy.onPubSubEmptySpaceUnsafe(self.pubsub, self.subscribers);
-      return succeed7(message);
+      return succeed7(message2);
     }
   }), "take");
   var takeAll2 = /* @__PURE__ */ __name((self) => suspend2(/* @__PURE__ */ __name(function loop(value) {
@@ -8870,20 +9472,20 @@ ${prefix}}`;
   var pollForItem = /* @__PURE__ */ __name((self) => callback2((resume) => {
     if (self.shutdownFlag.current) return resume(interrupt3);
     if (isSome2(self.ended.current)) {
-      const message = self.pollers.length === 0 ? self.subscription.poll() : Empty;
-      if (message !== Empty) {
+      const message2 = self.pollers.length === 0 ? self.subscription.poll() : Empty;
+      if (message2 !== Empty) {
         self.strategy.onPubSubEmptySpaceUnsafe(self.pubsub, self.subscribers);
-        return resume(succeed7(message));
+        return resume(succeed7(message2));
       }
       return resume(succeed7(self.ended.current.value));
     }
     const deferred = makeUnsafe2();
-    let set4 = self.subscribers.get(self.subscription);
-    if (!set4) {
-      set4 = /* @__PURE__ */ new Set();
-      self.subscribers.set(self.subscription, set4);
+    let set5 = self.subscribers.get(self.subscription);
+    if (!set5) {
+      set5 = /* @__PURE__ */ new Set();
+      self.subscribers.set(self.subscription, set5);
     }
-    set4.add(self.pollers);
+    set5.add(self.pollers);
     append2(self.pollers, deferred);
     self.strategy.completePollersUnsafe(self.pubsub, self.subscribers, self.subscription, self.pollers);
     if (deferred.effect) return resume(deferred.effect);
@@ -8895,20 +9497,20 @@ ${prefix}}`;
     if (!subscribers.has(subscription)) {
       subscribers.set(subscription, /* @__PURE__ */ new Set());
     }
-    const set4 = subscribers.get(subscription);
-    set4.add(pollers);
+    const set5 = subscribers.get(subscription);
+    set5.add(pollers);
   }, "addSubscribers");
   var removeSubscribers = /* @__PURE__ */ __name((subscribers, subscription, pollers) => {
     if (!subscribers.has(subscription)) {
       return;
     }
-    const set4 = subscribers.get(subscription);
-    set4.delete(pollers);
-    if (set4.size === 0) {
+    const set5 = subscribers.get(subscription);
+    set5.delete(pollers);
+    if (set5.size === 0) {
       subscribers.delete(subscription);
     }
   }, "removeSubscribers");
-  var makeSubscriptionUnsafe = /* @__PURE__ */ __name((pubsub, subscribers, strategy, ended) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make9(), makeUnsafe4(false), make10(false), strategy, pubsub.replayWindow(), ended), "makeSubscriptionUnsafe");
+  var makeSubscriptionUnsafe = /* @__PURE__ */ __name((pubsub, subscribers, strategy, ended) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make10(), makeUnsafe4(false), make11(false), strategy, pubsub.replayWindow(), ended), "makeSubscriptionUnsafe");
   var UnboundedPubSub = class {
     static {
       __name(this, "UnboundedPubSub");
@@ -9116,7 +9718,7 @@ ${prefix}}`;
     static {
       __name(this, "PubSubImpl");
     }
-    [TypeId14] = {
+    [TypeId15] = {
       _A: identity
     };
     pubsub;
@@ -9268,9 +9870,9 @@ ${prefix}}`;
         return;
       }
       const count = Math.min(slides, this.buffer.capacity);
-      const start = this.buffer.index - count;
+      const start2 = this.buffer.index - count;
       for (let i = 0; i < count; i++) {
-        const entry = this.buffer.slideValues[(start + i) % this.buffer.capacity];
+        const entry = this.buffer.slideValues[(start2 + i) % this.buffer.capacity];
         if (entry.index > this.newestIndex) {
           this.index = (this.index + 1) % this.values.length;
           this.values[(this.index + this.remaining - 1) % this.values.length] = entry.value;
@@ -9315,7 +9917,7 @@ ${prefix}}`;
   };
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Queue.js
-  var TypeId15 = "~effect/Queue";
+  var TypeId16 = "~effect/Queue";
   var EnqueueTypeId = "~effect/Queue/Enqueue";
   var DequeueTypeId = "~effect/Queue/Dequeue";
   var variance = {
@@ -9323,7 +9925,7 @@ ${prefix}}`;
     _E: identity
   };
   var QueueProto = {
-    [TypeId15]: variance,
+    [TypeId16]: variance,
     [EnqueueTypeId]: variance,
     [DequeueTypeId]: variance,
     ...PipeInspectableProto,
@@ -9335,12 +9937,12 @@ ${prefix}}`;
       };
     }
   };
-  var make12 = /* @__PURE__ */ __name((options) => withFiber((fiber2) => {
+  var make13 = /* @__PURE__ */ __name((options) => withFiber((fiber2) => {
     const self = Object.create(QueueProto);
     self.dispatcher = fiber2.currentDispatcher;
     self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
     self.strategy = options?.strategy ?? "suspend";
-    self.messages = make9();
+    self.messages = make10();
     self.scheduleRunning = false;
     self.state = {
       _tag: "Open",
@@ -9350,27 +9952,27 @@ ${prefix}}`;
     };
     return succeed3(self);
   }), "make");
-  var bounded = /* @__PURE__ */ __name((capacity) => make12({
+  var bounded = /* @__PURE__ */ __name((capacity) => make13({
     capacity
   }), "bounded");
-  var unbounded2 = /* @__PURE__ */ __name(() => make12(), "unbounded");
-  var offer = /* @__PURE__ */ dual(2, (self, message) => suspend(() => offerUnsafe(self, message) ? exitTrue : self.state._tag === "Open" && self.strategy === "suspend" ? offerOrWait(self, message) : exitFalse));
-  var offerUnsafe = /* @__PURE__ */ __name((self, message) => {
+  var unbounded2 = /* @__PURE__ */ __name(() => make13(), "unbounded");
+  var offer = /* @__PURE__ */ dual(2, (self, message2) => suspend(() => offerUnsafe(self, message2) ? exitTrue : self.state._tag === "Open" && self.strategy === "suspend" ? offerOrWait(self, message2) : exitFalse));
+  var offerUnsafe = /* @__PURE__ */ __name((self, message2) => {
     if (self.state._tag !== "Open") {
       return false;
     } else if (self.messages.length >= self.capacity) {
       if (self.strategy === "sliding") {
         take(self.messages);
-        append2(self.messages, message);
+        append2(self.messages, message2);
         return true;
       } else if (self.capacity <= 0 && self.state.takers.size > 0) {
-        append2(self.messages, message);
+        append2(self.messages, message2);
         releaseTakers(self);
         return true;
       }
       return false;
     }
-    append2(self.messages, message);
+    append2(self.messages, message2);
     scheduleReleaseTaker(self);
     return true;
   }, "offerUnsafe");
@@ -9407,10 +10009,10 @@ ${prefix}}`;
     return true;
   }, "shutdownUnsafe");
   var takeAll3 = /* @__PURE__ */ __name((self) => takeBetween(self, 1, Number.POSITIVE_INFINITY), "takeAll");
-  var takeBetween = /* @__PURE__ */ dual(3, (self, min2, max2) => {
-    min2 = normalize(min2);
-    max2 = normalize(max2);
-    return suspendTake(() => takeBetweenUnsafe(self, min2, max2) ?? andThen(awaitTake(self, () => canTake(self, min2)), takeBetween(self, min2, max2)));
+  var takeBetween = /* @__PURE__ */ dual(3, (self, min3, max3) => {
+    min3 = normalize(min3);
+    max3 = normalize(max3);
+    return suspendTake(() => takeBetweenUnsafe(self, min3, max3) ?? andThen(awaitTake(self, () => canTake(self, min3)), takeBetween(self, min3, max3)));
   });
   var take3 = /* @__PURE__ */ __name((self) => suspendTake(() => takeUnsafe(self) ?? andThen(awaitTake(self, () => canTake(self, 1)), take3(self))), "take");
   var takeUnsafe = /* @__PURE__ */ __name((self) => {
@@ -9418,13 +10020,13 @@ ${prefix}}`;
       return self.state.exit;
     }
     if (self.messages.length > 0) {
-      const message = take(self.messages);
+      const message2 = take(self.messages);
       releaseCapacity(self);
-      return exitSucceed(message);
+      return exitSucceed(message2);
     } else if (self.capacity <= 0 && self.state.offers.size > 0) {
-      const message = takeOfferUnsafe(self.state.offers);
+      const message2 = takeOfferUnsafe(self.state.offers);
       releaseCapacity(self);
-      return exitSucceed(message);
+      return exitSucceed(message2);
     }
     return void 0;
   }, "takeUnsafe");
@@ -9456,15 +10058,15 @@ ${prefix}}`;
       releaseTakers(self);
     }, 0);
   }, "scheduleReleaseTaker");
-  var takeBetweenUnsafe = /* @__PURE__ */ __name((self, min2, max2) => {
+  var takeBetweenUnsafe = /* @__PURE__ */ __name((self, min3, max3) => {
     if (self.state._tag === "Done") {
       return self.state.exit;
-    } else if (max2 <= 0 || min2 <= 0) {
+    } else if (max3 <= 0 || min3 <= 0) {
       return exitSucceed([]);
-    } else if (!canTake(self, min2)) {
+    } else if (!canTake(self, min3)) {
       return void 0;
     }
-    const messages = self.messages.length > 0 ? takeN(self.messages, max2) : [takeOfferUnsafe(self.state.offers)];
+    const messages = self.messages.length > 0 ? takeN(self.messages, max3) : [takeOfferUnsafe(self.state.offers)];
     releaseCapacity(self);
     return exitSucceed(messages);
   }, "takeBetweenUnsafe");
@@ -9475,7 +10077,7 @@ ${prefix}}`;
       return isExit(effect2) ? effect2[evaluate](fiber2) : effect2;
     }
   });
-  var canTake = /* @__PURE__ */ __name((self, min2) => self.messages.length >= (self.state._tag === "Closing" ? 1 : Math.min(min2, self.capacity || 1)) || self.capacity <= 0 && self.state._tag !== "Done" && self.state.offers.size > 0, "canTake");
+  var canTake = /* @__PURE__ */ __name((self, min3) => self.messages.length >= (self.state._tag === "Closing" ? 1 : Math.min(min3, self.capacity || 1)) || self.capacity <= 0 && self.state._tag !== "Done" && self.state.offers.size > 0, "canTake");
   var awaitTake = /* @__PURE__ */ __name((self, ready) => callback((resume) => {
     if (self.state._tag === "Done") return resume(self.state.exit);
     if (ready()) return resume(exitVoid);
@@ -9488,9 +10090,9 @@ ${prefix}}`;
       if (self.state._tag !== "Done") self.state.takers.delete(taker);
     });
   }), "awaitTake");
-  var offerOrWait = /* @__PURE__ */ __name((self, message) => callback((resume) => offerUnsafe(self, message) ? resume(exitTrue) : waitToOffer(self, {
+  var offerOrWait = /* @__PURE__ */ __name((self, message2) => callback((resume) => offerUnsafe(self, message2) ? resume(exitTrue) : waitToOffer(self, {
     _tag: "Single",
-    message,
+    message: message2,
     resume
   })), "offerOrWait");
   var waitToOffer = /* @__PURE__ */ __name((self, entry) => {
@@ -9513,12 +10115,12 @@ ${prefix}}`;
       entry.resume(exitTrue);
       return entry.message;
     }
-    const message = entry.remaining[entry.offset++];
+    const message2 = entry.remaining[entry.offset++];
     if (entry.offset === entry.remaining.length) {
       offers.delete(entry);
       entry.resume(exitSucceed([]));
     }
-    return message;
+    return message2;
   }, "takeOfferUnsafe");
   var releaseCapacity = /* @__PURE__ */ __name((self) => {
     if (self.state._tag === "Done") {
@@ -9670,13 +10272,13 @@ ${prefix}}`;
       });
     }
   };
-  var make13 = /* @__PURE__ */ __name((permits) => sync(() => new SemaphoreImpl(permits)), "make");
+  var make14 = /* @__PURE__ */ __name((permits) => sync(() => new SemaphoreImpl(permits)), "make");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Channel.js
-  var TypeId16 = "~effect/Channel";
-  var isChannel = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId16), "isChannel");
+  var TypeId17 = "~effect/Channel";
+  var isChannel = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId17), "isChannel");
   var ChannelProto = {
-    [TypeId16]: {
+    [TypeId17]: {
       _Env: identity,
       _InErr: identity,
       _InElem: identity,
@@ -9703,16 +10305,16 @@ ${prefix}}`;
   var toTransform = /* @__PURE__ */ __name((channel) => channel.transform, "toTransform");
   var fromQueueArray = /* @__PURE__ */ __name((queue) => fromPull(succeed7(takeAll3(queue))), "fromQueueArray");
   var fromSubscriptionArray = /* @__PURE__ */ __name((subscription) => fromPull(succeed7(onInterrupt2(takeAll2(subscription), () => done3()))), "fromSubscriptionArray");
-  var fromPubSubArray = /* @__PURE__ */ __name((pubsub) => unwrap(map4(subscribe(pubsub), fromSubscriptionArray)), "fromPubSubArray");
-  var map6 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => sync2(() => {
+  var fromPubSubArray = /* @__PURE__ */ __name((pubsub) => unwrap(map5(subscribe(pubsub), fromSubscriptionArray)), "fromPubSubArray");
+  var map7 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => sync2(() => {
     let i = 0;
-    return map4(pull, (o) => f(o, i++));
+    return map5(pull, (o) => f(o, i++));
   })));
   var concurrencyIsSequential = /* @__PURE__ */ __name((concurrency) => concurrency === void 0 || concurrency !== "unbounded" && concurrency <= 1, "concurrencyIsSequential");
   var mapEffect = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, f, options) => concurrencyIsSequential(options?.concurrency) ? mapEffectSequential(self, f) : mapEffectConcurrent(self, f, options));
   var mapEffectSequential = /* @__PURE__ */ __name((self, f) => fromTransform((upstream, scope3) => {
     let i = 0;
-    return map4(toTransform(self)(upstream, scope3), flatMap3((o) => f(o, i++)));
+    return map5(toTransform(self)(upstream, scope3), flatMap3((o) => f(o, i++)));
   }), "mapEffectSequential");
   var mapEffectConcurrent = /* @__PURE__ */ __name((self, f, options) => fromTransformBracket(fnUntraced2(function* (upstream, scope3, forkedScope) {
     let i = 0;
@@ -9788,7 +10390,7 @@ ${prefix}}`;
     }, "loop"));
     return succeed7(pump);
   }), "flattenArray");
-  var schedule2 = /* @__PURE__ */ dual(2, (self, schedule4) => transformPull(self, (pull, _scope) => map4(toStepWithSleep(schedule4), (step) => {
+  var schedule2 = /* @__PURE__ */ dual(2, (self, schedule4) => transformPull(self, (pull, _scope) => map5(toStepWithSleep(schedule4), (step) => {
     const pullWithStep = tap2(pull, step);
     return pullWithStep;
   })));
@@ -9821,7 +10423,7 @@ ${prefix}}`;
   })));
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/stream.js
-  var TypeId17 = "~effect/Stream";
+  var TypeId18 = "~effect/Stream";
   var streamVariance = {
     _R: identity,
     _E: identity,
@@ -9831,7 +10433,7 @@ ${prefix}}`;
     this.channel = channel;
   }, "Stream");
   Stream.prototype = {
-    [TypeId17]: streamVariance,
+    [TypeId18]: streamVariance,
     pipe() {
       return pipeArguments(this, arguments);
     }
@@ -9839,9 +10441,9 @@ ${prefix}}`;
   var fromChannel = /* @__PURE__ */ __name((channel) => new Stream(channel), "fromChannel");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableHashMap.js
-  var TypeId18 = "~effect/MutableHashMap";
+  var TypeId19 = "~effect/MutableHashMap";
   var MutableHashMapProto = {
-    [TypeId18]: TypeId18,
+    [TypeId19]: TypeId19,
     [Symbol.iterator]() {
       return this.backing[Symbol.iterator]();
     },
@@ -9944,14 +10546,14 @@ ${prefix}}`;
   });
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Stream.js
-  var TypeId19 = "~effect/Stream";
-  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId19), "isStream");
+  var TypeId20 = "~effect/Stream";
+  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId20), "isStream");
   var fromChannel2 = fromChannel;
   var toChannel = /* @__PURE__ */ __name((stream) => stream.channel, "toChannel");
   var fromQueue = /* @__PURE__ */ __name((queue) => fromChannel2(fromQueueArray(queue)), "fromQueue");
   var fromPubSub = /* @__PURE__ */ __name((pubsub) => fromChannel2(fromPubSubArray(pubsub)), "fromPubSub");
-  var mapEffect2 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, f, options) => self.channel.pipe(flattenArray, mapEffect(f, options), map6(of), fromChannel2));
-  var schedule3 = /* @__PURE__ */ dual(2, (self, schedule4) => self.channel.pipe(flattenArray, schedule2(schedule4), map6(of), fromChannel2));
+  var mapEffect2 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, f, options) => self.channel.pipe(flattenArray, mapEffect(f, options), map7(of), fromChannel2));
+  var schedule3 = /* @__PURE__ */ dual(2, (self, schedule4) => self.channel.pipe(flattenArray, schedule2(schedule4), map7(of), fromChannel2));
   var filter6 = /* @__PURE__ */ dual(2, (self, predicate) => fromChannel2(filterArray(toChannel(self), predicate)));
   var runForEach2 = /* @__PURE__ */ dual(2, (self, f) => runForEach(self.channel, (arr) => {
     let i = 0;
@@ -10013,13 +10615,13 @@ ${prefix}}`;
   var matchesPacket = /* @__PURE__ */ __name((packet, selector) => (selector?.command === void 0 || selector.command === packet.command) && (selector?.direction === void 0 || selector.direction === packet.direction) && (selector?.encoding === void 0 || selector.encoding === packet.encoding) && (selector?.predicate === void 0 || selector.predicate(packet)), "matchesPacket");
 
   // packages/runtime/src/game/flash/contract/Coercion.ts
-  var invalid3 = /* @__PURE__ */ __name((value, message) => fail5(
-    new InvalidValue({ message }, value, { reportInput: true })
+  var invalid3 = /* @__PURE__ */ __name((value, message2) => fail5(
+    new InvalidValue({ message: message2 }, value, { reportInput: true })
   ), "invalid");
-  var NumberInput = Union2([Number5, String4]);
+  var NumberInput = Union2([Number6, String4]);
   var WireNumber = NumberInput.pipe(
     decodeTo2(
-      Number5,
+      Number6,
       transformEffect2({
         decode: /* @__PURE__ */ __name((value) => {
           if (typeof value === "number") {
@@ -10051,7 +10653,7 @@ ${prefix}}`;
   );
   var BooleanInput = Union2([
     Boolean3,
-    Number5,
+    Number6,
     String4
   ]);
   var WireBoolean = BooleanInput.pipe(
@@ -10121,8 +10723,8 @@ ${prefix}}`;
     if (payload.startsWith("<")) return true;
     const parsed = parseJson2(payload);
     if (isNone2(parsed)) return false;
-    const record2 = decodeRecord(parsed.value);
-    return isSome2(record2) && record2.value["type"] === "xml";
+    const record3 = decodeRecord(parsed.value);
+    return isSome2(record3) && record3.value["type"] === "xml";
   }, "isUnsupportedPacketEnvelope");
   var parseClientPacket = /* @__PURE__ */ __name((raw) => {
     const payload = stripLogEnvelope(raw);
@@ -10296,7 +10898,7 @@ ${prefix}}`;
     }, "offer");
     const owned = {
       onConnection: /* @__PURE__ */ __name((status) => offer2("onConnection", { type: "connection", status }), "onConnection"),
-      onDebug: /* @__PURE__ */ __name((message) => offer2("onDebug", { type: "debug", message }), "onDebug"),
+      onDebug: /* @__PURE__ */ __name((message2) => offer2("onDebug", { type: "debug", message: message2 }), "onDebug"),
       onExtensionResponse: /* @__PURE__ */ __name((raw) => offer2("onExtensionResponse", { type: "extension-packet", raw }), "onExtensionResponse"),
       onProjectionEvent: /* @__PURE__ */ __name((event) => enqueue("onProjectionEvent", { type: "projection", event }), "onProjectionEvent"),
       packetFromClient: /* @__PURE__ */ __name((raw) => offer2("packetFromClient", { type: "client-packet", raw }), "packetFromClient"),
@@ -10340,7 +10942,7 @@ ${prefix}}`;
       }
       yield* publish(packets, packet.value);
     }), "dispatch");
-    const start = /* @__PURE__ */ __name((handle = () => void_3) => suspend2(() => {
+    const start2 = /* @__PURE__ */ __name((handle = () => void_3) => suspend2(() => {
       if (started) return void_3;
       started = true;
       const drain2 = forever3(
@@ -10359,12 +10961,12 @@ ${prefix}}`;
       "flash.sendClientPacket",
       [packet, clientPacketTypes[encoding]],
       Void2
-    ).pipe(map4(isSome2)), "sendToClient");
+    ).pipe(map5(isSome2)), "sendToClient");
     const sendToServer = /* @__PURE__ */ __name((packet, encoding = "string") => bridge.invoke(
       "flash.callGameFunction",
       [`sfc.send${serverPacketTypes[encoding]}`, packet],
       String4
-    ).pipe(map4(isSome2)), "sendToServer");
+    ).pipe(map5(isSome2)), "sendToServer");
     return {
       events: fromPubSub(events),
       packets: fromPubSub(packets),
@@ -10372,7 +10974,7 @@ ${prefix}}`;
       publishEvent,
       sendToClient,
       sendToServer,
-      start,
+      start: start2,
       subscribeEvents: subscribe(events),
       subscribePackets: subscribe(packets)
     };
@@ -10397,9 +10999,9 @@ ${prefix}}`;
     }
     const fields = Object.entries(selector);
     if (!fields.some(([key]) => key === "type")) return false;
-    const record2 = event;
+    const record3 = event;
     return fields.every(
-      ([key, value]) => isScalar(value) && record2[key] === value
+      ([key, value]) => isScalar(value) && record3[key] === value
     );
   }, "matchesEvent");
 
@@ -10907,6 +11509,27 @@ ${prefix}}`;
       }
     };
   }, "resolveEnhancementStrategy");
+  var normalizedEquipmentSlot = /* @__PURE__ */ __name((item) => normalize2(item.equipmentSlot), "normalizedEquipmentSlot");
+  var matchesSlot = /* @__PURE__ */ __name((item, slot) => {
+    const actual = normalizedEquipmentSlot(item);
+    switch (slot) {
+      case "weapon":
+        return actual === "weapon";
+      case "cape":
+        return actual === "ba" || actual === "cape";
+      case "helm":
+        return actual === "he" || actual === "helm";
+      case "class":
+        return actual === "ar" || actual === "class";
+    }
+  }, "matchesSlot");
+  var matchesEnhancementShopItem = /* @__PURE__ */ __name((item, strategy) => {
+    if (normalize2(item.category) !== "enhancement") return false;
+    if (!matchesSlot(item, strategy.slot)) return false;
+    const patternId = item.enhancement?.patternId ?? NO_PATTERN_ID;
+    const procId = item.enhancement?.procId ?? NO_PROC_ID;
+    return patternId === strategy.patternId && procId === strategy.procId;
+  }, "matchesEnhancementShopItem");
   var matchesAppliedEnhancement = /* @__PURE__ */ __name((item, strategy) => {
     const patternId = item.enhancement?.patternId ?? NO_PATTERN_ID;
     const procId = item.enhancement?.procId ?? NO_PROC_ID;
@@ -11331,6 +11954,9 @@ ${prefix}}`;
   };
 
   // packages/game/src/player.ts
+  var toPlayerSelector = /* @__PURE__ */ __name((query) => ({
+    username: typeof query === "string" ? query.trim() : query.username.trim()
+  }), "toPlayerSelector");
   var LivePlayer = class extends LiveEntity {
     static {
       __name(this, "LivePlayer");
@@ -11536,12 +12162,12 @@ ${prefix}}`;
     const fields = selector;
     return isFiniteNumber(fields["shopItemId"]) || isFiniteNumber(fields["itemId"]) || isFiniteNumber(fields["monsterMapId"]) || typeof fields["name"] === "string";
   }, "isSelectable");
-  var readItem = /* @__PURE__ */ __name((host, container, selector) => isSelectable(selector) ? host.read({ kind: "item", container, selector }).pipe(map4((item) => item === null ? null : toLiveItem(item))) : succeed7(null), "readItem");
-  var readItems = /* @__PURE__ */ __name((host, container) => host.read({ kind: "items", container }).pipe(map4((items) => items.map(toLiveItem))), "readItems");
-  var itemQuantity = /* @__PURE__ */ __name((host, container, selector) => readItem(host, container, selector).pipe(
-    map4((item) => item?.quantity ?? 0)
+  var readItem = /* @__PURE__ */ __name((host, container2, selector) => isSelectable(selector) ? host.read({ kind: "item", container: container2, selector }).pipe(map5((item) => item === null ? null : toLiveItem(item))) : succeed7(null), "readItem");
+  var readItems = /* @__PURE__ */ __name((host, container2) => host.read({ kind: "items", container: container2 }).pipe(map5((items) => items.map(toLiveItem))), "readItems");
+  var itemQuantity = /* @__PURE__ */ __name((host, container2, selector) => readItem(host, container2, selector).pipe(
+    map5((item) => item?.quantity ?? 0)
   ), "itemQuantity");
-  var isHydrated = /* @__PURE__ */ __name((host, container) => host.read({ kind: "itemHydration", container }).pipe(map4((version) => version > 0)), "isHydrated");
+  var isHydrated = /* @__PURE__ */ __name((host, container2) => host.read({ kind: "itemHydration", container: container2 }).pipe(map5((version) => version > 0)), "isHydrated");
 
   // packages/runtime/src/game/flash/api/Auth.ts
   var Credentials = Struct({
@@ -11571,7 +12197,7 @@ ${prefix}}`;
     const loggedIn = host.command({ kind: "refreshLoggedIn" }).pipe(
       flatMap3(
         match({
-          onNone: /* @__PURE__ */ __name(() => cached2.pipe(map4((auth) => auth.loggedIn)), "onNone"),
+          onNone: /* @__PURE__ */ __name(() => cached2.pipe(map5((auth) => auth.loggedIn)), "onNone"),
           onSome: succeed7
         })
       )
@@ -11584,9 +12210,9 @@ ${prefix}}`;
         })
       )
     );
-    const temporarilyKicked = bridge.invoke("auth.isTemporarilyKicked", void 0, Boolean3).pipe(map4(getOrElse(() => false)));
-    const getTemporaryKickRemainingMs = /* @__PURE__ */ __name(() => bridge.invokeJson("flash.getGameObject", ["mcLogin.warning.n"], Number5).pipe(
-      map4(
+    const temporarilyKicked = bridge.invoke("auth.isTemporarilyKicked", void 0, Boolean3).pipe(map5(getOrElse(() => false)));
+    const getTemporaryKickRemainingMs = /* @__PURE__ */ __name(() => bridge.invokeJson("flash.getGameObject", ["mcLogin.warning.n"], Number6).pipe(
+      map5(
         match({
           onNone: /* @__PURE__ */ __name(() => void 0, "onNone"),
           onSome: /* @__PURE__ */ __name((seconds2) => Number.isFinite(seconds2) && seconds2 > 0 ? Math.min(temporaryKickMaximumMs, Math.ceil(seconds2) * 1e3) : void 0, "onSome")
@@ -11605,7 +12231,7 @@ ${prefix}}`;
       const finalWaitMs = Math.max(0, temporaryKickMaximumMs - initialSleepMs);
       if (finalWaitMs === 0) return false;
       return yield* wait.until(
-        temporarilyKicked.pipe(map4((kicked) => !kicked)),
+        temporarilyKicked.pipe(map5((kicked) => !kicked)),
         {
           interval: "5 seconds",
           timeout: `${finalWaitMs} millis`
@@ -11622,7 +12248,7 @@ ${prefix}}`;
         });
       }
       const select = bridge.invoke("auth.connectTo", [requested], ConnectResult).pipe(
-        map4(
+        map5(
           match({
             onNone: /* @__PURE__ */ __name(() => ({
               message: "server selection is not ready",
@@ -11650,7 +12276,7 @@ ${prefix}}`;
         yield* sleep2("250 millis");
         const settled = yield* wait.untilSome(
           select.pipe(
-            map4(
+            map5(
               (outcome2) => outcome2.status === "not-ready" ? none2() : some2(outcome2)
             )
           ),
@@ -11659,18 +12285,18 @@ ${prefix}}`;
         return settled ?? initial;
       });
     }, "connectTo");
-    const getPassword = /* @__PURE__ */ __name(() => currentCredentials.pipe(map4((current) => current.password)), "getPassword");
+    const getPassword = /* @__PURE__ */ __name(() => currentCredentials.pipe(map5((current) => current.password)), "getPassword");
     const getServers = /* @__PURE__ */ __name(() => host.command({ kind: "refreshServers" }).pipe(
       flatMap3(
         match({
-          onNone: /* @__PURE__ */ __name(() => cached2.pipe(map4((auth) => auth.servers)), "onNone"),
+          onNone: /* @__PURE__ */ __name(() => cached2.pipe(map5((auth) => auth.servers)), "onNone"),
           onSome: succeed7
         })
       ),
-      map4((servers) => servers.map(toLiveServer))
+      map5((servers) => servers.map(toLiveServer))
     ), "getServers");
-    const getUsername = /* @__PURE__ */ __name(() => currentCredentials.pipe(map4((current) => current.username)), "getUsername");
-    const isServerSelectReady = /* @__PURE__ */ __name(() => bridge.invoke("flash.isNull", ["mcLogin.sl.iList"], Boolean3).pipe(map4((value) => !getOrElse(value, () => true))), "isServerSelectReady");
+    const getUsername = /* @__PURE__ */ __name(() => currentCredentials.pipe(map5((current) => current.username)), "getUsername");
+    const isServerSelectReady = /* @__PURE__ */ __name(() => bridge.invoke("flash.isNull", ["mcLogin.sl.iList"], Boolean3).pipe(map5((value) => !getOrElse(value, () => true))), "isServerSelectReady");
     const isLoggedIn = /* @__PURE__ */ __name(() => loggedIn, "isLoggedIn");
     const isTemporarilyKicked = /* @__PURE__ */ __name(() => temporarilyKicked, "isTemporarilyKicked");
     const login = /* @__PURE__ */ __name((username, password) => {
@@ -11687,7 +12313,7 @@ ${prefix}}`;
             kind: "login",
             username: credentials.value.username,
             password: credentials.value.password
-          }).pipe(map4(getOrElse(() => false))) : succeed7(false)
+          }).pipe(map5(getOrElse(() => false))) : succeed7(false)
         )
       );
     }, "login");
@@ -11707,7 +12333,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/internal/CombatControl.ts
   var EntityStatePayload = WireInt.check(
-    isBetween({
+    isBetween2({
       minimum: EntityState.Dead,
       maximum: EntityState.InCombat
     })
@@ -11745,7 +12371,7 @@ ${prefix}}`;
       })
     ])
   );
-  var readCombatTarget = /* @__PURE__ */ __name((bridge) => bridge.invoke("combat.getTarget", void 0, CombatTargetPayload).pipe(map4(getOrNull)), "readCombatTarget");
+  var readCombatTarget = /* @__PURE__ */ __name((bridge) => bridge.invoke("combat.getTarget", void 0, CombatTargetPayload).pipe(map5(getOrNull)), "readCombatTarget");
   var stopCombat = /* @__PURE__ */ __name((bridge) => all2(
     [
       bridge.invoke("combat.cancelAutoAttack", void 0, Void2),
@@ -11832,10 +12458,10 @@ ${prefix}}`;
   }, "makeAntiCounter");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/FiberMap.js
-  var TypeId20 = "~effect/FiberMap";
-  var isFiberMap = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId20), "isFiberMap");
+  var TypeId21 = "~effect/FiberMap";
+  var isFiberMap = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId21), "isFiberMap");
   var Proto2 = {
-    [TypeId20]: TypeId20,
+    [TypeId21]: TypeId21,
     [Symbol.iterator]() {
       if (this.state._tag === "Closed") {
         return empty2();
@@ -11859,13 +12485,13 @@ ${prefix}}`;
     self.deferred = deferred;
     return self;
   }, "makeUnsafe");
-  var make14 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe6(empty4(), makeUnsafe2())), (map7) => suspend2(() => {
-    const state = map7.state;
+  var make15 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe6(empty4(), makeUnsafe2())), (map8) => suspend2(() => {
+    const state = map8.state;
     if (state._tag === "Closed") return void_3;
-    map7.state = {
+    map8.state = {
       _tag: "Closed"
     };
-    return interruptAll(values(state.backing)).pipe(into(map7.deferred));
+    return interruptAll(values(state.backing)).pipe(into(map8.deferred));
   })), "make");
   var internalFiberId = -1;
   var isInternalInterruption = /* @__PURE__ */ toPredicate(/* @__PURE__ */ compose(filterInterruptors, /* @__PURE__ */ has(internalFiberId)));
@@ -11941,9 +12567,9 @@ ${prefix}}`;
   }), "runImpl");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Ref.js
-  var TypeId21 = "~effect/Ref";
+  var TypeId22 = "~effect/Ref";
   var RefProto = {
-    [TypeId21]: {
+    [TypeId22]: {
       _A: identity
     },
     ...PipeInspectableProto,
@@ -11956,10 +12582,10 @@ ${prefix}}`;
   };
   var makeUnsafe7 = /* @__PURE__ */ __name((value) => {
     const self = Object.create(RefProto);
-    self.ref = make10(value);
+    self.ref = make11(value);
     return self;
   }, "makeUnsafe");
-  var make15 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe7(value)), "make");
+  var make16 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe7(value)), "make");
   var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
   var set3 = /* @__PURE__ */ dual(2, (self, value) => sync2(() => set(self.ref, value)));
   var getAndSet = /* @__PURE__ */ dual(2, (self, value) => sync2(() => {
@@ -11975,13 +12601,14 @@ ${prefix}}`;
   var update = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
     self.ref.current = f(self.ref.current);
   }));
+  var updateAndGet = /* @__PURE__ */ dual(2, (self, f) => sync2(() => self.ref.current = f(self.ref.current)));
 
   // packages/runtime/src/game/flash/api/internal/SessionEvents.ts
   var readinessKey = "player-ready";
   var makeSessionEvents = fn2("makeSessionEvents")(function* (awaitPlayerReady, publishEvent) {
-    const fibers = yield* make14();
-    const lifecycle = yield* make13(1);
-    const loggedIn = yield* make15(false);
+    const fibers = yield* make15();
+    const lifecycle = yield* make14(1);
+    const loggedIn = yield* make16(false);
     const clearSession = lifecycle.withPermits(1)(set3(loggedIn, false));
     const publishLogin = lifecycle.withPermits(1)(
       gen2(function* () {
@@ -12037,13 +12664,13 @@ ${prefix}}`;
   var decodeSwapResponse = decodeUnknownOption2(SwapResponse);
   var houseCanAccept = /* @__PURE__ */ __name((itemId, house) => house.get(itemId).pipe(
     flatMap3(
-      (current) => current !== null ? succeed7(true) : house.getAvailableSlots().pipe(map4((available) => available > 0))
+      (current) => current !== null ? succeed7(true) : house.getAvailableSlots().pipe(map5((available) => available > 0))
     )
   ), "houseCanAccept");
   var makeBank = fnUntraced2(function* (bridge, host, auth, inventory, house, wait) {
-    const loads = yield* make13(1);
-    const opens = yield* make13(1);
-    const isOpen = /* @__PURE__ */ __name(() => bridge.invoke("bank.isOpen", void 0, Boolean3).pipe(map4(getOrElse(() => false))), "isOpen");
+    const loads = yield* make14(1);
+    const opens = yield* make14(1);
+    const isOpen = /* @__PURE__ */ __name(() => bridge.invoke("bank.isOpen", void 0, Boolean3).pipe(map5(getOrElse(() => false))), "isOpen");
     const getAll = /* @__PURE__ */ __name(() => isHydrated(host, "bank").pipe(
       flatMap3(
         (hydrated) => hydrated ? readItems(host, "bank") : succeed7([])
@@ -12054,9 +12681,9 @@ ${prefix}}`;
         (hydrated) => hydrated ? readItem(host, "bank", selector) : succeed7(null)
       )
     ), "get");
-    const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("bank.getSlots", void 0, WireInt).pipe(map4(getOrElse(() => 0))), "getSlots");
-    const getUsedSlots = /* @__PURE__ */ __name(() => bridge.invoke("bank.getUsedSlots", void 0, WireInt).pipe(map4(getOrElse(() => 0))), "getUsedSlots");
-    const isLoaded = /* @__PURE__ */ __name(() => bridge.invoke("bank.isLoaded", void 0, Boolean3).pipe(map4(getOrElse(() => false))), "isLoaded");
+    const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("bank.getSlots", void 0, WireInt).pipe(map5(getOrElse(() => 0))), "getSlots");
+    const getUsedSlots = /* @__PURE__ */ __name(() => bridge.invoke("bank.getUsedSlots", void 0, WireInt).pipe(map5(getOrElse(() => 0))), "getUsedSlots");
+    const isLoaded = /* @__PURE__ */ __name(() => bridge.invoke("bank.isLoaded", void 0, Boolean3).pipe(map5(getOrElse(() => false))), "isLoaded");
     const load = /* @__PURE__ */ __name((force = false) => {
       return loads.withPermits(1)(
         gen2(function* () {
@@ -12098,11 +12725,11 @@ ${prefix}}`;
       })
     ), "open");
     const contains = /* @__PURE__ */ __name((selector, quantity) => get6(selector).pipe(
-      map4(
+      map5(
         (item) => item !== null && item.quantity >= normalizeItemQuantity(quantity)
       )
     ), "contains");
-    const bankCanAccept = /* @__PURE__ */ __name((item) => item.coins ? succeed7(true) : getAvailableSlots().pipe(map4((slots) => slots > 0)), "bankCanAccept");
+    const bankCanAccept = /* @__PURE__ */ __name((item) => item.coins ? succeed7(true) : getAvailableSlots().pipe(map5((slots) => slots > 0)), "bankCanAccept");
     const deposit = /* @__PURE__ */ __name((selector) => {
       return gen2(function* () {
         if (!(yield* open())) return false;
@@ -12127,7 +12754,7 @@ ${prefix}}`;
           },
           {
             timeout: "5 seconds",
-            trigger: bridge.invoke("bank.deposit", [toItemSelector(selector)], Boolean3).pipe(map4(getOrElse(() => false)))
+            trigger: bridge.invoke("bank.deposit", [toItemSelector(selector)], Boolean3).pipe(map5(getOrElse(() => false)))
           }
         );
         if (packet === null || response?.bSuccess === false) return false;
@@ -12165,7 +12792,7 @@ ${prefix}}`;
           },
           {
             timeout: "5 seconds",
-            trigger: bridge.invoke("bank.withdraw", [toItemSelector(selector)], Boolean3).pipe(map4(getOrElse(() => false)))
+            trigger: bridge.invoke("bank.withdraw", [toItemSelector(selector)], Boolean3).pipe(map5(getOrElse(() => false)))
           }
         );
         if (packet === null || response?.bSuccess === false) return false;
@@ -12208,7 +12835,7 @@ ${prefix}}`;
                 toItemSelector(bankItem.itemId)
               ],
               Boolean3
-            ).pipe(map4(getOrElse(() => false)))
+            ).pipe(map5(getOrElse(() => false)))
           }
         );
         if (packet === null) return false;
@@ -12260,7 +12887,7 @@ ${prefix}}`;
     isGreaterThanOrEqualTo2(0)
   );
   var PositiveInt = Int.check(isGreaterThanOrEqualTo2(1));
-  var boundedInt = /* @__PURE__ */ __name((minimum, maximum) => Int.check(isBetween({ minimum, maximum })), "boundedInt");
+  var boundedInt = /* @__PURE__ */ __name((minimum, maximum) => Int.check(isBetween2({ minimum, maximum })), "boundedInt");
 
   // packages/schemas/src/combatProfiles.ts
   var COMBAT_PROFILE_LIBRARY_VERSION = 1;
@@ -12368,16 +12995,16 @@ ${prefix}}`;
   var decodeRecord2 = decodeUnknownOption2(UnknownRecordSchema);
   var decodeString2 = decodeUnknownOption2(String4);
   var decodeSkillSlot = decodeUnknownOption2(SkillSlotSchema);
-  var fromOption4 = /* @__PURE__ */ __name((decode2, value) => {
-    const decoded = decode2(value);
+  var fromOption4 = /* @__PURE__ */ __name((decode3, value) => {
+    const decoded = decode3(value);
     return isSome2(decoded) ? decoded.value : void 0;
   }, "fromOption");
   var asRecord = /* @__PURE__ */ __name((value) => fromOption4(decodeRecord2, value), "asRecord");
   var asArray = /* @__PURE__ */ __name((value) => fromOption4(decodeArray, value) ?? [], "asArray");
   var normalizeArray = /* @__PURE__ */ __name((value, normalize3) => asArray(value).map(normalize3).filter((value2) => value2 !== void 0), "normalizeArray");
-  var clampInt = /* @__PURE__ */ __name((value, fallback, min2, max2) => {
+  var clampInt = /* @__PURE__ */ __name((value, fallback, min3, max3) => {
     const parsed = fromOption4(decodeFinite, value);
-    return parsed === void 0 ? fallback : Math.min(max2, Math.max(min2, Math.trunc(parsed)));
+    return parsed === void 0 ? fallback : Math.min(max3, Math.max(min3, Math.trunc(parsed)));
   }, "clampInt");
   var truncateUtf16 = /* @__PURE__ */ __name((value, maxLength) => {
     const truncated = value.slice(0, maxLength);
@@ -12404,18 +13031,18 @@ ${prefix}}`;
     }))
   }), "genericProfile");
   var normalizeCondition = /* @__PURE__ */ __name((value) => {
-    const record2 = asRecord(value);
-    if (record2 === void 0) {
+    const record3 = asRecord(value);
+    if (record3 === void 0) {
       return void 0;
     }
-    const type = record2["type"];
+    const type = record3["type"];
     if (type === "self-hp" || type === "self-mp" || type === "ally-hp") {
-      const unit = fromOption4(decodeCombatProfileThresholdUnit, record2["unit"]) ?? "percent";
+      const unit = fromOption4(decodeCombatProfileThresholdUnit, record3["unit"]) ?? "percent";
       return {
         type,
-        op: fromOption4(decodeCombatProfileComparison, record2["op"]) ?? "<=",
+        op: fromOption4(decodeCombatProfileComparison, record3["op"]) ?? "<=",
         value: clampInt(
-          record2["value"],
+          record3["value"],
           0,
           0,
           unit === "percent" ? 100 : 999999
@@ -12426,95 +13053,95 @@ ${prefix}}`;
     if (type !== "self-aura" && type !== "target-aura") {
       return void 0;
     }
-    const auraName = trimString(record2["auraName"], MAX_AURA_NAME_LENGTH);
+    const auraName = trimString(record3["auraName"], MAX_AURA_NAME_LENGTH);
     return auraName === void 0 ? void 0 : {
       type,
       auraName,
-      op: fromOption4(decodeCombatProfileComparison, record2["op"]) ?? "<=",
-      value: clampInt(record2["value"], 0, 0, 999)
+      op: fromOption4(decodeCombatProfileComparison, record3["op"]) ?? "<=",
+      value: clampInt(record3["value"], 0, 0, 999)
     };
   }, "normalizeCondition");
   var normalizeStep = /* @__PURE__ */ __name((value) => {
-    const record2 = asRecord(value);
-    if (record2 === void 0) {
+    const record3 = asRecord(value);
+    if (record3 === void 0) {
       return void 0;
     }
-    const skill = clampInt(record2["skill"], Number.NaN, 0, 5);
+    const skill = clampInt(record3["skill"], Number.NaN, 0, 5);
     const skillSlot = fromOption4(decodeSkillSlot, skill);
     if (skillSlot === void 0) {
       return void 0;
     }
     const cooldownMode = fromOption4(
       decodeCombatProfileCooldownMode,
-      record2["cooldownMode"]
+      record3["cooldownMode"]
     );
-    const waitMs = clampInt(record2["waitMs"], 0, 0, MAX_WAIT_MS);
+    const waitMs = clampInt(record3["waitMs"], 0, 0, MAX_WAIT_MS);
     return {
       skill: skillSlot,
-      conditions: normalizeArray(record2["conditions"], normalizeCondition),
-      ...fromOption4(decodeBoolean, record2["priority"]) ? { priority: true } : {},
+      conditions: normalizeArray(record3["conditions"], normalizeCondition),
+      ...fromOption4(decodeBoolean, record3["priority"]) ? { priority: true } : {},
       ...cooldownMode === void 0 ? {} : { cooldownMode },
       ...waitMs > 0 ? { waitMs } : {}
     };
   }, "normalizeStep");
   var normalizeMessageTrigger = /* @__PURE__ */ __name((value) => {
-    const record2 = asRecord(value);
-    if (record2 === void 0) {
+    const record3 = asRecord(value);
+    if (record3 === void 0) {
       return void 0;
     }
     const messageIncludes = trimString(
-      record2["messageIncludes"],
+      record3["messageIncludes"],
       MAX_MESSAGE_TRIGGER_TEXT_LENGTH
     );
-    const skill = clampInt(record2["skill"], Number.NaN, 0, 5);
+    const skill = clampInt(record3["skill"], Number.NaN, 0, 5);
     const skillSlot = fromOption4(decodeSkillSlot, skill);
     if (messageIncludes === void 0 || skillSlot === void 0) {
       return void 0;
     }
-    const cooldownMs = clampInt(record2["cooldownMs"], 0, 0, MAX_WAIT_MS);
+    const cooldownMs = clampInt(record3["cooldownMs"], 0, 0, MAX_WAIT_MS);
     return {
       messageIncludes,
       skill: skillSlot,
-      source: fromOption4(decodeCombatProfileMessageTriggerSource, record2["source"]) ?? "any",
+      source: fromOption4(decodeCombatProfileMessageTriggerSource, record3["source"]) ?? "any",
       ...cooldownMs > 0 ? { cooldownMs } : {}
     };
   }, "normalizeMessageTrigger");
   var normalizeProfile = /* @__PURE__ */ __name((value, fallbackId) => {
-    const record2 = asRecord(value);
-    if (record2 === void 0) {
+    const record3 = asRecord(value);
+    if (record3 === void 0) {
       return void 0;
     }
-    const id = trimString(record2["id"], MAX_ID_LENGTH) ?? fallbackId;
+    const id = trimString(record3["id"], MAX_ID_LENGTH) ?? fallbackId;
     if (id === void 0) {
       return void 0;
     }
-    const label = trimString(record2["label"], MAX_LABEL_LENGTH) ?? "Profile";
+    const label = trimString(record3["label"], MAX_LABEL_LENGTH) ?? "Profile";
     const classNames = normalizeArray(
-      record2["classNames"],
+      record3["classNames"],
       (className) => trimString(className, MAX_CLASS_NAME_LENGTH)
     );
     const consumable = trimString(
-      record2["consumable"],
+      record3["consumable"],
       MAX_CONSUMABLE_NAME_LENGTH
     );
     const messageTriggers = normalizeArray(
-      record2["messageTriggers"],
+      record3["messageTriggers"],
       normalizeMessageTrigger
     );
-    const steps = normalizeArray(record2["steps"], normalizeStep);
+    const steps = normalizeArray(record3["steps"], normalizeStep);
     return {
       id,
       label,
       ...classNames.length === 0 ? {} : { classNames },
       ...consumable === void 0 ? {} : { consumable },
       delayMs: clampInt(
-        record2["delayMs"],
+        record3["delayMs"],
         DEFAULT_COMBAT_PROFILE_DELAY_MS,
         0,
         MAX_DELAY_MS
       ),
-      cooldownMode: fromOption4(decodeCombatProfileCooldownMode, record2["cooldownMode"]) ?? "use-if-ready",
-      ...fromOption4(decodeBoolean, record2["resetSkillIndexOnTargetDeath"]) ? { resetSkillIndexOnTargetDeath: true } : {},
+      cooldownMode: fromOption4(decodeCombatProfileCooldownMode, record3["cooldownMode"]) ?? "use-if-ready",
+      ...fromOption4(decodeBoolean, record3["resetSkillIndexOnTargetDeath"]) ? { resetSkillIndexOnTargetDeath: true } : {},
       steps,
       ...messageTriggers.length === 0 ? {} : { messageTriggers }
     };
@@ -12532,21 +13159,21 @@ ${prefix}}`;
     players,
     ...skill5ItemId === void 0 ? {} : { skill5ItemId }
   }), "makeCombatProfileRuntimeDeps");
-  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map4(make15({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
+  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map5(make16({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
   var resetCombatProfileCursor = /* @__PURE__ */ __name((cursor) => update(cursor.state, (state) => ({
     index: 0,
     resetVersion: state.resetVersion + 1
   })), "resetCombatProfileCursor");
   var makeCombatProfileMessageTriggerState = /* @__PURE__ */ __name(() => gen2(function* () {
-    const state = yield* make15(/* @__PURE__ */ new Map());
-    const semaphore = yield* make13(1);
+    const state = yield* make16(/* @__PURE__ */ new Map());
+    const semaphore = yield* make14(1);
     return {
       semaphore,
       state
     };
   }), "makeCombatProfileMessageTriggerState");
   var compare = /* @__PURE__ */ __name((actual, op, expected) => op === ">=" ? actual >= expected : actual <= expected, "compare");
-  var statValue = /* @__PURE__ */ __name((current, max2, unit) => unit === "value" ? current : max2 > 0 ? current / max2 * 100 : 0, "statValue");
+  var statValue = /* @__PURE__ */ __name((current, max3, unit) => unit === "value" ? current : max3 > 0 ? current / max3 * 100 : 0, "statValue");
   var auraValue = /* @__PURE__ */ __name((aura) => aura === null ? 0 : aura.stack ?? aura.value ?? 1, "auraValue");
   var matchesStatCondition = /* @__PURE__ */ __name((deps, condition) => gen2(function* () {
     if (condition.type === "self-hp") {
@@ -12627,7 +13254,7 @@ ${prefix}}`;
     }
     if (deps.skill5ItemId === void 0) return succeed7(true);
     return deps.combat.getConsumableSkillItem().pipe(
-      map4(
+      map5(
         (item) => item !== null && item.itemId === deps.skill5ItemId && item.ready === true
       )
     );
@@ -12728,9 +13355,9 @@ ${prefix}}`;
     }
   );
   var normalizeMessageTriggerText = /* @__PURE__ */ __name((value) => value.trim().replace(/\s+/gu, " ").toLowerCase(), "normalizeMessageTriggerText");
-  var matchesCombatProfileMessageTriggerMessage = /* @__PURE__ */ __name((configuredMessage, message) => {
+  var matchesCombatProfileMessageTriggerMessage = /* @__PURE__ */ __name((configuredMessage, message2) => {
     const normalizedConfigured = normalizeMessageTriggerText(configuredMessage);
-    return normalizedConfigured !== "" && normalizeMessageTriggerText(message).includes(normalizedConfigured);
+    return normalizedConfigured !== "" && normalizeMessageTriggerText(message2).includes(normalizedConfigured);
   }, "matchesCombatProfileMessageTriggerMessage");
   var matchesCombatProfileMessageTrigger = /* @__PURE__ */ __name((trigger, event) => (trigger.source === "any" || trigger.source === event.source) && matchesCombatProfileMessageTriggerMessage(
     trigger.messageIncludes,
@@ -12848,8 +13475,8 @@ ${prefix}}`;
       }
       const cursor = yield* makeCombatProfileCursor();
       const messageState = yield* makeCombatProfileMessageTriggerState();
-      const actionGate = yield* make13(1);
-      const state = yield* make15({
+      const actionGate = yield* make14(1);
+      const state = yield* make16({
         generation: 0,
         resetPending: false,
         target: void 0
@@ -12942,10 +13569,10 @@ ${prefix}}`;
             })
           ).pipe(
             catch_2(
-              (failure) => options.onAsyncFailure === void 0 ? logError(
+              (failure2) => options.onAsyncFailure === void 0 ? logError(
                 "Combat profile message trigger failed",
-                failure.failureCause
-              ).pipe(annotateLogs({ component: "combat" })) : options.onAsyncFailure(failure)
+                failure2.failureCause
+              ).pipe(annotateLogs({ component: "combat" })) : options.onAsyncFailure(failure2)
             )
           )
         );
@@ -13046,7 +13673,7 @@ ${prefix}}`;
         }
       );
       const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get4(state).pipe(
-        map4(
+        map5(
           (current) => !current.resetPending && current.generation === lease.generation && current.target?.monsterMapId === lease.monster.monsterMapId
         )
       ), "leaseIsCurrent");
@@ -13232,10 +13859,10 @@ ${prefix}}`;
     const decoded = decodeActionAcknowledgementsPayload(value);
     if (isNone2(decoded)) return [];
     const acknowledgements = [];
-    const append3 = /* @__PURE__ */ __name((values2, decode2) => {
+    const append3 = /* @__PURE__ */ __name((values2, decode3) => {
       if (!Array.isArray(values2)) return;
       for (const entry of values2) {
-        const acknowledgement = decode2(entry);
+        const acknowledgement = decode3(entry);
         if (acknowledgement !== void 0) acknowledgements.push(acknowledgement);
       }
     }, "append");
@@ -13307,6 +13934,445 @@ ${prefix}}`;
     return { acquire };
   }, "makeCombatProfileConsumableClaims");
 
+  // packages/schemas/src/scriptPath.ts
+  var windowsReservedPathSegment = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+  var unsafeScriptPathCharacters = /[<>:"\\|?*]/;
+  var hasControlCharacter = /* @__PURE__ */ __name((value) => Array.from(value).some((character) => character.charCodeAt(0) < 32), "hasControlCharacter");
+  var parseScriptPathSegments = /* @__PURE__ */ __name((value) => {
+    if (value === "" || value.startsWith("/") || value.includes("\\")) {
+      return null;
+    }
+    const segments = value.split("/");
+    return segments.every(
+      (segment) => segment !== "" && segment !== "." && segment !== ".." && !segment.endsWith(".") && !segment.endsWith(" ") && !unsafeScriptPathCharacters.test(segment) && !hasControlCharacter(segment) && !windowsReservedPathSegment.test(segment)
+    ) ? segments : null;
+  }, "parseScriptPathSegments");
+
+  // packages/schemas/src/scriptPackages.ts
+  var hasScriptPathSyntax = /* @__PURE__ */ __name((value) => parseScriptPathSegments(value) !== null, "hasScriptPathSyntax");
+  var isScriptPackageRepositorySubdirectory = /* @__PURE__ */ __name((value) => value.trim() === value && value.normalize("NFC") === value && hasScriptPathSyntax(value), "isScriptPackageRepositorySubdirectory");
+  var ScriptPackageRepositorySubdirectorySchema = String4.check(
+    makeFilter2(isScriptPackageRepositorySubdirectory, {
+      expected: "a portable repository-relative path using forward slashes"
+    })
+  );
+  var isReservedScriptPackageName = /* @__PURE__ */ __name((name) => name === "effect" || name === "lucent" || name.startsWith("lucent/"), "isReservedScriptPackageName");
+  var ScriptPackageNameSchema = String4.check(
+    makeFilter2(
+      (name) => name.trim() === name && !isReservedScriptPackageName(name) && hasScriptPathSyntax(name),
+      {
+        expected: "a safe, case-sensitive, non-reserved package name"
+      }
+    )
+  );
+  var ScriptPackageDirectorySchema = String4.check(
+    makeFilter2(
+      (value) => value.trim() === value && value.normalize("NFC") === value && !value.includes("/") && hasScriptPathSyntax(value),
+      { expected: "a portable single folder name" }
+    )
+  );
+  var ScriptRelativePathSchema = String4.check(
+    makeFilter2(hasScriptPathSyntax, {
+      expected: "a safe relative path using forward slashes"
+    })
+  );
+  var ScriptReferenceSchema = Union2([
+    Struct({
+      kind: Literal2("loose"),
+      path: ScriptRelativePathSchema
+    }),
+    Struct({
+      kind: Literal2("package"),
+      packageName: ScriptPackageNameSchema,
+      path: ScriptRelativePathSchema
+    })
+  ]);
+  var ScriptPackageCompatibilitySchema = Union2([
+    Struct({
+      status: Literal2("compatible"),
+      currentVersion: String4,
+      requiredVersion: String4
+    }),
+    Struct({
+      status: Literal2("incompatible"),
+      currentVersion: String4,
+      requiredVersion: String4
+    }),
+    Struct({
+      status: Literal2("unknown"),
+      currentVersion: String4,
+      warning: optionalKey2(String4)
+    })
+  ]);
+  var ScriptCatalogEntrySchema = Struct({
+    name: String4,
+    path: String4,
+    relativePath: String4,
+    packageName: optionalKey2(String4),
+    reference: ScriptReferenceSchema
+  });
+  var ScriptPackageIntegritySchema = Literals([
+    "modified",
+    "unmanaged",
+    "verified"
+  ]);
+  var ScriptPackageRepositorySourceFields = {
+    repositoryUrl: String4,
+    requestedRef: optionalKey2(String4),
+    credentialId: optionalKey2(String4)
+  };
+  var ScriptPackageSourceSchema = Union2([
+    Struct({
+      kind: Literal2("repository"),
+      ...ScriptPackageRepositorySourceFields,
+      resolvedCommit: String4
+    }),
+    Struct({
+      kind: Literal2("directory"),
+      ...ScriptPackageRepositorySourceFields,
+      // Local bundled copies have an exact tree without a resolved remote commit.
+      resolvedCommit: optionalKey2(String4),
+      resolvedTree: String4,
+      subdirectory: ScriptPackageRepositorySubdirectorySchema
+    })
+  ]);
+  var ScriptPackageRevisionSchema = Union2([
+    Struct({ kind: Literal2("commit"), sha: String4 }),
+    Struct({ kind: Literal2("tree"), sha: String4 })
+  ]);
+  var ScriptPackageUpdateStateSchema = Union2([
+    Struct({ status: Literal2("unchecked") }),
+    Struct({
+      status: Literal2("current"),
+      checkedAt: String4
+    }),
+    Struct({
+      status: Literal2("available"),
+      checkedAt: String4,
+      revision: ScriptPackageRevisionSchema
+    }),
+    Struct({
+      status: Literal2("unknown"),
+      checkedAt: optionalKey2(String4),
+      message: String4
+    }),
+    Struct({
+      status: Literal2("rate-limited"),
+      retryAt: String4,
+      message: String4
+    })
+  ]);
+  var ScriptPackageDependencyIssueSchema = Union2([
+    Struct({
+      reason: Literal2("missing"),
+      packageName: String4,
+      requiredVersion: String4
+    }),
+    Struct({
+      reason: Literal2("version-mismatch"),
+      installedVersion: String4,
+      packageName: String4,
+      requiredVersion: String4
+    }),
+    Struct({
+      reason: Literal2("version-unavailable"),
+      packageName: String4,
+      requiredVersion: String4
+    }),
+    Struct({
+      reason: Literal2("unavailable"),
+      packageName: String4,
+      requiredVersion: String4
+    })
+  ]);
+  var ScriptPackageDependencyStatusSchema = Union2([
+    Struct({ status: Literal2("ready") }),
+    Struct({
+      status: Literal2("blocked"),
+      issues: ArraySchema(ScriptPackageDependencyIssueSchema)
+    })
+  ]);
+  var ValidScriptPackageSchema = Struct({
+    status: Literal2("valid"),
+    compatibility: ScriptPackageCompatibilitySchema,
+    dependencyStatus: ScriptPackageDependencyStatusSchema,
+    description: optionalKey2(String4),
+    integrity: ScriptPackageIntegritySchema,
+    name: String4,
+    path: String4,
+    source: optionalKey2(ScriptPackageSourceSchema),
+    update: ScriptPackageUpdateStateSchema,
+    version: optionalKey2(String4),
+    warning: optionalKey2(String4)
+  });
+  var InvalidScriptPackageSchema = Struct({
+    status: Literal2("invalid"),
+    diagnostic: String4,
+    name: optionalKey2(String4),
+    path: String4
+  });
+  var ScriptPackageSummarySchema = Union2([
+    ValidScriptPackageSchema,
+    InvalidScriptPackageSchema
+  ]);
+  var ScriptCatalogSchema = Struct({
+    packages: ArraySchema(ScriptPackageSummarySchema),
+    revision: String4,
+    scripts: ArraySchema(ScriptCatalogEntrySchema)
+  });
+  var SCRIPT_CATALOG_PAGE_MAX_ENTRIES = 1024;
+  var ScriptCatalogOverviewSchema = Struct({
+    packages: ArraySchema(ScriptPackageSummarySchema),
+    revision: String4,
+    scriptCount: NonNegativeInt
+  });
+  var ScriptCatalogPageRequestSchema = Struct({
+    limit: boundedInt(1, SCRIPT_CATALOG_PAGE_MAX_ENTRIES),
+    offset: NonNegativeInt,
+    query: String4,
+    revision: String4
+  });
+  var ScriptCatalogPageSchema = Struct({
+    entries: ArraySchema(ScriptCatalogEntrySchema),
+    offset: NonNegativeInt,
+    revision: String4,
+    total: NonNegativeInt
+  });
+  var ScriptCatalogChangeSchema = Struct({
+    revision: String4
+  });
+  var GitHubCredentialSummarySchema = Struct({
+    id: String4,
+    label: String4
+  });
+  var ScriptPackageNonEmptyStringSchema = String4.check(
+    makeFilter2((value) => value.trim() !== "", {
+      expected: "a non-empty string"
+    })
+  );
+  var GitHubCredentialWriteSchema = Struct({
+    id: optionalKey2(String4),
+    label: ScriptPackageNonEmptyStringSchema,
+    token: ScriptPackageNonEmptyStringSchema
+  });
+  var ScriptPackageInstallRequestSchema = Struct({
+    credentialId: optionalKey2(String4),
+    ref: optionalKey2(String4),
+    replaceExisting: optionalKey2(Boolean3),
+    repositoryUrl: ScriptPackageNonEmptyStringSchema,
+    subdirectory: optionalKey2(ScriptPackageRepositorySubdirectorySchema)
+  });
+  var ScriptPackageUpdateRequestSchema = Struct({
+    packageName: ScriptPackageNameSchema,
+    replaceModified: optionalKey2(Boolean3)
+  });
+  var ScriptPackageRestoreRequestSchema = Struct({
+    packageName: ScriptPackageNameSchema
+  });
+  var ScriptPackageRemoveRequestSchema = Struct({
+    confirmModified: optionalKey2(Boolean3),
+    packageName: ScriptPackageNameSchema
+  });
+  var ScriptPackageMutationResultSchema = Union2([
+    Struct({
+      status: Literal2("completed"),
+      catalog: ScriptCatalogOverviewSchema,
+      packageName: String4
+    }),
+    Struct({
+      status: Literal2("unchanged"),
+      catalog: ScriptCatalogOverviewSchema,
+      packageName: String4
+    }),
+    Struct({
+      status: Literal2("confirmation-required"),
+      packageName: String4,
+      reason: Literals(["existing-package", "local-modifications"])
+    })
+  ]);
+
+  // packages/schemas/src/scriptInputs.ts
+  var ScriptInputValueSchema = Union2([
+    String4,
+    Number6,
+    Boolean3,
+    ArraySchema(String4)
+  ]);
+  var ScriptInputTypeSchema = Literals([
+    "string",
+    "number",
+    "boolean",
+    "select",
+    "multi-select"
+  ]);
+  var ScriptInputFieldBaseSchema = {
+    key: String4,
+    label: String4,
+    description: optionalKey2(String4),
+    required: optionalKey2(Boolean3)
+  };
+  var ScriptStringInputFieldSchema = Struct({
+    ...ScriptInputFieldBaseSchema,
+    type: Literal2("string"),
+    default: optionalKey2(String4)
+  });
+  var ScriptNumberInputFieldSchema = Struct({
+    ...ScriptInputFieldBaseSchema,
+    type: Literal2("number"),
+    default: optionalKey2(Number6)
+  });
+  var ScriptBooleanInputFieldSchema = Struct({
+    ...ScriptInputFieldBaseSchema,
+    type: Literal2("boolean"),
+    default: optionalKey2(Boolean3)
+  });
+  var ScriptSelectInputFieldSchema = Struct({
+    ...ScriptInputFieldBaseSchema,
+    type: Literal2("select"),
+    options: ArraySchema(String4),
+    default: optionalKey2(String4)
+  }).check(
+    makeFilter2(
+      ({ default: defaultValue, options }) => options.length > 0 && (defaultValue === void 0 || options.includes(defaultValue)),
+      {
+        expected: "select input options to be non-empty and contain the default value"
+      }
+    )
+  );
+  var ScriptMultiSelectInputFieldSchema = Struct({
+    ...ScriptInputFieldBaseSchema,
+    type: Literal2("multi-select"),
+    options: ArraySchema(String4),
+    default: optionalKey2(ArraySchema(String4))
+  }).check(
+    makeFilter2(
+      ({ default: defaultValue, options }) => {
+        const optionSet = new Set(options);
+        return options.length > 0 && optionSet.size === options.length && (defaultValue === void 0 || new Set(defaultValue).size === defaultValue.length && defaultValue.every((value) => optionSet.has(value)));
+      },
+      {
+        expected: "multi-select input options to be non-empty and unique, and contain every unique default value"
+      }
+    )
+  );
+  var ScriptInputFieldSchema = Union2([
+    ScriptStringInputFieldSchema,
+    ScriptNumberInputFieldSchema,
+    ScriptBooleanInputFieldSchema,
+    ScriptSelectInputFieldSchema,
+    ScriptMultiSelectInputFieldSchema
+  ]);
+  var ScriptInputsDefinitionSchema = Struct({
+    id: String4,
+    fields: ArraySchema(ScriptInputFieldSchema)
+  }).check(
+    makeFilter2(
+      ({ fields }) => new Set(fields.map((field2) => field2.key)).size === fields.length,
+      { expected: "script input field keys to be unique" }
+    )
+  );
+  var ScriptFileReferenceSchema = Struct({
+    path: String4,
+    name: String4,
+    reference: optionalKey2(ScriptReferenceSchema)
+  });
+  var ScriptFileSchema = Struct({
+    path: String4,
+    name: String4,
+    source: String4,
+    inputs: NullOr(ScriptInputsDefinitionSchema),
+    revision: String4,
+    reference: optionalKey2(ScriptReferenceSchema)
+  });
+  var ScriptOpenFileResultSchema = Union2([
+    Struct({
+      canceled: Literal2(true)
+    }),
+    Struct({
+      canceled: Literal2(false),
+      file: ScriptFileSchema
+    })
+  ]);
+  var ScriptSelectFileResultSchema = Union2([
+    Struct({
+      canceled: Literal2(true)
+    }),
+    Struct({
+      canceled: Literal2(false),
+      file: ScriptFileReferenceSchema
+    })
+  ]);
+  var ScriptFileResolutionSchema = Union2([
+    Struct({
+      status: Literal2("found"),
+      file: ScriptFileSchema
+    }),
+    Struct({
+      status: Literal2("missing"),
+      path: String4
+    }),
+    Struct({
+      status: Literal2("failed"),
+      path: String4,
+      message: String4,
+      detailsText: optionalKey2(String4)
+    })
+  ]);
+  var ScriptInputValuesSchema = Record(
+    String4,
+    ScriptInputValueSchema
+  );
+  var defaultScriptInputValue = /* @__PURE__ */ __name((field2) => Object.hasOwn(field2, "default") ? field2.default : void 0, "defaultScriptInputValue");
+  var normalizeValue = /* @__PURE__ */ __name((field2, value) => {
+    switch (field2.type) {
+      case "boolean":
+        return typeof value === "boolean" ? value : void 0;
+      case "number":
+        return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+      case "multi-select": {
+        if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+          return void 0;
+        }
+        const selected = new Set(value);
+        return field2.options.filter((option2) => selected.has(option2));
+      }
+      case "select":
+        return typeof value === "string" && field2.options.includes(value) ? value : void 0;
+      case "string":
+        return typeof value === "string" ? value : void 0;
+    }
+  }, "normalizeValue");
+  var normalizeScriptInputValues = /* @__PURE__ */ __name((definition, rawValues = {}) => {
+    const values2 = {};
+    for (const field2 of definition.fields) {
+      const normalized = normalizeValue(field2, rawValues[field2.key]);
+      if (normalized !== void 0) {
+        values2[field2.key] = normalized;
+        continue;
+      }
+      const fallback = defaultScriptInputValue(field2);
+      if (fallback !== void 0) {
+        const normalizedFallback = normalizeValue(field2, fallback);
+        if (normalizedFallback !== void 0) {
+          values2[field2.key] = normalizedFallback;
+        }
+      }
+    }
+    return values2;
+  }, "normalizeScriptInputValues");
+  var findMissingRequiredScriptInputs = /* @__PURE__ */ __name((definition, values2) => definition.fields.flatMap((field2) => {
+    if (field2.required !== true || !Object.hasOwn(values2, field2.key)) {
+      return field2.required === true ? [field2.key] : [];
+    }
+    const value = values2[field2.key];
+    return field2.type === "multi-select" && (!Array.isArray(value) || value.length === 0) ? [field2.key] : [];
+  }), "findMissingRequiredScriptInputs");
+  var validateScriptInputValues = /* @__PURE__ */ __name((definition, values2) => {
+    const normalized = normalizeScriptInputValues(definition, values2);
+    const fieldKeys = findMissingRequiredScriptInputs(definition, normalized);
+    return fieldKeys.length === 0 ? { status: "ok", values: normalized } : { fieldKeys, status: "missing-required", values: normalized };
+  }, "validateScriptInputValues");
+
   // packages/schemas/src/accountSettings.ts
   var ACCOUNT_SETTINGS_VERSION = 1;
   var MINIMUM_ROOM_NUMBER = 1;
@@ -13314,7 +14380,7 @@ ${prefix}}`;
   var MINIMUM_RANDOM_PRIVATE_ROOM = 1e4;
   var MAXIMUM_ROOM_NUMBER = 99999;
   var RoomNumberSchema = Int.check(
-    isBetween({
+    isBetween2({
       minimum: MINIMUM_ROOM_NUMBER,
       maximum: MAXIMUM_ROOM_NUMBER
     })
@@ -13344,10 +14410,163 @@ ${prefix}}`;
   var AccountSettingsPatchSchema = Struct({
     scripts: optionalKey2(AccountScriptSettingsPatchSchema)
   });
+  var RANDOM_PRIVATE_ROOM_POLICY = {
+    kind: "random-private"
+  };
+  var DEFAULT_ACCOUNT_SETTINGS = {
+    version: ACCOUNT_SETTINGS_VERSION,
+    scripts: {
+      restartAfterReconnect: false,
+      roomPolicy: RANDOM_PRIVATE_ROOM_POLICY,
+      safeStartStop: true
+    }
+  };
   var UnknownRecordSchema2 = Record(String4, Unknown2);
   var decodeRecord3 = decodeUnknownOption2(UnknownRecordSchema2);
   var decodeBoolean2 = decodeUnknownOption2(Boolean3);
   var decodeRoomPolicy = decodeUnknownOption2(RoomPolicySchema);
+
+  // packages/schemas/src/environment.ts
+  var EnvironmentItemBuckets = [
+    "ac-member",
+    "ac-non-member",
+    "non-ac-member",
+    "non-ac-non-member"
+  ];
+  var EnvironmentItemBucketSchema = Literals(
+    EnvironmentItemBuckets
+  );
+  var EnvironmentItemRulesSchema = Struct({
+    buckets: ArraySchema(EnvironmentItemBucketSchema),
+    rejectElse: Boolean3
+  });
+  var EnvironmentDropPolicySchema = Struct({
+    /** Accept member-only AC-tagged items. */
+    acceptAcMemberOnlyDrops: Boolean3,
+    /** Accept non-member AC-tagged items. */
+    acceptAcNonMemberDrops: Boolean3,
+    /** Accept member-only non-AC items. */
+    acceptNonAcMemberOnlyDrops: Boolean3,
+    /** Accept non-member non-AC items. */
+    acceptNonAcNonMemberDrops: Boolean3,
+    /** Reject any unregistered drop that is not accepted by this policy. */
+    rejectUnregisteredDrops: Boolean3
+  });
+  var EnvironmentQuestAutoRegisterOptionsSchema = Struct({
+    requirements: Boolean3,
+    rewards: Boolean3
+  });
+  var EnvironmentAutomationOptionsSchema = Struct({
+    boosts: Boolean3,
+    drops: Boolean3,
+    quests: Boolean3
+  });
+  var EnvironmentAutomationCapabilities = [
+    "boosts",
+    "drops",
+    "quests"
+  ];
+  var EnvironmentAutomationCapabilitySchema = Literals(
+    EnvironmentAutomationCapabilities
+  );
+  var EnvironmentDropItemDataSchema = Struct({
+    coins: Boolean3,
+    memberOnly: Boolean3,
+    name: String4
+  });
+  var EnvironmentStateSchema = Struct({
+    automation: EnvironmentAutomationOptionsSchema,
+    questIds: ArraySchema(PositiveInt),
+    questAutoRegister: EnvironmentQuestAutoRegisterOptionsSchema,
+    questRewards: Record(PositiveInt, PositiveInt),
+    itemNames: ArraySchema(String4),
+    itemNotificationNames: ArraySchema(String4),
+    itemRules: EnvironmentItemRulesSchema,
+    boosts: ArraySchema(String4)
+  });
+  var PositiveIntFromNumber = Number6.pipe(
+    decodeTo2(
+      PositiveInt,
+      transform2({
+        decode: Math.trunc,
+        encode: /* @__PURE__ */ __name((value) => value, "encode")
+      })
+    )
+  );
+  var decodeQuestIdentifier = decodeUnknownOption2(PositiveIntFromNumber);
+  var decodeTrimmedName = decodeUnknownOption2(TrimmedNonEmptyString);
+  var isEnvironmentItemBucketValue = is2(EnvironmentItemBucketSchema);
+  var normalizeEnvironmentItemRules = /* @__PURE__ */ __name((rules) => {
+    const requested = new Set(rules.buckets.filter(isEnvironmentItemBucketValue));
+    return {
+      buckets: EnvironmentItemBuckets.filter((bucket) => requested.has(bucket)),
+      rejectElse: rules.rejectElse
+    };
+  }, "normalizeEnvironmentItemRules");
+  var environmentItemRulesToDropPolicy = /* @__PURE__ */ __name((rules) => {
+    const buckets = new Set(normalizeEnvironmentItemRules(rules).buckets);
+    return {
+      acceptAcMemberOnlyDrops: buckets.has("ac-member"),
+      acceptAcNonMemberDrops: buckets.has("ac-non-member"),
+      acceptNonAcMemberOnlyDrops: buckets.has("non-ac-member"),
+      acceptNonAcNonMemberDrops: buckets.has("non-ac-non-member"),
+      rejectUnregisteredDrops: rules.rejectElse
+    };
+  }, "environmentItemRulesToDropPolicy");
+  var isEnvironmentItemRules = is2(EnvironmentItemRulesSchema);
+  var isEnvironmentQuestAutoRegisterOptions = is2(
+    EnvironmentQuestAutoRegisterOptionsSchema
+  );
+
+  // packages/schemas/src/filesystem.ts
+  var SCRIPT_FILE_SYSTEM_MAX_BYTES = 8 * 1024 * 1024;
+  var FileSystemOperationSchema = Literals([
+    "exists",
+    "list",
+    "read-json",
+    "read-text",
+    "remove",
+    "write-json",
+    "write-text"
+  ]);
+  var FileSystemErrorReasonSchema = Literals([
+    "invalid-path",
+    "not-found",
+    "not-file",
+    "not-directory",
+    "directory-not-empty",
+    "too-large",
+    "too-many-entries",
+    "invalid-utf8",
+    "invalid-json",
+    "not-json-serializable",
+    "permission-denied",
+    "busy",
+    "session-closed",
+    "unavailable"
+  ]);
+  var FileSystemErrorFields = {
+    operation: FileSystemOperationSchema,
+    path: optionalKey2(String4),
+    reason: FileSystemErrorReasonSchema
+  };
+  var FileSystemFailureSchema = Struct(FileSystemErrorFields);
+  var FileSystemError = class extends TaggedError3()(
+    "FileSystemError",
+    FileSystemErrorFields
+  ) {
+    static {
+      __name(this, "FileSystemError");
+    }
+    get message() {
+      const target = this.path === void 0 ? "" : ` at ${this.path}`;
+      return `Filesystem ${this.operation} failed${target}: ${this.reason}.`;
+    }
+  };
+  var FileSystemEntrySchema = Struct({
+    kind: Literals(["file", "directory", "symbolic-link", "other"]),
+    name: String4
+  });
 
   // packages/runtime/src/game/EnhancementSelectors.ts
   var EnhancementSelectorSchema = Struct({
@@ -13406,10 +14625,10 @@ ${prefix}}`;
     const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "inventory", selector), "get");
     const getSlots = fn2("Inventory.getSlots")(function* (pool = "bag") {
       if (!(yield* isHydrated(host, "inventory"))) return 0;
-      return yield* bridge.invoke(slotMethods[pool], void 0, WireInt).pipe(map4(getOrElse(() => 0)));
+      return yield* bridge.invoke(slotMethods[pool], void 0, WireInt).pipe(map5(getOrElse(() => 0)));
     });
     const getUsedSlots = /* @__PURE__ */ __name((pool = "bag") => host.read({ kind: "items", container: "inventory" }).pipe(
-      map4(
+      map5(
         (items) => items.filter((item) => item.pool === pool).length
       )
     ), "getUsedSlots");
@@ -13428,13 +14647,13 @@ ${prefix}}`;
       return (yield* getAvailableSlots(pool)) > 0;
     });
     const contains = /* @__PURE__ */ __name((selector, quantity) => get6(selector).pipe(
-      map4(
+      map5(
         (item) => item !== null && item.quantity >= normalizeItemQuantity(quantity)
       )
     ), "contains");
     const canUseMemberItem = fn2("Inventory.canUseMemberItem")(function* (memberOnly) {
       if (!memberOnly) return true;
-      return yield* bridge.invoke("player.isMember", void 0, Boolean3).pipe(map4(getOrElse(() => false)));
+      return yield* bridge.invoke("player.isMember", void 0, Boolean3).pipe(map5(getOrElse(() => false)));
     });
     const getLocalUserId = fn2("Inventory.getLocalUserId")(function* () {
       const cached2 = yield* host.read({ kind: "selfEntityId" });
@@ -13461,7 +14680,7 @@ ${prefix}}`;
         },
         {
           timeout: "5 seconds",
-          trigger: bridge.invoke("inventory.wear", [{ itemId }], Boolean3).pipe(map4(getOrElse(() => false)))
+          trigger: bridge.invoke("inventory.wear", [{ itemId }], Boolean3).pipe(map5(getOrElse(() => false)))
         }
       );
       return wearPacket !== null && response?.success === true;
@@ -13494,7 +14713,7 @@ ${prefix}}`;
                   }, "predicate")
                 },
                 {
-                  trigger: bridge.invoke("inventory.equip", [{ itemId }], Boolean3).pipe(map4(getOrElse(() => false)))
+                  trigger: bridge.invoke("inventory.equip", [{ itemId }], Boolean3).pipe(map5(getOrElse(() => false)))
                 }
               )
             );
@@ -13506,7 +14725,7 @@ ${prefix}}`;
       },
       consumableEquipment.withPermit,
       timeoutOption2("5 seconds"),
-      map4(getOrElse(() => false))
+      map5(getOrElse(() => false))
     );
     const equipEffect = fn2("Inventory.equip")(function* (selector, options) {
       const item = yield* get6(selector);
@@ -13544,7 +14763,7 @@ ${prefix}}`;
                 "inventory.equip",
                 [{ itemId: item.itemId }],
                 Boolean3
-              ).pipe(map4(getOrElse(() => false)))
+              ).pipe(map5(getOrElse(() => false)))
             }
           );
           if (equipPacket === null) return false;
@@ -13560,11 +14779,11 @@ ${prefix}}`;
       }
       if (!(yield* canUseMemberItem(item.memberOnly))) return false;
       const startingQuantity = item.quantity;
-      const sent = yield* bridge.invoke("inventory.use", [{ itemId: item.itemId }], Boolean3).pipe(map4(getOrElse(() => false)));
+      const sent = yield* bridge.invoke("inventory.use", [{ itemId: item.itemId }], Boolean3).pipe(map5(getOrElse(() => false)));
       if (!sent) return false;
       return yield* wait.until(
         get6(item.itemId).pipe(
-          map4(
+          map5(
             (current) => current === null || current.quantity < startingQuantity
           )
         ),
@@ -13614,7 +14833,7 @@ ${prefix}}`;
           "inventory.unequipConsumable",
           [{ itemId: item.itemId }],
           Boolean3
-        ).pipe(map4(getOrElse(() => false)));
+        ).pipe(map5(getOrElse(() => false)));
         if (!sent) return false;
         yield* host.command({ kind: "refreshEquippedConsumable" });
         const current = yield* get6(item.itemId);
@@ -13622,7 +14841,7 @@ ${prefix}}`;
       },
       consumableEquipment.withPermit,
       timeoutOption2("5 seconds"),
-      map4(getOrElse(() => false))
+      map5(getOrElse(() => false))
     );
     return {
       canAccept,
@@ -13753,7 +14972,7 @@ ${prefix}}`;
       }, "onSome")
     });
   }, "normalizeSkillInterval");
-  var makeCombat = /* @__PURE__ */ __name((bridge, antiCounter, host, drops, events, inventory, map7, monsters, player, players, settings, temporary, wait) => {
+  var makeCombat = /* @__PURE__ */ __name((bridge, antiCounter, host, drops, events, inventory, map8, monsters, player, players, settings, temporary, wait) => {
     const consumableCasts = makeUnsafe5(1);
     const targetValue = readCombatTarget(bridge);
     const targetAuras = /* @__PURE__ */ __name((options) => targetValue.pipe(
@@ -13767,11 +14986,11 @@ ${prefix}}`;
           kind: "playerAuras",
           entityId: target2.entityId,
           auraKind: options?.kind ?? null
-        })).pipe(map4((auras) => auras.map(toLiveAura)));
+        })).pipe(map5((auras) => auras.map(toLiveAura)));
       })
     ), "targetAuras");
     const getConsumableSkillItem = /* @__PURE__ */ __name(() => bridge.invoke("combat.getConsumableSkillItem", void 0, Consumable).pipe(
-      map4(
+      map5(
         match({
           onNone: /* @__PURE__ */ __name(() => null, "onNone"),
           onSome: /* @__PURE__ */ __name((item) => {
@@ -13795,15 +15014,15 @@ ${prefix}}`;
             { inventory, player },
             profile
           ).pipe(
-            map4(
-              (classWarning) => [classWarning, warning].filter((message) => message !== void 0)
+            map5(
+              (classWarning) => [classWarning, warning].filter((message2) => message2 !== void 0)
             )
           )
         };
       }
     );
     const getSkillCooldownRemainingMs = /* @__PURE__ */ __name((skill) => bridge.invoke("combat.getSkillCooldownRemaining", [skill], WireInt).pipe(
-      map4(
+      map5(
         match({
           onNone: /* @__PURE__ */ __name(() => null, "onNone"),
           onSome: /* @__PURE__ */ __name((remaining) => Math.max(0, Math.trunc(remaining)), "onSome")
@@ -13818,7 +15037,7 @@ ${prefix}}`;
         let dispatch;
         let confirmation = null;
         const projectedSourceId = yield* host.read({ kind: "selfEntityId" });
-        const sourceId = projectedSourceId ?? (yield* bridge.invoke("player.getUserId", void 0, PositiveWireInt).pipe(map4(getOrNull)));
+        const sourceId = projectedSourceId ?? (yield* bridge.invoke("player.getUserId", void 0, PositiveWireInt).pipe(map5(getOrNull)));
         if (sourceId === null) return null;
         yield* wait.forPacket(
           {
@@ -13853,7 +15072,7 @@ ${prefix}}`;
                 "combat.castConsumableOnMonster",
                 [toMonsterSelector(selector), expectedItemId],
                 ConsumableCastDispatch
-              ).pipe(map4(getOrNull));
+              ).pipe(map5(getOrNull));
               if (result2 === null || result2.itemId !== expectedItemId) {
                 return false;
               }
@@ -13868,7 +15087,7 @@ ${prefix}}`;
     const canUseSkill = /* @__PURE__ */ __name((skill) => {
       const index = skillIndex(skill);
       return index === null ? succeed7(false) : getSkillCooldownRemainingMs(index).pipe(
-        map4((remaining) => remaining === 0)
+        map5((remaining) => remaining === 0)
       );
     }, "canUseSkill");
     const waitForSkillReady = /* @__PURE__ */ __name((index) => wait.until(
@@ -13876,7 +15095,7 @@ ${prefix}}`;
         flatMap3(
           (remaining) => remaining === null ? succeed7(false) : remaining > 0 ? sleep2(remaining).pipe(as2(false)) : sleep2("150 millis").pipe(
             andThen2(getSkillCooldownRemainingMs(index)),
-            map4((confirmed) => confirmed === 0)
+            map5((confirmed) => confirmed === 0)
           )
         )
       ),
@@ -13889,7 +15108,7 @@ ${prefix}}`;
     ), "antiCounterActive");
     const stopCombat2 = stopCombat(bridge);
     const resolveMonsterMapId = /* @__PURE__ */ __name((query) => monsters.getAvailable().pipe(
-      map4(
+      map5(
         (available) => available.find((monster) => monster.matches(query))?.monsterMapId
       )
     ), "resolveMonsterMapId");
@@ -13929,7 +15148,7 @@ ${prefix}}`;
             options?.force === true
           ],
           Boolean3
-        ).pipe(map4(getOrElse(() => false)));
+        ).pipe(map5(getOrElse(() => false)));
       });
     }, "useSkill");
     const attack = /* @__PURE__ */ __name((selector) => {
@@ -13944,12 +15163,12 @@ ${prefix}}`;
           "combat.attackMonster",
           [toMonsterSelector(selector)],
           Boolean3
-        ).pipe(map4(getOrElse(() => false)));
+        ).pipe(map5(getOrElse(() => false)));
       });
     }, "attack");
     const reachHuntTarget = /* @__PURE__ */ __name((target2) => {
       if (target2 === null || target2.cell === "") return succeed7(null);
-      return player.jumpToCell(target2.cell).pipe(map4((reached) => reached ? target2 : null));
+      return player.jumpToCell(target2.cell).pipe(map5((reached) => reached ? target2 : null));
     }, "reachHuntTarget");
     const hunt = /* @__PURE__ */ __name((selector, options) => {
       return monsters.getAll().pipe(
@@ -14081,7 +15300,7 @@ ${prefix}}`;
         (candidate) => candidate.matches(selector)
       );
       if (monster === void 0) return false;
-      yield* map7.setSpawnPoint();
+      yield* map8.setSpawnPoint();
       const death = wait.forEvent(
         {
           monsterMapId: monster.monsterMapId,
@@ -14092,7 +15311,7 @@ ${prefix}}`;
             as2(true)
           )
         }
-      ).pipe(map4((event) => event !== null));
+      ).pipe(map5((event) => event !== null));
       const projectedEnd = wait.untilSome(
         all2([
           host.read({
@@ -14101,7 +15320,7 @@ ${prefix}}`;
           }),
           host.read({ kind: "map" })
         ]).pipe(
-          map4(
+          map5(
             ([current, currentMap]) => current === null || currentMap.id !== startMap.id || currentMap.name !== startMap.name || currentMap.roomNumber !== startMap.roomNumber ? some2(false) : current.dead ? some2(true) : none2()
           )
         ),
@@ -14109,7 +15328,7 @@ ${prefix}}`;
       );
       return yield* raceFirst2(
         death,
-        projectedEnd.pipe(map4((dead) => dead === true))
+        projectedEnd.pipe(map5((dead) => dead === true))
       );
     }), "killWithRuntime");
     const kill = /* @__PURE__ */ __name((selector, options) => scoped2(
@@ -14144,7 +15363,7 @@ ${prefix}}`;
     const killForItem = /* @__PURE__ */ __name((selector, item, quantity, options) => killFor(selector, item, quantity, inventory, options), "killForItem");
     const killForTempItem = /* @__PURE__ */ __name((selector, item, quantity, options) => killFor(selector, item, quantity, temporary, options), "killForTempItem");
     const getTargetAura2 = /* @__PURE__ */ __name((name, options) => targetAuras(options).pipe(
-      map4(
+      map5(
         (auras) => auras.find(
           (aura) => aura.name.localeCompare(name, void 0, {
             sensitivity: "accent"
@@ -14152,7 +15371,7 @@ ${prefix}}`;
         ) ?? null
       )
     ), "getTargetAura");
-    const hasTargetAura = /* @__PURE__ */ __name((name, options) => getTargetAura2(name, options).pipe(map4((aura) => aura !== null)), "hasTargetAura");
+    const hasTargetAura = /* @__PURE__ */ __name((name, options) => getTargetAura2(name, options).pipe(map5((aura) => aura !== null)), "hasTargetAura");
     const getTarget = /* @__PURE__ */ __name(() => targetValue, "getTarget");
     const target = {
       auras: {
@@ -14193,7 +15412,7 @@ ${prefix}}`;
   });
   var decodeAcceptResponse = decodeUnknownOption2(AcceptResponse);
   var makeDrops = fnUntraced2(function* (bridge, host, auth, wait) {
-    const accepts = yield* make13(1);
+    const accepts = yield* make14(1);
     const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "drop", selector), "get");
     const accept = /* @__PURE__ */ __name((selector) => {
       return accepts.withPermits(1)(
@@ -14223,25 +15442,25 @@ ${prefix}}`;
             },
             {
               timeout: "10 seconds",
-              trigger: bridge.invoke("drops.accept", [drop.itemId], Boolean3).pipe(map4(getOrElse(() => false)))
+              trigger: bridge.invoke("drops.accept", [drop.itemId], Boolean3).pipe(map5(getOrElse(() => false)))
             }
           );
           if (packet === null || response?.bSuccess !== true) return false;
-          const container = response.bBank && drop.category !== "Class" ? "bank" : response.bHouse || drop.houseItem ? "house" : "inventory";
-          const expected = response.iQtyNow ?? before[container] + (response.iQty ?? drop.quantity);
-          const owned = yield* readItem(host, container, drop.itemId);
+          const container2 = response.bBank && drop.category !== "Class" ? "bank" : response.bHouse || drop.houseItem ? "house" : "inventory";
+          const expected = response.iQtyNow ?? before[container2] + (response.iQty ?? drop.quantity);
+          const owned = yield* readItem(host, container2, drop.itemId);
           return owned !== null && owned.quantity >= expected;
         })
       );
     }, "accept");
-    const contains = /* @__PURE__ */ __name((selector) => get6(selector).pipe(map4((drop) => drop !== null)), "contains");
+    const contains = /* @__PURE__ */ __name((selector) => get6(selector).pipe(map5((drop) => drop !== null)), "contains");
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "drop"), "getAll");
-    const isCustomUiEnabled = /* @__PURE__ */ __name(() => bridge.invoke("drops.isUsingCustomDrops", void 0, Boolean3).pipe(map4(getOrElse(() => false))), "isCustomUiEnabled");
-    const reject = /* @__PURE__ */ __name((selector) => gen2(function* () {
+    const isCustomUiEnabled = /* @__PURE__ */ __name(() => bridge.invoke("drops.isUsingCustomDrops", void 0, Boolean3).pipe(map5(getOrElse(() => false))), "isCustomUiEnabled");
+    const reject2 = /* @__PURE__ */ __name((selector) => gen2(function* () {
       if (!(yield* auth.isLoggedIn())) return false;
       if (!isSelectable(selector)) return false;
-      const rejected = yield* host.command({ kind: "rejectDrop", selector });
-      return getOrElse(rejected, () => false);
+      const rejected2 = yield* host.command({ kind: "rejectDrop", selector });
+      return getOrElse(rejected2, () => false);
     }), "reject");
     const toggleUi = /* @__PURE__ */ __name(() => bridge.invoke("drops.toggleUi", void 0, Void2).pipe(asVoid2), "toggleUi");
     return {
@@ -14250,7 +15469,7 @@ ${prefix}}`;
       get: get6,
       getAll,
       isCustomUiEnabled,
-      reject,
+      reject: reject2,
       toggleUi
     };
   });
@@ -14267,7 +15486,7 @@ ${prefix}}`;
     const on = /* @__PURE__ */ __name(((selector, handler) => stream(selector).pipe(
       runForEach2(handler),
       forkIn2(scope3),
-      map4((fiber2) => () => {
+      map5((fiber2) => () => {
         runFork3(interrupt4(fiber2));
       })
     )), "on");
@@ -14289,11 +15508,11 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/api/House.ts
   var makeHouse = /* @__PURE__ */ __name((bridge, host) => {
     const contains = /* @__PURE__ */ __name((selector, quantity) => itemQuantity(host, "house", selector).pipe(
-      map4((owned) => owned >= normalizeItemQuantity(quantity))
+      map5((owned) => owned >= normalizeItemQuantity(quantity))
     ), "contains");
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "house"), "getAll");
-    const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("house.getSlots", void 0, WireInt).pipe(map4(getOrElse(() => 0))), "getSlots");
-    const getUsedSlots = /* @__PURE__ */ __name(() => host.read({ kind: "items", container: "house" }).pipe(map4((items) => items.length)), "getUsedSlots");
+    const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("house.getSlots", void 0, WireInt).pipe(map5(getOrElse(() => 0))), "getSlots");
+    const getUsedSlots = /* @__PURE__ */ __name(() => host.read({ kind: "items", container: "house" }).pipe(map5((items) => items.length)), "getUsedSlots");
     const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "house", selector), "get");
     const getAvailableSlots = /* @__PURE__ */ __name(() => zipWith2(
       getSlots(),
@@ -14312,7 +15531,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/Map.ts
   var makeMap = /* @__PURE__ */ __name((bridge, host, wait) => {
-    const isLoaded = /* @__PURE__ */ __name(() => bridge.invoke("world.isLoaded", void 0, Boolean3).pipe(map4(getOrElse(() => false))), "isLoaded");
+    const isLoaded = /* @__PURE__ */ __name(() => bridge.invoke("world.isLoaded", void 0, Boolean3).pipe(map5(getOrElse(() => false))), "isLoaded");
     const getCellPads = /* @__PURE__ */ __name(() => host.command({ kind: "refreshCellPads" }).pipe(
       flatMap3(
         match({
@@ -14330,7 +15549,7 @@ ${prefix}}`;
       )
     ), "getCells");
     const getMap = /* @__PURE__ */ __name(() => host.read({ kind: "map" }), "getMap");
-    const getId = /* @__PURE__ */ __name(() => getMap().pipe(map4((map7) => map7.id)), "getId");
+    const getId = /* @__PURE__ */ __name(() => getMap().pipe(map5((map8) => map8.id)), "getId");
     const getMapItem = /* @__PURE__ */ __name((itemId) => {
       if (!Number.isSafeInteger(itemId) || itemId <= 0) return void_3;
       return wait.forGameAction("getMapItem").pipe(
@@ -14340,8 +15559,8 @@ ${prefix}}`;
         asVoid2
       );
     }, "getMapItem");
-    const getName = /* @__PURE__ */ __name(() => getMap().pipe(map4((map7) => map7.name)), "getName");
-    const getRoomNumber = /* @__PURE__ */ __name(() => getMap().pipe(map4((map7) => map7.roomNumber)), "getRoomNumber");
+    const getName = /* @__PURE__ */ __name(() => getMap().pipe(map5((map8) => map8.name)), "getName");
+    const getRoomNumber = /* @__PURE__ */ __name(() => getMap().pipe(map5((map8) => map8.roomNumber)), "getRoomNumber");
     const loadSwf = /* @__PURE__ */ __name((swf) => bridge.invoke("world.loadSwf", [swf], Void2).pipe(asVoid2), "loadSwf");
     const reload = /* @__PURE__ */ __name(() => bridge.invoke("world.reload", void 0, Void2).pipe(asVoid2), "reload");
     const setSpawnPoint = /* @__PURE__ */ __name((options) => bridge.invoke("world.setSpawnPoint", [options?.cell, options?.pad], Void2).pipe(asVoid2), "setSpawnPoint");
@@ -14372,18 +15591,18 @@ ${prefix}}`;
   );
   var makeMonsters = fnUntraced2(function* (bridge, host, events, wait) {
     const readMonster = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host.read({ kind: "monster", selector }).pipe(
-      map4(
+      map5(
         (monster) => monster === null ? null : toLiveMonster(monster)
       )
     ) : succeed7(null), "readMonster");
-    const readMonsters = /* @__PURE__ */ __name(() => host.read({ kind: "monsters" }).pipe(map4((monsters) => monsters.map(toLiveMonster))), "readMonsters");
+    const readMonsters = /* @__PURE__ */ __name(() => host.read({ kind: "monsters" }).pipe(map5((monsters) => monsters.map(toLiveMonster))), "readMonsters");
     const readDrops = /* @__PURE__ */ __name((monsterMapId) => host.read({ kind: "monsterDrops", monsterMapId }), "readDrops");
     const requests = yield* unbounded2();
     const inFlight = /* @__PURE__ */ new Map();
     yield* addFinalizer3(() => shutdown2(requests));
     const requestKey = fn2("Monsters.requestKey")(function* (monsterMapId) {
-      const map7 = yield* host.read({ kind: "map" });
-      return `${map7.id}:${map7.name}:${map7.roomNumber}:${monsterMapId}`;
+      const map8 = yield* host.read({ kind: "map" });
+      return `${map8.id}:${map8.name}:${map8.roomNumber}:${monsterMapId}`;
     });
     const isInCurrentCell = fn2("Monsters.isInCurrentCell")(function* (monster) {
       const player = yield* host.read({ kind: "me" });
@@ -14411,7 +15630,7 @@ ${prefix}}`;
               "world.requestMonsterDrops",
               [request.monsterMapId],
               Boolean3
-            ).pipe(map4(getOrElse(() => false)))
+            ).pipe(map5(getOrElse(() => false)))
           }
         );
       });
@@ -14463,7 +15682,7 @@ ${prefix}}`;
     const getProjected = /* @__PURE__ */ __name((selector) => readMonster(selector).pipe(
       flatMap3(
         (current) => current !== null || !isSelectable(selector) ? succeed7(current) : host.command({ kind: "hydrateMonster", selector }).pipe(
-          map4(
+          map5(
             (hydrated) => isSome2(hydrated) && hydrated.value !== null ? toLiveMonster(hydrated.value) : null
           )
         )
@@ -14472,13 +15691,13 @@ ${prefix}}`;
     const getAvailableProjected = /* @__PURE__ */ __name(() => bridge.invoke(
       "world.getAvailableMonsterMapIds",
       void 0,
-      ArraySchema(Number5)
+      ArraySchema(Number6)
     ).pipe(
       flatMap3(
         match({
           onNone: /* @__PURE__ */ __name(() => succeed7([]), "onNone"),
           onSome: /* @__PURE__ */ __name((ids) => readMonsters().pipe(
-            map4((monsters) => {
+            map5((monsters) => {
               const available = new Set(ids);
               return monsters.filter(
                 (monster) => available.has(monster.monsterMapId)
@@ -14510,7 +15729,7 @@ ${prefix}}`;
     const reread = /* @__PURE__ */ __name((monsters) => {
       const ids = new Set(monsters.map((monster) => monster.monsterMapId));
       return readMonsters().pipe(
-        map4(
+        map5(
           (current) => current.filter((monster) => ids.has(monster.monsterMapId))
         )
       );
@@ -14536,7 +15755,7 @@ ${prefix}}`;
           "world.isMonsterAvailable",
           [monster.monsterMapId],
           Boolean3
-        ).pipe(map4(getOrElse(() => false)))
+        ).pipe(map5(getOrElse(() => false)))
       )
     ), "isAvailable");
     return {
@@ -14573,21 +15792,21 @@ ${prefix}}`;
       if (!placeholders.some((token) => packet.includes(`{${token}}`))) {
         return packet;
       }
-      const map7 = yield* host.read({ kind: "map" });
+      const map8 = yield* host.read({ kind: "map" });
       const player = yield* host.read({ kind: "me" });
-      return packet.replaceAll("{MAP_ID}", String(map7.id)).replaceAll("{ROOM_NUMBER}", String(map7.roomNumber)).replaceAll("{MAP_NAME}", map7.name).replaceAll("{PLAYER_NAME}", player?.username ?? "");
+      return packet.replaceAll("{MAP_ID}", String(map8.id)).replaceAll("{ROOM_NUMBER}", String(map8.roomNumber)).replaceAll("{MAP_NAME}", map8.name).replaceAll("{PLAYER_NAME}", player?.username ?? "");
     }), "resolve");
     const on = /* @__PURE__ */ __name(((selector, handler) => stream(selector).pipe(
       runForEach2(handler),
       forkIn2(scope3),
-      map4((fiber2) => () => {
+      map5((fiber2) => () => {
         runFork3(interrupt4(fiber2));
       })
     )), "on");
     const onRaw = /* @__PURE__ */ __name((handler) => gateway.rawPackets.pipe(
       runForEach2(handler),
       forkIn2(scope3),
-      map4((fiber2) => () => {
+      map5((fiber2) => () => {
         runFork3(interrupt4(fiber2));
       })
     ), "onRaw");
@@ -14628,11 +15847,11 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Random.js
   var Random2 = Random;
   var randomWith = /* @__PURE__ */ __name((f) => withFiber2((fiber2) => succeed7(f(fiber2.getRef(Random2)))), "randomWith");
-  var nextIntBetween = /* @__PURE__ */ __name((min2, max2, options) => {
+  var nextIntBetween = /* @__PURE__ */ __name((min3, max3, options) => {
     const extra = options?.halfOpen === true ? 0 : 1;
     return randomWith((r) => {
-      const minInt = Math.ceil(min2);
-      const maxInt = Math.floor(max2);
+      const minInt = Math.ceil(min3);
+      const maxInt = Math.floor(max3);
       return Math.floor(r.nextDoubleUnsafe() * (maxInt - minInt + extra)) + minInt;
     });
   }, "nextIntBetween");
@@ -14641,8 +15860,8 @@ ${prefix}}`;
   var minimumPrivateRoom = MINIMUM_PRIVATE_ROOM;
   var minimumRandomPrivateRoom = MINIMUM_RANDOM_PRIVATE_ROOM;
   var maximumRoom = MAXIMUM_ROOM_NUMBER;
-  var splitRoom = /* @__PURE__ */ __name((map7) => {
-    const trimmed = map7.trim();
+  var splitRoom = /* @__PURE__ */ __name((map8) => {
+    const trimmed = map8.trim();
     const separator = trimmed.indexOf("-");
     if (separator <= 0 || separator === trimmed.length - 1) {
       return { map: trimmed, name: trimmed };
@@ -14662,21 +15881,23 @@ ${prefix}}`;
     minimumRandomPrivateRoom,
     maximumRoom
   );
-  var withRoomNumber = /* @__PURE__ */ __name((map7, room) => {
-    const target = splitRoom(map7);
+  var isPrivateRoom = /* @__PURE__ */ __name((room) => Number.isSafeInteger(room) && room >= minimumPrivateRoom && room <= maximumRoom, "isPrivateRoom");
+  var withRoomNumber = /* @__PURE__ */ __name((map8, room) => {
+    const target = splitRoom(map8);
     if (target.roomToken !== void 0 && parseRoom(target.roomToken) !== void 0) {
       return target.map;
     }
     return `${target.name}-${Math.max(1, Math.trunc(room))}`;
   }, "withRoomNumber");
-  var applyRoomPolicy = fn2("applyRoomPolicy")(function* (map7, policy) {
-    const trimmed = map7.trim();
-    if (trimmed === "" || policy.kind === "public") return map7;
+  var applyRoomPolicy = fn2("applyRoomPolicy")(function* (map8, policy) {
+    const trimmed = map8.trim();
+    if (trimmed === "" || policy.kind === "public") return map8;
     const room = policy.kind === "specific" ? policy.roomNumber : yield* randomPrivateRoom;
     return withRoomNumber(trimmed, room);
   });
-  var parseMapTarget = /* @__PURE__ */ __name((map7) => gen2(function* () {
-    const target = splitRoom(map7);
+  var roomPolicyAcceptsRoom = /* @__PURE__ */ __name((policy, roomNumber) => policy.kind === "public" || (policy.kind === "random-private" ? isPrivateRoom(roomNumber) : roomNumber === policy.roomNumber), "roomPolicyAcceptsRoom");
+  var parseMapTarget = /* @__PURE__ */ __name((map8) => gen2(function* () {
+    const target = splitRoom(map8);
     if (target.roomToken === void 0) {
       return {
         map: target.map,
@@ -14758,18 +15979,18 @@ ${prefix}}`;
     },
     name: payload.name
   }), "toOutfit");
-  var makePlayer = /* @__PURE__ */ __name((bridge, host, auth, inventory, map7, wait) => {
-    const read = /* @__PURE__ */ __name((method, schema, fallback) => bridge.invoke(method, void 0, schema).pipe(map4(getOrElse(() => fallback))), "read");
+  var makePlayer = /* @__PURE__ */ __name((bridge, host, auth, inventory, map8, wait) => {
+    const read = /* @__PURE__ */ __name((method, schema, fallback) => bridge.invoke(method, void 0, schema).pipe(map5(getOrElse(() => fallback))), "read");
     const get6 = /* @__PURE__ */ __name(() => host.read({ kind: "me" }).pipe(
-      map4((player) => player === null ? null : toLivePlayer(player))
+      map5((player) => player === null ? null : toLivePlayer(player))
     ), "get");
-    const readLocation = /* @__PURE__ */ __name((projected, method) => projected !== "" ? succeed7(projected) : map7.isLoaded().pipe(
+    const readLocation = /* @__PURE__ */ __name((projected, method) => projected !== "" ? succeed7(projected) : map8.isLoaded().pipe(
       flatMap3(
         (loaded) => loaded ? read(method, String4, "") : succeed7("")
       )
     ), "readLocation");
     const getAuras = /* @__PURE__ */ __name((options) => get6().pipe(
-      map4(
+      map5(
         (player) => (player?.auras ?? []).filter(
           (aura) => options?.kind === void 0 || aura.kind === options.kind
         )
@@ -14778,14 +15999,14 @@ ${prefix}}`;
     const factionCache = /* @__PURE__ */ new Map();
     const outfitCache = /* @__PURE__ */ new Map();
     const getAura = /* @__PURE__ */ __name((name, options) => getAuras(options).pipe(
-      map4(
+      map5(
         (auras2) => auras2.find((aura) => sameText(aura.name, name)) ?? null
       )
     ), "getAura");
-    const hasAura = /* @__PURE__ */ __name((name, options) => getAura(name, options).pipe(map4((aura) => aura !== null)), "hasAura");
+    const hasAura = /* @__PURE__ */ __name((name, options) => getAura(name, options).pipe(map5((aura) => aura !== null)), "hasAura");
     const auras = { get: getAura, getAll: getAuras, has: hasAura };
     const getFactions = /* @__PURE__ */ __name(() => bridge.invoke("player.getFactions", void 0, FactionPayloads).pipe(
-      map4(
+      map5(
         match({
           onNone: /* @__PURE__ */ __name(() => Array.from(factionCache.values()), "onNone"),
           onSome: /* @__PURE__ */ __name((payloads) => {
@@ -14805,7 +16026,7 @@ ${prefix}}`;
       )
     ), "getFactions");
     const getFaction = /* @__PURE__ */ __name((selector) => getFactions().pipe(
-      map4(
+      map5(
         (factions2) => factions2.find(
           (faction) => typeof selector === "number" ? faction.id === selector : sameText(faction.name, selector)
         ) ?? null
@@ -14813,7 +16034,7 @@ ${prefix}}`;
     ), "getFaction");
     const factions = { get: getFaction, getAll: getFactions };
     const getOutfits = /* @__PURE__ */ __name(() => bridge.invoke("outfits.getAll", void 0, OutfitPayloads).pipe(
-      map4(
+      map5(
         match({
           onNone: /* @__PURE__ */ __name(() => Array.from(outfitCache.values()), "onNone"),
           onSome: /* @__PURE__ */ __name((payloads) => {
@@ -14836,18 +16057,18 @@ ${prefix}}`;
       )
     ), "getOutfits");
     const getOutfit = /* @__PURE__ */ __name((name) => getOutfits().pipe(
-      map4(
+      map5(
         (outfits2) => outfits2.find((outfit) => sameText(outfit.name, name)) ?? null
       )
     ), "getOutfit");
     const equipOutfit = /* @__PURE__ */ __name((name, keepColors = false) => wait.forGameAction("equipLoadout").pipe(
       flatMap3(
-        (ready) => ready ? bridge.invoke("outfits.equip", [name, keepColors], Boolean3).pipe(map4(getOrElse(() => false))) : succeed7(false)
+        (ready) => ready ? bridge.invoke("outfits.equip", [name, keepColors], Boolean3).pipe(map5(getOrElse(() => false))) : succeed7(false)
       )
     ), "equipOutfit");
     const wearOutfit = /* @__PURE__ */ __name((name, keepColors = false) => wait.forGameAction("wearLoadout").pipe(
       flatMap3(
-        (ready) => ready ? bridge.invoke("outfits.wear", [name, keepColors], Boolean3).pipe(map4(getOrElse(() => false))) : succeed7(false)
+        (ready) => ready ? bridge.invoke("outfits.wear", [name, keepColors], Boolean3).pipe(map5(getOrElse(() => false))) : succeed7(false)
       )
     ), "wearOutfit");
     const outfits = {
@@ -14873,19 +16094,19 @@ ${prefix}}`;
     });
     const getGender = /* @__PURE__ */ __name(() => read("player.getGender", String4, ""), "getGender");
     const getGold = /* @__PURE__ */ __name(() => read("player.getGold", WireInt, 0), "getGold");
-    const getHp = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.hp ?? 0)), "getHp");
-    const getLevel = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.level ?? 0)), "getLevel");
-    const getMaxHp = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.maxHp ?? 0)), "getMaxHp");
-    const getMaxMp = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.maxMp ?? 0)), "getMaxMp");
-    const getMp = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.mp ?? 0)), "getMp");
+    const getHp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.hp ?? 0)), "getHp");
+    const getLevel = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.level ?? 0)), "getLevel");
+    const getMaxHp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.maxHp ?? 0)), "getMaxHp");
+    const getMaxMp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.maxMp ?? 0)), "getMaxMp");
+    const getMp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.mp ?? 0)), "getMp");
     const getPad = /* @__PURE__ */ __name(() => get6().pipe(
       flatMap3(
         (current) => readLocation(current?.pad ?? "", "player.getPad")
       )
     ), "getPad");
-    const getState = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.state ?? EntityState.Idle)), "getState");
+    const getState = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.state ?? EntityState.Idle)), "getState");
     const getPosition = /* @__PURE__ */ __name(() => get6().pipe(
-      map4((current) => ({
+      map5((current) => ({
         ...current?.position ?? { x: 0, y: 0 }
       }))
     ), "getPosition");
@@ -14893,15 +16114,15 @@ ${prefix}}`;
       const username = name.trim();
       return username === "" ? void_3 : bridge.invoke("player.goToPlayer", [username], Void2).pipe(asVoid2);
     }, "goToPlayer");
-    const hasActiveBoost = /* @__PURE__ */ __name((boostType) => bridge.invoke("player.hasActiveBoost", [boostType], Boolean3).pipe(map4(getOrElse(() => false))), "hasActiveBoost");
-    const isAfk = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.afk ?? false)), "isAfk");
+    const hasActiveBoost = /* @__PURE__ */ __name((boostType) => bridge.invoke("player.hasActiveBoost", [boostType], Boolean3).pipe(map5(getOrElse(() => false))), "hasActiveBoost");
+    const isAfk = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.afk ?? false)), "isAfk");
     const isAlive = /* @__PURE__ */ __name(() => get6().pipe(
       flatMap3(
         (current) => current !== null ? succeed7(current.alive) : all2([
           read("player.getHp", WireInt, 0),
           read("player.getState", WireInt, EntityState.Dead)
         ]).pipe(
-          map4(([hp, state]) => hp > 0 && state !== EntityState.Dead)
+          map5(([hp, state]) => hp > 0 && state !== EntityState.Dead)
         )
       )
     ), "isAlive");
@@ -14910,22 +16131,22 @@ ${prefix}}`;
       flatMap3(
         (readiness) => readiness.missing.length === 0 ? all2([
           auth.isLoggedIn(),
-          map7.isLoaded(),
+          map8.isLoaded(),
           read("player.isLoaded", Boolean3, false)
         ]).pipe(
-          map4(
+          map5(
             ([loggedIn, loaded, playerLoaded]) => loggedIn && loaded && playerLoaded
           )
         ) : succeed7(false)
       )
     ), "isReady");
     const readLiveLocation = /* @__PURE__ */ __name(() => all2({
-      cell: bridge.invoke("player.getCell", void 0, String4).pipe(map4(getOrElse(() => ""))),
-      pad: bridge.invoke("player.getPad", void 0, String4).pipe(map4(getOrElse(() => "")))
+      cell: bridge.invoke("player.getCell", void 0, String4).pipe(map5(getOrElse(() => ""))),
+      pad: bridge.invoke("player.getPad", void 0, String4).pipe(map5(getOrElse(() => "")))
     }), "readLiveLocation");
     const isCellReady = /* @__PURE__ */ __name((cell, pad) => {
       const args2 = pad === void 0 ? [cell] : [cell, pad];
-      return bridge.invoke("world.isCellReady", args2, Boolean3).pipe(map4(getOrElse(() => false)));
+      return bridge.invoke("world.isCellReady", args2, Boolean3).pipe(map5(getOrElse(() => false)));
     }, "isCellReady");
     const jumpToCell = fn2("Player.jumpToCell")(function* (cell, pad) {
       const targetCell = cell.trim();
@@ -14959,7 +16180,7 @@ ${prefix}}`;
         flatMap3(
           (state) => state !== EntityState.Idle ? succeed7(false) : sleep2("500 millis").pipe(
             andThen2(getState()),
-            map4((confirmed) => confirmed === EntityState.Idle)
+            map5((confirmed) => confirmed === EntityState.Idle)
           )
         )
       ),
@@ -14970,7 +16191,7 @@ ${prefix}}`;
       const currentCell = yield* getCell();
       const currentPad = yield* getPad();
       const cells = combatExitCells(
-        yield* map7.getCells(),
+        yield* map8.getCells(),
         yield* host.read({ kind: "monsters" }),
         currentCell
       );
@@ -14990,7 +16211,7 @@ ${prefix}}`;
       if (destination.map === "") return false;
       const targetCell = cell ?? (pad === void 0 ? void 0 : "Enter");
       const currentMap = yield* host.read({ kind: "map" });
-      const alreadyLoaded = (yield* map7.isLoaded()) && sameText(currentMap.name, destination.name) && (!destination.requireExactRoom || currentMap.roomNumber === destination.roomNumber);
+      const alreadyLoaded = (yield* map8.isLoaded()) && sameText(currentMap.name, destination.name) && (!destination.requireExactRoom || currentMap.roomNumber === destination.roomNumber);
       if (alreadyLoaded) {
         if (!(yield* wait.until(isReady(), { timeout: "10 seconds" })))
           return false;
@@ -15009,8 +16230,8 @@ ${prefix}}`;
       const loaded = yield* wait.until(
         host.read({ kind: "map" }).pipe(
           flatMap3(
-            (current) => map7.isLoaded().pipe(
-              map4(
+            (current) => map8.isLoaded().pipe(
+              map5(
                 (ready) => ready && sameText(current.name, destination.name) && (!destination.requireExactRoom || current.roomNumber === destination.roomNumber)
               )
             )
@@ -15036,7 +16257,7 @@ ${prefix}}`;
       if (options?.waitUntilFull !== true) return true;
       return yield* wait.until(
         get6().pipe(
-          map4(
+          map5(
             (player) => player !== null && player.hp >= player.maxHp && player.mp >= player.maxMp
           )
         ),
@@ -15049,11 +16270,11 @@ ${prefix}}`;
       const targetY = Math.trunc(position.y);
       const speed = options?.speed;
       const args2 = speed === void 0 ? [targetX, targetY] : [targetX, targetY, speed];
-      const started = yield* bridge.invoke("player.walkTo", args2, Boolean3).pipe(map4(getOrElse(() => false)));
+      const started = yield* bridge.invoke("player.walkTo", args2, Boolean3).pipe(map5(getOrElse(() => false)));
       if (!started) return false;
       return yield* wait.until(
         get6().pipe(
-          map4(
+          map5(
             (current) => current?.position.x === targetX && current.position.y === targetY
           )
         ),
@@ -15095,13 +16316,13 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/api/Players.ts
   var makePlayers = /* @__PURE__ */ __name((host) => {
     const get6 = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host.read({ kind: "player", selector }).pipe(
-      map4(
+      map5(
         (player) => player === null ? null : toLivePlayer(player)
       )
     ) : succeed7(null), "get");
-    const getAll = /* @__PURE__ */ __name(() => host.read({ kind: "players" }).pipe(map4((players) => players.map(toLivePlayer))), "getAll");
+    const getAll = /* @__PURE__ */ __name(() => host.read({ kind: "players" }).pipe(map5((players) => players.map(toLivePlayer))), "getAll");
     const getMe = /* @__PURE__ */ __name(() => host.read({ kind: "me" }).pipe(
-      map4((player) => player === null ? null : toLivePlayer(player))
+      map5((player) => player === null ? null : toLivePlayer(player))
     ), "getMe");
     return {
       get: get6,
@@ -15126,9 +16347,9 @@ ${prefix}}`;
     const loads = makeUnsafe5(1);
     let nextLoadAt = 0;
     const read = /* @__PURE__ */ __name((questId) => host.read({ kind: "quest", id: questId }).pipe(
-      map4((quest) => quest === null ? null : toLiveQuest(quest))
+      map5((quest) => quest === null ? null : toLiveQuest(quest))
     ), "read");
-    const isLoaded = /* @__PURE__ */ __name((questId) => host.read({ kind: "quest", id: questId }).pipe(map4((quest) => quest !== null)), "isLoaded");
+    const isLoaded = /* @__PURE__ */ __name((questId) => host.read({ kind: "quest", id: questId }).pipe(map5((quest) => quest !== null)), "isLoaded");
     const waitForLoadSlot = gen2(function* () {
       const delay3 = nextLoadAt - (yield* currentTimeMillis2);
       if (delay3 > 0) yield* sleep2(delay3);
@@ -15138,7 +16359,7 @@ ${prefix}}`;
       function* (questIds, silent) {
         const missing2 = yield* filter2(
           questIds,
-          (id) => isLoaded(id).pipe(map4((loaded) => !loaded))
+          (id) => isLoaded(id).pipe(map5((loaded) => !loaded))
         );
         if (missing2.length === 0) return true;
         yield* waitForLoadSlot;
@@ -15149,7 +16370,7 @@ ${prefix}}`;
         ).pipe(flatMap3(fromOption3));
         return yield* wait.until(
           forEach2(missing2, isLoaded).pipe(
-            map4((results2) => results2.every(Boolean))
+            map5((results2) => results2.every(Boolean))
           ),
           { timeout: "5 seconds" }
         );
@@ -15169,15 +16390,15 @@ ${prefix}}`;
       return yield* forEach2(ids, isLoaded);
     });
     const load = /* @__PURE__ */ __name((questId, silent = false) => loadBatch([questId], silent).pipe(
-      map4((loaded) => loaded[0] ?? false)
+      map5((loaded) => loaded[0] ?? false)
     ), "load");
     const isInProgress = /* @__PURE__ */ __name((questId) => {
       if (!isQuestId(questId)) return succeed7(false);
-      return bridge.invoke("quests.isInProgress", [questId], Boolean3).pipe(map4(getOrElse(() => false)));
+      return bridge.invoke("quests.isInProgress", [questId], Boolean3).pipe(map5(getOrElse(() => false)));
     }, "isInProgress");
     const canComplete = /* @__PURE__ */ __name((questId) => {
       if (!isQuestId(questId)) return succeed7(false);
-      return bridge.invoke("quests.canComplete", [questId], Boolean3).pipe(map4(getOrElse(() => false)));
+      return bridge.invoke("quests.canComplete", [questId], Boolean3).pipe(map5(getOrElse(() => false)));
     }, "canComplete");
     const accept = /* @__PURE__ */ __name((questId, silent = false) => {
       if (!isQuestId(questId)) return succeed7(false);
@@ -15190,7 +16411,7 @@ ${prefix}}`;
         if (yield* isInProgress(questId)) return true;
         if (!actionAvailable && !(yield* wait.forGameAction("acceptQuest")))
           return false;
-        const accepted = yield* bridge.invoke("quests.accept", [questId, silent], Boolean3).pipe(map4(getOrElse(() => false)));
+        const accepted = yield* bridge.invoke("quests.accept", [questId, silent], Boolean3).pipe(map5(getOrElse(() => false)));
         return accepted ? yield* wait.until(isInProgress(questId), {
           timeout: "5 seconds"
         }) : false;
@@ -15206,7 +16427,7 @@ ${prefix}}`;
           return false;
         }
         return yield* wait.until(
-          isInProgress(questId).pipe(map4((active) => !active)),
+          isInProgress(questId).pipe(map5((active) => !active)),
           { timeout: "5 seconds" }
         );
       });
@@ -15217,7 +16438,7 @@ ${prefix}}`;
     const getMaxTurnIns = /* @__PURE__ */ __name((questId) => {
       if (!isQuestId(questId)) return succeed7(1);
       return bridge.invoke("quests.getMaxTurnIns", [questId], WireInt).pipe(
-        map4(
+        map5(
           match({
             onNone: /* @__PURE__ */ __name(() => 1, "onNone"),
             onSome: /* @__PURE__ */ __name((turnIns) => Math.max(1, turnIns), "onSome")
@@ -15247,7 +16468,7 @@ ${prefix}}`;
               "quests.complete",
               [questId, turnIns, options?.rewardItemId ?? -1, false],
               Void2
-            ).pipe(map4(isSome2))
+            ).pipe(map5(isSome2))
           }
         );
         return event !== null;
@@ -15268,12 +16489,12 @@ ${prefix}}`;
           onSome: succeed7
         })
       ),
-      map4((quests) => quests.map(toLiveQuest))
+      map5((quests) => quests.map(toLiveQuest))
     ), "getAccepted");
-    const getAll = /* @__PURE__ */ __name(() => host.read({ kind: "quests" }).pipe(map4((quests) => quests.map(toLiveQuest))), "getAll");
+    const getAll = /* @__PURE__ */ __name(() => host.read({ kind: "quests" }).pipe(map5((quests) => quests.map(toLiveQuest))), "getAll");
     const isAvailable = /* @__PURE__ */ __name((questId) => {
       if (!isQuestId(questId)) return succeed7(false);
-      return bridge.invoke("quests.isAvailable", [questId], Boolean3).pipe(map4(getOrElse(() => false)));
+      return bridge.invoke("quests.isAvailable", [questId], Boolean3).pipe(map5(getOrElse(() => false)));
     }, "isAvailable");
     return {
       abandon,
@@ -15293,10 +16514,10 @@ ${prefix}}`;
   }, "makeQuests");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
-  var TypeId22 = "~effect/SubscriptionRef";
+  var TypeId23 = "~effect/SubscriptionRef";
   var Proto3 = {
     ...PipeInspectableProto,
-    [TypeId22]: {
+    [TypeId23]: {
       _A: identity
     },
     toJSON() {
@@ -15306,7 +16527,7 @@ ${prefix}}`;
       };
     }
   };
-  var make16 = /* @__PURE__ */ __name((value) => map4(unbounded({
+  var make17 = /* @__PURE__ */ __name((value) => map5(unbounded({
     replay: 1
   }), (pubsub) => {
     const self = Object.create(Proto3);
@@ -15322,7 +16543,8 @@ ${prefix}}`;
     self.value = value;
     publishUnsafe(self.pubsub, value);
   }, "setUnsafe");
-  var updateAndGet = /* @__PURE__ */ dual(2, (self, update2) => self.semaphore.withPermit(sync2(() => {
+  var set4 = /* @__PURE__ */ dual(2, (self, value) => self.semaphore.withPermit(sync2(() => setUnsafe2(self, value))));
+  var updateAndGet2 = /* @__PURE__ */ dual(2, (self, update2) => self.semaphore.withPermit(sync2(() => {
     const newValue = update2(self.value);
     setUnsafe2(self, newValue);
     return newValue;
@@ -15384,19 +16606,19 @@ ${prefix}}`;
   }, "effectiveFrameRate");
   var isNonMinimalRenderingMode = /* @__PURE__ */ __name((mode) => mode !== "minimal", "isNonMinimalRenderingMode");
   var makeSettings = fnUntraced2(function* (bridge) {
-    const stateRef = yield* make16(makeSettingsState());
+    const stateRef = yield* make17(makeSettingsState());
     const stored = {
       changes: changes(stateRef),
       get: get5(stateRef),
-      patch: /* @__PURE__ */ __name((patch) => updateAndGet(stateRef, (state) => ({
+      patch: /* @__PURE__ */ __name((patch) => updateAndGet2(stateRef, (state) => ({
         ...state,
         ...patch
       })), "patch")
     };
     const scope3 = yield* scope2;
-    const updates = yield* make13(1);
-    const frameRateLimit = yield* make15(null);
-    const resumeRenderingMode = yield* make15("full");
+    const updates = yield* make14(1);
+    const frameRateLimit = yield* make16(null);
+    const resumeRenderingMode = yield* make16("full");
     const runFork3 = runForkWith2(yield* context2());
     const command = /* @__PURE__ */ __name((method, value) => bridge.invoke(method, value === void 0 ? void 0 : [value], Void2).pipe(asVoid2), "command");
     const execute = fnUntraced2(function* (patch, state) {
@@ -15488,27 +16710,27 @@ ${prefix}}`;
         yield* execute(recurringActionsPatch(state), state);
       })
     ), "reapplyActions");
-    const set4 = /* @__PURE__ */ __name((key) => (value) => apply({ [key]: value }), "set");
+    const set5 = /* @__PURE__ */ __name((key) => (value) => apply({ [key]: value }), "set");
     const changes2 = stored.changes;
     const get6 = /* @__PURE__ */ __name(() => stored.get, "get");
     const enemyMagnet = /* @__PURE__ */ __name(() => action("enemyMagnetEnabled", "settings.enemyMagnet"), "enemyMagnet");
     const infiniteRange = /* @__PURE__ */ __name(() => action("infiniteRangeEnabled", "settings.infiniteRange"), "infiniteRange");
     const provokeCell = /* @__PURE__ */ __name(() => action("provokeCellEnabled", "settings.provokeCell"), "provokeCell");
     const skipCutscenes = /* @__PURE__ */ __name(() => action("skipCutscenesEnabled", "settings.skipCutscenes"), "skipCutscenes");
-    const isAntiCounterEnabled = /* @__PURE__ */ __name(() => stored.get.pipe(map4((state) => state.antiCounterEnabled)), "isAntiCounterEnabled");
-    const getRenderingMode = /* @__PURE__ */ __name(() => stored.get.pipe(map4((state) => state.renderingMode)), "getRenderingMode");
+    const isAntiCounterEnabled = /* @__PURE__ */ __name(() => stored.get.pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled");
+    const getRenderingMode = /* @__PURE__ */ __name(() => stored.get.pipe(map5((state) => state.renderingMode)), "getRenderingMode");
     const onState = /* @__PURE__ */ __name((listener) => stored.changes.pipe(
       runForEach2((state) => sync2(() => listener(state))),
       forkIn2(scope3),
-      map4((fiber2) => () => {
+      map5((fiber2) => () => {
         runFork3(interrupt4(fiber2));
       })
     ), "onState");
-    const setAnimationsEnabled = set4("animationsEnabled");
-    const setAntiCounterEnabled = set4("antiCounterEnabled");
-    const setCollisionsEnabled = set4("collisionsEnabled");
-    const setCustomGuild = set4("customGuild");
-    const setCustomName = set4("customName");
+    const setAnimationsEnabled = set5("animationsEnabled");
+    const setAntiCounterEnabled = set5("antiCounterEnabled");
+    const setCollisionsEnabled = set5("collisionsEnabled");
+    const setCustomGuild = set5("customGuild");
+    const setCustomName = set5("customName");
     const resetCustomGuild = updates.withPermits(1)(
       gen2(function* () {
         yield* command("settings.resetCustomGuild");
@@ -15527,9 +16749,9 @@ ${prefix}}`;
         });
       })
     );
-    const setDeathAdsVisible = set4("deathAdsVisible");
-    const setEnemyMagnetEnabled = set4("enemyMagnetEnabled");
-    const setFrameRate = set4("frameRate");
+    const setDeathAdsVisible = set5("deathAdsVisible");
+    const setEnemyMagnetEnabled = set5("enemyMagnetEnabled");
+    const setFrameRate = set5("frameRate");
     const setFrameRateLimit = /* @__PURE__ */ __name((limit) => updates.withPermits(1)(
       gen2(function* () {
         const normalized = limit === null ? null : normalizeFrameRate(limit);
@@ -15541,12 +16763,12 @@ ${prefix}}`;
         );
       })
     ), "setFrameRateLimit");
-    const setInfiniteRangeEnabled = set4("infiniteRangeEnabled");
-    const setOtherPlayersVisible = set4("otherPlayersVisible");
-    const setProvokeCellEnabled = set4("provokeCellEnabled");
-    const setRenderingMode = set4("renderingMode");
-    const setSkipCutscenesEnabled = set4("skipCutscenesEnabled");
-    const setWalkSpeed = set4("walkSpeed");
+    const setInfiniteRangeEnabled = set5("infiniteRangeEnabled");
+    const setOtherPlayersVisible = set5("otherPlayersVisible");
+    const setProvokeCellEnabled = set5("provokeCellEnabled");
+    const setRenderingMode = set5("renderingMode");
+    const setSkipCutscenesEnabled = set5("skipCutscenesEnabled");
+    const setWalkSpeed = set5("walkSpeed");
     const restoreRenderingMode = /* @__PURE__ */ __name(() => updates.withPermits(1)(
       gen2(function* () {
         const mode = yield* get4(resumeRenderingMode);
@@ -15604,7 +16826,7 @@ ${prefix}}`;
   var selectorFor = /* @__PURE__ */ __name((item) => item.shopItemId === void 0 ? { itemId: item.itemId } : { shopItemId: item.shopItemId }, "selectorFor");
   var makeShops = /* @__PURE__ */ __name((bridge, host, inventory, wait) => {
     const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "shop", selector), "get");
-    const getCurrent = /* @__PURE__ */ __name(() => host.read({ kind: "shop" }).pipe(map4((shop) => shop === null ? null : toLiveShop(shop))), "getCurrent");
+    const getCurrent = /* @__PURE__ */ __name(() => host.read({ kind: "shop" }).pipe(map5((shop) => shop === null ? null : toLiveShop(shop))), "getCurrent");
     const isOpen = /* @__PURE__ */ __name((shopId) => {
       if (shopId !== void 0 && !isShopId(shopId)) {
         return succeed7(false);
@@ -15617,7 +16839,7 @@ ${prefix}}`;
         flatMap3(
           match({
             onNone: /* @__PURE__ */ __name(() => host.read({ kind: "shop" }).pipe(
-              map4(
+              map5(
                 (shop) => shopId !== void 0 ? shop?.id === shopId : shop !== null
               )
             ), "onNone"),
@@ -15636,10 +16858,10 @@ ${prefix}}`;
           "shops.close",
           shopId === void 0 ? void 0 : [shopId],
           Boolean3
-        ).pipe(map4(getOrElse(() => false)));
+        ).pipe(map5(getOrElse(() => false)));
         if (!closed) return false;
         const settled = yield* wait.until(
-          isOpen(shopId).pipe(map4((open) => !open)),
+          isOpen(shopId).pipe(map5((open) => !open)),
           { timeout: "3 seconds" }
         );
         if (!settled) return false;
@@ -15687,7 +16909,7 @@ ${prefix}}`;
           },
           {
             timeout: "5 seconds",
-            trigger: bridge.invoke("shops.load", [shopId], Void2).pipe(map4(isSome2))
+            trigger: bridge.invoke("shops.load", [shopId], Void2).pipe(map5(isSome2))
           }
         );
         if (packet === null) return false;
@@ -15704,7 +16926,7 @@ ${prefix}}`;
           "shops.canBuyItem",
           [selectorFor(item), normalizeItemQuantity(options?.quantity)],
           Boolean3
-        ).pipe(map4(getOrElse(() => false)))
+        ).pipe(map5(getOrElse(() => false)))
       )
     ), "canBuy");
     const buy = /* @__PURE__ */ __name((selector, options) => get6(selector).pipe(
@@ -15740,14 +16962,14 @@ ${prefix}}`;
                 "shops.buy",
                 [selectorFor(item), requested],
                 Void2
-              ).pipe(map4(isSome2))
+              ).pipe(map5(isSome2))
             }
           );
           if (packet === null || response?.bitSuccess !== true) return false;
-          const container = response.bBank && item.category !== "Class" ? "bank" : item.houseItem ? "house" : "inventory";
-          yield* host.command({ kind: "refreshContainer", container });
-          const owned = yield* itemQuantity(host, container, item.itemId);
-          return owned >= startingQuantities[container] + requested;
+          const container2 = response.bBank && item.category !== "Class" ? "bank" : item.houseItem ? "house" : "inventory";
+          yield* host.command({ kind: "refreshContainer", container: container2 });
+          const owned = yield* itemQuantity(host, container2, item.itemId);
+          return owned >= startingQuantities[container2] + requested;
         });
       })
     ), "buy");
@@ -15763,11 +16985,11 @@ ${prefix}}`;
               "shops.sell",
               [toItemSelector(selector), requested],
               Boolean3
-            ).pipe(map4(getOrElse(() => false)));
+            ).pipe(map5(getOrElse(() => false)));
             if (!sold) return false;
             return yield* wait.until(
               inventory.get(item.itemId).pipe(
-                map4(
+                map5(
                   (current) => current === null || current.quantity <= item.quantity - requested
                 )
               ),
@@ -15780,13 +17002,13 @@ ${prefix}}`;
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "shop"), "getAll");
     const getMaxBuyQuantity = /* @__PURE__ */ __name((selector) => get6(selector).pipe(
       flatMap3(
-        (item) => item === null ? succeed7(0) : bridge.invoke("shops.getMaxBuyQuantity", [selectorFor(item)], WireInt).pipe(map4(getOrElse(() => 0)))
+        (item) => item === null ? succeed7(0) : bridge.invoke("shops.getMaxBuyQuantity", [selectorFor(item)], WireInt).pipe(map5(getOrElse(() => 0)))
       )
     ), "getMaxBuyQuantity");
     const isMergeShop = /* @__PURE__ */ __name(() => bridge.invoke("shops.isMergeShop", void 0, Boolean3).pipe(
       flatMap3(
         match({
-          onNone: /* @__PURE__ */ __name(() => host.read({ kind: "shop" }).pipe(map4((shop) => shop?.merge ?? false)), "onNone"),
+          onNone: /* @__PURE__ */ __name(() => host.read({ kind: "shop" }).pipe(map5((shop) => shop?.merge ?? false)), "onNone"),
           onSome: /* @__PURE__ */ __name((merge3) => succeed7(merge3), "onSome")
         })
       )
@@ -15821,7 +17043,7 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/api/TempInventory.ts
   var makeTempInventory = /* @__PURE__ */ __name((host) => {
     const contains = /* @__PURE__ */ __name((selector, quantity) => itemQuantity(host, "temporary", selector).pipe(
-      map4((owned) => owned >= normalizeItemQuantity(quantity))
+      map5((owned) => owned >= normalizeItemQuantity(quantity))
     ), "contains");
     const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "temporary", selector), "get");
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "temporary"), "getAll");
@@ -15839,7 +17061,7 @@ ${prefix}}`;
       if (matches(value)) return value;
     }
   }), "takeMatching");
-  var withTimeout = /* @__PURE__ */ __name((effect2, timeout2) => timeout2 === void 0 ? effect2.pipe(map4((value) => value)) : effect2.pipe(timeoutOption2(timeout2), map4(getOrNull)), "withTimeout");
+  var withTimeout = /* @__PURE__ */ __name((effect2, timeout2) => timeout2 === void 0 ? effect2.pipe(map5((value) => value)) : effect2.pipe(timeoutOption2(timeout2), map5(getOrNull)), "withTimeout");
   var makeWait = /* @__PURE__ */ __name((source) => ({
     forEvent: /* @__PURE__ */ __name(((selector, options) => scoped2(
       gen2(function* () {
@@ -15896,7 +17118,7 @@ ${prefix}}`;
       }).pipe(as2(true));
       return options?.timeout === void 0 ? awaited : awaited.pipe(
         timeoutOption2(options.timeout),
-        map4(isSome2)
+        map5(isSome2)
       );
     }, "until"),
     untilSome: /* @__PURE__ */ __name((condition, options) => {
@@ -15904,10 +17126,10 @@ ${prefix}}`;
         schedule: spaced(options?.interval ?? "100 millis"),
         until: isSome2
       });
-      return options?.timeout === void 0 ? awaited.pipe(map4(getOrNull)) : awaited.pipe(
+      return options?.timeout === void 0 ? awaited.pipe(map5(getOrNull)) : awaited.pipe(
         timeoutOption2(options.timeout),
-        map4(flatten),
-        map4(getOrNull)
+        map5(flatten),
+        map5(getOrNull)
       );
     }, "untilSome")
   }), "makeWait");
@@ -15916,7 +17138,7 @@ ${prefix}}`;
   var isWaitOptions = /* @__PURE__ */ __name((options) => typeof options === "object" && !Array.isArray(options) && ("timeout" in options || "interval" in options), "isWaitOptions");
   var makeWaitApi = /* @__PURE__ */ __name((bridge, gateway) => {
     const wait = makeWait(gateway);
-    const isGameActionAvailable = /* @__PURE__ */ __name((action) => bridge.invoke("world.isActionAvailable", [action], Boolean3).pipe(map4(getOrElse(() => false))), "isGameActionAvailable");
+    const isGameActionAvailable = /* @__PURE__ */ __name((action) => bridge.invoke("world.isActionAvailable", [action], Boolean3).pipe(map5(getOrElse(() => false))), "isGameActionAvailable");
     const forGameAction = /* @__PURE__ */ __name((action, options) => {
       const normalized = options === void 0 ? {} : isWaitOptions(options) ? options : { timeout: options };
       return wait.until(isGameActionAvailable(action), {
@@ -15944,11 +17166,11 @@ ${prefix}}`;
     const inventory = makeInventory(bridge, host, house, wait);
     const bank = yield* makeBank(bridge, host, auth, inventory, house, wait);
     const drops = yield* makeDrops(bridge, host, auth, wait);
-    const map7 = makeMap(bridge, host, wait);
+    const map8 = makeMap(bridge, host, wait);
     const monsterServices = yield* makeMonsters(bridge, host, events, wait);
     const monsters = monsterServices.api;
     const players = makePlayers(host);
-    const player = makePlayer(bridge, host, auth, inventory, map7, wait);
+    const player = makePlayer(bridge, host, auth, inventory, map8, wait);
     const sessionEvents = yield* makeSessionEvents(
       wait.until(player.isReady()).pipe(asVoid2),
       gateway.publishEvent
@@ -15966,7 +17188,7 @@ ${prefix}}`;
       drops,
       events,
       inventory,
-      map7,
+      map8,
       monsterServices.lookup,
       player,
       players,
@@ -15986,7 +17208,7 @@ ${prefix}}`;
         events,
         house,
         inventory,
-        map: map7,
+        map: map8,
         monsterLookup: monsterServices.lookup,
         monsters,
         packet,
@@ -16001,7 +17223,7 @@ ${prefix}}`;
       projectionReadiness
     };
   });
-  var makeApi = makeApiServices.pipe(map4(({ api }) => api));
+  var makeApi = makeApiServices.pipe(map5(({ api: api2 }) => api2));
   var Api = class extends Service()(
     "lucent/renderer/flash/Api"
   ) {
@@ -16011,8 +17233,8 @@ ${prefix}}`;
   };
   var layer4 = effectContext(
     makeApiServices.pipe(
-      map4(
-        ({ api, projectionReadiness }) => make2(Api, api).pipe(
+      map5(
+        ({ api: api2, projectionReadiness }) => make2(Api, api2).pipe(
           add(ProjectionReadiness, projectionReadiness)
         )
       )
@@ -16024,15 +17246,4385 @@ ${prefix}}`;
   var hostLayer = layer3.pipe(provideMerge(gatewayLayer));
   var apiLayer = layer4.pipe(provideMerge(hostLayer));
 
-  // packages/runtime/src/host/run.ts
-  var runtime = make5(apiLayer);
-  runtime.runSync(void_3);
-  var run3 = /* @__PURE__ */ __name((program) => runtime.runPromise(
-    gen2(function* () {
-      return yield* program(yield* Api);
+  // packages/runtime/src/game/audio/beep.ts
+  var SOURCE_STOP_PADDING = 0.05;
+  var CLEANUP_AFTER_MS = 1050;
+  var REPEAT_INTERVAL = 0.28;
+  var SILENCE = 1e-4;
+  var sharedContext = null;
+  var getAudioContext = /* @__PURE__ */ __name(() => {
+    if (sharedContext) return sharedContext;
+    try {
+      sharedContext = new AudioContext();
+      return sharedContext;
+    } catch {
+      return null;
+    }
+  }, "getAudioContext");
+  var renderSuccessBeep = /* @__PURE__ */ __name((context3, times) => {
+    const now = context3.currentTime;
+    const master = context3.createGain();
+    master.gain.value = 0.5;
+    master.connect(context3.destination);
+    const delay3 = context3.createDelay(1);
+    delay3.delayTime.value = 0.1;
+    const feedbackFilter = context3.createBiquadFilter();
+    feedbackFilter.type = "lowpass";
+    feedbackFilter.frequency.value = 4500;
+    const feedbackGain = context3.createGain();
+    feedbackGain.gain.value = 0.22;
+    const wetGain = context3.createGain();
+    wetGain.gain.value = 0.16;
+    master.connect(delay3);
+    delay3.connect(feedbackFilter);
+    feedbackFilter.connect(feedbackGain);
+    feedbackGain.connect(delay3);
+    feedbackFilter.connect(wetGain);
+    wetGain.connect(context3.destination);
+    const notes = [
+      { frequency: 880, offset: 0, attack: 4e-3, decay: 0.09, peak: 0.06 },
+      {
+        frequency: 1108.73,
+        offset: 0.06,
+        attack: 4e-3,
+        decay: 0.1,
+        peak: 0.06
+      },
+      {
+        frequency: 1318.51,
+        offset: 0.12,
+        attack: 4e-3,
+        decay: 0.18,
+        peak: 0.07
+      }
+    ];
+    for (let repetition = 0; repetition < times; repetition += 1) {
+      for (const note of notes) {
+        const start2 = now + repetition * REPEAT_INTERVAL + note.offset;
+        const end2 = start2 + note.attack + note.decay;
+        const oscillator = context3.createOscillator();
+        const envelope = context3.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(note.frequency, start2);
+        envelope.gain.setValueAtTime(SILENCE, start2);
+        envelope.gain.exponentialRampToValueAtTime(
+          note.peak,
+          start2 + note.attack
+        );
+        envelope.gain.exponentialRampToValueAtTime(SILENCE, end2);
+        oscillator.connect(envelope).connect(master);
+        oscillator.start(start2);
+        oscillator.stop(end2 + SOURCE_STOP_PADDING);
+      }
+    }
+    window.setTimeout(
+      () => {
+        master.disconnect();
+        delay3.disconnect();
+        feedbackFilter.disconnect();
+        feedbackGain.disconnect();
+        wetGain.disconnect();
+      },
+      CLEANUP_AFTER_MS + (times - 1) * REPEAT_INTERVAL * 1e3
+    );
+  }, "renderSuccessBeep");
+  var playBeep = /* @__PURE__ */ __name((times) => {
+    const context3 = getAudioContext();
+    if (!context3) return;
+    if (context3.state === "running") {
+      renderSuccessBeep(context3, times);
+      return;
+    }
+    void context3.resume().then(
+      () => {
+        if (context3.state === "running") renderSuccessBeep(context3, times);
+      },
+      () => void 0
+    );
+  }, "playBeep");
+
+  // packages/runtime/src/game/scripting/ScriptDialogs.ts
+  var ScriptDialogs = class extends Service()("lucent/game/scripting/ScriptDialogs") {
+    static {
+      __name(this, "ScriptDialogs");
+    }
+  };
+  var snapshotRequest = /* @__PURE__ */ __name((request) => ({ ...request }), "snapshotRequest");
+  var snapshotCurrent = /* @__PURE__ */ __name((request) => request === null ? null : snapshotRequest(request), "snapshotCurrent");
+  var responseMatchesRequest = /* @__PURE__ */ __name((request, response) => request.id === response.id && request.kind === response.kind, "responseMatchesRequest");
+  var requestWithId = /* @__PURE__ */ __name((request, id) => {
+    switch (request.kind) {
+      case "alert":
+        return { ...request, id };
+      case "confirm":
+        return { ...request, id };
+      case "prompt":
+        return { ...request, id };
+    }
+  }, "requestWithId");
+  var makeScriptDialogs = fnUntraced2(function* () {
+    const scope3 = yield* scope2;
+    const runFork3 = runForkWith2(yield* context2());
+    const queue = yield* unbounded2();
+    const activeRef = yield* make16(null);
+    const currentRef = yield* make17(
+      null
+    );
+    const nextIdRef = yield* make16(0);
+    const clearActive = /* @__PURE__ */ __name((pending) => gen2(function* () {
+      const active = yield* get4(activeRef);
+      if (active !== pending) return;
+      yield* set3(activeRef, null);
+      yield* set4(currentRef, null);
+    }), "clearActive");
+    const processNext = fn2("ScriptDialogs.processNext")(function* () {
+      const pending = yield* take3(queue);
+      if (yield* isDone2(pending.canceled)) return;
+      yield* set3(activeRef, pending);
+      yield* set4(currentRef, snapshotRequest(pending.request));
+      yield* raceFirst2(
+        _await(pending.response).pipe(asVoid2),
+        _await(pending.canceled)
+      ).pipe(ensuring2(clearActive(pending)));
+    });
+    yield* gen2(function* () {
+      while (true) {
+        yield* processNext();
+      }
+    }).pipe(forkIn2(scope3));
+    const enqueue = fn2("ScriptDialogs.enqueue")(function* (request) {
+      return yield* acquireUseRelease2(
+        gen2(function* () {
+          const id = yield* updateAndGet(nextIdRef, (current) => current + 1);
+          const pending = {
+            canceled: yield* make5(),
+            request: requestWithId(request, id),
+            response: yield* make5()
+          };
+          yield* offer(queue, pending);
+          return pending;
+        }),
+        (pending) => _await(pending.response),
+        (pending) => succeed5(pending.canceled, void 0).pipe(asVoid2)
+      );
+    });
+    const alert = /* @__PURE__ */ __name((source, message2) => enqueue({ ...source, kind: "alert", message: message2 }).pipe(asVoid2), "alert");
+    const confirm = /* @__PURE__ */ __name((source, message2) => gen2(function* () {
+      const response = yield* enqueue({ ...source, kind: "confirm", message: message2 });
+      if (response.kind !== "confirm") {
+        return yield* die3("Script dialog response kind did not match.");
+      }
+      return response.confirmed;
+    }), "confirm");
+    const prompt = /* @__PURE__ */ __name((source, message2, placeholder = "") => gen2(function* () {
+      const response = yield* enqueue({
+        ...source,
+        placeholder,
+        kind: "prompt",
+        message: message2
+      });
+      if (response.kind !== "prompt") {
+        return yield* die3("Script dialog response kind did not match.");
+      }
+      return response.value;
+    }), "prompt");
+    const respond = /* @__PURE__ */ __name((response) => gen2(function* () {
+      const active = yield* get4(activeRef);
+      if (active === null || !responseMatchesRequest(active.request, response)) {
+        return false;
+      }
+      return yield* succeed5(active.response, response);
+    }), "respond");
+    const onCurrent = /* @__PURE__ */ __name((listener) => changes(currentRef).pipe(
+      runForEach2(
+        (request) => sync2(() => listener(snapshotCurrent(request)))
+      ),
+      forkIn2(scope3),
+      map5((fiber2) => () => {
+        runFork3(interrupt4(fiber2));
+      })
+    ), "onCurrent");
+    return ScriptDialogs.of({
+      beep: /* @__PURE__ */ __name((times) => sync2(() => playBeep(times)), "beep"),
+      alert,
+      confirm,
+      getCurrent: /* @__PURE__ */ __name(() => get5(currentRef).pipe(map5(snapshotCurrent)), "getCurrent"),
+      onCurrent,
+      prompt,
+      respond
+    });
+  });
+  var layer5 = effect(ScriptDialogs, makeScriptDialogs());
+
+  // packages/runtime/src/game/scripting/scriptAsyncScope.ts
+  var runCleanup = /* @__PURE__ */ __name((cleanup) => suspend2(() => {
+    const result2 = cleanup();
+    return isEffect2(result2) ? result2.pipe(asVoid2) : void_3;
+  }).pipe(
+    catchCause2(
+      (cause) => logWarning("script cleanup failed", cause).pipe(
+        annotateLogs({ component: "scripting" })
+      )
+    )
+  ), "runCleanup");
+  var makeScriptAsyncScope = /* @__PURE__ */ __name(() => {
+    const controller = new AbortController();
+    const cleanups = /* @__PURE__ */ new Set();
+    const cancel = sync2(() => {
+      if (!controller.signal.aborted) {
+        controller.abort();
+      }
+    });
+    const close2 = gen2(function* () {
+      yield* cancel;
+      const pending = Array.from(cleanups).reverse();
+      cleanups.clear();
+      yield* forEach2(pending, runCleanup, { discard: true });
+    });
+    return {
+      addCleanup: /* @__PURE__ */ __name((cleanup) => suspend2(() => {
+        if (controller.signal.aborted) {
+          return runCleanup(cleanup);
+        }
+        cleanups.add(cleanup);
+        return void_3;
+      }), "addCleanup"),
+      cancel,
+      close: close2,
+      controller,
+      signal: controller.signal
+    };
+  }, "makeScriptAsyncScope");
+
+  // packages/runtime/src/game/scripting/ScriptRunnerErrors.ts
+  var ScriptLoadError = class extends TaggedError3()(
+    "ScriptLoadError",
+    {
+      detail: String4,
+      cause: optionalKey2(Defect())
+    }
+  ) {
+    static {
+      __name(this, "ScriptLoadError");
+    }
+    get message() {
+      return this.detail;
+    }
+  };
+  var ScriptExecutionError = class extends TaggedError3()(
+    "ScriptExecutionError",
+    {
+      detail: String4,
+      cause: optionalKey2(Defect())
+    }
+  ) {
+    static {
+      __name(this, "ScriptExecutionError");
+    }
+    get message() {
+      return this.detail;
+    }
+  };
+  var ScriptNotReadyError = class extends TaggedError3()(
+    "ScriptNotReadyError",
+    {
+      detail: String4,
+      missing: ArraySchema(String4)
+    }
+  ) {
+    static {
+      __name(this, "ScriptNotReadyError");
+    }
+    get message() {
+      return this.detail;
+    }
+  };
+  var ScriptStopSignal = class extends TaggedError3()(
+    "ScriptStopSignal",
+    {
+      reason: optionalKey2(String4)
+    }
+  ) {
+    static {
+      __name(this, "ScriptStopSignal");
+    }
+    get message() {
+      return this.reason ?? "Script stopped.";
+    }
+  };
+  var scriptExitRequests = /* @__PURE__ */ new WeakMap();
+  var makeScriptExitSignal = /* @__PURE__ */ __name((options) => {
+    const signal = new ScriptStopSignal({ reason: "Requested by the script" });
+    const request = {
+      closeClient: options?.closeClient === true,
+      logout: options?.logout === true
+    };
+    scriptExitRequests.set(signal, request);
+    return signal;
+  }, "makeScriptExitSignal");
+  var getScriptExitRequest = /* @__PURE__ */ __name((signal) => scriptExitRequests.get(signal), "getScriptExitRequest");
+
+  // packages/runtime/src/game/scripting/scriptEntry.ts
+  var isGeneratorFunction = /* @__PURE__ */ __name((value) => typeof value === "function" && value.constructor?.name === "GeneratorFunction", "isGeneratorFunction");
+  var readScriptEntry = fn2("ScriptEntry.read")(function* (namespace, name, suppliedValues) {
+    const exports = typeof namespace === "object" && namespace !== null ? namespace : {};
+    const main = Reflect.get(exports, "default");
+    if (!isGeneratorFunction(main)) {
+      return yield* new ScriptLoadError({
+        detail: `${name} must export a generator function as its default export.`
+      });
+    }
+    const inputs = Reflect.get(exports, "inputs");
+    if (inputs === void 0) return { main, inputValues: {} };
+    const definition = yield* decodeUnknownEffect2(
+      ScriptInputsDefinitionSchema
+    )(inputs).pipe(
+      mapError3(
+        (cause) => new ScriptLoadError({
+          detail: `${name} has an invalid inputs export.`,
+          cause
+        })
+      )
+    );
+    const validation = validateScriptInputValues(definition, suppliedValues);
+    if (validation.status === "missing-required") {
+      return yield* new ScriptLoadError({
+        detail: `${name} is missing required inputs: ${validation.fieldKeys.join(", ")}.`
+      });
+    }
+    return { main, inputValues: validation.values };
+  });
+
+  // packages/runtime/src/game/scripting/scriptSourceAttribution.ts
+  var SCRIPT_SOURCE_PATTERN = /lucent-script:\/\/(?:loose|package)\/([^\s:?#]+)/g;
+  var SCRIPT_FRAME_PATTERN = /lucent-script:\/\/(?:loose|package)\/[^\s:?#]+:\d+:\d+/;
+  var decodeSegment = /* @__PURE__ */ __name((value) => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }, "decodeSegment");
+  var displayScriptSourceText = /* @__PURE__ */ __name((text) => text.replace(
+    SCRIPT_SOURCE_PATTERN,
+    (_url, identity2) => identity2.split("/").filter(Boolean).map(decodeSegment).join("/")
+  ), "displayScriptSourceText");
+  var errorChain = /* @__PURE__ */ __name((error) => {
+    const chain = [];
+    const seen = /* @__PURE__ */ new Set();
+    let current = error;
+    while (current !== void 0 && !seen.has(current)) {
+      seen.add(current);
+      chain.push(current);
+      const cause = Reflect.get(current, "cause");
+      current = cause instanceof Error ? cause : void 0;
+    }
+    return chain;
+  }, "errorChain");
+  var attributedScriptErrorMessage = /* @__PURE__ */ __name((error) => {
+    const message2 = displayScriptSourceText(error.message);
+    if (SCRIPT_FRAME_PATTERN.test(error.message)) return message2;
+    for (const entry of errorChain(error)) {
+      const frame = entry.stack?.match(SCRIPT_FRAME_PATTERN);
+      if (frame) return `${displayScriptSourceText(frame[0])}: ${message2}`;
+    }
+    return message2;
+  }, "attributedScriptErrorMessage");
+  var attributedScriptErrorDetails = /* @__PURE__ */ __name((error) => {
+    const details = errorChain(error).map(
+      (entry) => displayScriptSourceText(
+        entry.stack?.trim() === "" ? entry.message : entry.stack ?? entry.message
+      )
+    ).filter((entry) => entry.trim() !== "");
+    return details.length === 0 ? void 0 : details.join("\nCaused by:\n");
+  }, "attributedScriptErrorDetails");
+
+  // packages/runtime/src/game/scripting/ScriptRuntime.ts
+  var DEFAULT_SCRIPT_RUNTIME_OPTIONS = {
+    restartAfterReconnect: DEFAULT_ACCOUNT_SETTINGS.scripts.restartAfterReconnect,
+    roomPolicy: DEFAULT_ACCOUNT_SETTINGS.scripts.roomPolicy,
+    safeStartStop: DEFAULT_ACCOUNT_SETTINGS.scripts.safeStartStop
+  };
+  var snapshotRoomPolicy = /* @__PURE__ */ __name((policy) => ({
+    ...policy
+  }), "snapshotRoomPolicy");
+  var decodeOptionsPatch = decodeUnknownEffect2(
+    AccountScriptSettingsPatchSchema
+  );
+  var snapshotScriptRuntimeOptions = /* @__PURE__ */ __name((options) => ({
+    restartAfterReconnect: options.restartAfterReconnect,
+    roomPolicy: snapshotRoomPolicy(options.roomPolicy),
+    safeStartStop: options.safeStartStop
+  }), "snapshotScriptRuntimeOptions");
+  var snapshotScriptInputValue = /* @__PURE__ */ __name((value) => Array.isArray(value) ? [...value] : value, "snapshotScriptInputValue");
+  var snapshotScriptInputValues = /* @__PURE__ */ __name((values2) => {
+    const snapshot = {};
+    for (const [key, value] of Object.entries(values2)) {
+      snapshot[key] = snapshotScriptInputValue(value);
+    }
+    return snapshot;
+  }, "snapshotScriptInputValues");
+  var makeScriptRuntimeApi = /* @__PURE__ */ __name((options) => {
+    const source = { ...options.source };
+    const script = {
+      alert: /* @__PURE__ */ __name((message2) => options.dialogs.alert(source, message2), "alert"),
+      beep: /* @__PURE__ */ __name((times = 1) => Number.isFinite(times) ? options.dialogs.beep(Math.max(1, Math.floor(times))) : fail5(
+        new ScriptExecutionError({
+          detail: "script.beep requires a finite number of repetitions."
+        })
+      ), "beep"),
+      confirm: /* @__PURE__ */ __name((message2) => options.dialogs.confirm(source, message2), "confirm"),
+      exit: /* @__PURE__ */ __name((exitOptions) => fail5(makeScriptExitSignal(exitOptions)), "exit"),
+      inputs: Object.freeze({
+        get: /* @__PURE__ */ __name((key) => sync2(() => {
+          const value = options.getInputValues()[key];
+          return value === void 0 ? void 0 : snapshotScriptInputValue(value);
+        }), "get"),
+        getAll: /* @__PURE__ */ __name(() => sync2(() => snapshotScriptInputValues(options.getInputValues())), "getAll")
+      }),
+      log: /* @__PURE__ */ __name((...values2) => sync2(() => options.log(...values2)), "log"),
+      options: Object.freeze({
+        get: options.getOptions,
+        reset: /* @__PURE__ */ __name(() => options.setOptions(() => DEFAULT_SCRIPT_RUNTIME_OPTIONS).pipe(asVoid2), "reset"),
+        update: fn2("ScriptRuntime.options.update")(function* (patch) {
+          const decoded = yield* decodeOptionsPatch(patch).pipe(
+            mapError3(
+              (cause) => new ScriptExecutionError({
+                cause,
+                detail: "script.options.update requires valid runtime options."
+              })
+            )
+          );
+          if (Object.keys(decoded).length === 0) return;
+          yield* options.setOptions((currentOptions) => ({
+            ...currentOptions,
+            ...decoded
+          }));
+        })
+      }),
+      prompt: /* @__PURE__ */ __name((message2, placeholder) => options.dialogs.prompt(source, message2, placeholder), "prompt"),
+      signal: options.scope.signal,
+      sleep: /* @__PURE__ */ __name((duration) => try_2({
+        try: /* @__PURE__ */ __name(() => toMillis(duration), "try"),
+        catch: /* @__PURE__ */ __name((cause) => new ScriptExecutionError({
+          cause,
+          detail: "Invalid duration."
+        }), "catch")
+      }).pipe(
+        flatMap3(
+          (milliseconds) => Number.isFinite(milliseconds) && milliseconds >= 0 ? sleep2(duration) : fail5(
+            new ScriptExecutionError({
+              detail: "Duration must be non-negative and finite."
+            })
+          )
+        )
+      ), "sleep"),
+      stop: /* @__PURE__ */ __name((reason) => fail5(new ScriptStopSignal(reason === void 0 ? {} : { reason })), "stop")
+    };
+    return Object.freeze(script);
+  }, "makeScriptRuntimeApi");
+
+  // packages/runtime/src/game/army/ArmyErrors.ts
+  var ArmyError = class extends Error {
+    static {
+      __name(this, "ArmyError");
+    }
+    _tag = "ArmyError";
+    constructor(message2, cause) {
+      super(message2);
+      this.name = "ArmyError";
+      if (cause !== void 0) {
+        Object.defineProperty(this, "cause", {
+          configurable: true,
+          enumerable: false,
+          value: cause,
+          writable: true
+        });
+      }
+    }
+  };
+  var ArmyLoopTauntError = class extends Error {
+    static {
+      __name(this, "ArmyLoopTauntError");
+    }
+    _tag = "ArmyLoopTauntError";
+    constructor(message2, cause) {
+      super(message2);
+      this.name = "ArmyLoopTauntError";
+      if (cause !== void 0) {
+        Object.defineProperty(this, "cause", {
+          configurable: true,
+          enumerable: false,
+          value: cause,
+          writable: true
+        });
+      }
+    }
+  };
+
+  // packages/runtime/src/game/scripting/api/Callbacks.ts
+  var isGenerator = /* @__PURE__ */ __name((value) => typeof value === "object" && value !== null && typeof value.next === "function" && typeof value.throw === "function", "isGenerator");
+  var normalizeScriptCallbackResult = /* @__PURE__ */ __name((result2) => {
+    if (isEffect2(result2)) {
+      return result2;
+    }
+    if (isGenerator(result2)) {
+      return gen2(function* () {
+        const iterator = result2;
+        return yield* iterator;
+      });
+    }
+    return fail5(
+      new ScriptExecutionError({
+        detail: "Script callbacks must return an Effect or generator; plain values and Promises are not supported."
+      })
+    );
+  }, "normalizeScriptCallbackResult");
+  var normalizeScriptCallback = /* @__PURE__ */ __name((callback3, value) => try_2({
+    try: /* @__PURE__ */ __name(() => callback3(value), "try"),
+    catch: /* @__PURE__ */ __name((cause) => new ScriptExecutionError({
+      detail: "Script callback threw before returning an Effect.",
+      cause
+    }), "catch")
+  }).pipe(flatMap3(normalizeScriptCallbackResult), asVoid2), "normalizeScriptCallback");
+  var notifyScriptCallbackFailure = /* @__PURE__ */ __name((callback3, failCause7) => (value) => normalizeScriptCallback(callback3, value).pipe(
+    catchCause2(
+      (cause) => failCause7(cause).pipe(andThen2(failCause4(cause)))
+    )
+  ), "notifyScriptCallbackFailure");
+
+  // packages/runtime/src/game/scripting/api/Army.ts
+  var normalizeSkipWhen = /* @__PURE__ */ __name((skipWhen) => (context3) => try_2({
+    try: /* @__PURE__ */ __name(() => skipWhen(context3), "try"),
+    catch: /* @__PURE__ */ __name((cause) => new ScriptExecutionError({
+      cause,
+      detail: "Loop Taunt skipWhen callback threw."
+    }), "catch")
+  }).pipe(
+    flatMap3(
+      (result2) => typeof result2 === "boolean" ? succeed7(result2) : normalizeScriptCallbackResult(result2)
+    ),
+    flatMap3(
+      (result2) => typeof result2 === "boolean" ? succeed7(result2) : fail5(
+        new ScriptExecutionError({
+          detail: "Loop Taunt skipWhen must return a boolean, an Effect<boolean>, or a generator that returns a boolean."
+        })
+      )
+    )
+  ), "normalizeSkipWhen");
+  var makeScriptArmyApi = /* @__PURE__ */ __name((army, scope3, failCause7) => {
+    return Object.freeze({
+      equipSet: army.equipSet,
+      getConfigString: army.getConfigString,
+      getConfigValue: army.getConfigValue,
+      getPlayerNumber: army.getPlayerNumber,
+      getSession: army.getSession,
+      isLeader: army.isLeader,
+      isMember: army.isMember,
+      isStarted: army.isStarted,
+      joinMap: army.joinMap,
+      kill: army.kill,
+      killForItem: army.killForItem,
+      killForTempItem: army.killForTempItem,
+      leave: army.leave,
+      loopTaunt: /* @__PURE__ */ __name((plan) => try_2({
+        try: /* @__PURE__ */ __name(() => plan.map((priorityGroup) => ({
+          assignments: priorityGroup.assignments.map(
+            (assignment) => {
+              if (assignment.skipWhen === void 0) {
+                return {
+                  players: assignment.players,
+                  strategy: assignment.strategy,
+                  target: assignment.target
+                };
+              }
+              if (typeof assignment.skipWhen !== "function") {
+                throw new ArmyLoopTauntError(
+                  "Loop Taunt skipWhen must be a function"
+                );
+              }
+              return {
+                ...assignment,
+                skipWhen: normalizeSkipWhen(assignment.skipWhen)
+              };
+            }
+          )
+        })), "try"),
+        catch: /* @__PURE__ */ __name((cause) => cause instanceof ArmyLoopTauntError ? cause : new ArmyLoopTauntError(
+          "Failed to normalize Loop Taunt plan",
+          cause
+        ), "catch")
+      }).pipe(
+        flatMap3((normalized) => army.loopTaunt(normalized, failCause7)),
+        // addCleanup runs immediately after cancellation, closing the race
+        // between handle acquisition and an already-closed script scope.
+        tap2((handle) => scope3.addCleanup(handle.stop))
+      ), "loopTaunt"),
+      runStep: army.runStep,
+      start: army.start,
+      sync: army.sync,
+      waitForAllInMap: army.waitForAllInMap
+    });
+  }, "makeScriptArmyApi");
+
+  // packages/runtime/src/game/scripting/api/Combat.ts
+  var makeScriptCombatApi = /* @__PURE__ */ __name((combat) => {
+    const killForItem = /* @__PURE__ */ __name((target2, goal, options) => combat.killForItem(target2, goal.item, goal.quantity, options), "killForItem");
+    const killForTempItem = /* @__PURE__ */ __name((target2, goal, options) => combat.killForTempItem(target2, goal.item, goal.quantity, options), "killForTempItem");
+    const target = Object.freeze({
+      auras: Object.freeze({
+        get: combat.target.auras.get,
+        getAll: combat.target.auras.getAll,
+        has: combat.target.auras.has
+      }),
+      get: combat.target.get
+    });
+    return Object.freeze({
+      attack: combat.attack,
+      cancelAutoAttack: combat.cancelAutoAttack,
+      cancelTarget: combat.cancelTarget,
+      canUseSkill: combat.canUseSkill,
+      exit: combat.exit,
+      getSkillCooldownRemainingMs: combat.getSkillCooldownRemainingMs,
+      hunt: combat.hunt,
+      kill: combat.kill,
+      killForItem,
+      killForTempItem,
+      target,
+      useSkill: combat.useSkill
+    });
+  }, "makeScriptCombatApi");
+
+  // packages/runtime/src/game/scripting/api/Events.ts
+  var makeScriptEventsApi = /* @__PURE__ */ __name((events, scope3, failCause7) => {
+    const on = /* @__PURE__ */ __name(((selector, handler) => {
+      return events.onProjection(selector, notifyScriptCallbackFailure(handler, failCause7)).pipe(tap2((dispose) => scope3.addCleanup(dispose)));
+    }), "on");
+    const once = events.onceProjection;
+    return Object.freeze({
+      on,
+      once
+    });
+  }, "makeScriptEventsApi");
+
+  // packages/runtime/src/game/scripting/api/Environment.ts
+  var ScriptEnvironmentError = class extends TaggedError3()(
+    "EnvironmentError",
+    {
+      cause: Defect(),
+      operation: String4
+    }
+  ) {
+    static {
+      __name(this, "ScriptEnvironmentError");
+    }
+    get message() {
+      return `Environment ${this.operation} failed.`;
+    }
+  };
+  var toEnvironmentSnapshot = /* @__PURE__ */ __name((state) => Object.freeze({
+    automation: Object.freeze({ ...state.automation }),
+    boosts: Object.freeze([...state.boosts]),
+    dropPolicy: Object.freeze(
+      environmentItemRulesToDropPolicy(state.itemRules)
+    ),
+    itemNames: Object.freeze([...state.itemNames]),
+    itemNotificationNames: Object.freeze([...state.itemNotificationNames]),
+    questAutoRegister: Object.freeze({ ...state.questAutoRegister }),
+    questIds: Object.freeze([...state.questIds]),
+    questRewards: Object.freeze({ ...state.questRewards })
+  }), "toEnvironmentSnapshot");
+  var exposeMutation = /* @__PURE__ */ __name((operation, effect2) => effect2.pipe(
+    map5(toEnvironmentSnapshot),
+    mapError3(
+      (cause) => new ScriptEnvironmentError({ cause, operation })
+    )
+  ), "exposeMutation");
+  var makeScriptEnvironmentApi = /* @__PURE__ */ __name((environment) => {
+    const automationSetters = {
+      boosts: environment.setBoostAutomationEnabled,
+      drops: environment.setDropAutomationEnabled,
+      quests: environment.setQuestAutomationEnabled
+    };
+    const api2 = {
+      getState: /* @__PURE__ */ __name(() => environment.getState().pipe(map5(toEnvironmentSnapshot)), "getState"),
+      clearRegistrations: /* @__PURE__ */ __name(() => exposeMutation("clearRegistrations", environment.clear()), "clearRegistrations"),
+      setAutomationEnabled: /* @__PURE__ */ __name((capability, enabled) => exposeMutation(
+        "setAutomationEnabled",
+        automationSetters[capability](enabled)
+      ), "setAutomationEnabled"),
+      addQuest: /* @__PURE__ */ __name((questId, rewardItemId) => exposeMutation("addQuest", environment.addQuest(questId, rewardItemId)), "addQuest"),
+      removeQuest: /* @__PURE__ */ __name((questId) => exposeMutation("removeQuest", environment.removeQuest(questId)), "removeQuest"),
+      setQuestReward: /* @__PURE__ */ __name((questId, rewardItemId) => exposeMutation(
+        "setQuestReward",
+        environment.setQuestReward(questId, rewardItemId)
+      ), "setQuestReward"),
+      clearQuestReward: /* @__PURE__ */ __name((questId) => exposeMutation("clearQuestReward", environment.clearQuestReward(questId)), "clearQuestReward"),
+      clearQuests: /* @__PURE__ */ __name(() => exposeMutation("clearQuests", environment.clearQuests()), "clearQuests"),
+      updateQuestAutoRegister: /* @__PURE__ */ __name((patch) => exposeMutation(
+        "updateQuestAutoRegister",
+        environment.getState().pipe(
+          flatMap3(
+            (state) => environment.setQuestAutoRegister({
+              ...state.questAutoRegister,
+              ...patch
+            })
+          )
+        )
+      ), "updateQuestAutoRegister"),
+      addItem: /* @__PURE__ */ __name((name) => exposeMutation("addItem", environment.addItem(name)), "addItem"),
+      removeItem: /* @__PURE__ */ __name((name) => exposeMutation("removeItem", environment.removeItem(name)), "removeItem"),
+      clearItems: /* @__PURE__ */ __name(() => exposeMutation("clearItems", environment.clearItems()), "clearItems"),
+      setItemNotification: /* @__PURE__ */ __name((name, enabled) => exposeMutation(
+        "setItemNotification",
+        environment.setItemNotification(name, enabled)
+      ), "setItemNotification"),
+      updateDropPolicy: /* @__PURE__ */ __name((patch) => exposeMutation("updateDropPolicy", environment.setDropPolicy(patch)), "updateDropPolicy"),
+      addBoost: /* @__PURE__ */ __name((name) => exposeMutation("addBoost", environment.addBoost(name)), "addBoost"),
+      removeBoost: /* @__PURE__ */ __name((name) => exposeMutation("removeBoost", environment.removeBoost(name)), "removeBoost"),
+      clearBoosts: /* @__PURE__ */ __name(() => exposeMutation("clearBoosts", environment.clearBoosts()), "clearBoosts")
+    };
+    return Object.freeze(api2);
+  }, "makeScriptEnvironmentApi");
+
+  // packages/runtime/src/game/scripting/api/Packet.ts
+  var makeScriptPacketApi = /* @__PURE__ */ __name((packet, scope3, failCause7) => {
+    const on = /* @__PURE__ */ __name(((selector, handler) => packet.on(selector, notifyScriptCallbackFailure(handler, failCause7)).pipe(
+      tap2((dispose) => scope3.addCleanup(dispose))
+    )), "on");
+    return Object.freeze({
+      on,
+      once: packet.once,
+      sendToClient: packet.sendToClient,
+      sendToServer: packet.sendToServer
+    });
+  }, "makeScriptPacketApi");
+
+  // packages/runtime/src/game/scripting/api/Players.ts
+  var makeScriptPlayersApi = /* @__PURE__ */ __name((players) => Object.freeze({
+    get: /* @__PURE__ */ __name((query) => players.get(toPlayerSelector(query).username), "get"),
+    getAll: players.getAll
+  }), "makeScriptPlayersApi");
+
+  // packages/runtime/src/game/scripting/api/Player.ts
+  var makeScriptPlayerJoinMap = /* @__PURE__ */ __name((joinMap, script) => fn2("ScriptPlayer.joinMap")(function* (map8, options) {
+    const policy = yield* script.policy;
+    if (policy.kind === "random-private" && (yield* script.map.isLoaded())) {
+      const currentName = yield* script.map.getName();
+      const currentRoom = yield* script.map.getRoomNumber();
+      if (map8.trim().toLowerCase() === currentName.trim().toLowerCase() && roomPolicyAcceptsRoom(policy, currentRoom)) {
+        return yield* joinMap(withRoomNumber(map8.trim(), currentRoom), options);
+      }
+    }
+    return yield* joinMap(yield* applyRoomPolicy(map8, policy), options);
+  }), "makeScriptPlayerJoinMap");
+  var makeScriptPlayerApis = /* @__PURE__ */ __name((player, players, script) => {
+    const auras = Object.freeze({
+      get: player.auras.get,
+      getAll: player.auras.getAll,
+      has: player.auras.has
+    });
+    const factions = Object.freeze({
+      get: player.factions.get,
+      getAll: player.factions.getAll
+    });
+    const outfits = Object.freeze({
+      equip: player.outfits.equip,
+      get: player.outfits.get,
+      getAll: player.outfits.getAll,
+      wear: player.outfits.wear
+    });
+    const playerApi = Object.freeze({
+      auras,
+      factions,
+      get: player.get,
+      getCell: player.getCell,
+      getClassName: player.getClassName,
+      getClassRank: player.getClassRank,
+      getGender: player.getGender,
+      getGold: player.getGold,
+      getHp: player.getHp,
+      getLevel: player.getLevel,
+      getMaxHp: player.getMaxHp,
+      getMaxMp: player.getMaxMp,
+      getMp: player.getMp,
+      getPad: player.getPad,
+      getPosition: player.getPosition,
+      getState: player.getState,
+      goToPlayer: player.goToPlayer,
+      hasActiveBoost: player.hasActiveBoost,
+      isAfk: player.isAfk,
+      isAlive: player.isAlive,
+      isMember: player.isMember,
+      isReady: player.isReady,
+      joinMap: makeScriptPlayerJoinMap(
+        (map8, options) => player.joinMap(map8, options),
+        script
+      ),
+      jumpToCell: player.jumpToCell,
+      outfits,
+      rest: player.rest,
+      walkTo: player.walkTo
+    });
+    return {
+      player: playerApi,
+      players: makeScriptPlayersApi(players)
+    };
+  }, "makeScriptPlayerApis");
+
+  // packages/runtime/src/game/scripting/api/PublicServices.ts
+  var makeScriptPublicServices = /* @__PURE__ */ __name((services) => ({
+    auth: Object.freeze({
+      connectTo: services.auth.connectTo,
+      getPassword: services.auth.getPassword,
+      getServers: services.auth.getServers,
+      getUsername: services.auth.getUsername,
+      isLoggedIn: services.auth.isLoggedIn,
+      isServerSelectReady: services.auth.isServerSelectReady,
+      isTemporarilyKicked: services.auth.isTemporarilyKicked,
+      login: services.auth.login,
+      logout: services.auth.logout
+    }),
+    bank: Object.freeze({
+      contains: services.bank.contains,
+      deposit: services.bank.deposit,
+      depositBatch: services.bank.depositBatch,
+      get: services.bank.get,
+      getAll: services.bank.getAll,
+      getAvailableSlots: services.bank.getAvailableSlots,
+      getSlots: services.bank.getSlots,
+      getUsedSlots: services.bank.getUsedSlots,
+      isOpen: services.bank.isOpen,
+      load: services.bank.load,
+      open: services.bank.open,
+      swap: services.bank.swap,
+      withdraw: services.bank.withdraw,
+      withdrawBatch: services.bank.withdrawBatch
+    }),
+    drops: Object.freeze({
+      accept: services.drops.accept,
+      contains: services.drops.contains,
+      get: services.drops.get,
+      getAll: services.drops.getAll,
+      reject: services.drops.reject
+    }),
+    house: Object.freeze({
+      contains: services.house.contains,
+      get: services.house.get,
+      getAll: services.house.getAll,
+      getAvailableSlots: services.house.getAvailableSlots,
+      getSlots: services.house.getSlots,
+      getUsedSlots: services.house.getUsedSlots
+    }),
+    inventory: Object.freeze({
+      contains: services.inventory.contains,
+      equip: services.inventory.equip,
+      equipByEnhancement: services.inventory.equipByEnhancement,
+      get: services.inventory.get,
+      getAll: services.inventory.getAll,
+      getAvailableSlots: services.inventory.getAvailableSlots,
+      getSlots: services.inventory.getSlots,
+      getUsedSlots: services.inventory.getUsedSlots,
+      unequipConsumable: services.inventory.unequipConsumable,
+      use: services.inventory.use,
+      wear: services.inventory.wear
+    }),
+    map: Object.freeze({
+      getCellPads: services.map.getCellPads,
+      getCells: services.map.getCells,
+      getId: services.map.getId,
+      getMapItem: services.map.getMapItem,
+      getName: services.map.getName,
+      getRoomNumber: services.map.getRoomNumber,
+      isLoaded: services.map.isLoaded,
+      loadSwf: services.map.loadSwf,
+      reload: services.map.reload,
+      setSpawnPoint: services.map.setSpawnPoint
+    }),
+    monsters: Object.freeze({
+      get: services.monsters.get,
+      getAll: services.monsters.getAll,
+      getAvailable: services.monsters.getAvailable,
+      isAvailable: services.monsters.isAvailable
+    }),
+    quests: Object.freeze({
+      abandon: services.quests.abandon,
+      accept: services.quests.accept,
+      acceptBatch: services.quests.acceptBatch,
+      canComplete: services.quests.canComplete,
+      complete: services.quests.complete,
+      get: services.quests.get,
+      getAccepted: services.quests.getAccepted,
+      getAll: services.quests.getAll,
+      getMaxTurnIns: services.quests.getMaxTurnIns,
+      isAvailable: services.quests.isAvailable,
+      isInProgress: services.quests.isInProgress,
+      load: services.quests.load,
+      loadBatch: services.quests.loadBatch
+    }),
+    tempInventory: Object.freeze({
+      contains: services.tempInventory.contains,
+      get: services.tempInventory.get,
+      getAll: services.tempInventory.getAll
+    }),
+    wait: Object.freeze({
+      forGameAction: services.wait.forGameAction,
+      isGameActionAvailable: services.wait.isGameActionAvailable,
+      until: services.wait.until,
+      untilSome: services.wait.untilSome
     })
-  ), "run");
+  }), "makeScriptPublicServices");
+
+  // packages/runtime/src/game/scripting/api/Settings.ts
+  var makeScriptSettingsApi = /* @__PURE__ */ __name((settings) => Object.freeze({
+    update: /* @__PURE__ */ __name((patch) => settings.apply({
+      ...patch.animations === void 0 ? {} : { animationsEnabled: patch.animations },
+      ...patch.antiCounter === void 0 ? {} : { antiCounterEnabled: patch.antiCounter },
+      ...patch.collisions === void 0 ? {} : { collisionsEnabled: patch.collisions },
+      ...patch.customGuild === void 0 ? {} : { customGuild: patch.customGuild },
+      ...patch.customName === void 0 ? {} : { customName: patch.customName },
+      ...patch.deathAds === void 0 ? {} : { deathAdsVisible: patch.deathAds },
+      ...patch.enemyMagnet === void 0 ? {} : { enemyMagnetEnabled: patch.enemyMagnet },
+      ...patch.frameRate === void 0 ? {} : { frameRate: patch.frameRate },
+      ...patch.infiniteRange === void 0 ? {} : { infiniteRangeEnabled: patch.infiniteRange },
+      ...patch.hidePlayers === void 0 ? {} : { otherPlayersVisible: !patch.hidePlayers },
+      ...patch.provokeCell === void 0 ? {} : { provokeCellEnabled: patch.provokeCell },
+      ...patch.renderingMode === void 0 ? {} : { renderingMode: patch.renderingMode },
+      ...patch.skipCutscenes === void 0 ? {} : { skipCutscenesEnabled: patch.skipCutscenes },
+      ...patch.walkSpeed === void 0 ? {} : { walkSpeed: patch.walkSpeed }
+    }), "update"),
+    get: fn2("ScriptSettings.get")(function* () {
+      const state = yield* settings.get();
+      return Object.freeze({
+        animations: state.animationsEnabled,
+        antiCounter: state.antiCounterEnabled,
+        collisions: state.collisionsEnabled,
+        customGuild: state.customGuildConfigured ? state.customGuild : null,
+        customName: state.customNameConfigured ? state.customName : null,
+        deathAds: state.deathAdsVisible,
+        enemyMagnet: state.enemyMagnetEnabled,
+        frameRate: state.frameRate,
+        infiniteRange: state.infiniteRangeEnabled,
+        hidePlayers: !state.otherPlayersVisible,
+        provokeCell: state.provokeCellEnabled,
+        renderingMode: state.renderingMode,
+        skipCutscenes: state.skipCutscenesEnabled,
+        walkSpeed: state.walkSpeed
+      });
+    })
+  }), "makeScriptSettingsApi");
+
+  // packages/runtime/src/game/scripting/api/Shop.ts
+  var enhancementResponseContains = /* @__PURE__ */ __name((packet, itemId) => {
+    if (packet.direction === "client" || typeof packet.data !== "object") {
+      return false;
+    }
+    const itemIds = packet.data.ItemIDs;
+    return Array.isArray(itemIds) && itemIds.some((value) => Number(value) === itemId);
+  }, "enhancementResponseContains");
+  var candidateOrder = /* @__PURE__ */ __name((member) => (left, right) => {
+    const levelDifference = (right.enhancement?.level ?? 0) - (left.enhancement?.level ?? 0);
+    if (levelDifference !== 0) return levelDifference;
+    if (member && left.memberOnly !== right.memberOnly) {
+      return Number(right.memberOnly === member) - Number(left.memberOnly === member);
+    }
+    return (left.shopItemId ?? left.itemId) - (right.shopItemId ?? right.itemId);
+  }, "candidateOrder");
+  var selectorForCandidate = /* @__PURE__ */ __name((candidate) => candidate.shopItemId === void 0 ? { itemId: candidate.itemId } : { shopItemId: candidate.shopItemId }, "selectorForCandidate");
+  var ScriptItemQuerySchema = Union2([
+    PositiveInt,
+    TrimmedNonEmptyString,
+    Struct({
+      itemId: PositiveInt,
+      name: optionalKey2(Never2)
+    }),
+    Struct({
+      itemId: optionalKey2(Never2),
+      name: TrimmedNonEmptyString
+    })
+  ]);
+  var ScriptEnhanceItemOptionsSchema = EnhancementSelectorSchema;
+  var ScriptEnhanceItemRequestSchema = Struct({
+    item: ScriptItemQuerySchema,
+    options: ScriptEnhanceItemOptionsSchema
+  });
+  var decodeScriptEnhanceItemRequest = decodeUnknownOption2(
+    ScriptEnhanceItemRequestSchema
+  );
+  var makeScriptShopApi = /* @__PURE__ */ __name((services, bridge) => {
+    const enhanceItem = fn2("ScriptShop.enhanceItem")(function* (item, options) {
+      const itemSelector = toItemSelector(item);
+      const { enhancement, special } = options;
+      const inventoryItem = yield* services.inventory.get(itemSelector);
+      if (inventoryItem === null) {
+        return false;
+      }
+      const playerLevel = yield* services.player.getLevel();
+      const strategyResolution = resolveEnhancementStrategy(
+        inventoryItem,
+        enhancement,
+        playerLevel,
+        special
+      );
+      if (!strategyResolution.ok) {
+        return false;
+      }
+      const strategy = strategyResolution.strategy;
+      const matchesApplied = matchesAppliedEnhancement(inventoryItem, strategy);
+      const appliedLevel = matchesApplied ? inventoryItem.enhancement?.level : void 0;
+      if (appliedLevel !== void 0 && appliedLevel >= playerLevel) {
+        return true;
+      }
+      if (strategy.map !== void 0) {
+        const joined = yield* services.player.joinMap(strategy.map);
+        if (!joined) return false;
+      }
+      const loaded = yield* services.shops.load(strategy.shopId);
+      if (!loaded) return false;
+      const member = yield* services.player.isMember();
+      const shopItems = yield* services.shops.getAll();
+      const candidates = shopItems.filter(
+        (candidate) => (!candidate.memberOnly || member) && candidate.enhancement?.level !== void 0 && candidate.enhancement.level <= playerLevel && matchesEnhancementShopItem(candidate, strategy)
+      ).toSorted(candidateOrder(member));
+      let candidateSelector;
+      for (const current of candidates) {
+        const candidateLevel = current.enhancement?.level ?? 0;
+        if (appliedLevel !== void 0 && appliedLevel >= candidateLevel) {
+          return true;
+        }
+        const selector = selectorForCandidate(current);
+        const canBuy = yield* services.shops.canBuy(selector);
+        if (!canBuy) continue;
+        candidateSelector = selector;
+        break;
+      }
+      if (candidateSelector === void 0) {
+        return false;
+      }
+      const actionAvailable = yield* services.wait.forGameAction("buyItem");
+      if (!actionAvailable) return false;
+      const response = yield* services.wait.forPacket(
+        {
+          command: "enhanceItemShop",
+          direction: "extension",
+          predicate: /* @__PURE__ */ __name((packet) => enhancementResponseContains(packet, inventoryItem.itemId), "predicate"),
+          encoding: "json"
+        },
+        {
+          timeout: "5 seconds",
+          trigger: gen2(function* () {
+            const bridgeResult = yield* bridge.invoke(
+              "shops.enhance",
+              [candidateSelector, inventoryItem.itemId],
+              Boolean3
+            );
+            return getOrElse(bridgeResult, () => false);
+          })
+        }
+      );
+      if (response === null) {
+        return false;
+      }
+      const updated = yield* services.inventory.get(inventoryItem.itemId);
+      return updated !== null && matchesAppliedEnhancement(updated, strategy);
+    });
+    const shop = {
+      buy: services.shops.buy,
+      canBuy: services.shops.canBuy,
+      close: services.shops.close,
+      enhanceItem: /* @__PURE__ */ __name((item, options) => match(decodeScriptEnhanceItemRequest({ item, options }), {
+        onNone: /* @__PURE__ */ __name(() => succeed7(false), "onNone"),
+        onSome: /* @__PURE__ */ __name((request) => enhanceItem(request.item, request.options), "onSome")
+      }), "enhanceItem"),
+      get: services.shops.get,
+      getAll: services.shops.getAll,
+      getCurrent: services.shops.getCurrent,
+      getMaxBuyQuantity: services.shops.getMaxBuyQuantity,
+      isMergeShop: services.shops.isMergeShop,
+      isOpen: services.shops.isOpen,
+      open: services.shops.load,
+      openArmorCustomize: services.shops.openArmorCustomize,
+      openHairShop: services.shops.openHairShop,
+      sell: services.shops.sell
+    };
+    return Object.freeze(shop);
+  }, "makeScriptShopApi");
+
+  // packages/runtime/src/game/scripting/ScriptEffectStd.ts
+  var scriptDurationModule = {
+    days,
+    hours,
+    millis,
+    minutes,
+    seconds,
+    toMillis
+  };
+  Object.freeze(scriptDurationModule);
+  function scriptEffectAll(effects) {
+    return all2(effects);
+  }
+  __name(scriptEffectAll, "scriptEffectAll");
+  var scriptEffectModule = {
+    all: scriptEffectAll,
+    as: as2,
+    asVoid: asVoid2,
+    catch: catch_2,
+    fail: fail5,
+    flatMap: flatMap3,
+    forEach: /* @__PURE__ */ __name((values2, transform3) => forEach2(values2, transform3), "forEach"),
+    gen: gen2,
+    map: map5,
+    mapError: mapError3,
+    raceFirst: raceFirst2,
+    sleep: sleep2,
+    succeed: succeed7,
+    sync: sync2,
+    tap: tap2,
+    timeoutOption: timeoutOption2,
+    try: try_2,
+    tryPromise: tryPromise2,
+    void: void_3
+  };
+  Object.freeze(scriptEffectModule);
+  var scriptOptionModule = {
+    getOrElse,
+    isNone: isNone2,
+    isSome: isSome2,
+    map,
+    match,
+    none: none2,
+    some: some2
+  };
+  Object.freeze(scriptOptionModule);
+  var scriptEffectStd = Object.freeze({
+    Duration: scriptDurationModule,
+    Effect: scriptEffectModule,
+    Option: scriptOptionModule,
+    pipe
+  });
+
+  // packages/runtime/src/game/scripting/schema/issues.ts
+  var SchemaUsageError = class extends Error {
+    static {
+      __name(this, "SchemaUsageError");
+    }
+    name = "SchemaUsageError";
+  };
+  var assertSync = /* @__PURE__ */ __name((value) => {
+    if (isPromiseLike(value)) {
+      void Promise.resolve(value).catch(() => void 0);
+      throw new SchemaUsageError(
+        "Schema callbacks must return synchronously, without promises."
+      );
+    }
+    return value;
+  }, "assertSync");
+  var formatPath2 = /* @__PURE__ */ __name((path) => {
+    let result2 = "$";
+    for (const part of path) {
+      result2 += typeof part === "number" ? `[${part}]` : /^[A-Za-z_$][\w$]*$/.test(part) ? `.${part}` : `[${JSON.stringify(part)}]`;
+    }
+    return result2;
+  }, "formatPath");
+  var formatIssues = /* @__PURE__ */ __name((issues) => issues.map((issue2) => `${formatPath2(issue2.path)}: ${issue2.message}`).join("\n"), "formatIssues");
+  var ValidationError = class extends Error {
+    static {
+      __name(this, "ValidationError");
+    }
+    name = "ValidationError";
+    issues;
+    constructor(issues) {
+      super(formatIssues(issues));
+      this.issues = issues;
+    }
+  };
+  var diagnostics = /* @__PURE__ */ new WeakMap();
+  var nativeFormatter = makeFormatterDefault();
+  var issue = /* @__PURE__ */ __name((code, message2, path = []) => fromIssues([{ code, message: message2, path }]), "issue");
+  var fromIssues = /* @__PURE__ */ __name((issues) => {
+    const result2 = new InvalidValue({
+      message: issues[0]?.message ?? "Invalid value."
+    });
+    diagnostics.set(result2, issues);
+    return result2;
+  }, "fromIssues");
+  var atPath = /* @__PURE__ */ __name((path, cause) => new Pointer(path, cause), "atPath");
+  var flatten6 = /* @__PURE__ */ __name((cause, options = {}, prefix = []) => {
+    const output = [];
+    const limit = options.maxIssues ?? 100;
+    const rebase = /* @__PURE__ */ __name((entry, path) => ({
+      ...entry,
+      path: Object.freeze([...path, ...entry.path]),
+      ...entry.branches === void 0 ? {} : {
+        branches: Object.freeze(
+          entry.branches.map(
+            (branch) => Object.freeze(branch.map((child2) => rebase(child2, path)))
+          )
+        )
+      }
+    }), "rebase");
+    const append3 = /* @__PURE__ */ __name((entry, path) => {
+      if (output.length >= limit) return;
+      const full = rebase(entry, path);
+      const message2 = assertSync(options.message?.(full));
+      if (message2 !== void 0 && typeof message2 !== "string") {
+        throw new SchemaUsageError(
+          "A message callback must return a string or undefined."
+        );
+      }
+      output.push(
+        Object.freeze(message2 === void 0 ? full : { ...full, message: message2 })
+      );
+    }, "append");
+    const visit = /* @__PURE__ */ __name((entry, path) => {
+      if (output.length >= limit) return;
+      const own = diagnostics.get(entry);
+      if (own !== void 0) {
+        for (const diagnostic of own) append3(diagnostic, path);
+        return;
+      }
+      switch (entry._tag) {
+        case "Pointer":
+          visit(entry.issue, [
+            ...path,
+            ...entry.path.map(
+              (key) => typeof key === "symbol" ? String(key) : key
+            )
+          ]);
+          return;
+        case "Composite":
+          for (const child2 of entry.issues) visit(child2, path);
+          return;
+        case "Filter":
+        case "Encoding":
+          visit(entry.issue, path);
+          return;
+        case "AnyOf":
+          append3(
+            {
+              code: "invalid_union",
+              path: [],
+              message: "Expected one of the allowed values or shapes.",
+              branches: entry.issues.map(
+                (child2) => flatten6(child2, { maxIssues: limit })
+              )
+            },
+            path
+          );
+          return;
+        case "Forbidden":
+          throw new SchemaUsageError(
+            "Schema callbacks must complete synchronously."
+          );
+        default: {
+          const code = entry._tag === "MissingKey" ? "missing" : entry._tag === "UnexpectedKey" ? "unrecognized_key" : entry._tag === "InvalidType" ? "invalid_type" : "invalid_value";
+          append3({ code, path: [], message: nativeFormatter(entry) }, path);
+        }
+      }
+    }, "visit");
+    visit(cause, prefix);
+    return Object.freeze(output);
+  }, "flatten");
+
+  // packages/runtime/src/game/scripting/schema/engine.ts
+  var MISSING = /* @__PURE__ */ Symbol("lucent/schema/missing");
+  var INVALID = /* @__PURE__ */ Symbol("lucent/schema/invalid");
+  var stateKey = /* @__PURE__ */ Symbol("lucent/schema/parse-state");
+  var definitions = /* @__PURE__ */ new WeakMap();
+  var parsers = /* @__PURE__ */ new WeakMap();
+  var register = /* @__PURE__ */ __name((instance, definition) => {
+    definitions.set(instance, Object.freeze(definition));
+  }, "register");
+  var isSchema2 = /* @__PURE__ */ __name((value) => isObject(value) && definitions.has(value), "isSchema");
+  var definitionOf = /* @__PURE__ */ __name((value) => {
+    const definition = isObject(value) ? definitions.get(value) : void 0;
+    if (definition === void 0)
+      throw new SchemaUsageError("Expected a lucent/schema schema.");
+    return definition;
+  }, "definitionOf");
+  var missingOf = /* @__PURE__ */ __name((definition) => typeof definition.missing === "function" ? definition.missing() : definition.missing, "missingOf");
+  var stateOf = /* @__PURE__ */ __name((options) => {
+    const state = options[stateKey];
+    if (state === void 0)
+      throw new SchemaUsageError("Use the schema's parsing methods.");
+    return state;
+  }, "stateOf");
+  var makeOptions = /* @__PURE__ */ __name((options = {}) => {
+    if (!isObject(options))
+      throw new SchemaUsageError("Expected parsing options.");
+    const errors = options.errors ?? "first";
+    const maxIssues = options.maxIssues ?? 100;
+    const maxDepth = options.maxDepth ?? 256;
+    if (errors !== "first" && errors !== "all")
+      throw new SchemaUsageError('errors must be "first" or "all".');
+    positiveInteger(maxIssues, "maxIssues");
+    positiveInteger(maxDepth, "maxDepth");
+    if (options.message !== void 0 && !isFunction(options.message)) {
+      throw new SchemaUsageError("message must be a function.");
+    }
+    return {
+      errors,
+      reportInput: false,
+      [stateKey]: {
+        path: [],
+        ancestors: /* @__PURE__ */ new Set(),
+        maxDepth,
+        maxIssues,
+        errors,
+        depth: 0
+      }
+    };
+  }, "makeOptions");
+  var decode2 = /* @__PURE__ */ __name((backend, input, options) => {
+    let parser = parsers.get(backend);
+    if (parser === void 0) {
+      parser = decodeUnknownResult(backend);
+      parsers.set(backend, parser);
+    }
+    return parser(input, options);
+  }, "decode");
+  var declare2 = /* @__PURE__ */ __name((run3) => declareConstructor()([], () => (input, _ast, options) => {
+    const result2 = run3(input, options);
+    return isSuccess2(result2) ? succeed7(result2.success) : fail5(result2.failure);
+  }), "declare");
+  var field = /* @__PURE__ */ __name((definition, input, options) => {
+    if (input === MISSING) {
+      const missing2 = missingOf(definition);
+      if (missing2 === "omit") return succeed2(MISSING);
+      if (missing2 === "reject")
+        return fail2(issue("missing", "This field is required."));
+    }
+    return decode2(definition.backend, input, options);
+  }, "field");
+  var child = /* @__PURE__ */ __name((definition, input, key, options) => {
+    const state = stateOf(options);
+    state.path.push(key);
+    try {
+      const result2 = field(definition, input, options);
+      return isFailure2(result2) ? fail2(atPath([key], result2.failure)) : result2;
+    } finally {
+      state.path.pop();
+    }
+  }, "child");
+  var container = /* @__PURE__ */ __name((input, options, run3) => {
+    const state = stateOf(options);
+    if (state.depth >= state.maxDepth)
+      return fail2(
+        issue("max_depth", "The value exceeds the maximum nesting depth.")
+      );
+    if (state.ancestors.has(input))
+      return fail2(
+        issue("cyclic_reference", "Cyclic values cannot be parsed.")
+      );
+    state.depth += 1;
+    state.ancestors.add(input);
+    try {
+      return run3();
+    } finally {
+      state.depth -= 1;
+      state.ancestors.delete(input);
+    }
+  }, "container");
+  var canContinue = /* @__PURE__ */ __name((issues, options) => {
+    const state = stateOf(options);
+    return issues.length === 0 || state.errors === "all" && issues.length < state.maxIssues;
+  }, "canContinue");
+  var collect = /* @__PURE__ */ __name((issues, cause, options) => {
+    const state = stateOf(options);
+    issues.push(
+      ...flatten6(cause, {
+        maxIssues: Math.max(1, state.maxIssues - issues.length)
+      })
+    );
+  }, "collect");
+  var message = /* @__PURE__ */ __name((options, fallback) => {
+    if (options !== void 0 && (!isObject(options) || options.message !== void 0 && typeof options.message !== "string")) {
+      throw new SchemaUsageError("Expected a string validation message.");
+    }
+    return options?.message ?? fallback;
+  }, "message");
+  var size2 = /* @__PURE__ */ __name((value, name = "length") => {
+    if (!Number.isSafeInteger(value) || value < 0)
+      throw new SchemaUsageError(`${name} must be a nonnegative safe integer.`);
+  }, "size");
+  var positiveInteger = /* @__PURE__ */ __name((value, name) => {
+    size2(value, name);
+    if (value === 0)
+      throw new SchemaUsageError(`${name} must be greater than zero.`);
+  }, "positiveInteger");
+  var finite2 = /* @__PURE__ */ __name((value) => {
+    if (!Number.isFinite(value))
+      throw new SchemaUsageError("Expected a finite numeric bound.");
+  }, "finite");
+  var validatePath = /* @__PURE__ */ __name((path) => {
+    if (!Array.isArray(path) || !path.every(
+      (part) => typeof part === "string" || typeof part === "number" && Number.isSafeInteger(part) && part >= 0
+    )) {
+      throw new SchemaUsageError(
+        "An issue path must contain strings or nonnegative integer indices."
+      );
+    }
+    return Object.freeze([...path]);
+  }, "validatePath");
+  var baseDefinition = /* @__PURE__ */ __name((backend) => ({
+    backend,
+    missing: "reject",
+    metadata: Object.freeze({})
+  }), "baseDefinition");
+  var writeProperty = /* @__PURE__ */ __name((target, key, value) => {
+    Object.defineProperty(target, key, {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value
+    });
+  }, "writeProperty");
+
+  // packages/runtime/src/game/scripting/schema/Schema.ts
+  var SchemaImpl = class {
+    static {
+      __name(this, "SchemaImpl");
+    }
+    constructor(definition) {
+      register(this, definition);
+    }
+    get description() {
+      return definitionOf(this).description;
+    }
+    get metadata() {
+      return definitionOf(this).metadata;
+    }
+    parse(input, options) {
+      const result2 = this.safeParse(input, options);
+      if (!result2.success) throw new ValidationError(result2.issues);
+      return result2.data;
+    }
+    safeParse(input, options) {
+      const engineOptions = makeOptions(options);
+      const result2 = decode2(definitionOf(this).backend, input, engineOptions);
+      return isSuccess2(result2) ? { success: true, data: result2.success } : {
+        success: false,
+        issues: flatten6(result2.failure, {
+          ...options,
+          maxIssues: engineOptions.errors === "first" ? 1 : stateOf(engineOptions).maxIssues
+        })
+      };
+    }
+    is(input) {
+      return isSuccess2(
+        decode2(definitionOf(this).backend, input, makeOptions())
+      );
+    }
+    optional() {
+      const previous = definitionOf(this);
+      return create({
+        ...previous,
+        missing: "omit",
+        backend: declare2(
+          (value, options) => value === void 0 ? succeed2(void 0) : decode2(previous.backend, value, options)
+        )
+      });
+    }
+    optionalKey() {
+      return create({ ...definitionOf(this), missing: "omit" });
+    }
+    nullable() {
+      const previous = definitionOf(this);
+      return create({
+        ...previous,
+        literals: previous.literals === void 0 ? void 0 : Object.freeze([.../* @__PURE__ */ new Set([...previous.literals, null])]),
+        backend: declare2(
+          (value, options) => value === null ? succeed2(null) : decode2(previous.backend, value, options)
+        )
+      });
+    }
+    nullish() {
+      return this.nullable().optional();
+    }
+    required() {
+      return this.rejectValue(void 0, "A value is required.", "reject");
+    }
+    nonnullable() {
+      return this.rejectValue(
+        null,
+        "Null is not allowed.",
+        definitionOf(this).missing
+      );
+    }
+    rejectValue(rejected2, text, missing2) {
+      const previous = definitionOf(this);
+      return create({
+        ...previous,
+        missing: missing2,
+        literals: previous.literals?.filter((value) => value !== rejected2),
+        backend: declare2((value, options) => {
+          if (value === rejected2)
+            return fail2(issue("invalid_value", text));
+          const result2 = decode2(previous.backend, value, options);
+          return isSuccess2(result2) && result2.success === rejected2 ? fail2(issue("invalid_value", text)) : result2;
+        })
+      });
+    }
+    default(fallback) {
+      const previous = definitionOf(this);
+      return create({
+        ...previous,
+        missing: "parse",
+        backend: declare2((value, options) => {
+          if (value === MISSING || value === void 0) {
+            value = isFunction(fallback) ? assertSync(fallback()) : fallback;
+          }
+          return decode2(previous.backend, value, options);
+        })
+      });
+    }
+    catch(fallback) {
+      const previous = definitionOf(this);
+      return create({
+        ...previous,
+        literals: void 0,
+        missing: "parse",
+        backend: declare2((value, options) => {
+          let result2 = field(previous, value, options);
+          if (isSuccess2(result2) && result2.success === MISSING)
+            result2 = decode2(previous.backend, void 0, options);
+          if (isSuccess2(result2)) return result2;
+          const context3 = {
+            input: value === MISSING ? void 0 : value,
+            issues: flatten6(result2.failure, {}, stateOf(options).path)
+          };
+          const replacement = isFunction(fallback) ? assertSync(fallback(context3)) : fallback;
+          return decode2(previous.backend, replacement, options);
+        })
+      });
+    }
+    refine(predicate, options = {}) {
+      if (!isFunction(predicate))
+        throw new SchemaUsageError("A refinement requires a predicate.");
+      const text = message(options, "The value does not satisfy this check.");
+      const path = validatePath(options.path ?? []);
+      if (options.rule !== void 0 && typeof options.rule !== "string")
+        throw new SchemaUsageError("A rule name must be a string.");
+      return this.check((value, context3) => {
+        const accepted = assertSync(predicate(value));
+        if (typeof accepted !== "boolean")
+          throw new SchemaUsageError("A refinement must return a boolean.");
+        if (!accepted)
+          context3.addIssue({
+            message: text,
+            path,
+            ...options.rule === void 0 ? {} : { rule: options.rule }
+          });
+      });
+    }
+    check(callback3) {
+      if (!isFunction(callback3))
+        throw new SchemaUsageError("A check requires a callback.");
+      return create({
+        ...definitionOf(this),
+        backend: this.checkedBackend((value, context3) => {
+          const result2 = assertSync(callback3(value, context3));
+          if (result2 !== void 0)
+            throw new SchemaUsageError(
+              "A check callback must report issues and return undefined."
+            );
+          return value;
+        })
+      });
+    }
+    transform(callback3) {
+      return create({
+        ...definitionOf(this),
+        backend: this.checkedBackend(callback3)
+      });
+    }
+    preprocess(callback3) {
+      const previous = definitionOf(this);
+      const preprocessing = create({
+        backend: Unknown2,
+        missing: "reject",
+        metadata: previous.metadata
+      }).transform(callback3);
+      const preprocessingBackend = definitionOf(preprocessing).backend;
+      const backend = declare2((input, options) => {
+        const result2 = decode2(
+          preprocessingBackend,
+          input === MISSING ? void 0 : input,
+          options
+        );
+        return isFailure2(result2) ? result2 : decode2(previous.backend, result2.success, options);
+      });
+      return create({
+        ...previous,
+        missing: "parse",
+        literals: void 0,
+        backend
+      });
+    }
+    pipe(next) {
+      const previous = definitionOf(this);
+      const target = definitionOf(next);
+      return create({
+        ...previous,
+        missing: /* @__PURE__ */ __name(() => missingOf(previous) === "reject" ? "reject" : "parse", "missing"),
+        backend: declare2((value, options) => {
+          const result2 = field(previous, value, options);
+          return isFailure2(result2) ? result2 : field(target, result2.success, options);
+        })
+      });
+    }
+    brand(name) {
+      if (typeof name !== "string" || name.length === 0)
+        throw new SchemaUsageError("A brand needs a nonempty name.");
+      return create(definitionOf(this));
+    }
+    readonly() {
+      return create(definitionOf(this));
+    }
+    describe(text) {
+      if (typeof text !== "string")
+        throw new SchemaUsageError("A description must be a string.");
+      return create({ ...definitionOf(this), description: text });
+    }
+    meta(metadata) {
+      if (!isObject(metadata))
+        throw new SchemaUsageError("Metadata must be an object.");
+      const previous = definitionOf(this);
+      return create({
+        ...previous,
+        metadata: Object.freeze({ ...previous.metadata, ...metadata })
+      });
+    }
+    constraint(predicate, code, text) {
+      const previous = definitionOf(this);
+      const backend = previous.backend.check(
+        makeFilter2(
+          (value) => predicate(value) || issue(code, text)
+        )
+      );
+      return { ...previous, backend };
+    }
+    converted(callback3) {
+      const previous = definitionOf(this);
+      return {
+        ...previous,
+        backend: previous.backend.pipe(
+          decodeTo2(Unknown2, {
+            decode: transform((value) => callback3(value)),
+            encode: passthrough2()
+          })
+        )
+      };
+    }
+    checkedBackend(callback3) {
+      if (!isFunction(callback3))
+        throw new SchemaUsageError("Expected a synchronous schema callback.");
+      return definitionOf(this).backend.pipe(
+        decodeTo2(Unknown2, {
+          decode: transformEffect((value, options) => {
+            const state = stateOf(options);
+            const issues = [];
+            let active = true;
+            const context3 = Object.freeze({
+              path: Object.freeze([...state.path]),
+              addIssue: /* @__PURE__ */ __name((entry) => {
+                if (!active)
+                  throw new SchemaUsageError(
+                    "A validation context cannot be used after its callback returns."
+                  );
+                if (!isObject(entry) || typeof entry.message !== "string" || entry.rule !== void 0 && typeof entry.rule !== "string") {
+                  throw new SchemaUsageError(
+                    "An issue needs a string message and an optional string rule."
+                  );
+                }
+                if (issues.length >= state.maxIssues || state.errors === "first" && issues.length > 0)
+                  return;
+                issues.push({
+                  code: "custom",
+                  message: entry.message,
+                  path: validatePath(entry.path ?? []),
+                  ...entry.rule === void 0 ? {} : { rule: entry.rule }
+                });
+              }, "addIssue")
+            });
+            let result2;
+            try {
+              result2 = assertSync(callback3(value, context3));
+            } finally {
+              active = false;
+            }
+            if (result2 === INVALID && issues.length === 0)
+              issues.push({
+                code: "custom",
+                message: "The value could not be transformed.",
+                path: []
+              });
+            return issues.length > 0 ? fail5(fromIssues(issues)) : succeed7(result2);
+          }),
+          encode: passthrough2()
+        })
+      );
+    }
+  };
+  var create = /* @__PURE__ */ __name((definition) => {
+    const schema = new SchemaImpl(definition);
+    Object.freeze(schema);
+    return schema;
+  }, "create");
+
+  // packages/runtime/src/game/scripting/schema/primitives.ts
+  var primitive = /* @__PURE__ */ __name((backend, options) => {
+    message(options, "Invalid value.");
+    if (options?.message === void 0) return baseDefinition(backend);
+    const text = options.message;
+    return baseDefinition(
+      declare2((input, parseOptions) => {
+        const result2 = decode2(backend, input, parseOptions);
+        return isSuccess2(result2) ? result2 : fail2(issue("invalid_type", text));
+      })
+    );
+  }, "primitive");
+  var StringImpl = class extends SchemaImpl {
+    static {
+      __name(this, "StringImpl");
+    }
+    min(length, options) {
+      size2(length);
+      return newString(
+        this.constraint(
+          (value) => value.length >= length,
+          "too_small",
+          message(options, `Use at least ${length} characters.`)
+        )
+      );
+    }
+    max(length, options) {
+      size2(length);
+      return newString(
+        this.constraint(
+          (value) => value.length <= length,
+          "too_big",
+          message(options, `Use at most ${length} characters.`)
+        )
+      );
+    }
+    length(length, options) {
+      size2(length);
+      return newString(
+        this.constraint(
+          (value) => value.length === length,
+          "invalid_value",
+          message(options, `Use exactly ${length} characters.`)
+        )
+      );
+    }
+    regex(pattern, options) {
+      if (!(pattern instanceof RegExp))
+        throw new SchemaUsageError("Expected a regular expression.");
+      const own = new RegExp(pattern.source, pattern.flags);
+      return newString(
+        this.constraint(
+          (value) => {
+            own.lastIndex = 0;
+            return own.test(value);
+          },
+          "invalid_format",
+          message(options, `Use a value matching ${pattern}.`)
+        )
+      );
+    }
+    startsWith(prefix, options) {
+      assertString(prefix);
+      return newString(
+        this.constraint(
+          (value) => value.startsWith(prefix),
+          "invalid_format",
+          message(options, `Start with ${JSON.stringify(prefix)}.`)
+        )
+      );
+    }
+    endsWith(suffix, options) {
+      assertString(suffix);
+      return newString(
+        this.constraint(
+          (value) => value.endsWith(suffix),
+          "invalid_format",
+          message(options, `End with ${JSON.stringify(suffix)}.`)
+        )
+      );
+    }
+    includes(part, options) {
+      assertString(part);
+      return newString(
+        this.constraint(
+          (value) => value.includes(part),
+          "invalid_format",
+          message(options, `Include ${JSON.stringify(part)}.`)
+        )
+      );
+    }
+    trim() {
+      return newString(this.converted((value) => value.trim()));
+    }
+    toLowerCase() {
+      return newString(this.converted((value) => value.toLowerCase()));
+    }
+    toUpperCase() {
+      return newString(this.converted((value) => value.toUpperCase()));
+    }
+    normalize(form = "NFC") {
+      if (!["NFC", "NFD", "NFKC", "NFKD"].includes(form))
+        throw new SchemaUsageError("Unknown Unicode normalization form.");
+      return newString(this.converted((value) => value.normalize(form)));
+    }
+  };
+  var NumberImpl = class extends SchemaImpl {
+    static {
+      __name(this, "NumberImpl");
+    }
+    int(options) {
+      return newNumber(
+        this.constraint(
+          Number.isSafeInteger,
+          "invalid_value",
+          message(options, "Use a safe whole number.")
+        )
+      );
+    }
+    min(bound, options) {
+      finite2(bound);
+      return newNumber(
+        this.constraint(
+          (value) => value >= bound,
+          "too_small",
+          message(options, `Use a number of ${bound} or more.`)
+        )
+      );
+    }
+    max(bound, options) {
+      finite2(bound);
+      return newNumber(
+        this.constraint(
+          (value) => value <= bound,
+          "too_big",
+          message(options, `Use a number of ${bound} or less.`)
+        )
+      );
+    }
+    gt(bound, options) {
+      finite2(bound);
+      return newNumber(
+        this.constraint(
+          (value) => value > bound,
+          "too_small",
+          message(options, `Use a number greater than ${bound}.`)
+        )
+      );
+    }
+    lt(bound, options) {
+      finite2(bound);
+      return newNumber(
+        this.constraint(
+          (value) => value < bound,
+          "too_big",
+          message(options, `Use a number less than ${bound}.`)
+        )
+      );
+    }
+    multipleOf(divisor, options) {
+      finite2(divisor);
+      if (divisor <= 0)
+        throw new SchemaUsageError("A multiple must be greater than zero.");
+      return newNumber(
+        this.constraint(
+          (value) => remainder(value, divisor) === 0,
+          "not_multiple_of",
+          message(options, `Use a multiple of ${divisor}.`)
+        )
+      );
+    }
+  };
+  var DateImpl = class extends SchemaImpl {
+    static {
+      __name(this, "DateImpl");
+    }
+    min(bound, options) {
+      const time = dateBound(bound);
+      return newDate(
+        this.constraint(
+          (value) => value.getTime() >= time,
+          "too_small",
+          message(options, `Use a date on or after ${bound.toISOString()}.`)
+        )
+      );
+    }
+    max(bound, options) {
+      const time = dateBound(bound);
+      return newDate(
+        this.constraint(
+          (value) => value.getTime() <= time,
+          "too_big",
+          message(options, `Use a date on or before ${bound.toISOString()}.`)
+        )
+      );
+    }
+    gt(bound, options) {
+      const time = dateBound(bound);
+      return newDate(
+        this.constraint(
+          (value) => value.getTime() > time,
+          "too_small",
+          message(options, `Use a date after ${bound.toISOString()}.`)
+        )
+      );
+    }
+    lt(bound, options) {
+      const time = dateBound(bound);
+      return newDate(
+        this.constraint(
+          (value) => value.getTime() < time,
+          "too_big",
+          message(options, `Use a date before ${bound.toISOString()}.`)
+        )
+      );
+    }
+  };
+  var assertString = /* @__PURE__ */ __name((value) => {
+    if (typeof value !== "string")
+      throw new SchemaUsageError("Expected a string constraint.");
+  }, "assertString");
+  var dateBound = /* @__PURE__ */ __name((value) => {
+    if (!(value instanceof Date) || !Number.isFinite(value.getTime()))
+      throw new SchemaUsageError("Expected a valid date bound.");
+    return value.getTime();
+  }, "dateBound");
+  var newString = /* @__PURE__ */ __name((definition) => {
+    const schema = new StringImpl(definition);
+    Object.freeze(schema);
+    return schema;
+  }, "newString");
+  var newNumber = /* @__PURE__ */ __name((definition) => {
+    const schema = new NumberImpl(definition);
+    Object.freeze(schema);
+    return schema;
+  }, "newNumber");
+  var newDate = /* @__PURE__ */ __name((definition) => {
+    const schema = new DateImpl(definition);
+    Object.freeze(schema);
+    return schema;
+  }, "newDate");
+  var validDate = Date4.check(
+    makeFilter2((value) => Number.isFinite(value.getTime()), {
+      expected: "a valid date"
+    })
+  );
+  var string3 = /* @__PURE__ */ __name((options) => newString(primitive(String4, options)), "string");
+  var number3 = /* @__PURE__ */ __name((options) => newNumber(primitive(Finite, options)), "number");
+  var boolean2 = /* @__PURE__ */ __name((options) => create(primitive(Boolean3, options)), "boolean");
+  var date = /* @__PURE__ */ __name((options) => newDate(primitive(validDate, options)), "date");
+  var literal = /* @__PURE__ */ __name((value, options) => {
+    if (value !== null && value !== void 0 && typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+      throw new SchemaUsageError(
+        "A literal must be a string, number, boolean, null, or undefined."
+      );
+    }
+    const backend = value === void 0 ? Undefined2 : value === null ? Null2 : Literal2(value);
+    return create({
+      ...primitive(backend, options),
+      literals: Object.freeze([value])
+    });
+  }, "literal");
+  var EnumImpl = class extends SchemaImpl {
+    static {
+      __name(this, "EnumImpl");
+    }
+    values;
+    constructor(values2, options) {
+      if (!Array.isArray(values2) || values2.length === 0 || !values2.every(
+        (value) => typeof value === "string" || typeof value === "number"
+      )) {
+        throw new SchemaUsageError(
+          "An enum needs a nonempty array of strings or numbers."
+        );
+      }
+      const copy3 = Object.freeze([...new Set(values2)]);
+      super({ ...primitive(Literals(copy3), options), literals: copy3 });
+      this.values = copy3;
+      Object.freeze(this);
+    }
+  };
+  var custom = /* @__PURE__ */ __name((predicate, options) => {
+    if (!isFunction(predicate))
+      throw new SchemaUsageError("A custom schema requires a predicate.");
+    const text = message(options, "The value does not match the required type.");
+    return create(
+      baseDefinition(
+        declare(
+          (value) => {
+            const accepted = assertSync(predicate(value));
+            if (typeof accepted !== "boolean")
+              throw new SchemaUsageError(
+                "A custom predicate must return a boolean."
+              );
+            return accepted;
+          },
+          { title: text }
+        )
+      )
+    );
+  }, "custom");
+  var decimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+  var decimalInput = Union2([Finite, String4]);
+  var coercion = /* @__PURE__ */ __name((source, convert, options, expected) => {
+    const text = message(options, expected);
+    return baseDefinition(
+      declare2((input, parseOptions) => {
+        const accepted = decode2(source, input, parseOptions);
+        if (isFailure2(accepted))
+          return fail2(issue("invalid_type", text));
+        const value = convert(accepted.success);
+        return value === rejected ? fail2(issue("invalid_value", text)) : succeed2(value);
+      })
+    );
+  }, "coercion");
+  var rejected = /* @__PURE__ */ Symbol("invalid-coercion");
+  var parseDate = /* @__PURE__ */ __name((input) => {
+    if (input instanceof Date)
+      return Number.isFinite(input.getTime()) ? input : rejected;
+    if (typeof input === "number") {
+      const value2 = new Date(input);
+      return Number.isFinite(value2.getTime()) ? value2 : rejected;
+    }
+    if (typeof input !== "string") return rejected;
+    const match6 = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|([+-])(\d{2}):(\d{2})))?$/.exec(
+      input
+    );
+    if (match6 === null) return rejected;
+    const year = Number(match6[1]);
+    const month = Number(match6[2]);
+    const day = Number(match6[3]);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const monthDays = [
+      31,
+      leap ? 29 : 28,
+      31,
+      30,
+      31,
+      30,
+      31,
+      31,
+      30,
+      31,
+      30,
+      31
+    ];
+    if (month < 1 || month > 12 || day < 1 || day > (monthDays[month - 1] ?? 0) || Number(match6[4] ?? 0) > 23 || Number(match6[5] ?? 0) > 59 || Number(match6[6] ?? 0) > 59 || Number(match6[8] ?? 0) > 23 || Number(match6[9] ?? 0) > 59)
+      return rejected;
+    const value = new Date(input);
+    return Number.isFinite(value.getTime()) ? value : rejected;
+  }, "parseDate");
+  var coerce = Object.freeze({
+    string: /* @__PURE__ */ __name((options) => newString(
+      coercion(
+        Union2([String4, Finite, Boolean3]),
+        String,
+        options,
+        "Use a string, finite number, or boolean."
+      )
+    ), "string"),
+    number: /* @__PURE__ */ __name((options) => newNumber(
+      coercion(
+        decimalInput,
+        (value) => {
+          if (typeof value === "number") return value;
+          if (typeof value !== "string" || !decimal.test(value.trim()))
+            return rejected;
+          const parsed = Number(value.trim());
+          return Number.isFinite(parsed) ? parsed : rejected;
+        },
+        options,
+        "Use a finite number or decimal numeric string."
+      )
+    ), "number"),
+    boolean: /* @__PURE__ */ __name((options) => create(
+      coercion(
+        Literals([true, false, 0, 1, "0", "1", "false", "true"]),
+        (value) => value === true || value === 1 || value === "1" || value === "true",
+        options,
+        "Use true, false, 0, or 1."
+      )
+    ), "boolean"),
+    date: /* @__PURE__ */ __name((options) => newDate(
+      coercion(
+        Union2([Date4, Finite, String4]),
+        parseDate,
+        options,
+        "Use a valid date, timestamp, or ISO date string."
+      )
+    ), "date")
+  });
+
+  // packages/runtime/src/game/scripting/schema/collections.ts
+  var plainObject = declare(
+    (value) => isObject(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null),
+    { title: "a plain object" }
+  );
+  var arrayValue = declare(Array.isArray, {
+    title: "an array"
+  });
+  var objectConfigs = /* @__PURE__ */ new WeakMap();
+  var ObjectImpl = class _ObjectImpl extends SchemaImpl {
+    static {
+      __name(this, "ObjectImpl");
+    }
+    shape;
+    constructor(fields, policy = "strip", options) {
+      if (!isObject(fields))
+        throw new SchemaUsageError("An object schema needs a field map.");
+      const shape = Object.freeze({ ...fields });
+      const entries = Object.entries(shape).map(
+        ([key, schema]) => [key, definitionOf(schema)]
+      );
+      const knownKeys = new Set(entries.map(([key]) => key));
+      const text = message(options, "Expected a plain object.");
+      super(
+        baseDefinition(
+          declare2((input, parseOptions) => {
+            const accepted = decode2(plainObject, input, parseOptions);
+            if (isFailure2(accepted))
+              return fail2(issue("invalid_type", text));
+            const source = accepted.success;
+            return container(source, parseOptions, () => {
+              const output = {};
+              const issues = [];
+              for (const [key, definition] of entries) {
+                const value = Object.hasOwn(source, key) ? source[key] : MISSING;
+                const result2 = child(definition, value, key, parseOptions);
+                if (isFailure2(result2))
+                  collect(issues, result2.failure, parseOptions);
+                else if (result2.success !== MISSING)
+                  writeProperty(output, key, result2.success);
+                if (!canContinue(issues, parseOptions)) break;
+              }
+              if (policy !== "strip" && canContinue(issues, parseOptions)) {
+                for (const key of Object.keys(source)) {
+                  if (knownKeys.has(key)) continue;
+                  if (policy === "strict") {
+                    issues.push({
+                      code: "unrecognized_key",
+                      path: [key],
+                      message: "This field is not allowed."
+                    });
+                  } else if (policy === "passthrough") {
+                    writeProperty(output, key, source[key]);
+                  } else {
+                    const result2 = child(policy, source[key], key, parseOptions);
+                    if (isFailure2(result2))
+                      collect(issues, result2.failure, parseOptions);
+                    else writeProperty(output, key, result2.success);
+                  }
+                  if (!canContinue(issues, parseOptions)) break;
+                }
+              }
+              return issues.length > 0 ? fail2(fromIssues(issues)) : succeed2(output);
+            });
+          })
+        )
+      );
+      this.shape = shape;
+      objectConfigs.set(this, {
+        policy,
+        options: options === void 0 ? void 0 : Object.freeze({ ...options })
+      });
+      Object.freeze(this);
+    }
+    extend(fields) {
+      if (!isObject(fields))
+        throw new SchemaUsageError(
+          "Expected fields to extend the object schema."
+        );
+      return this.rebuild({ ...this.shape, ...fields });
+    }
+    pick(keys) {
+      const selected = this.keys(keys);
+      return this.rebuild(
+        Object.fromEntries(
+          Object.entries(this.shape).filter(([key]) => selected.has(key))
+        )
+      );
+    }
+    omit(keys) {
+      const omitted = this.keys(keys);
+      return this.rebuild(
+        Object.fromEntries(
+          Object.entries(this.shape).filter(([key]) => !omitted.has(key))
+        )
+      );
+    }
+    partial(keys = Object.keys(this.shape)) {
+      const selected = this.keys(keys);
+      return this.rebuild(
+        Object.fromEntries(
+          Object.entries(this.shape).map(([key, schema]) => [
+            key,
+            selected.has(key) ? new SchemaImpl(definitionOf(schema)).optional() : schema
+          ])
+        )
+      );
+    }
+    required(keys = Object.keys(this.shape)) {
+      const selected = this.keys(keys);
+      return this.rebuild(
+        Object.fromEntries(
+          Object.entries(this.shape).map(([key, schema]) => [
+            key,
+            selected.has(key) ? new SchemaImpl(definitionOf(schema)).required() : schema
+          ])
+        )
+      );
+    }
+    strip() {
+      return this.rebuild(this.shape, "strip");
+    }
+    strict() {
+      return this.rebuild(this.shape, "strict");
+    }
+    passthrough() {
+      return this.rebuild(this.shape, "passthrough");
+    }
+    catchall(schema) {
+      return this.rebuild(this.shape, definitionOf(schema));
+    }
+    keyof() {
+      return new EnumImpl(Object.keys(this.shape));
+    }
+    keys(keys) {
+      if (!Array.isArray(keys) || !keys.every(
+        (key) => typeof key === "string" && Object.hasOwn(this.shape, key)
+      )) {
+        throw new SchemaUsageError("Select keys declared by this object schema.");
+      }
+      return new Set(keys);
+    }
+    rebuild(fields, policy) {
+      const config = objectConfigs.get(this);
+      if (config === void 0)
+        throw new SchemaUsageError("Expected an object schema.");
+      return new _ObjectImpl(fields, policy ?? config.policy, config.options);
+    }
+  };
+  var ArrayImpl = class _ArrayImpl extends SchemaImpl {
+    static {
+      __name(this, "ArrayImpl");
+    }
+    element;
+    constructor(element, options, definition) {
+      const childDefinition = definitionOf(element);
+      const text = message(options, "Expected an array.");
+      super(
+        definition ?? baseDefinition(
+          declare2((input, parseOptions) => {
+            const accepted = decode2(arrayValue, input, parseOptions);
+            if (isFailure2(accepted))
+              return fail2(issue("invalid_type", text));
+            const source = accepted.success;
+            return container(source, parseOptions, () => {
+              const output = [];
+              const issues = [];
+              for (let index = 0; index < source.length; index += 1) {
+                const result2 = child(
+                  childDefinition,
+                  source[index],
+                  index,
+                  parseOptions
+                );
+                if (isFailure2(result2))
+                  collect(issues, result2.failure, parseOptions);
+                else output.push(result2.success);
+                if (!canContinue(issues, parseOptions)) break;
+              }
+              return issues.length > 0 ? fail2(fromIssues(issues)) : succeed2(output);
+            });
+          })
+        )
+      );
+      this.element = element;
+      Object.freeze(this);
+    }
+    min(length, options) {
+      size2(length);
+      return new _ArrayImpl(
+        this.element,
+        void 0,
+        this.constraint(
+          (value) => value.length >= length,
+          "too_small",
+          message(options, `Select at least ${length} entries.`)
+        )
+      );
+    }
+    max(length, options) {
+      size2(length);
+      return new _ArrayImpl(
+        this.element,
+        void 0,
+        this.constraint(
+          (value) => value.length <= length,
+          "too_big",
+          message(options, `Use at most ${length} entries.`)
+        )
+      );
+    }
+    length(length, options) {
+      size2(length);
+      return new _ArrayImpl(
+        this.element,
+        void 0,
+        this.constraint(
+          (value) => value.length === length,
+          "invalid_value",
+          message(options, `Use exactly ${length} entries.`)
+        )
+      );
+    }
+    unique(selector, options) {
+      if (selector !== void 0 && !isFunction(selector))
+        throw new SchemaUsageError("A uniqueness selector must be a function.");
+      return new _ArrayImpl(
+        this.element,
+        void 0,
+        this.constraint(
+          (values2) => {
+            const keys = /* @__PURE__ */ new Set();
+            for (const value of values2) {
+              const key = selector === void 0 ? value : assertSync(selector(value));
+              if (keys.has(key)) return false;
+              keys.add(key);
+            }
+            return true;
+          },
+          "duplicate_value",
+          message(options, "Each entry must be unique.")
+        )
+      );
+    }
+  };
+  var tupleConfigs = /* @__PURE__ */ new WeakMap();
+  var TupleImpl = class _TupleImpl extends SchemaImpl {
+    static {
+      __name(this, "TupleImpl");
+    }
+    items;
+    constructor(items, rest, options) {
+      if (!Array.isArray(items))
+        throw new SchemaUsageError("A tuple needs an array of schemas.");
+      const definitions2 = items.map(definitionOf);
+      const validateOrder = /* @__PURE__ */ __name(() => {
+        let optional2 = false;
+        for (const definition of definitions2) {
+          const missing2 = missingOf(definition);
+          if (optional2 && missing2 === "reject")
+            throw new SchemaUsageError(
+              "Optional tuple elements must be trailing."
+            );
+          optional2 ||= missing2 !== "reject";
+        }
+      }, "validateOrder");
+      let orderValidated = definitions2.every(
+        (definition) => typeof definition.missing !== "function"
+      );
+      if (orderValidated) validateOrder();
+      const tail = rest === void 0 ? void 0 : definitionOf(rest);
+      const text = message(options, "Expected an array tuple.");
+      super(
+        baseDefinition(
+          declare2((input, parseOptions) => {
+            if (!orderValidated) {
+              validateOrder();
+              orderValidated = true;
+            }
+            const accepted = decode2(arrayValue, input, parseOptions);
+            if (isFailure2(accepted))
+              return fail2(issue("invalid_type", text));
+            const source = accepted.success;
+            return container(source, parseOptions, () => {
+              const output = [];
+              const issues = [];
+              for (let index = 0; index < Math.max(source.length, definitions2.length); index += 1) {
+                const definition = definitions2[index] ?? tail;
+                if (definition === void 0) {
+                  issues.push({
+                    code: "unrecognized_key",
+                    path: [index],
+                    message: "This tuple has an extra element."
+                  });
+                } else {
+                  const value = Object.hasOwn(source, index) ? source[index] : MISSING;
+                  const result2 = child(definition, value, index, parseOptions);
+                  if (isFailure2(result2))
+                    collect(issues, result2.failure, parseOptions);
+                  else if (result2.success !== MISSING)
+                    output[index] = result2.success;
+                }
+                if (!canContinue(issues, parseOptions)) break;
+              }
+              return issues.length > 0 ? fail2(fromIssues(issues)) : succeed2(output);
+            });
+          })
+        )
+      );
+      this.items = Object.freeze([...items]);
+      tupleConfigs.set(this, { options });
+      Object.freeze(this);
+    }
+    rest(schema) {
+      return new _TupleImpl(this.items, schema, tupleConfigs.get(this)?.options);
+    }
+  };
+  var RecordImpl = class _RecordImpl extends SchemaImpl {
+    static {
+      __name(this, "RecordImpl");
+    }
+    key;
+    value;
+    constructor(key, value, options, definition) {
+      const keyDefinition = definitionOf(key);
+      const valueDefinition = definitionOf(value);
+      const text = message(options, "Expected a plain object record.");
+      super(
+        definition ?? baseDefinition(
+          declare2((input, parseOptions) => {
+            const accepted = decode2(plainObject, input, parseOptions);
+            if (isFailure2(accepted))
+              return fail2(issue("invalid_type", text));
+            const source = accepted.success;
+            return container(source, parseOptions, () => {
+              const output = {};
+              const issues = [];
+              for (const key2 of Object.keys(source)) {
+                const parsedKey = child(keyDefinition, key2, key2, parseOptions);
+                if (isFailure2(parsedKey)) {
+                  const keyIssues = [];
+                  collect(keyIssues, parsedKey.failure, parseOptions);
+                  issues.push(
+                    ...keyIssues.map(
+                      (entry) => ({ ...entry, code: "invalid_key" })
+                    )
+                  );
+                } else if (typeof parsedKey.success !== "string") {
+                  throw new SchemaUsageError(
+                    "Record keys must decode to strings."
+                  );
+                } else if (Object.hasOwn(output, parsedKey.success)) {
+                  issues.push({
+                    code: "duplicate_key",
+                    path: [key2],
+                    message: "This key duplicates another decoded key."
+                  });
+                } else {
+                  const result2 = child(
+                    valueDefinition,
+                    source[key2],
+                    key2,
+                    parseOptions
+                  );
+                  if (isFailure2(result2))
+                    collect(issues, result2.failure, parseOptions);
+                  else writeProperty(output, parsedKey.success, result2.success);
+                }
+                if (!canContinue(issues, parseOptions)) break;
+              }
+              return issues.length > 0 ? fail2(fromIssues(issues)) : succeed2(output);
+            });
+          })
+        )
+      );
+      this.key = key;
+      this.value = value;
+      Object.freeze(this);
+    }
+    min(bound, options) {
+      size2(bound, "size");
+      return new _RecordImpl(
+        this.key,
+        this.value,
+        void 0,
+        this.constraint(
+          (value) => Object.keys(value).length >= bound,
+          "too_small",
+          message(options, `Use at least ${bound} entries.`)
+        )
+      );
+    }
+    max(bound, options) {
+      size2(bound, "size");
+      return new _RecordImpl(
+        this.key,
+        this.value,
+        void 0,
+        this.constraint(
+          (value) => Object.keys(value).length <= bound,
+          "too_big",
+          message(options, `Use at most ${bound} entries.`)
+        )
+      );
+    }
+    size(bound, options) {
+      size2(bound, "size");
+      return new _RecordImpl(
+        this.key,
+        this.value,
+        void 0,
+        this.constraint(
+          (value) => Object.keys(value).length === bound,
+          "invalid_value",
+          message(options, `Use exactly ${bound} entries.`)
+        )
+      );
+    }
+  };
+  var record2 = /* @__PURE__ */ __name((first, second, options) => {
+    if (isSchema2(second)) {
+      return new RecordImpl(first, second, options);
+    }
+    return new RecordImpl(string3(), first, second);
+  }, "record");
+
+  // packages/runtime/src/game/scripting/schema/index.ts
+  var union2 = /* @__PURE__ */ __name((members, options) => {
+    if (!Array.isArray(members) || members.length === 0)
+      throw new SchemaUsageError("A union needs at least one schema.");
+    const definitions2 = members.map(definitionOf);
+    const text = message(
+      options,
+      "Expected one of the allowed values or shapes."
+    );
+    return create(
+      baseDefinition(
+        declare2((input, parseOptions) => {
+          const failures = [];
+          for (const definition of definitions2) {
+            const result2 = decode2(definition.backend, input, parseOptions);
+            if (isSuccess2(result2)) return result2;
+            failures.push(result2.failure);
+          }
+          return fail2(
+            fromIssues([
+              {
+                code: "invalid_union",
+                path: [],
+                message: text,
+                branches: failures.map(
+                  (failure2) => flatten6(failure2, {
+                    maxIssues: stateOf(parseOptions).maxIssues
+                  })
+                )
+              }
+            ])
+          );
+        })
+      )
+    );
+  }, "union");
+  var discriminatedUnion = /* @__PURE__ */ __name((key, members, options) => {
+    if (typeof key !== "string" || !Array.isArray(members) || members.length === 0)
+      throw new SchemaUsageError(
+        "A discriminated union needs a key and object schemas."
+      );
+    const branches = /* @__PURE__ */ new Map();
+    for (const member of members) {
+      if (!(member instanceof ObjectImpl))
+        throw new SchemaUsageError(
+          "Discriminated union members must be object schemas."
+        );
+      const discriminator = definitionOf(member.shape[key]);
+      if (discriminator.missing !== "reject" || discriminator.literals === void 0) {
+        throw new SchemaUsageError(
+          "A discriminator must be a required literal or enum."
+        );
+      }
+      for (const value of discriminator.literals) {
+        if (branches.has(value))
+          throw new SchemaUsageError("Discriminator values must be unique.");
+        branches.set(value, definitionOf(member).backend);
+      }
+    }
+    const text = message(options, `Use a recognized ${key} value.`);
+    return create(
+      baseDefinition(
+        declare2((input, parseOptions) => {
+          if (!isObject(input) || !Object.hasOwn(input, key))
+            return fail2(issue("invalid_union", text, [key]));
+          const backend = branches.get(input[key]);
+          return backend === void 0 ? fail2(issue("invalid_union", text, [key])) : decode2(backend, input, parseOptions);
+        })
+      )
+    );
+  }, "discriminatedUnion");
+  var lazy = /* @__PURE__ */ __name((factory) => {
+    if (!isFunction(factory))
+      throw new SchemaUsageError("A lazy schema needs a factory.");
+    let resolved;
+    let resolving = false;
+    let resolvingMissing = false;
+    const resolve3 = /* @__PURE__ */ __name(() => {
+      if (resolved === void 0) {
+        if (resolving)
+          throw new SchemaUsageError(
+            "A lazy factory cannot parse its own schema while resolving."
+          );
+        resolving = true;
+        try {
+          resolved = definitionOf(assertSync(factory()));
+        } finally {
+          resolving = false;
+        }
+      }
+      return resolved;
+    }, "resolve");
+    const active = /* @__PURE__ */ new WeakMap();
+    const backend = declare2((input, options) => {
+      const target = resolve3();
+      const state = stateOf(options);
+      let inputs = active.get(state);
+      if (inputs === void 0) {
+        inputs = /* @__PURE__ */ new Set();
+        active.set(state, inputs);
+      }
+      if (inputs.has(input))
+        return fail2(
+          issue(
+            "cyclic_reference",
+            "A recursive schema revisited the same value."
+          )
+        );
+      inputs.add(input);
+      try {
+        return decode2(target.backend, input, options);
+      } finally {
+        inputs.delete(input);
+      }
+    });
+    return create({
+      ...baseDefinition(backend),
+      missing: /* @__PURE__ */ __name(() => {
+        if (resolving || resolvingMissing) return "reject";
+        resolvingMissing = true;
+        try {
+          return missingOf(resolve3());
+        } finally {
+          resolvingMissing = false;
+        }
+      }, "missing")
+    });
+  }, "lazy");
+  var json = /* @__PURE__ */ __name((schema, options) => {
+    const target = definitionOf(schema);
+    const text = message(options, "Use valid JSON text.");
+    return create(
+      baseDefinition(
+        declare2((input, parseOptions) => {
+          const accepted = decode2(String4, input, parseOptions);
+          if (isFailure2(accepted))
+            return fail2(issue("invalid_type", "Expected JSON text."));
+          let parsed;
+          try {
+            parsed = JSON.parse(accepted.success);
+          } catch (error) {
+            if (!(error instanceof SyntaxError)) throw error;
+            return fail2(issue("invalid_json", text));
+          }
+          return decode2(target.backend, parsed, parseOptions);
+        })
+      )
+    );
+  }, "json");
+  var jsonValue = /* @__PURE__ */ __name(() => {
+    const scalar = Union2([
+      Null2,
+      Boolean3,
+      Finite,
+      String4
+    ]);
+    const value = lazy(
+      () => create(
+        baseDefinition(
+          declare2((input, options) => {
+            const backend = Array.isArray(input) ? arrayBackend : isObject(input) ? recordBackend : scalar;
+            return decode2(backend, input, options);
+          })
+        )
+      )
+    );
+    const arrayBackend = definitionOf(new ArrayImpl(value)).backend;
+    const recordBackend = definitionOf(new RecordImpl(string3(), value)).backend;
+    return value;
+  }, "jsonValue");
+  var instanceOf2 = /* @__PURE__ */ __name((constructor, options) => {
+    if (!isFunction(constructor))
+      throw new SchemaUsageError("Expected a class constructor.");
+    return custom((value) => value instanceof constructor, options);
+  }, "instanceOf");
+  for (const implementation of [
+    SchemaImpl,
+    StringImpl,
+    NumberImpl,
+    DateImpl,
+    ObjectImpl,
+    ArrayImpl,
+    RecordImpl,
+    TupleImpl,
+    EnumImpl
+  ]) {
+    Object.freeze(implementation.prototype);
+  }
+  var scriptSchema = Object.freeze({
+    string: string3,
+    number: number3,
+    boolean: boolean2,
+    date,
+    literal,
+    custom,
+    instanceOf: instanceOf2,
+    union: union2,
+    discriminatedUnion,
+    lazy,
+    json,
+    jsonValue,
+    null: /* @__PURE__ */ __name((options) => create(primitive(Null2, options)), "null"),
+    undefined: /* @__PURE__ */ __name((options) => create(primitive(Undefined2, options)), "undefined"),
+    unknown: /* @__PURE__ */ __name(() => create(baseDefinition(Unknown2)), "unknown"),
+    never: /* @__PURE__ */ __name((options) => create(primitive(Never2, options)), "never"),
+    enum: /* @__PURE__ */ __name((values2, options) => new EnumImpl(values2, options), "enum"),
+    object: /* @__PURE__ */ __name((fields, options) => new ObjectImpl(fields, "strip", options), "object"),
+    array: /* @__PURE__ */ __name((element, options) => new ArrayImpl(element, options), "array"),
+    tuple: /* @__PURE__ */ __name((elements, options) => new TupleImpl(elements, void 0, options), "tuple"),
+    record: record2,
+    coerce,
+    INVALID,
+    isSchema: isSchema2,
+    ValidationError,
+    SchemaUsageError,
+    formatIssues,
+    formatPath: formatPath2
+  });
+
+  // packages/runtime/src/game/scripting/ScriptBuiltinModules.ts
+  var makeScriptAutoReloginApi = /* @__PURE__ */ __name((api2) => Object.freeze({
+    getDelayMs: api2.getDelayMs,
+    getServer: api2.getServer,
+    getState: api2.getState,
+    isEnabled: api2.isEnabled,
+    setDelay: api2.setDelay,
+    setEnabled: api2.setEnabled,
+    setServer: api2.setServer
+  }), "makeScriptAutoReloginApi");
+  var makeScriptAutoZoneApi = /* @__PURE__ */ __name((api2) => Object.freeze({
+    getMap: api2.getMap,
+    getState: api2.getState,
+    isEnabled: api2.isEnabled,
+    setEnabled: api2.setEnabled,
+    setMap: api2.setMap
+  }), "makeScriptAutoZoneApi");
+  var makeScriptBuiltinModules = /* @__PURE__ */ __name((options) => {
+    const army = makeScriptArmyApi(
+      options.services.army,
+      options.scope,
+      options.failCause
+    );
+    const events = makeScriptEventsApi(
+      options.services.events,
+      options.scope,
+      options.failCause
+    );
+    const environment = makeScriptEnvironmentApi(options.services.environment);
+    const packet = makeScriptPacketApi(
+      options.services.packet,
+      options.scope,
+      options.failCause
+    );
+    const { player, players } = makeScriptPlayerApis(
+      options.services.player,
+      options.services.players,
+      { policy: options.roomPolicy, map: options.services.map }
+    );
+    const settings = makeScriptSettingsApi(options.services.settings);
+    const shop = makeScriptShopApi(
+      {
+        inventory: options.services.inventory,
+        player: {
+          getLevel: player.getLevel,
+          isMember: player.isMember,
+          joinMap: player.joinMap
+        },
+        shops: options.services.shops,
+        wait: options.services.wait
+      },
+      options.bridge
+    );
+    const combat = makeScriptCombatApi(options.services.combat);
+    const publicServices = makeScriptPublicServices(options.services);
+    const api2 = Object.freeze({
+      army,
+      auth: publicServices.auth,
+      bank: publicServices.bank,
+      combat,
+      drops: publicServices.drops,
+      environment,
+      events,
+      house: publicServices.house,
+      inventory: publicServices.inventory,
+      map: publicServices.map,
+      monsters: publicServices.monsters,
+      packet,
+      player,
+      players,
+      quests: publicServices.quests,
+      settings,
+      shop,
+      tempInventory: publicServices.tempInventory,
+      wait: publicServices.wait
+    });
+    return Object.freeze({
+      effect: scriptEffectStd,
+      "lucent/api": api2,
+      "lucent/autorelogin": makeScriptAutoReloginApi(options.autoRelogin),
+      "lucent/autozone": makeScriptAutoZoneApi(options.autoZone),
+      "lucent/filesystem": options.fileSystem,
+      "lucent/http": options.http,
+      "lucent/schema": scriptSchema,
+      "lucent/script": options.script
+    });
+  }, "makeScriptBuiltinModules");
+
+  // packages/runtime/src/game/scripting/ScriptFileSystem.ts
+  var makeError = /* @__PURE__ */ __name((operation, reason, path) => new FileSystemError({
+    operation,
+    reason,
+    ...path === void 0 ? {} : { path }
+  }), "makeError");
+  var isJson2 = is2(Json2);
+  var utf8Encoder = new TextEncoder();
+  var makeScriptFileSystemApi = /* @__PURE__ */ __name((bridge, scope3) => {
+    const request = /* @__PURE__ */ __name((operation, path, invoke, validate2) => suspend2(() => {
+      if (scope3.signal.aborted) {
+        return fail5(makeError(operation, "session-closed", path));
+      }
+      const validationError = validate2?.();
+      if (validationError !== void 0) {
+        return fail5(validationError);
+      }
+      return tryPromise2({
+        try: invoke,
+        catch: /* @__PURE__ */ __name(() => makeError(operation, "unavailable", path), "catch")
+      }).pipe(
+        flatMap3(
+          (result2) => result2.ok ? succeed7(result2.value) : fail5(
+            makeError(
+              result2.error.operation,
+              result2.error.reason,
+              result2.error.path
+            )
+          )
+        )
+      );
+    }), "request");
+    const api2 = {
+      FileSystemError,
+      exists: /* @__PURE__ */ __name((path) => request("exists", path, () => bridge.exists(path)), "exists"),
+      list: /* @__PURE__ */ __name((path) => request("list", path, () => bridge.list(path)).pipe(
+        map5(
+          (entries) => Object.freeze(entries.map((entry) => Object.freeze({ ...entry })))
+        )
+      ), "list"),
+      readJson: /* @__PURE__ */ __name((path) => request("read-json", path, () => bridge.readJson(path)), "readJson"),
+      readText: /* @__PURE__ */ __name((path) => request("read-text", path, () => bridge.readText(path)), "readText"),
+      remove: /* @__PURE__ */ __name((path) => request("remove", path, () => bridge.remove(path)), "remove"),
+      writeJson: /* @__PURE__ */ __name((path, value) => request(
+        "write-json",
+        path,
+        () => bridge.writeJson(path, value),
+        () => {
+          if (!isJson2(value)) {
+            return makeError("write-json", "not-json-serializable", path);
+          }
+          const source = `${JSON.stringify(value, null, 2)}
+`;
+          return utf8Encoder.encode(source).byteLength > SCRIPT_FILE_SYSTEM_MAX_BYTES ? makeError("write-json", "too-large", path) : void 0;
+        }
+      ), "writeJson"),
+      writeText: /* @__PURE__ */ __name((path, contents) => request(
+        "write-text",
+        path,
+        () => bridge.writeText(path, contents),
+        () => utf8Encoder.encode(contents).byteLength > SCRIPT_FILE_SYSTEM_MAX_BYTES ? makeError("write-text", "too-large", path) : void 0
+      ), "writeText")
+    };
+    return Object.freeze(api2);
+  }, "makeScriptFileSystemApi");
+
+  // packages/runtime/src/game/scripting/ScriptServices.ts
+  var ScriptServices = class extends Service()("lucent/game/scripting/ScriptServices") {
+    static {
+      __name(this, "ScriptServices");
+    }
+  };
+
+  // packages/runtime/src/game/scripting/api/Services.ts
+  var makeScriptRuntimeServices = /* @__PURE__ */ __name((api2, army, environment) => ({ ...api2, army, environment }), "makeScriptRuntimeServices");
+
+  // packages/runtime/src/shared/logFailure.ts
+  var logFailure = /* @__PURE__ */ __name((message2, cause, options) => {
+    if (hasInterruptsOnly2(cause)) return void_3;
+    if (hasDies2(cause)) return logError(message2, cause);
+    switch (options?.failure ?? "debug") {
+      case "error":
+        return logError(message2, cause);
+      case "warning":
+        return logWarning(message2, cause);
+      case "debug":
+        return logDebug(message2, cause);
+    }
+  }, "logFailure");
+
+  // packages/runtime/src/game/scripting/safeStartStop.ts
+  var maximumSafeMoveAttempts = 3;
+  var respawnTimeout = "15 seconds";
+  var returnInfoPath = "world.returnInfo";
+  var SafeMoveTimeout = class extends TaggedError2("SafeMoveTimeout") {
+    static {
+      __name(this, "SafeMoveTimeout");
+    }
+  };
+  var safeMoveRetrySchedule = exponential("1 second").pipe(
+    upTo({ times: maximumSafeMoveAttempts - 1 })
+  );
+  var logMoveFailure = /* @__PURE__ */ __name((phase) => catchCause2(
+    (cause) => logFailure("Safe start/stop move failed", cause).pipe(
+      annotateLogs({ component: "scripting", data: { phase } })
+    )
+  ), "logMoveFailure");
+  var retrySafeMove = /* @__PURE__ */ __name((attempt) => attempt.pipe(
+    flatMap3(
+      (result2) => result2 === "retry" ? fail5(new SafeMoveTimeout()) : succeed7(result2)
+    ),
+    retry2(safeMoveRetrySchedule),
+    catchTag2(
+      "SafeMoveTimeout",
+      () => succeed7("timed-out")
+    )
+  ), "retrySafeMove");
+  var runWithSafeStartStop = /* @__PURE__ */ __name((main, isEnabled, moveToSafeDestination) => {
+    const moveIfEnabled = /* @__PURE__ */ __name((phase) => isEnabled.pipe(
+      flatMap3(
+        (enabled) => enabled ? moveToSafeDestination(phase) : void_3
+      )
+    ), "moveIfEnabled");
+    return gen2(function* () {
+      yield* moveIfEnabled("before");
+      return yield* main;
+    }).pipe(ensuring2(moveIfEnabled("after")));
+  }, "runWithSafeStartStop");
+  var makeMoveToSafeDestination = /* @__PURE__ */ __name((services) => {
+    const { auth, bridge, combat, house, map: map8, packet, player, roomPolicy, wait } = services;
+    const isInOwnHouse = bridge.invokeJson("flash.callGameFunction0", ["world.isMyHouse"], Boolean3).pipe(map5(getOrElse(() => false)));
+    const setReturnInfo = /* @__PURE__ */ __name((value) => bridge.invoke("flash.setGameObject", [returnInfoPath, value], Void2).pipe(map5(isSome2)), "setReturnInfo");
+    const moveToSafeDestination = fn2("ScriptRunner.moveToSafeDestination")(
+      function* () {
+        if (!(yield* auth.isLoggedIn())) {
+          return;
+        }
+        const username = (yield* auth.getUsername()).trim();
+        if (username === "") {
+          return;
+        }
+        const hasEquippedHouse = (yield* house.getAll()).some(
+          (item) => item.category === "House" && item.equipped
+        );
+        let destination;
+        if (hasEquippedHouse) {
+          const inOwnHouse = yield* isInOwnHouse;
+          if (!(yield* auth.isLoggedIn())) {
+            return;
+          }
+          if (inOwnHouse) return;
+          destination = { kind: "house" };
+        } else {
+          const policy = yield* roomPolicy;
+          const [mapName, currentRoomNumber] = yield* all2([
+            map8.getName(),
+            map8.getRoomNumber()
+          ]);
+          const inBuyhouse = mapName.localeCompare("buyhouse", void 0, {
+            sensitivity: "accent"
+          }) === 0;
+          if (inBuyhouse && roomPolicyAcceptsRoom(policy, currentRoomNumber)) {
+            return;
+          }
+          destination = {
+            kind: "buyhouse",
+            target: yield* applyRoomPolicy("buyhouse", policy)
+          };
+        }
+        const alive = yield* player.isAlive();
+        if (!(yield* auth.isLoggedIn())) {
+          return;
+        }
+        if (!alive) {
+          const respawn = yield* wait.untilSome(
+            all2([auth.isLoggedIn(), player.isAlive()]).pipe(
+              map5(
+                ([loggedIn, alive2]) => !loggedIn ? some2("aborted") : alive2 ? some2("ready") : none2()
+              )
+            ),
+            { timeout: respawnTimeout }
+          );
+          if (respawn === "aborted") {
+            return;
+          }
+          if (respawn !== "ready") {
+            return;
+          }
+        }
+        const exitedCombat = yield* combat.exit();
+        if (!(yield* auth.isLoggedIn())) {
+          return;
+        }
+        if (!exitedCombat) {
+          return;
+        }
+        yield* sleep2("1 second");
+        if (!(yield* auth.isLoggedIn())) {
+          return;
+        }
+        const move = retrySafeMove(
+          destination.kind === "house" ? gen2(function* () {
+            if (!(yield* auth.isLoggedIn())) return "aborted";
+            if (!(yield* packet.sendToServer(`%xt%zm%house%1%${username}%`))) {
+              return "retry";
+            }
+            const outcome2 = yield* wait.untilSome(
+              all2([
+                auth.isLoggedIn(),
+                isInOwnHouse,
+                player.isReady()
+              ]).pipe(
+                map5(
+                  ([loggedIn, ownHouse, ready]) => !loggedIn ? some2("aborted") : ownHouse && ready ? some2("moved") : none2()
+                )
+              ),
+              { timeout: "5 seconds" }
+            );
+            return outcome2 ?? "retry";
+          }) : gen2(function* () {
+            if (!(yield* auth.isLoggedIn())) return "aborted";
+            const joined = yield* player.joinMap(destination.target);
+            if (!(yield* auth.isLoggedIn())) return "aborted";
+            if (!joined) return "retry";
+            const outcome2 = yield* wait.untilSome(
+              all2([auth.isLoggedIn(), player.isReady()]).pipe(
+                map5(
+                  ([loggedIn, ready]) => !loggedIn ? some2("aborted") : ready ? some2("moved") : none2()
+                )
+              ),
+              { timeout: "5 seconds" }
+            );
+            return outcome2 ?? "retry";
+          })
+        );
+        const returnInfoIsNull = yield* bridge.invoke(
+          "flash.isNull",
+          [returnInfoPath],
+          Boolean3
+        );
+        if (getOrElse(returnInfoIsNull, () => false))
+          return yield* asVoid2(move);
+        const returnInfo = yield* bridge.invokeJson(
+          "flash.getGameObject",
+          [returnInfoPath],
+          Unknown2
+        );
+        if (isNone2(returnInfo) || !(yield* setReturnInfo(null))) {
+          return;
+        }
+        yield* move.pipe(
+          ensuring2(setReturnInfo(returnInfo.value).pipe(asVoid2))
+        );
+      }
+    );
+    return (phase) => moveToSafeDestination().pipe(logMoveFailure(phase));
+  }, "makeMoveToSafeDestination");
+
+  // packages/runtime/src/game/scripting/ScriptStartReadiness.ts
+  var scriptStartReadinessTimeout = "10 seconds";
+  var labels = {
+    account: "account binding",
+    houseInventory: "house inventory projection",
+    inventory: "inventory projection",
+    login: "login",
+    map: "map projection",
+    player: "player projection",
+    playerLoaded: "live player readiness"
+  };
+  var missingDetail = /* @__PURE__ */ __name((snapshot) => snapshot.missing.map((key) => {
+    const failure2 = key === "houseInventory" || key === "inventory" || key === "map" || key === "player" ? snapshot.projections.failures[key] : void 0;
+    return failure2 === void 0 ? labels[key] : `${labels[key]} (${failure2})`;
+  }).join(", "), "missingDetail");
+  var makeScriptStartReadiness = /* @__PURE__ */ __name((services) => {
+    const get6 = fn2("ScriptStartReadiness.get")(
+      function* () {
+        const projections = yield* services.projectionReadiness.inspect().pipe(catchCause2(() => succeed7(null)));
+        const resolvedProjections = projections ?? {
+          epoch: 0,
+          failures: {},
+          missing: ["houseInventory", "inventory", "map", "player"],
+          state: {
+            houseInventory: false,
+            inventory: false,
+            map: false,
+            player: false
+          }
+        };
+        if (resolvedProjections.missing.length > 0) {
+          return {
+            loggedIn: false,
+            missing: [...resolvedProjections.missing],
+            playerLoaded: false,
+            projections: resolvedProjections,
+            ready: false,
+            username: ""
+          };
+        }
+        const playerLoaded = yield* services.player.isReady().pipe(catchCause2(() => succeed7(false)));
+        if (!playerLoaded) {
+          return {
+            loggedIn: false,
+            missing: ["playerLoaded"],
+            playerLoaded: false,
+            projections: resolvedProjections,
+            ready: false,
+            username: ""
+          };
+        }
+        const state = yield* all2({
+          loggedIn: services.auth.isLoggedIn().pipe(catchCause2(() => succeed7(false))),
+          username: services.auth.getUsername().pipe(catchCause2(() => succeed7("")))
+        });
+        const username = state.username.trim().toLowerCase();
+        const missing2 = [];
+        if (!state.loggedIn) missing2.push("login");
+        if (username === "") missing2.push("account");
+        return {
+          loggedIn: state.loggedIn,
+          missing: missing2,
+          playerLoaded,
+          projections: resolvedProjections,
+          ready: missing2.length === 0,
+          username
+        };
+      }
+    );
+    const awaitReady = fn2("ScriptStartReadiness.awaitReady")(function* (options = {}) {
+      const ready = yield* services.wait.untilSome(
+        get6().pipe(
+          map5(
+            (snapshot2) => snapshot2.ready ? some2(snapshot2) : none2()
+          )
+        ),
+        {
+          interval: options.interval ?? "100 millis",
+          timeout: options.timeout ?? scriptStartReadinessTimeout
+        }
+      );
+      if (ready !== null) return ready;
+      const snapshot = yield* get6();
+      const detail = snapshot.missing.length === 0 ? "Scripts can only start after game readiness is stable." : `Scripts can only start after game readiness is complete. Missing: ${missingDetail(snapshot)}.`;
+      return yield* new ScriptNotReadyError({
+        detail,
+        missing: [...snapshot.missing]
+      });
+    });
+    return { awaitReady, get: get6 };
+  }, "makeScriptStartReadiness");
+
+  // packages/runtime/src/game/scripting/ScriptRunner.ts
+  var terminalFinalization = /* @__PURE__ */ __name((outcome2) => ({ outcome: outcome2, status: outcome2.status }), "terminalFinalization");
+  var ScriptRunner = class extends Service()("lucent/game/scripting/ScriptRunner") {
+    static {
+      __name(this, "ScriptRunner");
+    }
+  };
+  var nowIso = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
+  var snapshotStatus = /* @__PURE__ */ __name((status) => ({
+    ...status
+  }), "snapshotStatus");
+  var makeRunHandle = /* @__PURE__ */ __name((initialStatus, terminal) => ({
+    initialStatus: snapshotStatus(initialStatus),
+    terminal: _await(terminal)
+  }), "makeRunHandle");
+  var externalStopOutcome = /* @__PURE__ */ __name((status) => ({ kind: "externally-stopped", status }), "externalStopOutcome");
+  var statusName = /* @__PURE__ */ __name((source) => source.name.trim() === "" ? "script" : source.name, "statusName");
+  var activeStatusFields = /* @__PURE__ */ __name((active) => ({
+    name: active.name,
+    ...active.path === void 0 ? {} : { path: active.path }
+  }), "activeStatusFields");
+  var normalizeUsername = /* @__PURE__ */ __name((username) => username.trim().toLowerCase(), "normalizeUsername");
+  var statusFromStartingCancellation = /* @__PURE__ */ __name((starting, cancellation) => cancellation.retryAfterReconnect === true && starting.restart !== void 0 ? {
+    ...activeStatusFields(starting.restart),
+    disconnectedAt: starting.restart.disconnectedAt,
+    state: "waiting-to-restart"
+  } : {
+    ...cancellation.reason === void 0 ? {} : { reason: cancellation.reason },
+    state: "stopped",
+    stoppedAt: nowIso()
+  }, "statusFromStartingCancellation");
+  var classifyScriptTermination = /* @__PURE__ */ __name((cause) => {
+    let closeClient = false;
+    let logout = false;
+    let stopReason;
+    let sawExitRequest = false;
+    let sawStopSignal = false;
+    for (const reason of cause.reasons) {
+      if (isInterruptReason2(reason)) {
+        continue;
+      }
+      if (isFailReason2(reason) && reason.error instanceof ScriptStopSignal) {
+        sawStopSignal = true;
+        stopReason ??= reason.error.reason;
+        const exitRequest = getScriptExitRequest(reason.error);
+        sawExitRequest ||= exitRequest !== void 0;
+        closeClient ||= exitRequest?.closeClient === true;
+        logout ||= exitRequest?.logout === true;
+        continue;
+      }
+      return { kind: "failed" };
+    }
+    if (sawStopSignal) {
+      return sawExitRequest ? {
+        exitRequest: { closeClient, logout },
+        kind: "script-exited",
+        ...stopReason === void 0 ? {} : { reason: stopReason }
+      } : {
+        kind: "script-stopped",
+        ...stopReason === void 0 ? {} : { reason: stopReason }
+      };
+    }
+    return hasInterruptsOnly2(cause) ? { kind: "script-interrupted" } : { kind: "failed" };
+  }, "classifyScriptTermination");
+  var isScriptNotReadyCause = /* @__PURE__ */ __name((cause) => {
+    let sawNotReady = false;
+    for (const reason of cause.reasons) {
+      if (isInterruptReason2(reason)) continue;
+      if (isFailReason2(reason) && reason.error instanceof ScriptNotReadyError) {
+        sawNotReady = true;
+        continue;
+      }
+      return false;
+    }
+    return sawNotReady;
+  }, "isScriptNotReadyCause");
+  var causeMessage = /* @__PURE__ */ __name((cause) => {
+    const squashed = squash(cause);
+    return squashed instanceof Error && squashed.message.length > 0 ? attributedScriptErrorMessage(squashed) : pretty(cause);
+  }, "causeMessage");
+  var causeDetailsText = /* @__PURE__ */ __name((cause) => {
+    const squashed = squash(cause);
+    if (squashed instanceof Error) {
+      const details = attributedScriptErrorDetails(squashed);
+      if (details !== void 0) return details;
+    }
+    const pretty2 = pretty(cause);
+    return pretty2.trim() === "" ? void 0 : pretty2;
+  }, "causeDetailsText");
+  var logScriptFailureCause = /* @__PURE__ */ __name((cause) => sync2(() => {
+    const squashed = squash(cause);
+    console.error(
+      "[script]",
+      "error running script:",
+      squashed instanceof Error ? squashed : causeMessage(cause)
+    );
+  }), "logScriptFailureCause");
+  var isConnectionLoss = /* @__PURE__ */ __name((event) => event.type === "connection" && (event.status === "OnConnectionLost" || event.status === "OnConnectionFailed"), "isConnectionLoss");
+  var makeScriptOptions = fnUntraced2(function* () {
+    const optionsRef = yield* make17(
+      snapshotScriptRuntimeOptions(DEFAULT_SCRIPT_RUNTIME_OPTIONS)
+    );
+    const accountUsernameRef = yield* make16("");
+    const getOptions = /* @__PURE__ */ __name(() => get5(optionsRef).pipe(
+      map5(snapshotScriptRuntimeOptions)
+    ), "getOptions");
+    const bindAccount = /* @__PURE__ */ __name((username) => gen2(function* () {
+      const normalized = normalizeUsername(username);
+      if ((yield* getAndSet(accountUsernameRef, normalized)) !== normalized)
+        yield* set4(
+          optionsRef,
+          snapshotScriptRuntimeOptions(DEFAULT_SCRIPT_RUNTIME_OPTIONS)
+        );
+      return yield* getOptions();
+    }), "bindAccount");
+    const setOptions = /* @__PURE__ */ __name((update2) => updateAndGet2(
+      optionsRef,
+      (current) => snapshotScriptRuntimeOptions(update2(snapshotScriptRuntimeOptions(current)))
+    ).pipe(map5(snapshotScriptRuntimeOptions)), "setOptions");
+    return { optionsRef, bindAccount, getOptions, setOptions };
+  });
+  var layer6 = effect(
+    ScriptRunner,
+    gen2(function* () {
+      const scope3 = yield* scope2;
+      const runFork3 = runForkWith2(yield* context2());
+      const api2 = yield* Api;
+      const projectionReadiness = yield* ProjectionReadiness;
+      const bridge = yield* Bridge;
+      const dialogs = yield* ScriptDialogs;
+      const {
+        army,
+        environment,
+        autoRelogin,
+        autoZone,
+        fileSystem: fileSystemBridge,
+        http: makeHttpApi
+      } = yield* ScriptServices;
+      const { auth, combat, events, house, map: map8, packet, player, wait } = api2;
+      const scriptStartReadiness = makeScriptStartReadiness({
+        auth,
+        player,
+        projectionReadiness,
+        wait
+      });
+      const services = makeScriptRuntimeServices(api2, army, environment);
+      const activeRef = yield* make16(null);
+      const lifecycleGate = yield* make14(1);
+      const latestCommandIdRef = yield* make16(0);
+      const nextIdRef = yield* make16(0);
+      const pendingFinalizationRef = yield* make16(
+        null
+      );
+      const pendingRestartRef = yield* make16(null);
+      const startingRef = yield* make16(null);
+      const { optionsRef, bindAccount, getOptions, setOptions } = yield* makeScriptOptions();
+      const statusRef = yield* make17({
+        state: "idle"
+      });
+      const getStatus = /* @__PURE__ */ __name(() => get5(statusRef).pipe(map5(snapshotStatus)), "getStatus");
+      const setStatus = /* @__PURE__ */ __name((status) => set4(statusRef, snapshotStatus(status)), "setStatus");
+      const observe = /* @__PURE__ */ __name((changes2, snapshot, listener) => changes2.pipe(
+        runForEach2(
+          (value) => sync2(() => listener(snapshot(value)))
+        ),
+        forkIn2(scope3),
+        map5((fiber2) => () => {
+          runFork3(interrupt4(fiber2));
+        })
+      ), "observe");
+      const awaitStatus = /* @__PURE__ */ __name((done4) => _await(done4).pipe(map5(snapshotStatus)), "awaitStatus");
+      const requestInterrupt = fn2("ScriptRunner.requestInterrupt")(
+        function* (fiber2) {
+          const interruptor = yield* fiberId2;
+          yield* sync2(() => {
+            fiber2.interruptUnsafe(interruptor);
+          });
+        }
+      );
+      const completeFinalization = fn2("ScriptRunner.completeFinalization")(
+        function* (id, done4, terminal, finalization) {
+          yield* lifecycleGate.withPermit(
+            gen2(function* () {
+              const pending = yield* get4(pendingFinalizationRef);
+              if (pending?.id !== id || pending.done !== done4) {
+                yield* succeed5(done4, yield* getStatus());
+                return;
+              }
+              yield* set3(pendingFinalizationRef, null);
+              yield* setStatus(finalization.status);
+              yield* succeed5(done4, snapshotStatus(finalization.status));
+              if (finalization.outcome !== void 0) {
+                yield* succeed5(terminal, finalization.outcome);
+              }
+            })
+          );
+        }
+      );
+      const finalize2 = fn2("ScriptRunner.finalize")(function* (options) {
+        if (options.awaitFiber) {
+          yield* await_(options.active.fiber);
+        }
+        yield* options.active.scope.close;
+        if (options.cause !== void 0) {
+          yield* logScriptFailureCause(options.cause);
+        }
+        if (options.beforeComplete !== void 0) {
+          yield* options.beforeComplete;
+        }
+        const result2 = options.result();
+        yield* completeFinalization(
+          options.active.id,
+          options.done,
+          options.active.terminal,
+          result2
+        );
+      });
+      const beginFinalization = fn2("ScriptRunner.beginFinalization")(
+        function* (active, options) {
+          return yield* uninterruptible2(
+            gen2(function* () {
+              const done4 = yield* make5();
+              yield* set3(activeRef, null);
+              yield* set3(pendingFinalizationRef, { done: done4, id: active.id });
+              if (options.intermediateStatus !== void 0) {
+                yield* setStatus(options.intermediateStatus);
+              }
+              yield* active.scope.cancel;
+              if (options.interrupt) {
+                yield* requestInterrupt(active.fiber);
+              }
+              yield* finalize2({
+                active,
+                awaitFiber: options.awaitFiber,
+                ...options.beforeComplete === void 0 ? {} : { beforeComplete: options.beforeComplete },
+                ...options.cause === void 0 ? {} : { cause: options.cause },
+                done: done4,
+                result: options.result
+              }).pipe(forkDetach2);
+              return done4;
+            })
+          );
+        }
+      );
+      const cancelPendingRestart = fn2("ScriptRunner.cancelPendingRestart")(
+        function* (reason) {
+          const pending = yield* get4(pendingRestartRef);
+          if (pending !== null) {
+            yield* succeed5(
+              pending.cancel,
+              reason === void 0 ? {} : { reason }
+            );
+          }
+          return pending;
+        }
+      );
+      const stopActive = fn2("ScriptRunner.stopActive")(function* (reason) {
+        yield* update(latestCommandIdRef, (value) => value + 1);
+        const result2 = yield* lifecycleGate.withPermit(
+          gen2(function* () {
+            const restart = yield* cancelPendingRestart(reason);
+            const starting = yield* get4(startingRef);
+            if (starting !== null) {
+              yield* succeed5(
+                starting.cancel,
+                reason === void 0 ? {} : { reason }
+              );
+              return {
+                done: restart?.done ?? starting.done,
+                kind: "waiting"
+              };
+            }
+            const pending = yield* get4(pendingFinalizationRef);
+            if (pending !== null) {
+              return {
+                done: restart?.done ?? pending.done,
+                kind: "waiting"
+              };
+            }
+            const active = yield* get4(activeRef);
+            if (active === null) {
+              if (restart !== null) {
+                return { done: restart.done, kind: "waiting" };
+              }
+              return { kind: "status", status: yield* getStatus() };
+            }
+            const done4 = yield* beginFinalization(active, {
+              awaitFiber: true,
+              intermediateStatus: {
+                ...activeStatusFields(active),
+                state: "stopping"
+              },
+              interrupt: true,
+              result: /* @__PURE__ */ __name(() => {
+                const status = {
+                  ...reason === void 0 ? {} : { reason },
+                  state: "stopped",
+                  stoppedAt: nowIso()
+                };
+                return terminalFinalization(externalStopOutcome(status));
+              }, "result")
+            });
+            return { done: done4, kind: "waiting" };
+          })
+        );
+        return result2.kind === "status" ? result2.status : yield* awaitStatus(result2.done);
+      });
+      const finishIfActive = fn2("ScriptRunner.finishIfActive")(function* (id, options) {
+        const done4 = yield* lifecycleGate.withPermit(
+          gen2(function* () {
+            if ((yield* get4(pendingFinalizationRef)) !== null) {
+              return null;
+            }
+            const active = yield* get4(activeRef);
+            return active?.id === id ? yield* beginFinalization(active, {
+              awaitFiber: false,
+              ...options.beforeComplete === void 0 ? {} : { beforeComplete: options.beforeComplete },
+              interrupt: false,
+              result: options.result
+            }) : null;
+          })
+        );
+        if (done4 !== null) {
+          yield* awaitStatus(done4);
+        } else if (options.beforeComplete !== void 0) {
+          yield* options.beforeComplete;
+        }
+      });
+      const failActiveCause = fn2("ScriptRunner.failActiveCause")(
+        function* (id, cause) {
+          const detailsText = causeDetailsText(cause);
+          const done4 = yield* lifecycleGate.withPermit(
+            gen2(function* () {
+              if ((yield* get4(pendingFinalizationRef)) !== null) {
+                return null;
+              }
+              const active = yield* get4(activeRef);
+              if (active?.id !== id) return null;
+              return yield* beginFinalization(active, {
+                awaitFiber: true,
+                cause,
+                interrupt: true,
+                result: /* @__PURE__ */ __name(() => {
+                  const status = {
+                    ...activeStatusFields(active),
+                    ...detailsText === void 0 ? {} : { detailsText },
+                    failedAt: nowIso(),
+                    message: causeMessage(cause),
+                    state: "failed"
+                  };
+                  return terminalFinalization({ kind: "failed", status });
+                }, "result")
+              });
+            })
+          );
+          if (done4 !== null) {
+            yield* awaitStatus(done4);
+          }
+        }
+      );
+      const moveToSafeMap = makeMoveToSafeDestination({
+        auth,
+        bridge,
+        combat,
+        house,
+        map: map8,
+        packet,
+        player,
+        roomPolicy: get5(optionsRef).pipe(
+          map5((options) => snapshotRoomPolicy(options.roomPolicy))
+        ),
+        wait
+      });
+      const runWithSafeStartStop2 = /* @__PURE__ */ __name((main) => runWithSafeStartStop(
+        gen2(function* () {
+          const iterator = main();
+          return yield* iterator;
+        }).pipe(asVoid2),
+        get5(optionsRef).pipe(
+          map5((options) => options.safeStartStop)
+        ),
+        moveToSafeMap
+      ), "runWithSafeStartStop");
+      const runScript = /* @__PURE__ */ __name((id, source, main) => runWithSafeStartStop2(main).pipe(
+        matchCauseEffect2({
+          onFailure: /* @__PURE__ */ __name((cause) => {
+            const termination = classifyScriptTermination(cause);
+            if (termination.kind !== "failed") {
+              const reason = termination.kind === "script-interrupted" ? void 0 : termination.reason;
+              const exitRequest = termination.kind === "script-exited" ? termination.exitRequest : void 0;
+              return finishIfActive(id, {
+                beforeComplete: exitRequest?.logout === true ? auth.logout() : void_3,
+                result: /* @__PURE__ */ __name(() => {
+                  const status = {
+                    ...reason === void 0 ? {} : { reason },
+                    state: "stopped",
+                    stoppedAt: nowIso()
+                  };
+                  const outcome2 = termination.kind === "script-exited" ? {
+                    kind: "script-exited",
+                    closeClient: termination.exitRequest.closeClient,
+                    status
+                  } : termination.kind === "script-stopped" ? { kind: "script-stopped", status } : { kind: "externally-stopped", status };
+                  return terminalFinalization(outcome2);
+                }, "result")
+              }).pipe(uninterruptible2);
+            }
+            const detailsText = causeDetailsText(cause);
+            return logScriptFailureCause(cause).pipe(
+              andThen2(
+                finishIfActive(id, {
+                  result: /* @__PURE__ */ __name(() => {
+                    const status = {
+                      ...detailsText === void 0 ? {} : { detailsText },
+                      failedAt: nowIso(),
+                      message: causeMessage(cause),
+                      name: statusName(source),
+                      state: "failed"
+                    };
+                    return terminalFinalization({ kind: "failed", status });
+                  }, "result")
+                })
+              )
+            );
+          }, "onFailure"),
+          onSuccess: /* @__PURE__ */ __name(() => finishIfActive(id, {
+            result: /* @__PURE__ */ __name(() => {
+              const status = {
+                completedAt: nowIso(),
+                name: statusName(source),
+                state: "completed"
+              };
+              return terminalFinalization({ kind: "completed", status });
+            }, "result")
+          }), "onSuccess")
+        })
+      ), "runScript");
+      const completeStarting = fn2("ScriptRunner.completeStarting")(
+        function* (starting, status) {
+          return yield* lifecycleGate.withPermit(
+            uninterruptible2(
+              gen2(function* () {
+                const current = yield* get4(startingRef);
+                const authoritative = current?.id === starting.id && current.done === starting.done ? status : yield* getStatus();
+                if (current?.id === starting.id && current.done === starting.done) {
+                  yield* set3(startingRef, null);
+                  yield* setStatus(status);
+                }
+                yield* succeed5(starting.done, snapshotStatus(status));
+                if (status.state === "failed") {
+                  yield* succeed5(starting.terminal, {
+                    kind: "failed",
+                    status: { ...status }
+                  });
+                } else if (status.state === "stopped") {
+                  yield* succeed5(
+                    starting.terminal,
+                    externalStopOutcome({ ...status })
+                  );
+                } else if (status.state === "completed") {
+                  yield* succeed5(starting.terminal, {
+                    kind: "completed",
+                    status: { ...status }
+                  });
+                }
+                return authoritative;
+              })
+            )
+          );
+        }
+      );
+      const runStarting = fn2("ScriptRunner.runStarting")(function* (starting, source, inputs) {
+        const scriptScope = makeScriptAsyncScope();
+        let inputValues = {};
+        let activated = false;
+        let scriptFiber;
+        const cleanup = suspend2(
+          () => activated ? void_3 : uninterruptible2(
+            gen2(function* () {
+              yield* scriptScope.cancel;
+              if (scriptFiber !== void 0) {
+                yield* requestInterrupt(scriptFiber);
+                yield* await_(scriptFiber);
+              }
+              yield* scriptScope.close;
+            })
+          )
+        );
+        yield* installReadinessWatcher(starting.id, scriptScope);
+        const setup = gen2(function* () {
+          const readiness = yield* scriptStartReadiness.awaitReady();
+          const username = readiness.username;
+          yield* bindAccount(username);
+          yield* scriptScope.addCleanup(
+            () => army.leave().pipe(catchCause2(() => void_3))
+          );
+          const script = makeScriptRuntimeApi({
+            dialogs,
+            getOptions,
+            getInputValues: /* @__PURE__ */ __name(() => inputValues, "getInputValues"),
+            log: /* @__PURE__ */ __name((...values2) => console.log("[script]", ...values2), "log"),
+            scope: scriptScope,
+            setOptions,
+            source: { sourceName: statusName(source) }
+          });
+          const http = yield* makeHttpApi(scriptScope);
+          const modules = makeScriptBuiltinModules({
+            autoRelogin,
+            autoZone,
+            bridge,
+            failCause: /* @__PURE__ */ __name((cause) => failActiveCause(starting.id, cause), "failCause"),
+            fileSystem: makeScriptFileSystemApi(fileSystemBridge, scriptScope),
+            http,
+            roomPolicy: get5(optionsRef).pipe(
+              map5((options) => snapshotRoomPolicy(options.roomPolicy))
+            ),
+            scope: scriptScope,
+            script,
+            services
+          });
+          const namespace = yield* try_2({
+            try: /* @__PURE__ */ __name(() => source.load(modules), "try"),
+            catch: /* @__PURE__ */ __name((cause) => new ScriptLoadError({
+              detail: cause instanceof Error ? cause.message : String(cause),
+              cause
+            }), "catch")
+          });
+          const loaded = yield* readScriptEntry(namespace, source.name, inputs);
+          inputValues = loaded.inputValues;
+          const release = yield* make5();
+          const fiber2 = yield* _await(release).pipe(
+            andThen2(runScript(starting.id, source, loaded.main)),
+            forkDetach2
+          );
+          scriptFiber = fiber2;
+          const active = {
+            commandId: starting.commandId,
+            fiber: fiber2,
+            source: { ...source },
+            id: starting.id,
+            inputs: { ...inputs },
+            name: starting.name,
+            ...starting.path === void 0 ? {} : { path: starting.path },
+            scope: scriptScope,
+            terminal: starting.terminal,
+            username
+          };
+          const status2 = {
+            ...activeStatusFields(active),
+            startedAt: nowIso(),
+            state: "running"
+          };
+          const committed = yield* lifecycleGate.withPermit(
+            uninterruptible2(
+              gen2(function* () {
+                const current = yield* get4(startingRef);
+                const latestCommandId = yield* get4(latestCommandIdRef);
+                const cancelled = yield* isDone2(starting.cancel);
+                const restartCancelled = starting.restart !== void 0 && (yield* isDone2(starting.restart.cancel));
+                const currentRestart = yield* get4(pendingRestartRef);
+                if (current?.id !== starting.id || current.done !== starting.done || latestCommandId !== starting.commandId || cancelled || restartCancelled || starting.restart !== void 0 && currentRestart !== starting.restart) {
+                  return false;
+                }
+                yield* sync2(() => {
+                  activated = true;
+                });
+                yield* set3(startingRef, null);
+                yield* set3(activeRef, active);
+                yield* setStatus(status2);
+                yield* succeed5(release, void 0);
+                if (starting.restart !== void 0) {
+                  yield* set3(pendingRestartRef, null);
+                  yield* succeed5(
+                    starting.restart.done,
+                    snapshotStatus(status2)
+                  );
+                }
+                return true;
+              })
+            )
+          );
+          if (!committed) {
+            return yield* interrupt3;
+          }
+          return status2;
+        }).pipe(ensuring2(cleanup));
+        const status = yield* raceFirst2(
+          setup.pipe(
+            map5((status2) => ({ kind: "started", status: status2 }))
+          ),
+          _await(starting.cancel).pipe(
+            map5(
+              (cancellation) => ({ cancellation, kind: "cancelled" })
+            )
+          )
+        ).pipe(
+          matchCauseEffect2({
+            onFailure: /* @__PURE__ */ __name((cause) => gen2(function* () {
+              if (hasInterruptsOnly2(cause)) {
+                const cancellation = (yield* isDone2(starting.cancel)) ? yield* _await(starting.cancel) : { reason: "Start cancelled" };
+                return statusFromStartingCancellation(starting, cancellation);
+              }
+              if (starting.restart !== void 0 && isScriptNotReadyCause(cause)) {
+                return {
+                  ...activeStatusFields(starting.restart),
+                  disconnectedAt: starting.restart.disconnectedAt,
+                  state: "waiting-to-restart"
+                };
+              }
+              yield* logScriptFailureCause(cause);
+              const detailsText = causeDetailsText(cause);
+              return {
+                ...detailsText === void 0 ? {} : { detailsText },
+                failedAt: nowIso(),
+                message: causeMessage(cause),
+                name: starting.name,
+                ...starting.path === void 0 ? {} : { path: starting.path },
+                state: "failed"
+              };
+            }), "onFailure"),
+            onSuccess: /* @__PURE__ */ __name((outcome2) => outcome2.kind === "started" ? succeed7(outcome2.status) : succeed7(
+              statusFromStartingCancellation(
+                starting,
+                outcome2.cancellation
+              )
+            ), "onSuccess")
+          })
+        );
+        yield* completeStarting(starting, status);
+      });
+      const beginStarting = fn2("ScriptRunner.beginStarting")(function* (commandId, source, inputs, restart, identity2) {
+        return yield* uninterruptible2(
+          gen2(function* () {
+            const id = restart?.id ?? identity2?.id ?? (yield* updateAndGet(nextIdRef, (value) => value + 1));
+            const cancel = yield* make5();
+            const done4 = yield* make5();
+            const terminal = restart?.terminal ?? identity2?.terminal ?? (yield* make5());
+            const starting = {
+              cancel,
+              commandId,
+              done: done4,
+              id,
+              name: statusName(source),
+              ...restart === void 0 ? {} : { restart },
+              terminal
+            };
+            yield* set3(startingRef, starting);
+            yield* setStatus({
+              ...activeStatusFields(starting),
+              startedAt: nowIso(),
+              state: "starting"
+            });
+            yield* runStarting(starting, source, inputs).pipe(forkDetach2);
+            return starting;
+          })
+        );
+      });
+      const completePendingRestart = fn2(
+        "ScriptRunner.completePendingRestart"
+      )(function* (pending, status) {
+        yield* lifecycleGate.withPermit(
+          gen2(function* () {
+            const current = yield* get4(pendingRestartRef);
+            const authoritative = current === pending ? status : yield* getStatus();
+            if (current === pending) {
+              yield* set3(pendingRestartRef, null);
+              yield* setStatus(status);
+            }
+            yield* succeed5(pending.done, snapshotStatus(authoritative));
+            if (status.state === "stopped") {
+              yield* succeed5(
+                pending.terminal,
+                externalStopOutcome({ ...status })
+              );
+            } else if (status.state === "failed") {
+              yield* succeed5(pending.terminal, {
+                kind: "failed",
+                status: { ...status }
+              });
+            }
+          })
+        );
+      });
+      const awaitRestartReadiness = fn2(
+        "ScriptRunner.awaitRestartReadiness"
+      )(function* (pending) {
+        return (yield* wait.untilSome(
+          gen2(function* () {
+            const options = yield* get5(optionsRef);
+            if (!options.restartAfterReconnect) {
+              return some2({ kind: "disabled" });
+            }
+            const readiness = yield* scriptStartReadiness.get();
+            if (!readiness.ready) return none2();
+            return some2({
+              kind: readiness.username === pending.username ? "ready" : "account-changed"
+            });
+          }),
+          { interval: "250 millis" }
+        )) ?? { kind: "disabled" };
+      });
+      const resumePendingRestart = fn2("ScriptRunner.resumePendingRestart")(
+        function* (pending) {
+          const result2 = yield* lifecycleGate.withPermit(
+            gen2(function* () {
+              const current = yield* get4(pendingRestartRef);
+              const latestCommandId = yield* get4(latestCommandIdRef);
+              const options = yield* get5(optionsRef);
+              if (current !== pending || latestCommandId !== pending.commandId || !options.restartAfterReconnect) {
+                const status2 = yield* getStatus();
+                if (current === pending) {
+                  const stopped = {
+                    state: "stopped",
+                    stoppedAt: nowIso()
+                  };
+                  yield* set3(pendingRestartRef, null);
+                  yield* setStatus(stopped);
+                  return { kind: "settled", status: stopped };
+                }
+                return { kind: "settled", status: status2 };
+              }
+              const starting = yield* beginStarting(
+                pending.commandId,
+                pending.source,
+                pending.inputs,
+                pending
+              );
+              return {
+                done: starting.done,
+                kind: "starting"
+              };
+            })
+          );
+          const status = result2.kind === "starting" ? yield* awaitStatus(result2.done) : result2.status;
+          if (status.state === "waiting-to-restart") {
+            return true;
+          }
+          yield* completePendingRestart(pending, status);
+          return false;
+        }
+      );
+      const runPendingRestart = fn2("ScriptRunner.runPendingRestart")(
+        function* (pending, finalized) {
+          yield* awaitStatus(finalized);
+          while (true) {
+            const outcome2 = yield* raceFirst2(
+              _await(pending.cancel).pipe(
+                map5(
+                  (cancellation) => ({ cancellation, kind: "cancelled" })
+                )
+              ),
+              awaitRestartReadiness(pending).pipe(
+                map5(
+                  (readiness) => ({ kind: "readiness", readiness })
+                )
+              )
+            );
+            if (outcome2.kind === "readiness" && outcome2.readiness.kind === "ready") {
+              if (yield* resumePendingRestart(pending)) continue;
+              return;
+            }
+            const reason = outcome2.kind === "cancelled" ? outcome2.cancellation.reason : outcome2.readiness.kind === "account-changed" ? "Account changed" : void 0;
+            yield* completePendingRestart(pending, {
+              ...reason === void 0 ? {} : { reason },
+              state: "stopped",
+              stoppedAt: nowIso()
+            });
+            return;
+          }
+        }
+      );
+      const handleConnectionLoss = fn2("ScriptRunner.handleConnectionLoss")(
+        function* (id) {
+          return yield* uninterruptible2(
+            gen2(function* () {
+              const result2 = yield* lifecycleGate.withPermit(
+                gen2(function* () {
+                  const starting = yield* get4(startingRef);
+                  if (starting?.id === id) {
+                    yield* succeed5(starting.cancel, {
+                      reason: "Connection lost",
+                      retryAfterReconnect: starting.restart !== void 0
+                    });
+                    return null;
+                  }
+                  if ((yield* get4(pendingFinalizationRef)) !== null) {
+                    return null;
+                  }
+                  const active = yield* get4(activeRef);
+                  if (active?.id !== id) return null;
+                  const options = yield* get5(optionsRef);
+                  const shouldRestart = options.restartAfterReconnect && active.username !== "";
+                  const disconnectedAt = nowIso();
+                  const restart = shouldRestart ? {
+                    cancel: yield* make5(),
+                    commandId: active.commandId,
+                    disconnectedAt,
+                    done: yield* make5(),
+                    source: { ...active.source },
+                    id: active.id,
+                    inputs: { ...active.inputs },
+                    name: active.name,
+                    ...active.path === void 0 ? {} : { path: active.path },
+                    terminal: active.terminal,
+                    username: active.username
+                  } : null;
+                  if (restart !== null) {
+                    yield* set3(pendingRestartRef, restart);
+                  }
+                  const finalized = yield* beginFinalization(active, {
+                    awaitFiber: true,
+                    intermediateStatus: {
+                      ...activeStatusFields(active),
+                      state: "stopping"
+                    },
+                    interrupt: true,
+                    result: /* @__PURE__ */ __name(() => {
+                      if (restart === null) {
+                        const status = {
+                          state: "stopped",
+                          stoppedAt: nowIso()
+                        };
+                        return terminalFinalization(externalStopOutcome(status));
+                      }
+                      return {
+                        status: {
+                          ...activeStatusFields(restart),
+                          disconnectedAt: restart.disconnectedAt,
+                          state: "waiting-to-restart"
+                        }
+                      };
+                    }, "result")
+                  });
+                  return restart === null ? null : { finalized, restart };
+                })
+              );
+              if (result2 !== null) {
+                yield* runPendingRestart(result2.restart, result2.finalized).pipe(
+                  forkDetach2
+                );
+              }
+            })
+          );
+        }
+      );
+      const installReadinessWatcher = /* @__PURE__ */ __name((id, scope4) => events.on(
+        { type: "connection" },
+        (event) => isConnectionLoss(event) ? handleConnectionLoss(id) : void_3
+      ).pipe(tap2((dispose) => scope4.addCleanup(dispose))), "installReadinessWatcher");
+      const start2 = /* @__PURE__ */ __name((source, inputs) => {
+        const sourceSnapshot = { ...source };
+        const inputSnapshot = { ...inputs };
+        return gen2(function* () {
+          const commandId = yield* updateAndGet(
+            latestCommandIdRef,
+            (value) => value + 1
+          );
+          const identity2 = {
+            id: yield* updateAndGet(nextIdRef, (value) => value + 1),
+            terminal: yield* make5()
+          };
+          while (true) {
+            const result2 = yield* lifecycleGate.withPermit(
+              gen2(function* () {
+                if ((yield* get4(latestCommandIdRef)) !== commandId) {
+                  const status2 = {
+                    reason: "Replaced by another script",
+                    state: "stopped",
+                    stoppedAt: nowIso()
+                  };
+                  yield* succeed5(
+                    identity2.terminal,
+                    externalStopOutcome(status2)
+                  );
+                  return {
+                    handle: makeRunHandle(status2, identity2.terminal),
+                    kind: "superseded"
+                  };
+                }
+                const restart = yield* cancelPendingRestart(
+                  "Replaced by another script"
+                );
+                const starting = yield* get4(startingRef);
+                if (starting !== null) {
+                  yield* succeed5(starting.cancel, {
+                    reason: "Replaced by another script"
+                  });
+                  return {
+                    done: restart?.done ?? starting.done,
+                    kind: "waiting"
+                  };
+                }
+                const pending = yield* get4(pendingFinalizationRef);
+                if (pending !== null) {
+                  return {
+                    done: restart?.done ?? pending.done,
+                    kind: "waiting"
+                  };
+                }
+                const active = yield* get4(activeRef);
+                if (active !== null) {
+                  const done4 = yield* beginFinalization(active, {
+                    awaitFiber: true,
+                    intermediateStatus: {
+                      ...activeStatusFields(active),
+                      state: "stopping"
+                    },
+                    interrupt: true,
+                    result: /* @__PURE__ */ __name(() => {
+                      const status2 = {
+                        reason: "Replaced by another script",
+                        state: "stopped",
+                        stoppedAt: nowIso()
+                      };
+                      return terminalFinalization(externalStopOutcome(status2));
+                    }, "result")
+                  });
+                  return { done: done4, kind: "waiting" };
+                }
+                if (restart !== null) {
+                  return { done: restart.done, kind: "waiting" };
+                }
+                const started = yield* beginStarting(
+                  commandId,
+                  sourceSnapshot,
+                  inputSnapshot,
+                  void 0,
+                  identity2
+                );
+                return {
+                  started,
+                  kind: "starting"
+                };
+              })
+            );
+            if (result2.kind === "superseded") {
+              return result2.handle;
+            }
+            const status = yield* awaitStatus(
+              result2.kind === "starting" ? result2.started.done : result2.done
+            );
+            if (result2.kind === "starting") {
+              return makeRunHandle(status, result2.started.terminal);
+            }
+          }
+        });
+      }, "start");
+      const stop2 = /* @__PURE__ */ __name((reason) => stopActive(reason), "stop");
+      yield* addFinalizer3(() => stop2("shutdown").pipe(asVoid2));
+      return ScriptRunner.of({
+        bindAccount,
+        getOptions,
+        getStatus,
+        isRunning: /* @__PURE__ */ __name(() => getStatus().pipe(
+          map5(
+            (status) => status.state === "running" || status.state === "starting" || status.state === "stopping" || status.state === "waiting-to-restart"
+          )
+        ), "isRunning"),
+        onOptions: /* @__PURE__ */ __name((listener) => observe(
+          changes(optionsRef),
+          snapshotScriptRuntimeOptions,
+          listener
+        ), "onOptions"),
+        onStatus: /* @__PURE__ */ __name((listener) => observe(changes(statusRef), snapshotStatus, listener), "onStatus"),
+        setOptions,
+        start: start2,
+        stop: stop2
+      });
+    })
+  );
+
+  // packages/runtime/src/shared/http.ts
+  var SCRIPT_HTTP_MAX_BYTES = 8 * 1024 * 1024;
+  var HttpErrorReasonSchema = Literals([
+    "request",
+    "redirect",
+    "timeout",
+    "aborted",
+    "too-large",
+    "body"
+  ]);
+  var HttpFailureSchema = Struct({
+    reason: HttpErrorReasonSchema,
+    url: String4,
+    detail: String4
+  });
+  var HttpError = class extends TaggedError3()("HttpError", {
+    ...HttpFailureSchema.fields,
+    cause: optionalKey2(Defect())
+  }) {
+    static {
+      __name(this, "HttpError");
+    }
+    get message() {
+      return this.detail;
+    }
+  };
+  var HttpRequestPayloadSchema = Struct({
+    sessionId: String4,
+    requestId: Int.check(isGreaterThan2(0)),
+    url: String4,
+    method: String4,
+    headers: Record(String4, String4),
+    body: optionalKey2(Uint8Array2),
+    deadline: optionalKey2(Finite),
+    redirect: Literals(["follow", "manual", "error"]),
+    maxRedirects: Int.check(isGreaterThanOrEqualTo2(0))
+  });
+  var HttpResponsePayloadSchema = Struct({
+    body: Uint8Array2,
+    headers: ArraySchema(Tuple([String4, String4])),
+    status: Int,
+    statusText: String4,
+    url: String4
+  });
+  var HttpResultSchema = Union2([
+    Struct({ ok: Literal2(true), value: HttpResponsePayloadSchema }),
+    Struct({ ok: Literal2(false), error: HttpFailureSchema })
+  ]);
+
+  // packages/runtime/src/host/services.ts
+  var HostServiceUnavailable = class extends Error {
+    constructor(service3) {
+      super(`The ${service3} service is not available yet.`);
+      this.service = service3;
+      this.name = "HostServiceUnavailable";
+    }
+    service;
+    static {
+      __name(this, "HostServiceUnavailable");
+    }
+  };
+  var defect = /* @__PURE__ */ __name((service3) => () => die3(new HostServiceUnavailable(service3)), "defect");
+  var failure = /* @__PURE__ */ __name((service3) => () => fail5(new HostServiceUnavailable(service3)), "failure");
+  var reject = /* @__PURE__ */ __name((service3) => () => Promise.reject(new HostServiceUnavailable(service3)), "reject");
+  var armyFailure = /* @__PURE__ */ __name((ErrorClass) => () => {
+    const cause = new HostServiceUnavailable("army");
+    return fail5(new ErrorClass(cause.message, cause));
+  }, "armyFailure");
+  var unavailableScriptServices = {
+    army: {
+      equipSet: armyFailure(ArmyError),
+      getConfigString: defect("army"),
+      getConfigValue: defect("army"),
+      getPlayerNumber: defect("army"),
+      getSession: defect("army"),
+      isLeader: defect("army"),
+      isMember: defect("army"),
+      isStarted: defect("army"),
+      joinMap: armyFailure(ArmyError),
+      kill: armyFailure(ArmyError),
+      killForItem: armyFailure(ArmyError),
+      killForTempItem: armyFailure(ArmyError),
+      leave: defect("army"),
+      loopTaunt: armyFailure(ArmyLoopTauntError),
+      runStep: armyFailure(ArmyError),
+      start: armyFailure(ArmyError),
+      sync: armyFailure(ArmyError),
+      waitForAllInMap: armyFailure(ArmyError)
+    },
+    environment: {
+      getState: defect("environment"),
+      clear: failure("environment"),
+      addQuest: failure("environment"),
+      removeQuest: failure("environment"),
+      setQuestReward: failure("environment"),
+      clearQuestReward: failure("environment"),
+      clearQuests: failure("environment"),
+      setQuestAutoRegister: failure("environment"),
+      setAutoRegisterRequirements: failure("environment"),
+      setAutoRegisterRewards: failure("environment"),
+      addItem: failure("environment"),
+      removeItem: failure("environment"),
+      setAcceptAcMemberOnlyDrops: failure("environment"),
+      setAcceptAcNonMemberDrops: failure("environment"),
+      setAcceptNonAcMemberOnlyDrops: failure("environment"),
+      setAcceptNonAcNonMemberDrops: failure("environment"),
+      setRejectUnregisteredDrops: failure("environment"),
+      setDropPolicy: failure("environment"),
+      setItemRules: failure("environment"),
+      clearItems: failure("environment"),
+      addBoost: failure("environment"),
+      removeBoost: failure("environment"),
+      clearBoosts: failure("environment"),
+      fetchBoosts: failure("environment"),
+      setBoostAutomationEnabled: failure("environment"),
+      setDropAutomationEnabled: failure("environment"),
+      setItemNotification: failure("environment"),
+      setQuestAutomationEnabled: failure("environment"),
+      syncToAll: failure("environment")
+    },
+    autoRelogin: {
+      getDelayMs: defect("autoRelogin"),
+      getServer: defect("autoRelogin"),
+      getState: defect("autoRelogin"),
+      isEnabled: defect("autoRelogin"),
+      setDelay: defect("autoRelogin"),
+      setEnabled: defect("autoRelogin"),
+      setServer: defect("autoRelogin")
+    },
+    autoZone: {
+      getMap: defect("autoZone"),
+      getState: defect("autoZone"),
+      isEnabled: defect("autoZone"),
+      setEnabled: defect("autoZone"),
+      setMap: defect("autoZone")
+    },
+    fileSystem: {
+      exists: reject("fileSystem"),
+      list: reject("fileSystem"),
+      readJson: reject("fileSystem"),
+      readText: reject("fileSystem"),
+      remove: reject("fileSystem"),
+      writeJson: reject("fileSystem"),
+      writeText: reject("fileSystem")
+    },
+    http: /* @__PURE__ */ __name(() => succeed7({
+      HttpError,
+      request: /* @__PURE__ */ __name((url) => fail5(
+        new HttpError({
+          reason: "request",
+          url: String(url),
+          detail: new HostServiceUnavailable("http").message
+        })
+      ), "request")
+    }), "http")
+  };
+  var unavailableScriptDialogs = {
+    alert: defect("dialogs"),
+    beep: defect("beep"),
+    confirm: defect("dialogs"),
+    getCurrent: defect("dialogs"),
+    onCurrent: defect("dialogs"),
+    prompt: defect("dialogs"),
+    respond: defect("dialogs")
+  };
+
+  // packages/runtime/src/host/scripts.ts
+  var api = make6(apiLayer);
+  api.runSync(void_3);
+  var runtime = make6(
+    layer6.pipe(
+      provide2(
+        mergeAll2(
+          apiLayer,
+          succeed6(ScriptServices, unavailableScriptServices),
+          succeed6(ScriptDialogs, unavailableScriptDialogs)
+        )
+      )
+    ),
+    { memoMap: api.memoMap }
+  );
+  var start = /* @__PURE__ */ __name((load, name, inputsJson) => runtime.runPromise(
+    gen2(function* () {
+      const runner = yield* ScriptRunner;
+      const handle = yield* runner.start({ name, load }, JSON.parse(inputsJson));
+      const outcome2 = yield* handle.terminal;
+      switch (outcome2.kind) {
+        case "completed":
+          return { kind: "completed" };
+        case "failed":
+          return {
+            kind: "failed",
+            message: outcome2.status.message,
+            details: outcome2.status.detailsText ?? null
+          };
+        case "script-exited":
+          return { kind: "script-exited", closeClient: outcome2.closeClient };
+        case "script-stopped":
+        case "externally-stopped":
+          return { kind: outcome2.kind, reason: outcome2.status.reason ?? null };
+      }
+    })
+  ), "start");
+  var stop = /* @__PURE__ */ __name((reason) => runtime.runPromise(
+    flatMap3(ScriptRunner, (runner) => runner.stop(reason)).pipe(asVoid2)
+  ), "stop");
 
   // packages/runtime/src/host/index.ts
-  Object.assign(globalThis, { __lucent: Object.freeze({ run: run3, turn, wake }) });
+  Object.assign(globalThis, { __lucent: Object.freeze({ start, stop, turn, wake }) });
 })();

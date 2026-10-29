@@ -27,3 +27,5 @@ The Rust host owns both sides of those tests.
 The host service implementations in `host/services.ts` fail explicitly until their host operations are available. They do not build desktop automation or return fabricated state.
 
 `host/globals.ts` supplies `Event`, `EventTarget`, `AbortController`, `AbortSignal`, `TextEncoder`, and the console methods `log`, `info`, `warn`, `error`, and `debug`. Console messages reach `__host.log` and Rust tracing with target `lucent_runtime::script`. `host/loop.ts` supplies `window`, timers, and `window.swf`. HTTP response decoding creates `TextDecoder` only when a body is read.
+
+`host/scripts.ts` builds the API layer before the first turn and shares it with ScriptRunner through a memo map. The host exposes `__lucent.start(load, name, inputsJson)` and `__lucent.stop(reason?)`. Each start resolves with a protocol `ScriptOutcome` after its resources are released. Rust loads ES modules and supplies their per-run built-ins.

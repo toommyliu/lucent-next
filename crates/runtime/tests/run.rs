@@ -1,38 +1,31 @@
-use std::time::Duration;
+mod common;
 
+use common::TIMEOUT;
 use lucent_host::testing::{self, ProbeMovie};
+use lucent_protocol::script::ScriptOutcome;
 use lucent_runtime::Runtime;
-use serde_json::{Value, json};
-
-const TIMEOUT: Duration = Duration::from_secs(10);
 
 #[test]
-fn a_failed_program_rejects_its_run_and_the_next_run_still_answers() {
+fn a_failed_script_reports_its_error_and_the_next_run_completes() {
     let host = testing::headless_host();
-    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let (_session, link) = testing::start_probe(&host, common::ready_movie());
     let runtime = Runtime::start(link).unwrap();
-
-    let observed: Value = runtime
-        .eval(
-            "run.js",
-            r#"
-            (async () => {
-                const rejected = await __lucent
-                    .run(() => {
-                        throw new Error("broken program");
-                    })
-                    .then(() => null, (error) => String(error));
-                return { rejected, map: await __lucent.run((api) => api.map.getName()) };
-            })()
-            "#,
+    common::ready(&runtime);
+    match runtime
+        .run_script(
+            common::loose(&[(
+                "run.js",
+                "export default function* () { throw new Error(\"broken program\"); }",
+            )]),
+            Default::default(),
         )
         .wait(TIMEOUT)
-        .unwrap();
-
-    assert_eq!(
-        observed,
-        json!({"rejected": "Error: broken program", "map": ""})
-    );
+        .unwrap()
+    {
+        ScriptOutcome::Failed { message, .. } => assert_eq!(message, "run.js:1:37: broken program"),
+        other => panic!("{other:?}"),
+    }
+    common::completed(&runtime);
 }
 
 #[test]

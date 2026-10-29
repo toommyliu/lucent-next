@@ -2,6 +2,7 @@ mod alarm;
 mod engine;
 mod host;
 mod interrupt;
+mod modules;
 
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{
@@ -14,6 +15,7 @@ use std::time::{Duration, Instant};
 
 use lucent_host::ScriptLink;
 use lucent_host::bridge::Error as EventError;
+use lucent_protocol::script::{Script, ScriptInputs, ScriptOutcome};
 use serde::de::DeserializeOwned;
 
 use engine::Engine;
@@ -55,6 +57,13 @@ pub struct Runtime {
 
 enum Command {
     Wake,
+    StopScript,
+    Run {
+        script: Script,
+        inputs: ScriptInputs,
+        kills: u64,
+        reply: mpsc::Sender<Result<String, RuntimeError>>,
+    },
     Stop,
     Kill,
     Eval {
@@ -91,6 +100,14 @@ impl PendingEval {
             RecvTimeoutError::Disconnected => RuntimeError::Stopped,
         })??;
         Ok(serde_json::from_str(&json)?)
+    }
+}
+
+pub struct ScriptRun(PendingEval);
+
+impl ScriptRun {
+    pub fn wait(self, timeout: Duration) -> Result<ScriptOutcome, RuntimeError> {
+        self.0.wait(timeout)
     }
 }
 
@@ -151,6 +168,21 @@ impl Runtime {
         PendingEval(pending)
     }
 
+    pub fn run_script(&self, script: Script, inputs: ScriptInputs) -> ScriptRun {
+        let (reply, pending) = mpsc::channel();
+        let _ = self.commands.send(Command::Run {
+            script,
+            inputs,
+            kills: self.interrupt.kills(),
+            reply,
+        });
+        ScriptRun(PendingEval(pending))
+    }
+
+    pub fn stop_script(&self) {
+        let _ = self.commands.send(Command::StopScript);
+    }
+
     pub fn kill(&self) {
         self.interrupt.kill(Kill::Requested);
         let _ = self.commands.send(Command::Kill);
@@ -191,6 +223,24 @@ fn run(
                     }
                     None => engine.eval(&name, &source, reply),
                 }
+                Vec::new()
+            }
+            Ok(Command::Run {
+                script,
+                inputs,
+                kills,
+                reply,
+            }) => {
+                match interrupt.killed_since(kills) {
+                    Some(kill) => {
+                        let _ = reply.send(Err(RuntimeError::Killed(kill)));
+                    }
+                    None => engine.start(script, inputs, reply),
+                }
+                Vec::new()
+            }
+            Ok(Command::StopScript) => {
+                engine.stop(None);
                 Vec::new()
             }
             Ok(Command::Wake) => {
