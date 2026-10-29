@@ -520,3 +520,166 @@ fn a_policy_defect_ends_the_bot_instead_of_silencing_a_tick() {
         matches!(bot.wait(Duration::from_secs(2)), Err(RuntimeError::JavaScript(error)) if error.contains("length"))
     );
 }
+
+#[cfg(feature = "testing")]
+#[test]
+fn settings_policy_host_failures_retry_once_per_streak() {
+    for boundary in ["read", "swf", "command"] {
+        let logs = common::logs::Logs::default();
+        let dispatch = logs.dispatch();
+        let _guard = tracing::dispatcher::set_default(&dispatch);
+        let (_host, mut session, observer) = start();
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        next_call(&observer, "settings.setWalkSpeed");
+        bot.eval(
+            "fail-boundary.js",
+            format!(
+                r#"
+                globalThis.failures = 0;
+                const original = __host.{boundary};
+                __host.{boundary} = (...args) => {{
+                    if (++failures <= 3) throw new SyntaxError("host link unavailable");
+                    return original(...args);
+                }};
+                new Promise(resolve => setTimeout(() => resolve(null), 2200));
+                "#
+            ),
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+        let warnings = logs.messages(tracing::Level::WARN);
+        assert_eq!(
+            warnings
+                .iter()
+                .filter(|text| text.contains("settings policy tick failed"))
+                .count(),
+            1,
+            "{boundary}: {warnings:?}"
+        );
+        assert!(
+            warnings[0].contains("host link unavailable"),
+            "{warnings:?}"
+        );
+        let recovered = logs.messages(tracing::Level::INFO);
+        assert_eq!(
+            recovered
+                .iter()
+                .filter(|text| text.contains("settings policy recovered"))
+                .count(),
+            1,
+            "{boundary}: {recovered:?}"
+        );
+        assert!(
+            bot.eval("attempts.js", "failures")
+                .wait::<u32>(TIMEOUT)
+                .unwrap()
+                > 3
+        );
+        drain(&observer);
+        assert_eq!(
+            next_call(&observer, "settings.setWalkSpeed")[1],
+            Value::Number(30.0)
+        );
+        assert!(matches!(
+            bot.wait(Duration::ZERO),
+            Err(RuntimeError::Timeout)
+        ));
+    }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn settings_policy_code_errors_are_terminal() {
+    for source in [
+        "__host.command = undefined; null;",
+        r#"
+        const stringify = JSON.stringify;
+        JSON.stringify = value => {
+            if (value.kind === "reapplySettings") throw new Error("broken policy serialization");
+            return stringify(value);
+        };
+        null;
+        "#,
+    ] {
+        let (_host, mut session, observer) = start();
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        next_call(&observer, "settings.setWalkSpeed");
+        bot.eval("break-policy.js", source)
+            .wait::<()>(TIMEOUT)
+            .unwrap();
+        let result = bot.wait(Duration::from_secs(2));
+        assert!(
+            matches!(&result, Err(RuntimeError::JavaScript(error)) if
+            error.contains("function") || error.contains("broken policy serialization")),
+            "{result:?}"
+        );
+    }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn settings_policy_malformed_host_replies_are_terminal() {
+    for (boundary, reply) in [
+        ("read", "not json"),
+        ("read", r#"{"missing":""}"#),
+        ("swf", "not json"),
+        ("swf", r#""true""#),
+        ("command", "not json"),
+    ] {
+        let (_host, mut session, observer) = start();
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        next_call(&observer, "settings.setWalkSpeed");
+        bot.eval(
+            "malformed-host.js",
+            format!(
+                "__host.{boundary} = () => {}; null;",
+                serde_json::to_string(reply).unwrap()
+            ),
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+        let result = bot.wait(Duration::from_secs(2));
+        assert!(
+            matches!(&result, Err(RuntimeError::JavaScript(_))),
+            "{boundary} returned {reply}: {result:?}"
+        );
+    }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn settings_policy_uses_player_readiness() {
+    let (_host, mut session, observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    next_call(&observer, "settings.setWalkSpeed");
+    bot.eval(
+        "not-logged-in.js",
+        r#"
+        globalThis.reapplications = 0;
+        const command = __host.command;
+        __host.command = json => {
+            const input = JSON.parse(json);
+            if (input.kind === "refreshLoggedIn") return "false";
+            if (input.kind === "reapplySettings") reapplications++;
+            return command(json);
+        };
+        new Promise(resolve => setTimeout(() => resolve(null), 1200));
+    "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    assert_eq!(
+        bot.eval("count.js", "reapplications")
+            .wait::<u32>(TIMEOUT)
+            .unwrap(),
+        0
+    );
+    bot.eval("ready-again.js", "__host.command = command; null;")
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+    drain(&observer);
+    assert_eq!(
+        next_call(&observer, "settings.setWalkSpeed")[1],
+        Value::Number(30.0)
+    );
+}
