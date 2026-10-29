@@ -9,11 +9,11 @@ describe("fatal script alerts", () => {
   it.each(["error", "status"] as const)(
     "maps a fatal %s to the dialog with readable source attribution",
     (kind) => {
-      const message = "lucent-script://loose/error.js?v=abc:2:9: hello world";
+      const message = "lucent-script://loose/error.js:2:9: hello world";
       const stack =
         "Error: " +
         message +
-        "\n    at lucent-script://loose/error.js?v=abc:2:9";
+        "\n    at lucent-script://loose/error.js:2:9";
       const error = new Error(message);
       error.stack = stack;
       const alert =

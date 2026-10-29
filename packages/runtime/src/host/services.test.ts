@@ -42,7 +42,7 @@ describe("unavailable host services", () => {
             roomPolicy: { kind: "public" },
             safeStartStop: true,
           }),
-        inputValues: {},
+        getInputValues: () => ({}),
         log: () => undefined,
         scope,
         setOptions: (update) =>

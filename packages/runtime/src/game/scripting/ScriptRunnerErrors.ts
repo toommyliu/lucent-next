@@ -2,6 +2,18 @@ import * as Schema from "effect/Schema";
 
 import type { ScriptExitOptions } from "./ScriptApi";
 
+export class ScriptLoadError extends Schema.TaggedError<ScriptLoadError>()(
+  "ScriptLoadError",
+  {
+    detail: Schema.String,
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return this.detail;
+  }
+}
+
 export class ScriptExecutionError extends Schema.TaggedError<ScriptExecutionError>()(
   "ScriptExecutionError",
   {

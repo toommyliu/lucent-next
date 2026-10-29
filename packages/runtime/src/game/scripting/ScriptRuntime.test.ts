@@ -1,6 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
+import type { ScriptInputValues } from "@lucent/schemas/scriptInputs";
+
 import type { ScriptRuntimeOptions } from "./ScriptApi";
 import {
   makeScriptRuntimeApi,
@@ -16,7 +18,7 @@ const makeRuntime = () => {
     roomPolicy: { kind: "random-private" },
     safeStartStop: true,
   };
-  const rewards = ["Weapon"];
+  let inputValues: ScriptInputValues = { item: "Weapon", rewards: ["Weapon"] };
   const dialogCalls: string[] = [];
   const script = makeScriptRuntimeApi({
     dialogs: {
@@ -37,7 +39,7 @@ const makeRuntime = () => {
         }),
     },
     getOptions: () => Effect.succeed(snapshotScriptRuntimeOptions(options)),
-    inputValues: { item: "Weapon", rewards },
+    getInputValues: () => inputValues,
     log: () => undefined,
     scope,
     setOptions: (update) =>
@@ -48,7 +50,15 @@ const makeRuntime = () => {
     source: { sourceName: "Runtime test" },
   });
 
-  return { script, scope, rewards, dialogCalls, getOptions: () => options };
+  return {
+    script,
+    scope,
+    setInputValues: (values: ScriptInputValues) => {
+      inputValues = values;
+    },
+    dialogCalls,
+    getOptions: () => options,
+  };
 };
 
 describe("ScriptRuntime", () => {
@@ -67,12 +77,15 @@ describe("ScriptRuntime", () => {
     }),
   );
 
-  it.effect("owns input arrays on ingress and on each read", () =>
+  it.effect("reads late-bound inputs and returns owned snapshots", () =>
     Effect.gen(function* () {
-      const { script, scope, rewards } = makeRuntime();
+      const { script, scope, setInputValues } = makeRuntime();
       yield* Effect.addFinalizer(() => scope.close);
       expect(yield* script.inputs.get("item")).toBe("Weapon");
-      rewards.push("Armor");
+      const inputs = script.inputs.getAll();
+      setInputValues({ item: "Armor", rewards: ["Weapon"] });
+      expect(yield* inputs).toEqual({ item: "Armor", rewards: ["Weapon"] });
+      expect(yield* script.inputs.get("item")).toBe("Armor");
       const selectedRewards = yield* script.inputs.get("rewards");
       expect(selectedRewards).toEqual(["Weapon"]);
       if (Array.isArray(selectedRewards)) selectedRewards.push("Pet");

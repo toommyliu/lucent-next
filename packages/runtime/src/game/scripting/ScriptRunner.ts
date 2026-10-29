@@ -10,7 +10,6 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
-import type { ScriptFile } from "../../shared/ipc/scripting";
 import type { ScriptInputValues } from "@lucent/schemas/scriptInputs";
 import { Api } from "../flash/api/Api";
 import { ProjectionReadiness } from "../flash/api/ProjectionReadiness";
@@ -21,7 +20,7 @@ import {
   makeScriptAsyncScope,
   type ScriptAsyncScope,
 } from "./scriptAsyncScope";
-import { loadScriptModule } from "./scriptLoader";
+import { readScriptEntry } from "./scriptEntry";
 import {
   attributedScriptErrorDetails,
   attributedScriptErrorMessage,
@@ -33,6 +32,7 @@ import {
   snapshotScriptRuntimeOptions,
   type ScriptRuntimeOptionsUpdate,
 } from "./ScriptRuntime";
+import type { ScriptBuiltinModules } from "./ScriptBuiltinModules";
 import { makeScriptBuiltinModules } from "./ScriptBuiltinModules";
 import { makeScriptFileSystemApi } from "./ScriptFileSystem";
 import { ScriptDialogs } from "./ScriptDialogs";
@@ -44,11 +44,17 @@ import {
 } from "./safeStartStop";
 import {
   getScriptExitRequest,
+  ScriptLoadError,
   ScriptNotReadyError,
   ScriptStopSignal,
   type ScriptExitRequest,
 } from "./ScriptRunnerErrors";
 import { makeScriptStartReadiness } from "./ScriptStartReadiness";
+
+export interface ScriptSource {
+  readonly name: string;
+  readonly load: (builtins: ScriptBuiltinModules) => unknown;
+}
 
 export type ScriptRunnerStatus =
   | { readonly state: "idle" }
@@ -167,7 +173,7 @@ export interface ScriptRunnerShape {
     update: ScriptRuntimeOptionsUpdate,
   ) => Effect.Effect<ScriptRuntimeOptions>;
   readonly start: (
-    file: ScriptFile,
+    source: ScriptSource,
     inputs: ScriptInputValues,
   ) => Effect.Effect<ScriptRunHandle>;
   readonly stop: (reason?: string) => Effect.Effect<ScriptRunnerStatus>;
@@ -181,7 +187,7 @@ export class ScriptRunner extends Context.Service<
 interface ActiveScript {
   readonly commandId: number;
   readonly fiber: Fiber.Fiber<void, unknown>;
-  readonly file: ScriptFile;
+  readonly source: ScriptSource;
   readonly id: number;
   readonly inputs: ScriptInputValues;
   readonly name: string;
@@ -201,7 +207,7 @@ interface PendingRestart {
   readonly commandId: number;
   readonly disconnectedAt: string;
   readonly done: Deferred.Deferred<ScriptRunnerStatus>;
-  readonly file: ScriptFile;
+  readonly source: ScriptSource;
   readonly id: number;
   readonly inputs: ScriptInputValues;
   readonly name: string;
@@ -254,8 +260,8 @@ const externalStopOutcome = (
   status: Extract<ScriptRunnerStatus, { readonly state: "stopped" }>,
 ): ScriptRunTerminalOutcome => ({ kind: "externally-stopped", status });
 
-const statusName = (file: Pick<ScriptFile, "name" | "path">) =>
-  file.name.trim() === "" ? (file.path ?? "script") : file.name;
+const statusName = (source: Pick<ScriptSource, "name">) =>
+  source.name.trim() === "" ? "script" : source.name;
 
 const activeStatusFields = (
   active: Pick<ActiveScript | PendingRestart | StartingScript, "name" | "path">,
@@ -769,7 +775,7 @@ export const layer = Layer.effect(
         moveToSafeMap,
       );
 
-    const runScript = (id: number, file: ScriptFile, main: ScriptMain) =>
+    const runScript = (id: number, source: ScriptSource, main: ScriptMain) =>
       runWithSafeStartStop(main).pipe(
         Effect.matchCauseEffect({
           onFailure: (cause) => {
@@ -816,8 +822,7 @@ export const layer = Layer.effect(
                       ...(detailsText === undefined ? {} : { detailsText }),
                       failedAt: nowIso(),
                       message: causeMessage(cause),
-                      name: statusName(file),
-                      ...(file.path === undefined ? {} : { path: file.path }),
+                      name: statusName(source),
                       state: "failed",
                     } as const;
                     return terminalFinalization({ kind: "failed", status });
@@ -831,8 +836,7 @@ export const layer = Layer.effect(
               result: () => {
                 const status = {
                   completedAt: nowIso(),
-                  name: statusName(file),
-                  ...(file.path === undefined ? {} : { path: file.path }),
+                  name: statusName(source),
                   state: "completed",
                 } as const;
                 return terminalFinalization({ kind: "completed", status });
@@ -885,10 +889,11 @@ export const layer = Layer.effect(
 
     const runStarting = Effect.fn("ScriptRunner.runStarting")(function* (
       starting: StartingScript,
-      file: ScriptFile,
+      source: ScriptSource,
       inputs: ScriptInputValues,
     ): Effect.fn.Return<void> {
       const scriptScope = makeScriptAsyncScope();
+      let inputValues: ScriptInputValues = {};
       let activated = false;
       let scriptFiber: Fiber.Fiber<void, unknown> | undefined;
 
@@ -919,11 +924,11 @@ export const layer = Layer.effect(
         const script = makeScriptRuntimeApi({
           dialogs,
           getOptions,
-          inputValues: inputs,
+          getInputValues: () => inputValues,
           log: (...values) => console.log("[script]", ...values),
           scope: scriptScope,
           setOptions,
-          source: { sourceName: statusName(file) },
+          source: { sourceName: statusName(source) },
         });
         const http = yield* makeHttpApi(scriptScope);
         const modules = makeScriptBuiltinModules({
@@ -940,23 +945,26 @@ export const layer = Layer.effect(
           script,
           services,
         });
-        const loaded = yield* loadScriptModule({
-          modules,
-          name: file.path ?? file.name,
-          revision: file.revision,
-          ...(file.snapshot === undefined ? {} : { snapshot: file.snapshot }),
-          source: file.source,
+        const namespace = yield* Effect.try({
+          try: () => source.load(modules),
+          catch: (cause) =>
+            new ScriptLoadError({
+              detail: cause instanceof Error ? cause.message : String(cause),
+              cause,
+            }),
         });
+        const loaded = yield* readScriptEntry(namespace, source.name, inputs);
+        inputValues = loaded.inputValues;
         const release = yield* Deferred.make<void>();
         const fiber = yield* Deferred.await(release).pipe(
-          Effect.andThen(runScript(starting.id, file, loaded.main)),
+          Effect.andThen(runScript(starting.id, source, loaded.main)),
           Effect.forkDetach,
         );
         scriptFiber = fiber;
         const active: ActiveScript = {
           commandId: starting.commandId,
           fiber,
-          file: { ...file },
+          source: { ...source },
           id: starting.id,
           inputs: { ...inputs },
           name: starting.name,
@@ -1076,7 +1084,7 @@ export const layer = Layer.effect(
 
     const beginStarting = Effect.fn("ScriptRunner.beginStarting")(function* (
       commandId: number,
-      file: ScriptFile,
+      source: ScriptSource,
       inputs: ScriptInputValues,
       restart?: PendingRestart,
       identity?: ScriptRunIdentity,
@@ -1098,8 +1106,7 @@ export const layer = Layer.effect(
             commandId,
             done,
             id,
-            name: statusName(file),
-            ...(file.path === undefined ? {} : { path: file.path }),
+            name: statusName(source),
             ...(restart === undefined ? {} : { restart }),
             terminal,
           };
@@ -1109,7 +1116,7 @@ export const layer = Layer.effect(
             startedAt: nowIso(),
             state: "starting",
           });
-          yield* runStarting(starting, file, inputs).pipe(Effect.forkDetach);
+          yield* runStarting(starting, source, inputs).pipe(Effect.forkDetach);
           return starting;
         }),
       );
@@ -1196,7 +1203,7 @@ export const layer = Layer.effect(
 
             const starting = yield* beginStarting(
               pending.commandId,
-              pending.file,
+              pending.source,
               pending.inputs,
               pending,
             );
@@ -1295,7 +1302,7 @@ export const layer = Layer.effect(
                       commandId: active.commandId,
                       disconnectedAt,
                       done: yield* Deferred.make<ScriptRunnerStatus>(),
-                      file: { ...active.file },
+                      source: { ...active.source },
                       id: active.id,
                       inputs: { ...active.inputs },
                       name: active.name,
@@ -1358,8 +1365,8 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.tap((dispose) => scope.addCleanup(dispose)));
 
-    const start: ScriptRunnerShape["start"] = (file, inputs) => {
-      const fileSnapshot = { ...file };
+    const start: ScriptRunnerShape["start"] = (source, inputs) => {
+      const sourceSnapshot = { ...source };
       const inputSnapshot = { ...inputs };
       return Effect.gen(function* () {
         const commandId = yield* Ref.updateAndGet(
@@ -1440,7 +1447,7 @@ export const layer = Layer.effect(
 
               const started = yield* beginStarting(
                 commandId,
-                fileSnapshot,
+                sourceSnapshot,
                 inputSnapshot,
                 undefined,
                 identity,

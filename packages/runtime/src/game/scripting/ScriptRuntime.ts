@@ -69,7 +69,7 @@ export interface ScriptRuntimeApiOptions {
     "alert" | "beep" | "confirm" | "prompt"
   >;
   readonly getOptions: () => Effect.Effect<ScriptRuntimeOptions>;
-  readonly inputValues: ScriptInputValues;
+  readonly getInputValues: () => ScriptInputValues;
   readonly log: (...values: unknown[]) => void;
   readonly scope: ScriptAsyncScope;
   readonly setOptions: (
@@ -81,7 +81,6 @@ export interface ScriptRuntimeApiOptions {
 export const makeScriptRuntimeApi = (
   options: ScriptRuntimeApiOptions,
 ): ScriptRuntimeApi => {
-  const inputValues = snapshotScriptInputValues(options.inputValues);
   const source = { ...options.source };
   const script: ScriptRuntimeApi = {
     alert: (message) => options.dialogs.alert(source, message),
@@ -96,13 +95,15 @@ export const makeScriptRuntimeApi = (
     confirm: (message) => options.dialogs.confirm(source, message),
     exit: (exitOptions) => Effect.fail(makeScriptExitSignal(exitOptions)),
     inputs: Object.freeze({
-      get: (key: string) => {
-        const value = inputValues[key];
-        return Effect.succeed(
-          value === undefined ? undefined : snapshotScriptInputValue(value),
-        );
-      },
-      getAll: () => Effect.succeed(snapshotScriptInputValues(inputValues)),
+      get: (key: string) =>
+        Effect.sync(() => {
+          const value = options.getInputValues()[key];
+          return value === undefined
+            ? undefined
+            : snapshotScriptInputValue(value);
+        }),
+      getAll: () =>
+        Effect.sync(() => snapshotScriptInputValues(options.getInputValues())),
     }),
     log: (...values) => Effect.sync(() => options.log(...values)),
     options: Object.freeze({
