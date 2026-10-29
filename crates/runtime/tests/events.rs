@@ -15,8 +15,22 @@ fn logout_reaches_a_runtime_rebuilt_on_a_logged_in_session() {
         let host = testing::headless_host();
         let (_session, link) = testing::start_probe(&host, common::ready_movie());
         let runtime = Runtime::start(link).unwrap();
+        runtime
+            .eval(
+                "connect.js",
+                r#"window.swf["probe.emit"]("onConnection", "OnConnection"); null"#,
+            )
+            .wait::<()>(TIMEOUT)
+            .unwrap();
         common::ready(&runtime);
         common::completed(&runtime);
+        runtime
+            .eval(
+                "settle.js",
+                "new Promise(resolve => setTimeout(() => resolve(null), 500))",
+            )
+            .wait::<()>(TIMEOUT)
+            .unwrap();
 
         if rebuild {
             assert!(matches!(
