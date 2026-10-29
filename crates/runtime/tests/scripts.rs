@@ -587,3 +587,36 @@ fn waiting_for_start_reports_a_script_that_was_killed_before_the_event() {
         "export default function* () { while (true) {} }",
     );
 }
+
+#[test]
+fn a_fresh_run_can_import_the_api_after_each_kill() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    for _ in 0..10 {
+        let run = yielding(&mut session);
+        run.kill();
+        assert!(matches!(
+            run.wait(TIMEOUT),
+            Err(RuntimeError::Killed(Kill::Requested))
+        ));
+        drop(run);
+        let outcome = start(
+            &mut session,
+            loose(&[(
+                "fresh.js",
+                r#"
+                import * as api from "lucent/api";
+                import * as script from "lucent/script";
+                export default function* () {
+                    yield* script.stop(String(yield* api.auth.isLoggedIn()));
+                }
+                "#,
+            )]),
+            Default::default(),
+        )
+        .wait(TIMEOUT);
+        assert!(
+            matches!(outcome, Ok(ScriptOutcome::StoppedByScript { reason: Some(ref reason) }) if reason == "true"),
+            "{outcome:?}"
+        );
+    }
+}
