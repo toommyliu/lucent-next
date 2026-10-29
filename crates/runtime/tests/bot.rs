@@ -1463,3 +1463,34 @@ fn auto_zone_moves_once_while_a_script_is_running() {
     run.stop_script();
     run.wait(TIMEOUT).unwrap();
 }
+
+#[test]
+fn set_enabled_returns_the_state_after_capture() {
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        common::ready_movie()
+            .constant("auth.getUsername", json!("player-a"))
+            .constant("auth.getPassword", json!("secret")),
+    );
+    become_ready(&observer);
+    let _bot = Bot::start(session.attach().unwrap()).unwrap();
+    let run = common::start(
+        &mut session,
+        common::loose(&[(
+            "enable.js",
+            r#"
+        import * as relogin from "lucent/autorelogin";
+        export default function* () {
+            const state = yield* relogin.setEnabled(true);
+            if (!state.enabled || !state.captured) throw new Error(JSON.stringify(state));
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        lucent_protocol::script::ScriptOutcome::Completed
+    );
+}
