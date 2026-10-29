@@ -287,11 +287,7 @@ mod tests {
                 .recv_timeout(Duration::from_secs(1)),
             Err(Error::Stopped)
         );
-        assert_eq!(
-            old.read_projection(|_| 42)
-                .recv_timeout(Duration::from_secs(1)),
-            Err(Error::Stopped)
-        );
+        assert_eq!(old.read(|_| 42), Err(Error::Stopped));
         let current = session.take_script_link().unwrap();
         assert_eq!(current.id(), old.id());
         session.send(ViewEvent::Resized(

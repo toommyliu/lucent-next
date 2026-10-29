@@ -142,7 +142,14 @@ impl Session {
         let inbox = self.unclaimed_link.take()?;
         let (producer, events) = script_events(EVENT_CAPACITY);
         inbox.post(player::Msg::Attach(producer));
-        Some(ScriptLink::new(self.id, inbox, events))
+        let player = self.player.as_ref().unwrap();
+        Some(ScriptLink::new(
+            self.id,
+            inbox,
+            events,
+            player.projection.clone(),
+            player.stopped.clone(),
+        ))
     }
 
     pub fn send(&self, event: ViewEvent) {

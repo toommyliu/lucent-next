@@ -34,10 +34,26 @@ pub(crate) fn read(
     query: &str,
 ) -> Result<String, String> {
     let query: Query = serde_json::from_str(query).map_err(|error| error.to_string())?;
-    wait(
-        link.read_projection(move |projection| answer(projection, query)),
-        interrupt,
-    )
+    interrupt.block();
+    let mut query = Some(query);
+    let deadline = Instant::now() + HOST_TIMEOUT;
+    let result = loop {
+        if let Some(stop) = interrupt.stop() {
+            break Err(RuntimeError::from(stop).to_string());
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            break Err(Error::Timeout.to_string());
+        }
+        match link.read_for(left.min(STOP_SLICE), |projection| {
+            answer(projection, query.take().unwrap())
+        }) {
+            Err(Error::Timeout) => {}
+            result => break result.map_err(|error| error.to_string()),
+        }
+    };
+    interrupt.unblock();
+    result
 }
 
 fn wait<T>(pending: Pending<T>, interrupt: &Interrupt) -> Result<T, String> {

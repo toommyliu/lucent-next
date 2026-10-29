@@ -18,8 +18,7 @@ fn command(link: &ScriptLink, command: Value) -> Result<Value, String> {
 fn query(link: &ScriptLink, query: Value) -> Value {
     let query: Query = serde_json::from_value(query).unwrap();
     let answer = link
-        .read_projection(move |projection| answer(projection, query))
-        .recv_timeout(Duration::from_secs(5))
+        .read(move |projection| answer(projection, query))
         .unwrap();
     serde_json::from_str(&answer).unwrap()
 }
