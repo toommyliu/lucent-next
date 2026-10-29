@@ -929,3 +929,86 @@ fn settings_policy_invalid_reapply_reply_warns_once_and_retries() {
         );
     }
 }
+
+#[test]
+fn auto_zone_follows_a_script_toggle_through_kills() {
+    let host = testing::headless_host();
+    let (mut session, observer) =
+        testing::start_probe(&host, common::ready_movie().recording("player.walkTo"));
+    become_ready(&observer);
+    observer
+        .call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onExtensionResponse".into()),
+                Value::String(
+                    json!({"type":"json","dataObj":{
+                        "cmd":"moveToArea","areaName":"ledgermayne-1",
+                        "uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}]
+                    }})
+                    .to_string(),
+                ),
+            ],
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    let run = common::started_run(
+        &mut session,
+        r#"
+        import * as autozone from "lucent/autozone";
+        import * as api from "lucent/api";
+        export default function* () {
+            yield* autozone.setMap("ledgermayne");
+            const state = yield* autozone.setEnabled(true);
+            if (!state.enabled || state.map !== "ledgermayne") throw new Error("wrong toggle reply");
+            yield* api.packet.sendToClient("started");
+            while (true) {}
+        }
+    "#,
+    );
+    assert!(matches!(
+        run.wait(TIMEOUT),
+        Err(RuntimeError::Killed(Kill::Watchdog))
+    ));
+    common::start(
+        &mut session,
+        common::loose(&[(
+            "read.js",
+            r#"
+        import * as autozone from "lucent/autozone";
+        export default function* () {
+            const state = yield* autozone.getState();
+            if (!state.enabled || state.map !== "ledgermayne") throw new Error("lost auto zone");
+        }
+    "#,
+        )]),
+        Default::default(),
+    )
+    .wait(TIMEOUT)
+    .map(|outcome| {
+        assert_eq!(outcome, lucent_protocol::script::ScriptOutcome::Completed);
+    })
+    .unwrap();
+    drain(&observer);
+    observer
+        .call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onExtensionResponse".into()),
+                Value::String(
+                    json!({"type":"json","dataObj":{"cmd":"event","args":{"zoneSet":"A"}}})
+                        .to_string(),
+                ),
+            ],
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let call = next_call(&observer, "player.walkTo");
+    assert!(matches!(call.get(1), Some(Value::Number(x)) if (147.0..=276.0).contains(x)));
+    assert!(matches!(call.get(2), Some(Value::Number(y)) if (353.0..=357.0).contains(y)));
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
+}
