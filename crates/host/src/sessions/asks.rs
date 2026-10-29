@@ -76,7 +76,9 @@ impl State {
             .map(|(id, _)| *id)
             .collect();
         for id in ids {
-            let route = self.routes.remove(&id).unwrap();
+            let Some(route) = self.routes.remove(&id) else {
+                continue;
+            };
             self.send(
                 route.asked_by,
                 ScriptEvent::Answer {
