@@ -1,15 +1,76 @@
 import { describe, expect, it } from "@effect/vitest";
+import { EntityState, type ItemSnapshot } from "@lucent/game";
 import * as Effect from "effect/Effect";
 
-import { Bridge, makeBridge } from "../bridge/Bridge";
-import { Gateway, makeGateway } from "../bridge/Gateway";
-import { makeApi } from "./Api";
+import {
+  editItem,
+  emitExtension,
+  item,
+  makeFakeApi,
+  makeFakeHostState,
+  monster,
+  moveItem,
+  player,
+  type FakeHostState,
+} from "../testing/FakeHost";
 
-const emitExtension = (target: Window, dataObj: object): void => {
-  target.onExtensionResponse?.(JSON.stringify({ dataObj, type: "json" }));
+const loadedBank: readonly ItemSnapshot[] = [
+  item("bank", { coins: true, itemId: 42, name: "Indexed Item", quantity: 2 }),
+  item("bank", { houseItem: true, itemId: 43, name: "Banked House Item" }),
+  item("bank", { itemId: 44, name: "Occupied Slot" }),
+  item("bank", {
+    category: "Class",
+    equipmentSlot: "ar",
+    itemId: 45,
+    name: "Banked Class",
+    quantity: 302_500,
+  }),
+];
+
+const testInventory: readonly ItemSnapshot[] = [
+  item("inventory", { itemId: 50, name: "Normal Item" }),
+  item("inventory", { coins: true, itemId: 51, name: "Coin Item" }),
+  item("inventory", {
+    equipmentSlot: "Weapon",
+    itemId: 52,
+    name: "Wearable Item",
+    wearable: true,
+    worn: false,
+  }),
+  item("inventory", {
+    equipmentSlot: "ba",
+    itemId: 53,
+    memberOnly: true,
+    name: "Member Item",
+    wearable: true,
+    worn: false,
+  }),
+  item("inventory", {
+    equipmentSlot: "Weapon",
+    itemId: 54,
+    name: "Cosmetic Item",
+    wearable: true,
+    worn: false,
+  }),
+];
+
+const inSlot = (state: FakeHostState, itemId: number) =>
+  state.items.inventory.find((entry) => entry.itemId === itemId)?.equipmentSlot;
+
+const markInSlot = (
+  state: FakeHostState,
+  itemId: number,
+  field: "equipped" | "worn",
+) => {
+  const slot = inSlot(state, itemId);
+  state.items.inventory = state.items.inventory.map((entry) =>
+    entry.equipmentSlot === slot
+      ? editItem(entry, { [field]: entry.itemId === itemId })
+      : entry,
+  );
 };
 
-const makeTarget = () => {
+const makeTarget = (state: FakeHostState) => {
   const calls = {
     actions: [] as string[],
     bankOpens: 0,
@@ -30,7 +91,7 @@ const makeTarget = () => {
   let failBankLoad = false;
   let bankLoaded = false;
   let bankOpen = false;
-  let bankItems: readonly unknown[] = [];
+  let bankItems: readonly ItemSnapshot[] = [];
   let cachedShopId = 0;
   let openShopId = 0;
   const target = {} as Window;
@@ -39,6 +100,7 @@ const makeTarget = () => {
     "auth.isLoggedIn": () => true,
     "bank.deposit": () => {
       calls.deposits += 1;
+      moveItem(state, "inventory", "bank", 51);
       emitExtension(target, {
         ItemID: 51,
         bSuccess: 1,
@@ -53,27 +115,7 @@ const makeTarget = () => {
     "bank.loadItems": (force = false) => {
       calls.bankLoadForces.push(force);
       if (failBankLoad) throw new Error("load failed");
-      bankItems = [
-        {
-          ItemID: "42",
-          bCoins: 1,
-          iQty: "2",
-          sName: "Indexed Item",
-        },
-        {
-          ItemID: "43",
-          bHouse: 1,
-          sName: "Banked House Item",
-        },
-        { ItemID: "44", sName: "Occupied Slot" },
-        {
-          ItemID: "45",
-          iQty: "302500",
-          sES: "ar",
-          sName: "Banked Class",
-          sType: "Class",
-        },
-      ];
+      bankItems = loadedBank;
       bankLoaded = true;
     },
     "bank.isOpen": () => bankOpen,
@@ -86,6 +128,8 @@ const makeTarget = () => {
       bankSelector: { itemId: number },
     ) => {
       calls.swaps += 1;
+      moveItem(state, "inventory", "bank", inventorySelector.itemId);
+      moveItem(state, "bank", "inventory", bankSelector.itemId);
       emitExtension(target, {
         bankItemID: bankSelector.itemId,
         cmd: "bankSwapInv",
@@ -107,6 +151,7 @@ const makeTarget = () => {
       return true;
     },
     "drops.accept": (itemId: number) => {
+      moveItem(state, "drop", "inventory", itemId);
       emitExtension(target, {
         ItemID: itemId,
         bBank: 1,
@@ -119,6 +164,7 @@ const makeTarget = () => {
     "house.getSlots": () => 1,
     "inventory.equip": (selector: { itemId: number }) => {
       calls.equips += 1;
+      markInSlot(state, selector.itemId, "equipped");
       emitExtension(target, {
         ItemID: selector.itemId,
         cmd: "equipItem",
@@ -129,6 +175,7 @@ const makeTarget = () => {
     },
     "inventory.wear": (selector: { itemId: number }) => {
       calls.wears += 1;
+      markInSlot(state, selector.itemId, "worn");
       emitExtension(target, {
         ItemID: selector.itemId,
         cmd: "wearItem",
@@ -155,12 +202,9 @@ const makeTarget = () => {
       openShopId !== 0 && (shopId === 0 || shopId === openShopId),
     "shops.canBuyItem": () => true,
     "shops.buy": () => {
-      bankItems = [
-        { ItemID: 42, bCoins: 1, iQty: 3, sName: "Indexed Item" },
-        { ItemID: 43, bHouse: 1, sName: "Banked House Item" },
-        { ItemID: 44, sName: "Occupied Slot" },
-        { ItemID: 45, sType: "Class", sName: "Banked Class" },
-      ];
+      bankItems = loadedBank.map((entry) =>
+        entry.itemId === 42 ? editItem(entry, { quantity: 3 }) : entry,
+      );
       emitExtension(target, {
         cmd: "buyItem",
         bitSuccess: 1,
@@ -175,6 +219,14 @@ const makeTarget = () => {
       openShopId = shopId;
       if (cachedShopId === shopId) return;
       cachedShopId = shopId;
+      state.shop = {
+        house: false,
+        id: shopId,
+        items: [],
+        limited: false,
+        merge: false,
+        name: "Action-locked Shop",
+      };
       emitExtension(target, {
         ShopID: shopId,
         cmd: "loadShop",
@@ -215,141 +267,41 @@ const makeTarget = () => {
 
 const makeApiHarness = () =>
   Effect.gen(function* () {
-    const {
-      calls,
-      closeBankUi,
-      closeShopUi,
-      failNextBankLoad,
-      resetBankSession,
-      target,
-    } = makeTarget();
-    const bridge = yield* makeBridge(target);
-    const gateway = yield* makeGateway(target).pipe(
-      Effect.provideService(Bridge, bridge),
-    );
-    const api = yield* makeApi.pipe(
-      Effect.provideService(Bridge, bridge),
-      Effect.provideService(Gateway, gateway),
-    );
-
-    return {
-      api,
-      calls,
-      closeBankUi,
-      closeShopUi,
-      failNextBankLoad,
-      resetBankSession,
-      target,
-    };
+    const state = makeFakeHostState();
+    const harness = makeTarget(state);
+    const api = yield* makeFakeApi(harness.target, state);
+    return { ...harness, api, state };
   });
 
-const loadTestInventory = (
-  api: Effect.Success<typeof makeApi>,
-  target: Window,
-) =>
-  Effect.gen(function* () {
-    const inventoryLoad = yield* api.wait.forPacket(
-      {
-        command: "loadInventoryBig",
-        direction: "extension",
-        encoding: "json",
-      },
-      {
-        timeout: "1 second",
-        trigger: Effect.sync(() => {
-          emitExtension(target, {
-            cmd: "loadInventoryBig",
-            hitems: [{ ItemID: 60, sName: "Placed House Item" }],
-            items: [
-              { ItemID: 50, sName: "Normal Item" },
-              { ItemID: 51, bCoins: 1, sName: "Coin Item" },
-              {
-                ItemID: 52,
-                bWear: 0,
-                sES: "Weapon",
-                sName: "Wearable Item",
-              },
-              {
-                ItemID: 53,
-                bUpg: 1,
-                bWear: 0,
-                sES: "ba",
-                sName: "Member Item",
-              },
-              {
-                ItemID: 54,
-                bWear: 0,
-                sES: "Weapon",
-                sName: "Cosmetic Item",
-              },
-            ],
-          });
-          return true;
-        }),
-      },
-    );
-    expect(inventoryLoad).not.toBeNull();
-  });
+const loadTestInventory = (state: FakeHostState) => {
+  state.items.inventory = [...testInventory];
+  state.items.house = [
+    item("house", { houseItem: true, itemId: 60, name: "Placed House Item" }),
+  ];
+  state.hydration.inventory += 1;
+  state.hydration.house += 1;
+};
 
 describe("Api", () => {
   it.effect("resolves named skill targets from available monsters", () =>
     Effect.gen(function* () {
-      const { calls, target } = makeTarget();
-      const bridge = yield* makeBridge(target);
-      const gateway = yield* makeGateway(target).pipe(
-        Effect.provideService(Bridge, bridge),
-      );
-      const api = yield* makeApi.pipe(
-        Effect.provideService(Bridge, bridge),
-        Effect.provideService(Gateway, gateway),
-      );
-
-      const loaded = yield* api.wait.forPacket(
-        {
-          command: "moveToArea",
-          direction: "extension",
-          encoding: "json",
-        },
-        {
-          timeout: "1 second",
-          trigger: Effect.sync(() => {
-            emitExtension(target, {
-              areaId: 1,
-              areaName: "test-1",
-              cmd: "moveToArea",
-              monBranch: [
-                {
-                  MonID: 1,
-                  MonMapID: 1,
-                  intHP: 0,
-                  intHPMax: 100,
-                  intState: 0,
-                  strMonName: "Slime",
-                },
-                {
-                  MonID: 1,
-                  MonMapID: 2,
-                  intHP: 100,
-                  intHPMax: 100,
-                  intState: 1,
-                  strMonName: "Slime",
-                },
-              ],
-              uoBranch: [
-                {
-                  entID: 1,
-                  intHP: 100,
-                  intHPMax: 100,
-                  intState: 1,
-                  strUsername: "Hero",
-                },
-              ],
-            });
-            return true;
-          }),
-        },
-      );
-      expect(loaded).not.toBeNull();
+      const { api, calls, state } = yield* makeApiHarness();
+      state.map = { id: 1, name: "test", roomNumber: 1 };
+      state.players = [player({ entityId: 1, username: "Hero" })];
+      state.selfEntityId = 1;
+      state.monsters = [
+        monster({
+          hp: 0,
+          monsterMapId: 1,
+          name: "Slime",
+          state: EntityState.Dead,
+        }),
+        monster({
+          monsterMapId: 2,
+          name: "Slime",
+          state: EntityState.Idle,
+        }),
+      ];
 
       expect(
         yield* api.combat.useSkill(1, {
@@ -365,15 +317,7 @@ describe("Api", () => {
 
   it.effect("reads class ranks from projections without bridge calls", () =>
     Effect.gen(function* () {
-      const { calls, target } = makeTarget();
-      const bridge = yield* makeBridge(target);
-      const gateway = yield* makeGateway(target).pipe(
-        Effect.provideService(Bridge, bridge),
-      );
-      const api = yield* makeApi.pipe(
-        Effect.provideService(Bridge, bridge),
-        Effect.provideService(Gateway, gateway),
-      );
+      const { api, calls, state } = yield* makeApiHarness();
 
       expect(yield* api.player.getClassRank()).toBeNull();
       expect(yield* api.player.getClassRank(45)).toBeNull();
@@ -383,40 +327,24 @@ describe("Api", () => {
       expect(yield* api.bank.get(45)).toBeNull();
       expect(yield* api.player.getClassRank(45)).toBeNull();
 
-      const inventoryLoad = yield* api.wait.forPacket(
-        {
-          command: "loadInventoryBig",
-          direction: "extension",
-          encoding: "json",
-        },
-        {
-          timeout: "1 second",
-          trigger: Effect.sync(() => {
-            emitExtension(target, {
-              cmd: "loadInventoryBig",
-              items: [
-                {
-                  ItemID: 45,
-                  iQty: 302_500,
-                  sES: "ar",
-                  sName: "Owned Class",
-                  sType: "Class",
-                },
-                {
-                  ItemID: 46,
-                  bEquip: 1,
-                  iQty: 10_000,
-                  sES: "ar",
-                  sName: "Equipped Class",
-                  sType: "Class",
-                },
-              ],
-            });
-            return true;
-          }),
-        },
-      );
-      expect(inventoryLoad).not.toBeNull();
+      state.items.inventory = [
+        item("inventory", {
+          category: "Class",
+          equipmentSlot: "ar",
+          itemId: 45,
+          name: "Owned Class",
+          quantity: 302_500,
+        }),
+        item("inventory", {
+          category: "Class",
+          equipmentSlot: "ar",
+          equipped: true,
+          itemId: 46,
+          name: "Equipped Class",
+          quantity: 10_000,
+        }),
+      ];
+      state.hydration.inventory += 1;
       expect(yield* api.player.getClassRank()).toBe(4);
       expect(yield* api.player.getClassRank(46)).toBe(4);
       expect(yield* api.player.getClassRank(45)).toBe(10);
@@ -425,15 +353,7 @@ describe("Api", () => {
 
   it.effect("reuses the shared bank for house withdrawals", () =>
     Effect.gen(function* () {
-      const { calls, target } = makeTarget();
-      const bridge = yield* makeBridge(target);
-      const gateway = yield* makeGateway(target).pipe(
-        Effect.provideService(Bridge, bridge),
-      );
-      const api = yield* makeApi.pipe(
-        Effect.provideService(Bridge, bridge),
-        Effect.provideService(Gateway, gateway),
-      );
+      const { api, calls } = yield* makeApiHarness();
 
       expect(yield* api.bank.isOpen()).toBe(false);
       expect(yield* api.bank.open()).toBe(true);
@@ -459,8 +379,14 @@ describe("Api", () => {
     "caches bank loads until disconnect and retains items after a failed reload",
     () =>
       Effect.gen(function* () {
-        const { api, calls, resetBankSession, target, failNextBankLoad } =
-          yield* makeApiHarness();
+        const {
+          api,
+          calls,
+          resetBankSession,
+          state,
+          target,
+          failNextBankLoad,
+        } = yield* makeApiHarness();
         expect(yield* api.bank.getAll()).toEqual([]);
         expect(yield* api.bank.open()).toBe(true);
         expect(calls.bankLoadForces).toEqual([true]);
@@ -476,6 +402,8 @@ describe("Api", () => {
           {
             trigger: Effect.sync(() => {
               resetBankSession();
+              state.items.bank = [];
+              state.hydration.bank = 0;
               target.onConnection?.("OnConnectionLost");
               return true;
             }),
@@ -497,51 +425,30 @@ describe("Api", () => {
       }),
   );
 
-  it.effect(
-    "keeps classes out of bank snapshots after a purchase refresh",
-    () =>
-      Effect.gen(function* () {
-        const { api, target } = yield* makeApiHarness();
-        expect(yield* api.bank.load()).toBe(true);
-        const loaded = yield* api.wait.forPacket(
-          { command: "loadShop", direction: "extension", encoding: "json" },
-          {
-            trigger: Effect.sync(() => {
-              emitExtension(target, {
-                cmd: "loadShop",
-                ShopID: 1,
-                items: [{ ItemID: 42, sName: "Indexed Item" }],
-              });
-              return true;
-            }),
-          },
-        );
-        expect(loaded).not.toBeNull();
-        expect(yield* api.shops.buy(42)).toBe(true);
-        expect((yield* api.bank.get(42))?.quantity).toBe(3);
-        expect(yield* api.bank.get(45)).toBeNull();
-      }),
+  it.effect("refreshes the bank after a purchase into it", () =>
+    Effect.gen(function* () {
+      const { api, state } = yield* makeApiHarness();
+      expect(yield* api.bank.load()).toBe(true);
+      state.shop = {
+        house: false,
+        id: 1,
+        items: [item("shop", { itemId: 42, name: "Indexed Item" })],
+        limited: false,
+        merge: false,
+        name: "Shop",
+      };
+      state.items.shop = [item("shop", { itemId: 42, name: "Indexed Item" })];
+      expect(yield* api.shops.buy(42)).toBe(true);
+      expect((yield* api.bank.get(42))?.quantity).toBe(3);
+    }),
   );
 
   it.effect("accepts classes into inventory despite a bank response flag", () =>
     Effect.gen(function* () {
-      const { api, target } = yield* makeApiHarness();
-      const packet = yield* api.wait.forPacket(
-        { command: "dropItem", direction: "extension", encoding: "json" },
-        {
-          timeout: "1 second",
-          trigger: Effect.sync(() => {
-            emitExtension(target, {
-              cmd: "dropItem",
-              items: {
-                70: { ItemID: 70, sName: "Dropped Class", sType: "Class" },
-              },
-            });
-            return true;
-          }),
-        },
-      );
-      expect(packet).not.toBeNull();
+      const { api, state } = yield* makeApiHarness();
+      state.items.drop = [
+        item("drop", { category: "Class", itemId: 70, name: "Dropped Class" }),
+      ];
       expect(yield* api.drops.accept(70)).toBe(true);
       expect(yield* api.drops.contains(70)).toBe(false);
       expect((yield* api.inventory.get(70))?.context).toBe("inventory");
@@ -549,11 +456,11 @@ describe("Api", () => {
     }),
   );
 
-  it.effect("guards full containers and projects deposits and swaps", () =>
+  it.effect("guards full containers and verifies deposits and swaps", () =>
     Effect.gen(function* () {
-      const { api, calls, closeBankUi, target } = yield* makeApiHarness();
+      const { api, calls, closeBankUi, state } = yield* makeApiHarness();
       yield* api.bank.open();
-      yield* loadTestInventory(api, target);
+      loadTestInventory(state);
       expect(yield* api.house.contains(60)).toBe(true);
       expect(yield* api.house.contains(60, 2)).toBe(false);
       expect(yield* api.bank.getAvailableSlots()).toBe(0);
@@ -585,31 +492,10 @@ describe("Api", () => {
     "keeps cosmetic wear distinct from equipment and rejects member-only items",
     () =>
       Effect.gen(function* () {
-        const { api, calls, target } = yield* makeApiHarness();
-        yield* loadTestInventory(api, target);
-        const playerLoad = yield* api.wait.forPacket(
-          {
-            command: "initUserDatas",
-            direction: "extension",
-            encoding: "json",
-          },
-          {
-            timeout: "1 second",
-            trigger: Effect.sync(() => {
-              emitExtension(target, {
-                a: [
-                  {
-                    data: { strUsername: "Hero" },
-                    uid: 1,
-                  },
-                ],
-                cmd: "initUserDatas",
-              });
-              return true;
-            }),
-          },
-        );
-        expect(playerLoad).not.toBeNull();
+        const { api, calls, state } = yield* makeApiHarness();
+        loadTestInventory(state);
+        state.players = [player({ entityId: 1, username: "Hero" })];
+        state.selfEntityId = 1;
         expect(yield* api.inventory.wear(54)).toBe(true);
         expect(calls.wears).toBe(1);
         const cosmetic = yield* api.inventory.get(54);

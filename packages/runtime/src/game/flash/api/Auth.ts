@@ -1,10 +1,10 @@
+import { toLiveServer } from "@lucent/game";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import type { BridgeService } from "../bridge/Bridge";
-import { ServerPayloads, toServer } from "../contract/payload/Auth";
-import type { Store } from "../state/Store";
+import type { HostStateService } from "../state/HostState";
 import type { Wait } from "./Wait";
 
 const Credentials = Schema.Struct({
@@ -27,8 +27,6 @@ const ConnectResult = Schema.Union([
   }),
 ]);
 const decodeCredentials = Schema.decodeUnknownOption(Credentials);
-const NullableServers = Schema.NullOr(ServerPayloads);
-const NullableString = Schema.NullOr(Schema.String);
 const temporaryKickFallbackMs = 60_000;
 const temporaryKickMaximumMs = 70_000;
 
@@ -47,19 +45,28 @@ export interface ConnectOutcome {
     | "timeout";
 }
 
-export const makeAuth = (bridge: BridgeService, store: Store, wait: Wait) => {
-  const loggedIn = bridge
-    .invoke("auth.isLoggedIn", undefined, Schema.Boolean)
-    .pipe(
-      Effect.flatMap(
-        Option.match({
-          onNone: () =>
-            store.auth.get.pipe(Effect.map((state) => state.loggedIn)),
-          onSome: (loggedIn) =>
-            store.auth.setLoggedIn(loggedIn).pipe(Effect.as(loggedIn)),
-        }),
-      ),
-    );
+export const makeAuth = (
+  bridge: BridgeService,
+  host: HostStateService,
+  wait: Wait,
+) => {
+  const cached = host.read({ kind: "auth" });
+  const loggedIn = host.command({ kind: "refreshLoggedIn" }).pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: () => cached.pipe(Effect.map((auth) => auth.loggedIn)),
+        onSome: Effect.succeed,
+      }),
+    ),
+  );
+  const currentCredentials = host.command({ kind: "refreshCredentials" }).pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: () => cached,
+        onSome: Effect.succeed,
+      }),
+    ),
+  );
   const temporarilyKicked = bridge
     .invoke("auth.isTemporarilyKicked", undefined, Schema.Boolean)
     .pipe(Effect.map(Option.getOrElse(() => false)));
@@ -162,69 +169,21 @@ export const makeAuth = (bridge: BridgeService, store: Store, wait: Wait) => {
   };
 
   const getPassword = () =>
-    Effect.gen(function* () {
-      const cached = yield* store.auth.get;
-      const projection = yield* store.projection.get;
-      if (!Object.values(projection.completed).every(Boolean)) {
-        return cached.password;
-      }
-      const live = yield* bridge.invokeJson(
-        "flash.getGameObjectS",
-        ["loginInfo.strPassword"],
-        NullableString,
-      );
-      const password = Option.match(live, {
-        onNone: () => cached.password,
-        onSome: (value) => value ?? cached.password,
-      });
-      if (password !== "" && password !== cached.password) {
-        yield* store.auth.setCredentials(cached.username, password);
-      }
-      return password;
-    });
+    currentCredentials.pipe(Effect.map((current) => current.password));
 
   const getServers = () =>
-    bridge.invoke("auth.getServers", undefined, NullableServers).pipe(
+    host.command({ kind: "refreshServers" }).pipe(
       Effect.flatMap(
         Option.match({
-          onNone: () =>
-            store.auth.get.pipe(
-              Effect.map((state) => Array.from(state.servers.values())),
-            ),
-          onSome: (payloads) => {
-            if (payloads === null) {
-              return store.auth.get.pipe(
-                Effect.map((state) => Array.from(state.servers.values())),
-              );
-            }
-            const servers = payloads.map(toServer);
-            return store.auth.setServers(servers).pipe(Effect.as(servers));
-          },
+          onNone: () => cached.pipe(Effect.map((auth) => auth.servers)),
+          onSome: Effect.succeed,
         }),
       ),
+      Effect.map((servers) => servers.map(toLiveServer)),
     );
 
   const getUsername = () =>
-    Effect.gen(function* () {
-      const cached = yield* store.auth.get;
-      const projection = yield* store.projection.get;
-      if (!Object.values(projection.completed).every(Boolean)) {
-        return cached.username;
-      }
-      const live = yield* bridge.invokeJson(
-        "flash.getGameObjectS",
-        ["loginInfo.strUsername"],
-        NullableString,
-      );
-      const username = Option.match(live, {
-        onNone: () => cached.username,
-        onSome: (value) => value ?? cached.username,
-      }).trim();
-      if (username !== "" && username !== cached.username) {
-        yield* store.auth.setCredentials(username, cached.password);
-      }
-      return username;
-    });
+    currentCredentials.pipe(Effect.map((current) => current.username));
 
   const isServerSelectReady = () =>
     bridge
@@ -250,32 +209,19 @@ export const makeAuth = (bridge: BridgeService, store: Store, wait: Wait) => {
     return waitForTemporaryKickClear.pipe(
       Effect.flatMap((ready) =>
         ready
-          ? bridge.invoke(
-              "auth.login",
-              [credentials.value.username, credentials.value.password],
-              Schema.Void,
-            )
-          : Effect.succeed(Option.none()),
-      ),
-      Effect.flatMap(
-        Option.match({
-          onNone: () => Effect.succeed(false),
-          onSome: () =>
-            store.auth
-              .setCredentials(
-                credentials.value.username,
-                credentials.value.password,
-              )
-              .pipe(Effect.as(true)),
-        }),
+          ? host
+              .command({
+                kind: "login",
+                username: credentials.value.username,
+                password: credentials.value.password,
+              })
+              .pipe(Effect.map(Option.getOrElse(() => false)))
+          : Effect.succeed(false),
       ),
     );
   };
 
-  const logout = () =>
-    bridge
-      .invoke("auth.logout", undefined, Schema.Void)
-      .pipe(Effect.andThen(store.auth.clear), Effect.asVoid);
+  const logout = () => host.command({ kind: "logout" }).pipe(Effect.asVoid);
 
   return {
     connectTo,

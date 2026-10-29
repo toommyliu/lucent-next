@@ -55,3 +55,8 @@ export class LiveServer extends LiveModel<ServerData> implements Server {
     return { ...this.modelData, full: this.full };
   }
 }
+
+export const toLiveServer = (snapshot: ServerSnapshot): LiveServer => {
+  const { full, ...data } = snapshot;
+  return new LiveServer(data);
+};

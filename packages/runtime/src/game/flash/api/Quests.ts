@@ -1,3 +1,4 @@
+import { toLiveQuest } from "@lucent/game";
 import * as Array from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -6,11 +7,9 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
 import type { BridgeService } from "../bridge/Bridge";
-import { PositiveWireInt, WireInt } from "../contract/Coercion";
-import type { Store } from "../state/Store";
+import { WireInt } from "../contract/Coercion";
+import type { HostStateService } from "../state/HostState";
 import type { Wait } from "./Wait";
-
-const QuestIds = Schema.Array(PositiveWireInt);
 
 const isQuestId = (questId: number): boolean =>
   Number.isSafeInteger(questId) && questId > 0;
@@ -22,11 +21,23 @@ export interface CompleteQuestOptions {
   readonly rewardItemId?: number;
 }
 
-export const makeQuests = (bridge: BridgeService, store: Store, wait: Wait) => {
+export const makeQuests = (
+  bridge: BridgeService,
+  host: HostStateService,
+  wait: Wait,
+) => {
   const loads = Semaphore.makeUnsafe(1);
   let nextLoadAt = 0;
+  const read = (questId: number) =>
+    host
+      .read({ kind: "quest", id: questId })
+      .pipe(
+        Effect.map((quest) => (quest === null ? null : toLiveQuest(quest))),
+      );
   const isLoaded = (questId: number) =>
-    store.quests.get(questId).pipe(Effect.map((quest) => quest !== null));
+    host
+      .read({ kind: "quest", id: questId })
+      .pipe(Effect.map((quest) => quest !== null));
 
   // Call under `loads` so single and batch requests share the same cooldown.
   const waitForLoadSlot = Effect.gen(function* () {
@@ -98,7 +109,7 @@ export const makeQuests = (bridge: BridgeService, store: Store, wait: Wait) => {
     if (!isQuestId(questId)) return Effect.succeed(false);
     return Effect.gen(function* () {
       let actionAvailable = false;
-      if ((yield* store.quests.get(questId)) === null) {
+      if (!(yield* isLoaded(questId))) {
         actionAvailable = yield* wait.forGameAction("acceptQuest");
         if (!actionAvailable || !(yield* load(questId, silent))) return false;
       }
@@ -189,31 +200,30 @@ export const makeQuests = (bridge: BridgeService, store: Store, wait: Wait) => {
 
   const get = (questId: number) => {
     if (!isQuestId(questId)) return Effect.succeed(null);
-    return store.quests
-      .get(questId)
-      .pipe(
-        Effect.flatMap((quest) =>
-          quest !== null
-            ? Effect.succeed(quest)
-            : load(questId).pipe(Effect.andThen(store.quests.get(questId))),
-        ),
-      );
+    return read(questId).pipe(
+      Effect.flatMap((quest) =>
+        quest !== null
+          ? Effect.succeed(quest)
+          : load(questId).pipe(Effect.andThen(read(questId))),
+      ),
+    );
   };
 
   const getAccepted = () =>
-    bridge.invoke("quests.getAccepted", undefined, QuestIds).pipe(
+    host.command({ kind: "refreshAcceptedQuests" }).pipe(
       Effect.flatMap(
         Option.match({
-          onNone: () => store.quests.getAccepted,
-          onSome: (ids) =>
-            store.quests
-              .setAccepted(ids)
-              .pipe(Effect.andThen(store.quests.getAccepted)),
+          onNone: () => host.read({ kind: "acceptedQuests" }),
+          onSome: Effect.succeed,
         }),
       ),
+      Effect.map((quests) => quests.map(toLiveQuest)),
     );
 
-  const getAll = () => store.quests.getAll;
+  const getAll = () =>
+    host
+      .read({ kind: "quests" })
+      .pipe(Effect.map((quests) => quests.map(toLiveQuest)));
 
   const isAvailable = (questId: number) => {
     if (!isQuestId(questId)) return Effect.succeed(false);

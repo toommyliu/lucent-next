@@ -15,8 +15,8 @@ import {
 } from "./index";
 
 describe("game domain models", () => {
-  it("derives entity state and silently reflects updates", () => {
-    const player = new LivePlayer({
+  it("derives entity state", () => {
+    const data = {
       afk: false,
       cell: "Enter",
       entityId: 1,
@@ -30,7 +30,8 @@ describe("game domain models", () => {
       position: { x: 1, y: 2 },
       state: EntityState.InCombat,
       username: "Hero",
-    });
+    };
+    const player = new LivePlayer(data);
 
     expect(player.alive).toBe(true);
     expect(player.hpPercent).toBe(50);
@@ -38,9 +39,9 @@ describe("game domain models", () => {
     expect(player.inCombat).toBe(true);
     expect(player.isInCell(" enter ")).toBe(true);
 
-    player.update({ hp: 0, state: EntityState.Dead });
-    expect(player.dead).toBe(true);
-    expect(player.toJSON()).toMatchObject({ alive: false, hp: 0 });
+    const dead = new LivePlayer({ ...data, hp: 0, state: EntityState.Dead });
+    expect(dead.dead).toBe(true);
+    expect(dead.toJSON()).toMatchObject({ alive: false, hp: 0 });
     expect(toPlayerSelector(" Hero ")).toEqual({ username: "Hero" });
     expect(toPlayerSelector({ username: " Hero " })).toEqual({
       username: "Hero",
@@ -48,7 +49,7 @@ describe("game domain models", () => {
   });
 
   it("interprets item context, equipment type, and selectors", () => {
-    const item = new LiveItem({
+    const data = {
       category: "Weapon",
       charItemId: 10,
       coins: true,
@@ -66,7 +67,8 @@ describe("game domain models", () => {
       name: "Test Sword",
       quantity: 1,
       temporaryItem: false,
-    });
+    } as const;
+    const item = new LiveItem(data);
 
     expect(item.weapon).toBe(true);
     expect(item.classRank).toBeNull();
@@ -77,9 +79,14 @@ describe("game domain models", () => {
     expect(item.matches({ itemId: 7 })).toBe(true);
     expect(toItemSelector(7)).toEqual({ itemId: 7 });
     expect(toItemSelector(" Test Sword ")).toEqual({ name: "Test Sword" });
-    item.update({ context: "bank", equipped: false, shopItemId: 12 });
-    expect(item.matches({ shopItemId: 12 })).toBe(true);
-    expect(item.toJSON()).toMatchObject({ context: "bank", weapon: true });
+    const banked = new LiveItem({
+      ...data,
+      context: "bank",
+      equipped: false,
+      shopItemId: 12,
+    });
+    expect(banked.matches({ shopItemId: 12 })).toBe(true);
+    expect(banked.toJSON()).toMatchObject({ context: "bank", weapon: true });
   });
 
   it("classifies items into inventory pools", () => {
@@ -183,67 +190,6 @@ describe("game domain models", () => {
     for (const query of ["9", "id9"]) {
       expect(toMonsterSelector(query)).toEqual({ name: query });
     }
-  });
-
-  it("retains drop metadata when a monster snapshot is replaced", () => {
-    const monster = new LiveMonster({
-      aggressive: false,
-      cell: "r1",
-      hp: 100,
-      level: 5,
-      maxHp: 100,
-      maxMp: 0,
-      monsterId: 8,
-      monsterMapId: 9,
-      mp: 0,
-      name: "Undead Warrior",
-      race: "Undead",
-      state: EntityState.Idle,
-    });
-
-    monster.replaceDrops([
-      {
-        eventDrop: true,
-        icon: "iibag",
-        item: new LiveItem({
-          category: "Item",
-          coins: false,
-          context: "monster-drop",
-          cost: 0,
-          description: "A test drop",
-          equipped: false,
-          equipmentSlot: "",
-          file: "",
-          houseItem: false,
-          itemId: 10,
-          link: "None",
-          memberOnly: false,
-          meta: "",
-          name: "Bone",
-          quantity: 1,
-          temporaryItem: false,
-        }).toJSON(),
-        questGated: false,
-        questObjectives: [],
-        rarity: 1,
-        rarityName: "Enhancement +0",
-        rateBoostPercent: null,
-        ratePercent: 25,
-        requiredQuestIds: [2972],
-        requiredQuests: [],
-        stackSize: 100,
-        variableQuantity: false,
-      },
-    ]);
-    monster.replaceFrom(
-      new LiveMonster({
-        ...monster.snapshot(),
-        hp: 50,
-      }),
-    );
-    expect(monster.drops[0]?.item.name).toBe("Bone");
-    expect(monster.toJSON().drops[0]?.ratePercent).toBe(25);
-    expect(monster.toJSON().drops[0]?.requiredQuestIds).toEqual([2972]);
   });
 
   it.each([

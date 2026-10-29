@@ -1,3 +1,4 @@
+import type { ReadinessKey } from "@lucent/game/protocol";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type * as Duration from "effect/Duration";
@@ -7,14 +8,13 @@ import {
   type ProjectionReadinessSnapshot,
 } from "../flash/api/ProjectionReadiness";
 import type { ApiService } from "../flash/api/Api";
-import { projectionKeys, type ProjectionKey } from "../flash/state/Projection";
 import { ScriptNotReadyError } from "./ScriptRunnerErrors";
 
 export type ScriptStartReadinessKey =
   | "account"
   | "login"
   | "playerLoaded"
-  | ProjectionKey;
+  | ReadinessKey;
 
 export interface ScriptStartReadinessSnapshot {
   readonly loggedIn: boolean;
@@ -80,7 +80,7 @@ export const makeScriptStartReadiness = (
         ({
           epoch: 0,
           failures: {},
-          missing: [...projectionKeys],
+          missing: ["houseInventory", "inventory", "map", "player"],
           state: {
             houseInventory: false,
             inventory: false,

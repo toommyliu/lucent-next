@@ -1,3 +1,4 @@
+import { toLiveAura, type LiveAura } from "./aura";
 import {
   LiveEntity,
   type Entity,
@@ -112,13 +113,22 @@ export type MonsterSnapshot = Readonly<MonsterData> &
   };
 
 export class LiveMonster extends LiveEntity<MonsterData> implements Monster {
-  readonly #drops = new Map<number, MonsterDrop>();
+  readonly #drops: readonly MonsterDrop[];
+
+  constructor(
+    data: MonsterData,
+    auras: readonly LiveAura[] = [],
+    drops: readonly MonsterDrop[] = [],
+  ) {
+    super(data, auras);
+    this.#drops = drops;
+  }
 
   get aggressive(): boolean {
     return this.modelData.aggressive;
   }
   get drops(): readonly MonsterDrop[] {
-    return Array.from(this.#drops.values());
+    return [...this.#drops];
   }
   get level(): number {
     return this.modelData.level;
@@ -155,23 +165,6 @@ export class LiveMonster extends LiveEntity<MonsterData> implements Monster {
     );
   }
 
-  /**
-   * Replaces the server-provided drop collection without replacing the monster.
-   * @internal
-   */
-  replaceDrops(drops: readonly MonsterDrop[]): void {
-    this.#drops.clear();
-    for (const drop of drops) {
-      this.#drops.set(drop.item.itemId, {
-        ...drop,
-        item: { ...drop.item },
-        questObjectives: [...drop.questObjectives],
-        requiredQuestIds: [...drop.requiredQuestIds],
-        requiredQuests: [...drop.requiredQuests],
-      });
-    }
-  }
-
   toJSON(): MonsterSnapshot {
     return {
       ...this.modelData,
@@ -192,3 +185,18 @@ export class LiveMonster extends LiveEntity<MonsterData> implements Monster {
     };
   }
 }
+
+export const toLiveMonster = (snapshot: MonsterSnapshot): LiveMonster => {
+  const {
+    alive,
+    auras,
+    dead,
+    drops,
+    hpPercent,
+    idle,
+    inCombat,
+    mpPercent,
+    ...data
+  } = snapshot;
+  return new LiveMonster(data, auras.map(toLiveAura), drops);
+};

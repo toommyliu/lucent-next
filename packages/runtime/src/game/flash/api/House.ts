@@ -5,15 +5,20 @@ import * as Option from "effect/Option";
 
 import type { BridgeService } from "../bridge/Bridge";
 import { WireInt } from "../contract/Coercion";
-import type { Store } from "../state/Store";
+import {
+  itemQuantity,
+  readItem,
+  readItems,
+  type HostStateService,
+} from "../state/HostState";
 
-export const makeHouse = (bridge: BridgeService, store: Store) => {
+export const makeHouse = (bridge: BridgeService, host: HostStateService) => {
   const contains = (selector: ItemQuery, quantity?: number) =>
-    store.items
-      .quantity("house", selector)
-      .pipe(Effect.map((owned) => owned >= normalizeItemQuantity(quantity)));
+    itemQuantity(host, "house", selector).pipe(
+      Effect.map((owned) => owned >= normalizeItemQuantity(quantity)),
+    );
 
-  const getAll = () => store.items.getAll("house");
+  const getAll = () => readItems(host, "house");
 
   const getSlots = () =>
     bridge
@@ -21,9 +26,11 @@ export const makeHouse = (bridge: BridgeService, store: Store) => {
       .pipe(Effect.map(Option.getOrElse(() => 0)));
 
   const getUsedSlots = () =>
-    store.items.getAll("house").pipe(Effect.map((items) => items.length));
+    host
+      .read({ kind: "items", container: "house" })
+      .pipe(Effect.map((items) => items.length));
 
-  const get = (selector: ItemQuery) => store.items.get("house", selector);
+  const get = (selector: ItemQuery) => readItem(host, "house", selector);
 
   const getAvailableSlots = () =>
     Effect.zipWith(getSlots(), getUsedSlots(), (slots, used) =>

@@ -17,7 +17,12 @@ import {
 import type { BridgeService } from "../bridge/Bridge";
 import { PositiveWireInt, WireBoolean, WireInt } from "../contract/Coercion";
 import { packetData } from "../contract/Packet";
-import type { Store } from "../state/Store";
+import {
+  isHydrated,
+  readItem,
+  readItems,
+  type HostStateService,
+} from "../state/HostState";
 import type { House } from "./House";
 import type { Wait } from "./Wait";
 
@@ -39,9 +44,6 @@ const decodeConsumableEquipResponse = Schema.decodeUnknownOption(
   }),
 );
 const decodeConsumableActionId = Schema.decodeUnknownOption(PositiveWireInt);
-const ConsumableSlot = Schema.NullOr(
-  Schema.Struct({ itemId: PositiveWireInt }),
-);
 const decodeEquipEnhancementSelector = Schema.decodeUnknownOption(
   EquipEnhancementSelectorSchema,
 );
@@ -71,45 +73,33 @@ const slotMethods = {
 
 export const makeInventory = (
   bridge: BridgeService,
-  store: Store,
+  host: HostStateService,
   house: House,
   wait: Wait,
 ) => {
   // Consumable equips and unequips mutate the same client action slot.
   const consumableEquipment = Semaphore.makeUnsafe(1);
-  const getAll = () => store.items.getAll("inventory");
+  const getAll = () => readItems(host, "inventory");
 
-  const get = (selector: ItemQuery) => store.items.get("inventory", selector);
-
-  const setEquippedConsumable = Effect.fn("Inventory.setEquippedConsumable")(
-    function* (itemId: number | undefined) {
-      const items = yield* getAll();
-      for (const item of items) {
-        // Usable-item equipment is a local client mutation with no equipItem packet.
-        if (
-          item.category === "Item" &&
-          item.link.trim() !== "" &&
-          item.link.trim().toLowerCase() !== "none"
-        ) {
-          item.update({ equipped: item.itemId === itemId });
-        }
-      }
-    },
-  );
+  const get = (selector: ItemQuery) => readItem(host, "inventory", selector);
 
   const getSlots = Effect.fn("Inventory.getSlots")(function* (
     pool: InventoryPool = "bag",
   ) {
-    if (!(yield* store.items.isHydrated("inventory"))) return 0;
+    if (!(yield* isHydrated(host, "inventory"))) return 0;
     return yield* bridge
       .invoke(slotMethods[pool], undefined, WireInt)
       .pipe(Effect.map(Option.getOrElse(() => 0)));
   });
 
   const getUsedSlots = (pool: InventoryPool = "bag") =>
-    getAll().pipe(
-      Effect.map((items) => items.filter((item) => item.pool === pool).length),
-    );
+    host
+      .read({ kind: "items", container: "inventory" })
+      .pipe(
+        Effect.map(
+          (items) => items.filter((item) => item.pool === pool).length,
+        ),
+      );
 
   const canAccept = Effect.fn("Inventory.canAccept")(function* (
     item: LiveItem,
@@ -156,7 +146,7 @@ export const makeInventory = (
   });
 
   const getLocalUserId = Effect.fn("Inventory.getLocalUserId")(function* () {
-    const cached = yield* store.world.getSelfEntityId;
+    const cached = yield* host.read({ kind: "selfEntityId" });
     return cached === null
       ? yield* bridge.invoke("player.getUserId", undefined, PositiveWireInt)
       : Option.some(cached);
@@ -244,14 +234,8 @@ export const makeInventory = (
         }),
       );
       if (response === null) return false;
-      const slot = yield* bridge.invoke(
-        "combat.getConsumableSkillItem",
-        undefined,
-        ConsumableSlot,
-      );
-      if (Option.isNone(slot) || slot.value?.itemId !== itemId) return false;
-      yield* setEquippedConsumable(itemId);
-      return true;
+      const slot = yield* host.command({ kind: "refreshEquippedConsumable" });
+      return Option.isSome(slot) && slot.value === itemId;
     },
     consumableEquipment.withPermit,
     Effect.timeoutOption("5 seconds"),
@@ -408,8 +392,9 @@ export const makeInventory = (
         .pipe(Effect.map(Option.getOrElse(() => false)));
       if (!sent) return false;
 
-      yield* setEquippedConsumable(undefined);
-      return !item.equipped;
+      yield* host.command({ kind: "refreshEquippedConsumable" });
+      const current = yield* get(item.itemId);
+      return current?.equipped !== true;
     },
     consumableEquipment.withPermit,
     Effect.timeoutOption("5 seconds"),

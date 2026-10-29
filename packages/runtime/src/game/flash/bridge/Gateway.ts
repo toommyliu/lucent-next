@@ -9,7 +9,7 @@ import * as Stream from "effect/Stream";
 
 import { decodeCallback, type Callback } from "../contract/Callback";
 import type { DiagnosticPhase } from "../contract/Diagnostic";
-import type { Event, RuntimeEvent } from "../contract/Event";
+import type { Event, ProjectionEvent, RuntimeEvent } from "../contract/Event";
 import type {
   Packet,
   PacketDirection,
@@ -27,8 +27,13 @@ type CallbackKey =
   | "onConnection"
   | "onDebug"
   | "onExtensionResponse"
+  | "onProjectionEvent"
   | "packetFromClient"
   | "packetFromServer";
+
+type Delivery =
+  | Callback
+  | { readonly type: "projection"; readonly event: ProjectionEvent };
 
 type OwnedCallbacks = Required<Pick<Window, CallbackKey>>;
 
@@ -47,7 +52,7 @@ const serverPacketTypes = {
 } as const;
 
 const packetInput = (
-  callback: Callback,
+  callback: Delivery,
 ):
   | { readonly direction: PacketDirection; readonly raw: string }
   | undefined => {
@@ -63,7 +68,7 @@ const packetInput = (
   }
 };
 
-const runtimeEvent = (callback: Callback): RuntimeEvent | undefined => {
+const runtimeEvent = (callback: Delivery): RuntimeEvent | undefined => {
   switch (callback.type) {
     case "connection":
       return { type: "connection", status: callback.status };
@@ -80,7 +85,7 @@ export const makeGateway = (target?: Window) =>
     const bridge = yield* Bridge;
     const diagnosticSink = yield* DiagnosticSink;
     const scope = yield* Effect.scope;
-    const callbacks = yield* Queue.unbounded<Callback>();
+    const callbacks = yield* Queue.unbounded<Delivery>();
     const events = yield* PubSub.unbounded<Event>();
     const packets = yield* PubSub.unbounded<Packet>();
     const rawPackets = yield* PubSub.unbounded<RawPacket>();
@@ -107,6 +112,16 @@ export const makeGateway = (target?: Window) =>
       diagnosticSink.report(phase, operation, cause, args);
     };
 
+    const enqueue = (operation: string, delivery: Delivery): void => {
+      if (!Queue.offerUnsafe(callbacks, delivery)) {
+        reportDiagnosticUnsafe(
+          "callback-dispatch",
+          operation,
+          new Error("Callback queue is unavailable"),
+        );
+      }
+    };
+
     const offer = (operation: string, value: unknown): void => {
       const decoded = decodeCallback(value);
       if (Option.isNone(decoded)) {
@@ -118,13 +133,7 @@ export const makeGateway = (target?: Window) =>
         );
         return;
       }
-      if (!Queue.offerUnsafe(callbacks, decoded.value)) {
-        reportDiagnosticUnsafe(
-          "callback-dispatch",
-          operation,
-          new Error("Callback queue is unavailable"),
-        );
-      }
+      enqueue(operation, decoded.value);
     };
 
     const owned: OwnedCallbacks = {
@@ -133,6 +142,8 @@ export const makeGateway = (target?: Window) =>
       onDebug: (message) => offer("onDebug", { type: "debug", message }),
       onExtensionResponse: (raw) =>
         offer("onExtensionResponse", { type: "extension-packet", raw }),
+      onProjectionEvent: (event) =>
+        enqueue("onProjectionEvent", { type: "projection", event }),
       packetFromClient: (raw) =>
         offer("packetFromClient", { type: "client-packet", raw }),
       packetFromServer: (raw) =>
@@ -151,32 +162,27 @@ export const makeGateway = (target?: Window) =>
       }),
     );
 
-    const publishEvent = (event: Event) =>
-      PubSub.publish(events, event).pipe(Effect.asVoid);
-
-    const reportDiagnostic = (
-      operation: string,
-      cause: unknown,
-      args?: readonly unknown[],
-    ) =>
+    const publishEvent = (event: ProjectionEvent) =>
       Effect.sync(() =>
-        diagnosticSink.report("projection", operation, cause, args),
+        enqueue("publishEvent", { type: "projection", event }),
       );
 
     const dispatch = (
-      callback: Callback,
-      project: (packet: Packet) => Effect.Effect<void>,
-      projectRuntime: (event: RuntimeEvent) => Effect.Effect<void>,
+      delivery: Delivery,
+      handle: (event: Event) => Effect.Effect<void>,
     ) =>
       Effect.gen(function* () {
-        const event = runtimeEvent(callback);
+        const event =
+          delivery.type === "projection"
+            ? delivery.event
+            : runtimeEvent(delivery);
         if (event !== undefined) {
-          yield* projectRuntime(event);
-          yield* publishEvent(event);
+          yield* handle(event);
+          yield* PubSub.publish(events, event);
           return;
         }
 
-        const input = packetInput(callback);
+        const input = packetInput(delivery);
         if (input === undefined) return;
 
         yield* PubSub.publish(rawPackets, input);
@@ -194,23 +200,18 @@ export const makeGateway = (target?: Window) =>
           return;
         }
 
-        yield* project(packet.value);
         yield* PubSub.publish(packets, packet.value);
       });
 
     const start = (
-      project: (packet: Packet) => Effect.Effect<void>,
-      projectRuntime: (event: RuntimeEvent) => Effect.Effect<void> = () =>
-        Effect.void,
+      handle: (event: Event) => Effect.Effect<void> = () => Effect.void,
     ) =>
       Effect.suspend(() => {
         if (started) return Effect.void;
         started = true;
         const drain = Effect.forever(
           Queue.take(callbacks).pipe(
-            Effect.flatMap((callback) =>
-              dispatch(callback, project, projectRuntime),
-            ),
+            Effect.flatMap((delivery) => dispatch(delivery, handle)),
             Effect.catchCause((cause) =>
               Effect.sync(() =>
                 diagnosticSink.report("callback-dispatch", "drain", cause),
@@ -250,7 +251,6 @@ export const makeGateway = (target?: Window) =>
       packets: Stream.fromPubSub(packets),
       rawPackets: Stream.fromPubSub(rawPackets),
       publishEvent,
-      reportDiagnostic,
       sendToClient,
       sendToServer,
       start,

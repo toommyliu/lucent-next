@@ -14,6 +14,8 @@ import * as TestClock from "effect/testing/TestClock";
 import { Api, makeApi, type ApiService } from "../flash/api/Api";
 import { Bridge, makeBridge } from "../flash/bridge/Bridge";
 import { Gateway, makeGateway } from "../flash/bridge/Gateway";
+import { HostState } from "../flash/state/HostState";
+import { makeFakeHost, makeFakeHostState } from "../flash/testing/FakeHost";
 import { Environment, layer } from "./Environment";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -40,6 +42,7 @@ const withEnvironment = Effect.fnUntraced(function* <A, E, R>(
   const api = yield* makeApi.pipe(
     Effect.provideService(Bridge, bridge),
     Effect.provideService(Gateway, gateway),
+    Effect.provideService(HostState, makeFakeHost(makeFakeHostState(), window)),
   );
   return yield* Effect.gen(function* () {
     yield* Environment;

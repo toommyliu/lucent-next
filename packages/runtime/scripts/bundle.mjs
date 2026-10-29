@@ -20,6 +20,7 @@ const result = await build({
   alias: {
     "@lucent/game/protocol": join(root, "packages", "game", "src", "protocol.ts"),
     "@lucent/game": join(root, "packages", "game", "src", "index.ts"),
+    "@lucent/schemas": join(root, "packages", "schemas", "src"),
   },
   legalComments: "none",
   keepNames: true,

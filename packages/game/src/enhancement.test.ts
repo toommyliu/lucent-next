@@ -241,12 +241,12 @@ describe("enhancement display", () => {
       special: "Dauntless",
     });
 
-    weapon.update({ enhancement: { level: 100, patternId: 6, procId: 12 } });
-    expect(weapon.enhancement).toMatchObject({
+    const wizard = item("Weapon", { level: 100, patternId: 6, procId: 12 });
+    expect(wizard.enhancement).toMatchObject({
       name: "Wizard",
       special: "Elysium",
     });
-    expect(weapon.toJSON().enhancement).toMatchObject({
+    expect(wizard.toJSON().enhancement).toMatchObject({
       name: "Wizard",
       special: "Elysium",
     });
@@ -273,8 +273,7 @@ describe("enhancement display", () => {
     expect(
       item("Weapon", { patternId: 9, procId: 999 }).enhancement,
     ).toMatchObject({ name: "Lucky", special: "Proc 999" });
-    weapon.update({ enhancement: { patternId: 9 } });
-    expect(weapon.enhancement).toMatchObject({
+    expect(item("Weapon", { patternId: 9 }).enhancement).toMatchObject({
       name: "Lucky",
       special: undefined,
     });
@@ -282,8 +281,7 @@ describe("enhancement display", () => {
       name: undefined,
       special: undefined,
     });
-    weapon.replaceFrom(item("Weapon"));
-    expect(weapon.enhancement).toBeUndefined();
+    expect(item("Weapon").enhancement).toBeUndefined();
   });
 
   it("formats basic and weapon-proc enhancements by their player-facing names", () => {

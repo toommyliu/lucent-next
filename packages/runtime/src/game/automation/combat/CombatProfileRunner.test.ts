@@ -7,10 +7,14 @@ import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as TestClock from "effect/testing/TestClock";
 
-import { Bridge, makeBridge } from "../../flash/bridge/Bridge";
-import { Gateway, makeGateway } from "../../flash/bridge/Gateway";
 import type { Event, EventType } from "../../flash/contract/Event";
-import { makeApi, type ApiService } from "../../flash/api/Api";
+import type { ApiService } from "../../flash/api/Api";
+import {
+  makeFakeApi,
+  makeFakeHostState,
+  monster as fakeMonster,
+  player as fakePlayer,
+} from "../../flash/testing/FakeHost";
 import {
   COMBAT_PROFILE_RETRY_DELAY_MS,
   makeCombatProfileRunner,
@@ -575,54 +579,12 @@ describe("CombatProfileRunner", () => {
         "world.getAvailableMonsterMapIds": () => [2],
         "world.requestMonsterDrops": () => true,
       } as unknown as Window["swf"];
-      const bridge = yield* makeBridge(target);
-      const gateway = yield* makeGateway(target).pipe(
-        Effect.provideService(Bridge, bridge),
-      );
-      const api = yield* makeApi.pipe(
-        Effect.provideService(Bridge, bridge),
-        Effect.provideService(Gateway, gateway),
-      );
-      yield* api.wait.forPacket(
-        { command: "moveToArea", direction: "extension", encoding: "json" },
-        {
-          timeout: "1 second",
-          trigger: Effect.sync(() => {
-            target.onExtensionResponse?.(
-              JSON.stringify({
-                dataObj: {
-                  areaId: 1,
-                  areaName: "test-1",
-                  cmd: "moveToArea",
-                  monBranch: [
-                    {
-                      MonID: 1,
-                      MonMapID: 2,
-                      intHP: 100,
-                      intHPMax: 100,
-                      intState: 1,
-                      strMonName: "Slime",
-                    },
-                  ],
-                  monmap: [{ MonMapID: 2, strFrame: "Enter" }],
-                  uoBranch: [
-                    {
-                      entID: 1,
-                      intHP: 100,
-                      intHPMax: 100,
-                      intState: 1,
-                      strFrame: "Enter",
-                      strUsername: "Hero",
-                    },
-                  ],
-                },
-                type: "json",
-              }),
-            );
-            return true;
-          }),
-        },
-      );
+      const state = makeFakeHostState();
+      state.map = { id: 1, name: "test", roomNumber: 1 };
+      state.monsters = [fakeMonster({ monsterMapId: 2, name: "Slime" })];
+      state.players = [fakePlayer({ entityId: 1, username: "Hero" })];
+      state.selfEntityId = 1;
+      const api = yield* makeFakeApi(target, state);
 
       const runner = yield* makeCombatProfileRunner(api, {
         profile,

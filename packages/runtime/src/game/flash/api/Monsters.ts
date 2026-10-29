@@ -1,4 +1,4 @@
-import { toMonsterSelector } from "@lucent/game";
+import { toLiveMonster } from "@lucent/game";
 import type { LiveMonster, MonsterQuery } from "@lucent/game";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -9,22 +9,11 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import type { BridgeService } from "../bridge/Bridge";
-import { UnknownRecord } from "../contract/Coercion";
 import { packetData } from "../contract/Packet";
 import { decodeMonsterDrops } from "../contract/payload/MonsterDrops";
-import { MonsterPayload, toMonster } from "../contract/payload/World";
-import type { Store } from "../state/Store";
+import { isSelectable, type HostStateService } from "../state/HostState";
 import type { Events } from "./Events";
 import type { Wait } from "./Wait";
-
-const NestedMonster = Schema.Struct({
-  dataLeaf: UnknownRecord,
-  objData: Schema.optionalKey(UnknownRecord),
-});
-const NullableMonster = Schema.NullOr(
-  Schema.Union([MonsterPayload, NestedMonster]),
-);
-const decodeMonster = Schema.decodeUnknownOption(MonsterPayload);
 
 const monsterDropRequestSpacing = Schedule.spaced("350 millis").pipe(
   Schedule.jittered,
@@ -38,10 +27,27 @@ interface MonsterDropRequest {
 
 export const makeMonsters = Effect.fnUntraced(function* (
   bridge: BridgeService,
-  store: Store,
+  host: HostStateService,
   events: Events,
   wait: Wait,
 ) {
+  const readMonster = (selector: MonsterQuery) =>
+    isSelectable(selector)
+      ? host
+          .read({ kind: "monster", selector })
+          .pipe(
+            Effect.map((monster) =>
+              monster === null ? null : toLiveMonster(monster),
+            ),
+          )
+      : Effect.succeed(null);
+  const readMonsters = () =>
+    host
+      .read({ kind: "monsters" })
+      .pipe(Effect.map((monsters) => monsters.map(toLiveMonster)));
+  const readDrops = (monsterMapId: number) =>
+    host.read({ kind: "monsterDrops", monsterMapId });
+
   const requests = yield* Queue.unbounded<MonsterDropRequest>();
   const inFlight = new Map<string, Deferred.Deferred<void>>();
 
@@ -50,14 +56,14 @@ export const makeMonsters = Effect.fnUntraced(function* (
   const requestKey = Effect.fn("Monsters.requestKey")(function* (
     monsterMapId: number,
   ) {
-    const map = yield* store.world.getMap;
+    const map = yield* host.read({ kind: "map" });
     return `${map.id}:${map.name}:${map.roomNumber}:${monsterMapId}`;
   });
 
   const isInCurrentCell = Effect.fn("Monsters.isInCurrentCell")(function* (
     monster: LiveMonster,
   ) {
-    const player = yield* store.world.getMe;
+    const player = yield* host.read({ kind: "me" });
     return player !== null && monster.isInCell(player.cell);
   });
 
@@ -66,10 +72,9 @@ export const makeMonsters = Effect.fnUntraced(function* (
   ) {
     const operation = Effect.gen(function* () {
       if ((yield* requestKey(request.monsterMapId)) !== request.key) return;
-      if ((yield* store.world.getMonsterDrops(request.monsterMapId)) !== null)
-        return;
+      if ((yield* readDrops(request.monsterMapId)) !== null) return;
 
-      const monster = yield* store.world.getMonster(request.monsterMapId);
+      const monster = yield* readMonster(request.monsterMapId);
       if (monster === null || !(yield* isInCurrentCell(monster))) return;
 
       yield* wait.forPacket(
@@ -127,8 +132,7 @@ export const makeMonsters = Effect.fnUntraced(function* (
   const ensureDrops = Effect.fn("Monsters.ensureDrops")(function* (
     monster: LiveMonster,
   ) {
-    if ((yield* store.world.getMonsterDrops(monster.monsterMapId)) !== null)
-      return;
+    if ((yield* readDrops(monster.monsterMapId)) !== null) return;
     if (!(yield* isInCurrentCell(monster))) return;
 
     const key = yield* requestKey(monster.monsterMapId);
@@ -154,42 +158,23 @@ export const makeMonsters = Effect.fnUntraced(function* (
       discard: true,
     });
 
-  const getProjected = (selector: MonsterQuery) => {
-    return store.world.getMonster(selector).pipe(
+  const getProjected = (selector: MonsterQuery) =>
+    readMonster(selector).pipe(
       Effect.flatMap((current) =>
-        current !== null
+        current !== null || !isSelectable(selector)
           ? Effect.succeed(current)
-          : bridge
-              .invoke(
-                "world.getMonster",
-                [toMonsterSelector(selector)],
-                NullableMonster,
-              )
+          : host
+              .command({ kind: "hydrateMonster", selector })
               .pipe(
-                Effect.flatMap(
-                  Option.match({
-                    onNone: () => Effect.succeed(null),
-                    onSome: (payload) => {
-                      if (payload === null) return Effect.succeed(null);
-                      const decoded =
-                        "dataLeaf" in payload
-                          ? decodeMonster({
-                              ...payload.objData,
-                              ...payload.dataLeaf,
-                            })
-                          : Option.some(payload);
-                      return Option.isNone(decoded)
-                        ? Effect.succeed(null)
-                        : store.world.putMonster(toMonster(decoded.value));
-                    },
-                  }),
+                Effect.map((hydrated) =>
+                  Option.isSome(hydrated) && hydrated.value !== null
+                    ? toLiveMonster(hydrated.value)
+                    : null,
                 ),
               ),
       ),
     );
-  };
 
-  const getAllProjected = () => store.world.getMonsters;
   const getAvailableProjected = () =>
     bridge
       .invoke(
@@ -202,7 +187,7 @@ export const makeMonsters = Effect.fnUntraced(function* (
           Option.match({
             onNone: () => Effect.succeed([]),
             onSome: (ids) =>
-              store.world.getMonsters.pipe(
+              readMonsters().pipe(
                 Effect.map((monsters) => {
                   const available = new Set(ids);
                   return monsters.filter((monster) =>
@@ -217,7 +202,7 @@ export const makeMonsters = Effect.fnUntraced(function* (
   const ensureCurrentCell = Effect.fn("Monsters.ensureCurrentCell")(function* (
     monsters: readonly LiveMonster[],
   ) {
-    const player = yield* store.world.getMe;
+    const player = yield* host.read({ kind: "me" });
     if (player === null) return;
     yield* ensureAllDrops(
       monsters.filter((monster) => monster.isInCell(player.cell)),
@@ -225,33 +210,48 @@ export const makeMonsters = Effect.fnUntraced(function* (
   });
 
   yield* events.on({ type: "join-map" }, () =>
-    getAllProjected().pipe(Effect.flatMap(ensureCurrentCell)),
+    readMonsters().pipe(Effect.flatMap(ensureCurrentCell)),
   );
   yield* events.on({ type: "player-location" }, (event) =>
-    store.world.getMe.pipe(
-      Effect.flatMap((player) =>
-        player?.entityId === event.entityId
-          ? getAllProjected().pipe(Effect.flatMap(ensureCurrentCell))
-          : Effect.void,
+    host
+      .read({ kind: "me" })
+      .pipe(
+        Effect.flatMap((player) =>
+          player?.entityId === event.entityId
+            ? readMonsters().pipe(Effect.flatMap(ensureCurrentCell))
+            : Effect.void,
+        ),
       ),
-    ),
   );
+
+  const reread = (monsters: readonly LiveMonster[]) => {
+    const ids = new Set(monsters.map((monster) => monster.monsterMapId));
+    return readMonsters().pipe(
+      Effect.map((current) =>
+        current.filter((monster) => ids.has(monster.monsterMapId)),
+      ),
+    );
+  };
 
   const get = (selector: MonsterQuery) =>
     getProjected(selector).pipe(
-      Effect.tap((monster) =>
-        monster === null ? Effect.void : ensureDrops(monster),
+      Effect.flatMap((monster) =>
+        monster === null
+          ? Effect.succeed(null)
+          : ensureDrops(monster).pipe(
+              Effect.andThen(readMonster(monster.monsterMapId)),
+            ),
       ),
     );
   const getAll = () =>
-    getAllProjected().pipe(
-      Effect.tap(ensureCurrentCell),
-      Effect.map((monsters) => [...monsters]),
+    readMonsters().pipe(
+      Effect.flatMap(ensureCurrentCell),
+      Effect.andThen(readMonsters()),
     );
   const getAvailable = () =>
     getAvailableProjected().pipe(
       Effect.tap(ensureAllDrops),
-      Effect.map((monsters) => [...monsters]),
+      Effect.flatMap(reread),
     );
   const isAvailable = (selector: MonsterQuery) =>
     getProjected(selector).pipe(
@@ -277,7 +277,7 @@ export const makeMonsters = Effect.fnUntraced(function* (
     },
     lookup: {
       get: getProjected,
-      getAll: getAllProjected,
+      getAll: readMonsters,
       getAvailable: getAvailableProjected,
     },
   };

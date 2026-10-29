@@ -1,4 +1,4 @@
-import type { Item, ItemSnapshot } from "./item";
+import { toLiveItem, type Item, type ItemSnapshot } from "./item";
 import { LiveModel } from "./model";
 
 export interface Shop {
@@ -50,3 +50,6 @@ export class LiveShop extends LiveModel<ShopData> implements Shop {
     };
   }
 }
+
+export const toLiveShop = (snapshot: ShopSnapshot): LiveShop =>
+  new LiveShop({ ...snapshot, items: snapshot.items.map(toLiveItem) });

@@ -1,4 +1,9 @@
-import { EntityState, LiveFaction, LiveOutfit } from "@lucent/game";
+import {
+  EntityState,
+  LiveFaction,
+  LiveOutfit,
+  toLivePlayer,
+} from "@lucent/game";
 import type { BoostType, ItemQuery, LiveItem, Position } from "@lucent/game";
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -13,7 +18,11 @@ import {
 } from "../contract/Coercion";
 import { combatExitCells } from "../domain/CombatExit";
 import { parseMapTarget } from "../domain/MapTarget";
-import type { Store } from "../state/Store";
+import {
+  isHydrated,
+  readItems,
+  type HostStateService,
+} from "../state/HostState";
 import type { Auth } from "./Auth";
 import { stopCombat as stopCombatControl } from "./internal/CombatControl";
 import type { Inventory } from "./Inventory";
@@ -111,7 +120,7 @@ const toOutfit = (payload: typeof OutfitPayload.Type): LiveOutfit =>
 
 export const makePlayer = (
   bridge: BridgeService,
-  store: Store,
+  host: HostStateService,
   auth: Auth,
   inventory: Inventory,
   map: Map,
@@ -125,7 +134,12 @@ export const makePlayer = (
     bridge
       .invoke(method, undefined, schema)
       .pipe(Effect.map(Option.getOrElse(() => fallback)));
-  const get = () => store.world.getMe;
+  const get = () =>
+    host
+      .read({ kind: "me" })
+      .pipe(
+        Effect.map((player) => (player === null ? null : toLivePlayer(player))),
+      );
   const readLocation = (
     projected: string,
     method: "player.getCell" | "player.getPad",
@@ -141,10 +155,10 @@ export const makePlayer = (
           );
   const getAuras = (options?: { kind?: "active" | "passive" }) =>
     get().pipe(
-      Effect.flatMap((player) =>
-        player === null
-          ? Effect.succeed([])
-          : store.world.getPlayerAuras(player.entityId, options),
+      Effect.map((player) =>
+        (player?.auras ?? []).filter(
+          (aura) => options?.kind === undefined || aura.kind === options.kind,
+        ),
       ),
     );
 
@@ -269,11 +283,11 @@ export const makePlayer = (
   ) {
     const inventoryClass = findClassItem(yield* inventory.getAll(), query);
     if (inventoryClass !== undefined) return inventoryClass.classRank;
-    if (query === undefined || !(yield* store.items.isHydrated("bank"))) {
+    if (query === undefined || !(yield* isHydrated(host, "bank"))) {
       return null;
     }
 
-    const bankClass = findClassItem(yield* store.items.getAll("bank"), query);
+    const bankClass = findClassItem(yield* readItems(host, "bank"), query);
     return bankClass?.classRank ?? null;
   });
   const getGender = () => read("player.getGender", Schema.String, "");
@@ -329,22 +343,24 @@ export const makePlayer = (
     );
   const isMember = () => read("player.isMember", Schema.Boolean, false);
   const isReady = () =>
-    store.projection.get.pipe(
-      Effect.flatMap((projection) =>
-        Object.values(projection.completed).every(Boolean)
-          ? Effect.all([
-              auth.isLoggedIn(),
-              map.isLoaded(),
-              read("player.isLoaded", Schema.Boolean, false),
-            ]).pipe(
-              Effect.map(
-                ([loggedIn, loaded, playerLoaded]) =>
-                  loggedIn && loaded && playerLoaded,
-              ),
-            )
-          : Effect.succeed(false),
-      ),
-    );
+    host
+      .read({ kind: "readiness" })
+      .pipe(
+        Effect.flatMap((readiness) =>
+          readiness.missing.length === 0
+            ? Effect.all([
+                auth.isLoggedIn(),
+                map.isLoaded(),
+                read("player.isLoaded", Schema.Boolean, false),
+              ]).pipe(
+                Effect.map(
+                  ([loggedIn, loaded, playerLoaded]) =>
+                    loggedIn && loaded && playerLoaded,
+                ),
+              )
+            : Effect.succeed(false),
+        ),
+      );
 
   const readLiveLocation = () =>
     Effect.all({
@@ -428,7 +444,7 @@ export const makePlayer = (
     const currentPad = yield* getPad();
     const cells = combatExitCells(
       yield* map.getCells(),
-      yield* store.world.getMonsters,
+      yield* host.read({ kind: "monsters" }),
       currentCell,
     );
 
@@ -449,7 +465,7 @@ export const makePlayer = (
       const destination = yield* parseMapTarget(target);
       if (destination.map === "") return false;
       const targetCell = cell ?? (pad === undefined ? undefined : "Enter");
-      const currentMap = yield* store.world.getMap;
+      const currentMap = yield* host.read({ kind: "map" });
       const alreadyLoaded =
         (yield* map.isLoaded()) &&
         sameText(currentMap.name, destination.name) &&
@@ -480,21 +496,23 @@ export const makePlayer = (
       )
         return false;
       const loaded = yield* wait.until(
-        store.world.getMap.pipe(
-          Effect.flatMap((current) =>
-            map
-              .isLoaded()
-              .pipe(
-                Effect.map(
-                  (ready) =>
-                    ready &&
-                    sameText(current.name, destination.name) &&
-                    (!destination.requireExactRoom ||
-                      current.roomNumber === destination.roomNumber),
+        host
+          .read({ kind: "map" })
+          .pipe(
+            Effect.flatMap((current) =>
+              map
+                .isLoaded()
+                .pipe(
+                  Effect.map(
+                    (ready) =>
+                      ready &&
+                      sameText(current.name, destination.name) &&
+                      (!destination.requireExactRoom ||
+                        current.roomNumber === destination.roomNumber),
+                  ),
                 ),
-              ),
+            ),
           ),
-        ),
         { timeout: "20 seconds" },
       );
       if (!loaded) return false;

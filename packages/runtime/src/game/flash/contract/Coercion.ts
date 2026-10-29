@@ -10,7 +10,7 @@ const invalid = (value: unknown, message: string) =>
 
 const NumberInput = Schema.Union([Schema.Number, Schema.String]);
 
-export const WireNumber = NumberInput.pipe(
+const WireNumber = NumberInput.pipe(
   Schema.decodeTo(
     Schema.Number,
     SchemaTransformation.transformEffect({
@@ -77,4 +77,3 @@ export const WireBoolean = BooleanInput.pipe(
 );
 
 export const UnknownRecord = Schema.Record(Schema.String, Schema.Unknown);
-export const UnknownArray = Schema.Array(Schema.Unknown);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { LiveItem } from "@lucent/game";
+import type { ItemSnapshot } from "@lucent/game";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as PubSub from "effect/PubSub";
@@ -12,12 +12,17 @@ import type { BridgeService } from "../bridge/Bridge";
 import type { Event } from "../contract/Event";
 import { makeWait } from "../protocol/Wait";
 import type { Packet } from "../contract/Packet";
-import { makeStore } from "../state/Store";
+import {
+  editItem,
+  item,
+  makeFakeHost,
+  makeFakeHostState,
+} from "../testing/FakeHost";
 import { makeHouse } from "./House";
 import { makeInventory } from "./Inventory";
 import type { Wait } from "./Wait";
 
-const item = ({
+const equipment = ({
   enhancementLevel,
   enhancementPatternId,
   enhancementProcId,
@@ -32,12 +37,8 @@ const item = ({
   readonly equipped?: boolean;
   readonly itemId: number;
 }) =>
-  new LiveItem({
+  item("inventory", {
     category: equipmentSlot === "ar" ? "Class" : "Equipment",
-    coins: false,
-    context: "inventory",
-    cost: 0,
-    description: "",
     enhancement: {
       level: enhancementLevel,
       patternId: enhancementPatternId,
@@ -45,15 +46,8 @@ const item = ({
     },
     equipped,
     equipmentSlot,
-    file: "",
-    houseItem: false,
     itemId,
-    link: "",
-    memberOnly: false,
-    meta: "",
     name: `Item ${itemId}`,
-    quantity: 1,
-    temporaryItem: false,
   });
 
 const consumable = (
@@ -62,30 +56,24 @@ const consumable = (
   equipped = false,
   category = "Item",
   actionId = 400,
-): LiveItem =>
-  new LiveItem({
+): ItemSnapshot =>
+  item("inventory", {
     category,
-    coins: false,
-    context: "inventory",
-    cost: 0,
     description: "Consumable",
     equipped,
-    equipmentSlot: "",
     file: "consumable.swf",
-    houseItem: false,
     itemId,
     link,
-    memberOnly: false,
     meta: String(actionId),
     name: `Consumable ${itemId}`,
     quantity: 2,
-    temporaryItem: false,
   });
 
-const makeHarness = (items: readonly LiveItem[], autoConfirm = true) =>
+const makeHarness = (items: readonly ItemSnapshot[], autoConfirm = true) =>
   Effect.gen(function* () {
-    const store = yield* makeStore;
-    yield* store.items.replace("inventory", items);
+    const state = makeFakeHostState();
+    state.items.inventory = [...items];
+    state.hydration.inventory = 1;
 
     const packets = yield* PubSub.unbounded<Packet>();
     const events = yield* PubSub.unbounded<Event>();
@@ -140,16 +128,21 @@ const makeHarness = (items: readonly LiveItem[], autoConfirm = true) =>
           if (method === "inventory.unequipConsumable") {
             const selector = args?.[0] as { readonly itemId: number };
             unequippedItemIds.push(selector.itemId);
+            slotItemId = undefined;
             return Option.some(true);
           }
           if (method === "inventory.use") {
             const selector = args?.[0] as { readonly itemId: number };
-            const selected = items.find(
+            const selected = state.items.inventory.find(
               (candidate) => candidate.itemId === selector.itemId,
             );
             if (selected === undefined) return Option.some(false);
             usedItemIds.push(selector.itemId);
-            selected.update({ quantity: selected.quantity - 1 });
+            state.items.inventory = state.items.inventory.map((candidate) =>
+              candidate === selected
+                ? editItem(candidate, { quantity: candidate.quantity - 1 })
+                : candidate,
+            );
             return Option.some(true);
           }
           if (method === "player.getUserId") return Option.some(1);
@@ -157,7 +150,13 @@ const makeHarness = (items: readonly LiveItem[], autoConfirm = true) =>
           return Option.none();
         }),
     } as unknown as BridgeService;
-    const house = makeHouse(bridge, store);
+    const host = makeFakeHost(state, {
+      swf: {
+        "combat.getConsumableSkillItem": () =>
+          slotItemId === undefined ? null : { itemId: slotItemId },
+      } as unknown as Window["swf"],
+    });
+    const house = makeHouse(bridge, host);
     const wait = {
       ...makeWait({
         subscribePackets: PubSub.subscribe(packets),
@@ -171,7 +170,7 @@ const makeHarness = (items: readonly LiveItem[], autoConfirm = true) =>
       confirmEquip,
       nextEquip: Queue.take(sentEquips),
       equippedItemIds,
-      inventory: makeInventory(bridge, store, house, wait),
+      inventory: makeInventory(bridge, host, house, wait),
       unequippedItemIds,
       usedItemIds,
     };
@@ -182,7 +181,7 @@ describe("Inventory.equipByEnhancement", () => {
     "supports the enhancement selector forms accepted by enhanceItem",
     () =>
       Effect.gen(function* () {
-        const best = item({
+        const best = equipment({
           enhancementLevel: 30,
           enhancementPatternId: 2,
           enhancementProcId: 14,
@@ -190,7 +189,7 @@ describe("Inventory.equipByEnhancement", () => {
           itemId: 2,
         });
         const { equippedItemIds, inventory } = yield* makeHarness([
-          item({
+          equipment({
             enhancementLevel: 26,
             enhancementPatternId: 2,
             enhancementProcId: 14,
@@ -198,7 +197,7 @@ describe("Inventory.equipByEnhancement", () => {
             itemId: 1,
           }),
           best,
-          item({
+          equipment({
             enhancementLevel: 35,
             enhancementPatternId: 10,
             enhancementProcId: 14,
@@ -226,19 +225,19 @@ describe("Inventory.equipByEnhancement", () => {
   it.effect("filters by slot and ranks by enhancement level", () =>
     Effect.gen(function* () {
       const { equippedItemIds, inventory } = yield* makeHarness([
-        item({
+        equipment({
           enhancementLevel: 30,
           enhancementPatternId: 10,
           equipmentSlot: "he",
           itemId: 10,
         }),
-        item({
+        equipment({
           enhancementLevel: 40,
           enhancementPatternId: 10,
           equipmentSlot: "ba",
           itemId: 11,
         }),
-        item({
+        equipment({
           enhancementLevel: 35,
           enhancementPatternId: 10,
           equipmentSlot: "he",
@@ -263,7 +262,7 @@ describe("Inventory.equipByEnhancement", () => {
   it.effect("rejects ambiguous or malformed selectors", () =>
     Effect.gen(function* () {
       const { equippedItemIds, inventory } = yield* makeHarness([
-        item({
+        equipment({
           enhancementLevel: 30,
           enhancementPatternId: 10,
           equipmentSlot: "he",
@@ -297,14 +296,18 @@ describe("Inventory consumable equipment", () => {
       const harness = yield* makeHarness([first, second]);
 
       expect(yield* harness.inventory.equip(first.itemId)).toBe(true);
-      expect(first.equipped).toBe(true);
-      expect(second.equipped).toBe(false);
+      expect((yield* harness.inventory.get(first.itemId))?.equipped).toBe(true);
+      expect((yield* harness.inventory.get(second.itemId))?.equipped).toBe(
+        false,
+      );
       expect(harness.equippedItemIds).toEqual([first.itemId]);
 
       expect(yield* harness.inventory.unequipConsumable(first.itemId)).toBe(
         true,
       );
-      expect(first.equipped).toBe(false);
+      expect((yield* harness.inventory.get(first.itemId))?.equipped).toBe(
+        false,
+      );
       expect(harness.unequippedItemIds).toEqual([first.itemId]);
     }),
   );
@@ -322,7 +325,9 @@ describe("Inventory consumable equipment", () => {
         yield* harness.nextEquip;
         yield* TestClock.adjust("5 seconds");
         expect(yield* Fiber.join(first)).toBe(false);
-        expect(potion.equipped).toBe(false);
+        expect((yield* harness.inventory.get(potion.itemId))?.equipped).toBe(
+          false,
+        );
         const second = yield* harness.inventory
           .equip(scroll.itemId)
           .pipe(Effect.forkChild);
@@ -333,13 +338,17 @@ describe("Inventory consumable equipment", () => {
         });
         yield* TestClock.adjust("100 millis");
         expect(second.pollUnsafe()).toBeUndefined();
-        expect(potion.equipped).toBe(false);
+        expect((yield* harness.inventory.get(potion.itemId))?.equipped).toBe(
+          false,
+        );
         yield* harness.confirmEquip({
           iRes: 1,
           o: { id: 482, cd: 20000, tgt: "h" },
         });
         expect(yield* Fiber.join(second)).toBe(true);
-        expect(scroll.equipped).toBe(true);
+        expect((yield* harness.inventory.get(scroll.itemId))?.equipped).toBe(
+          true,
+        );
         expect(yield* harness.inventory.unequipConsumable(scroll.itemId)).toBe(
           true,
         );
@@ -353,8 +362,9 @@ describe("Inventory consumable equipment", () => {
 
       expect(yield* harness.inventory.equip(tonic.itemId)).toBe(false);
       expect(yield* harness.inventory.use(tonic.itemId)).toBe(true);
-      expect(tonic.equipped).toBe(false);
-      expect(tonic.quantity).toBe(1);
+      const used = yield* harness.inventory.get(tonic.itemId);
+      expect(used?.equipped).toBe(false);
+      expect(used?.quantity).toBe(1);
       expect(harness.equippedItemIds).toEqual([]);
       expect(harness.usedItemIds).toEqual([tonic.itemId]);
     }),
@@ -366,7 +376,7 @@ describe("Inventory consumable equipment", () => {
       const harness = yield* makeHarness([boost]);
 
       expect(yield* harness.inventory.use(boost.itemId)).toBe(true);
-      expect(boost.quantity).toBe(1);
+      expect((yield* harness.inventory.get(boost.itemId))?.quantity).toBe(1);
       expect(harness.usedItemIds).toEqual([boost.itemId]);
     }),
   );

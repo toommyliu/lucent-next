@@ -65,3 +65,6 @@ export class LiveQuest extends LiveModel<QuestData> implements Quest {
     };
   }
 }
+
+export const toLiveQuest = (snapshot: QuestSnapshot): LiveQuest =>
+  new LiveQuest({ ...snapshot });

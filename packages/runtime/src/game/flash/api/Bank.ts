@@ -8,8 +8,12 @@ import * as Semaphore from "effect/Semaphore";
 import type { BridgeService } from "../bridge/Bridge";
 import { PositiveWireInt, WireBoolean, WireInt } from "../contract/Coercion";
 import { packetData } from "../contract/Packet";
-import { ItemPayloads, toBankItems } from "../contract/payload/Items";
-import type { Store } from "../state/Store";
+import {
+  isHydrated,
+  readItem,
+  readItems,
+  type HostStateService,
+} from "../state/HostState";
 import type { Auth } from "./Auth";
 import type { House } from "./House";
 import type { Inventory } from "./Inventory";
@@ -50,7 +54,7 @@ const houseCanAccept = (itemId: number, house: House) =>
 
 export const makeBank = Effect.fnUntraced(function* (
   bridge: BridgeService,
-  store: Store,
+  host: HostStateService,
   auth: Auth,
   inventory: Inventory,
   house: House,
@@ -65,22 +69,18 @@ export const makeBank = Effect.fnUntraced(function* (
       .pipe(Effect.map(Option.getOrElse(() => false)));
 
   const getAll = () =>
-    store.items
-      .isHydrated("bank")
-      .pipe(
-        Effect.flatMap((hydrated) =>
-          hydrated ? store.items.getAll("bank") : Effect.succeed([]),
-        ),
-      );
+    isHydrated(host, "bank").pipe(
+      Effect.flatMap((hydrated) =>
+        hydrated ? readItems(host, "bank") : Effect.succeed([]),
+      ),
+    );
 
   const get = (selector: ItemQuery) =>
-    store.items
-      .isHydrated("bank")
-      .pipe(
-        Effect.flatMap((hydrated) =>
-          hydrated ? store.items.get("bank", selector) : Effect.succeed(null),
-        ),
-      );
+    isHydrated(host, "bank").pipe(
+      Effect.flatMap((hydrated) =>
+        hydrated ? readItem(host, "bank", selector) : Effect.succeed(null),
+      ),
+    );
 
   const getSlots = () =>
     bridge
@@ -102,7 +102,10 @@ export const makeBank = Effect.fnUntraced(function* (
       Effect.gen(function* () {
         if (!(yield* auth.isLoggedIn())) return false;
 
-        const version = yield* store.items.getHydrationVersion("bank");
+        const version = yield* host.read({
+          kind: "itemHydration",
+          container: "bank",
+        });
         if (version > 0 && !force) return true;
 
         const requested = yield* bridge.invoke(
@@ -118,15 +121,11 @@ export const makeBank = Effect.fnUntraced(function* (
         });
         if (!loaded) return false;
 
-        const snapshot = yield* bridge.invoke(
-          "bank.getItems",
-          undefined,
-          ItemPayloads,
-        );
-        if (Option.isNone(snapshot)) return false;
-
-        yield* store.items.replace("bank", toBankItems(snapshot.value));
-        return true;
+        const refreshed = yield* host.command({
+          kind: "refreshContainer",
+          container: "bank",
+        });
+        return Option.isSome(refreshed);
       }),
     );
   };
@@ -202,8 +201,8 @@ export const makeBank = Effect.fnUntraced(function* (
       if (packet === null || response?.bSuccess === false) return false;
 
       const [projectedInventoryItem, projectedBankItem] = yield* Effect.all([
-        store.items.get("inventory", inventoryItem.itemId),
-        store.items.get("bank", inventoryItem.itemId),
+        readItem(host, "inventory", inventoryItem.itemId),
+        readItem(host, "bank", inventoryItem.itemId),
       ]);
       return projectedInventoryItem === null && projectedBankItem !== null;
     });
@@ -249,9 +248,9 @@ export const makeBank = Effect.fnUntraced(function* (
       if (packet === null || response?.bSuccess === false) return false;
 
       const [bank, inventoryItem, houseItem] = yield* Effect.all([
-        store.items.get("bank", bankItem.itemId),
-        store.items.get("inventory", bankItem.itemId),
-        store.items.get("house", bankItem.itemId),
+        readItem(host, "bank", bankItem.itemId),
+        readItem(host, "inventory", bankItem.itemId),
+        readItem(host, "house", bankItem.itemId),
       ]);
       return bank === null && (inventoryItem !== null || houseItem !== null);
     });
@@ -309,9 +308,9 @@ export const makeBank = Effect.fnUntraced(function* (
       if (packet === null) return false;
 
       const [newBankItem, newInventoryItem, newHouseItem] = yield* Effect.all([
-        store.items.get("bank", inventoryItem.itemId),
-        store.items.get("inventory", bankItem.itemId),
-        store.items.get("house", bankItem.itemId),
+        readItem(host, "bank", inventoryItem.itemId),
+        readItem(host, "inventory", bankItem.itemId),
+        readItem(host, "house", bankItem.itemId),
       ]);
       return (
         newBankItem !== null &&

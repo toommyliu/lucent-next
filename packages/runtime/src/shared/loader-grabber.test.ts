@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { EntityState, LiveMonster } from "@lucent/game";
+import { EntityState, LiveAura, LiveMonster } from "@lucent/game";
 import * as Schema from "effect/Schema";
 
 import {
@@ -133,34 +133,32 @@ describe("loader grabber requests", () => {
 
 describe("loader grabber aura snapshots", () => {
   it("preserves projected expiry and requires persistence", () => {
-    const monster = new LiveMonster({
-      aggressive: false,
-      cell: "r1",
-      hp: 100,
-      level: 1,
-      maxHp: 100,
-      maxMp: 100,
-      monsterId: 1,
-      monsterMapId: 48,
-      mp: 100,
-      name: "Monster",
-      race: "None",
-      state: EntityState.InCombat,
-    });
-    monster.projectAuras(
+    const monster = new LiveMonster(
       {
-        type: "seed",
-        entries: [
-          {
-            name: "Potent Battle Elixir",
-            icon: "ice",
-            stack: 1,
-            persistent: true,
-            timer: { type: "timed", remainingSeconds: 854.2, fullSeconds: 900 },
-          },
-        ],
+        aggressive: false,
+        cell: "r1",
+        hp: 100,
+        level: 1,
+        maxHp: 100,
+        maxMp: 100,
+        monsterId: 1,
+        monsterMapId: 48,
+        mp: 100,
+        name: "Monster",
+        race: "None",
+        state: EntityState.InCombat,
       },
-      1_000_000,
+      [
+        new LiveAura({
+          duration: 900,
+          expiresAt: 1_854_200,
+          icon: "ice",
+          kind: "active",
+          name: "Potent Battle Elixir",
+          persistent: true,
+          stack: 1,
+        }),
+      ],
     );
     const decode = Schema.decodeUnknownSync(GrabbedMonsterSchema);
     expect(decode(monster.toJSON()).auras).toEqual([

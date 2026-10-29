@@ -661,3 +661,119 @@ fn item_primary_key_selectors_take_precedence_and_names_keep_the_first_match() {
     assert_eq!(item(json!("id:2")), Value::Null);
     assert_eq!(item(json!({"shopItemId": 1.5})), Value::Null);
 }
+
+#[test]
+fn null_item_arrays_complete_empty_inventory_baselines() {
+    let (_host, _session, link) = start();
+    packet(
+        &link,
+        json!({"cmd": "loadInventoryBig", "hitems": null, "items": null}),
+    );
+    let readiness = query(&link, json!({"kind": "readiness"}));
+    assert_eq!(readiness["state"]["houseInventory"], true);
+    assert_eq!(readiness["state"]["inventory"], true);
+    assert_eq!(
+        query(&link, json!({"kind": "items", "container": "inventory"})),
+        json!([])
+    );
+    assert_eq!(
+        query(&link, json!({"kind": "items", "container": "house"})),
+        json!([])
+    );
+}
+
+#[test]
+fn malformed_and_sparse_baselines_remain_unready_and_explain_the_failure() {
+    let (_host, _session, link) = start();
+    packet(
+        &link,
+        json!({"cmd": "loadInventoryBig", "hitems": null, "items": [
+            {"ItemID": "1", "sName": "Valid Item"}, {"sName": "Missing item id"}
+        ]}),
+    );
+    let readiness = query(&link, json!({"kind": "readiness"}));
+    assert_eq!(
+        readiness["failures"],
+        json!({"inventory": "items:loadInventoryBig:entries contained 1 malformed item entries"})
+    );
+    assert_eq!(readiness["missing"], json!(["inventory", "map", "player"]));
+    assert_eq!(
+        readiness["state"],
+        json!({"houseInventory": true, "inventory": false, "map": false, "player": false})
+    );
+    assert_eq!(
+        query(
+            &link,
+            json!({"kind": "item", "container": "inventory", "selector": 1})
+        )["name"],
+        "Valid Item"
+    );
+    packet(&link, json!({"cmd": "loadInventoryBig", "items": []}));
+    let readiness = query(&link, json!({"kind": "readiness"}));
+    assert_eq!(
+        readiness["failures"],
+        json!({"houseInventory": "loadInventoryBig omitted hitems"})
+    );
+    assert_eq!(
+        readiness["state"],
+        json!({"houseInventory": false, "inventory": true, "map": false, "player": false})
+    );
+}
+
+#[test]
+fn guild_item_additions_go_to_inventory() {
+    let (_host, _session, link) = start();
+    packet(
+        &link,
+        json!({"cmd": "addItems", "items": {"8": {"sName": "Guild Item", "sType": "Guild", "iQty": 1}}}),
+    );
+    assert_eq!(
+        query(
+            &link,
+            json!({"kind": "item", "container": "inventory", "selector": 8})
+        )["name"],
+        "Guild Item"
+    );
+    assert_eq!(
+        query(
+            &link,
+            json!({"kind": "item", "container": "house", "selector": 8})
+        ),
+        Value::Null
+    );
+}
+
+#[test]
+fn class_point_gains_use_base_points_and_allow_negative_adjustments() {
+    let (_host, _session, link) = start();
+    packet(
+        &link,
+        json!({"cmd": "loadInventoryBig", "items": [{
+            "CharItemID": 101, "ItemID": 1, "bEquip": true, "iQty": 99400,
+            "sES": "ar", "sName": "Barber", "sType": "Class"
+        }]}),
+    );
+    packet(
+        &link,
+        json!({"cmd": "addGoldExp", "bonusCP": 18, "bonusGold": 6,
+        "iCP": 36, "id": 1, "intExp": 20, "intGold": 12, "typ": "m"}),
+    );
+    assert_eq!(
+        query(
+            &link,
+            json!({"kind": "item", "container": "inventory", "selector": "Barber"})
+        )["quantity"],
+        99436.0
+    );
+    packet(
+        &link,
+        json!({"cmd": "addGoldExp", "iCP": -36, "id": 0, "typ": "q"}),
+    );
+    assert_eq!(
+        query(
+            &link,
+            json!({"kind": "item", "container": "inventory", "selector": "Barber"})
+        )["quantity"],
+        99400.0
+    );
+}
