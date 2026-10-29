@@ -441,3 +441,80 @@ fn an_unavailable_host_service_fails_the_script_with_its_name() {
         other => panic!("{other:?}"),
     }
 }
+
+#[test]
+fn a_stopped_run_leaves_no_globals_or_timers() {
+    let (_host, _session, runtime) = ready_runtime();
+    let started = runtime.eval(
+        "started.js",
+        "new Promise(resolve => { globalThis.started = resolve; })",
+    );
+    let run = runtime.run_script(
+        loose(&[(
+            "leak.js",
+            r#"
+        import * as script from "lucent/script";
+        export default function* () {
+            globalThis.leak = 1;
+            globalThis.ticks = 0;
+            setInterval(() => globalThis.ticks++, 1);
+            globalThis.started(true);
+            yield* script.sleep("1 hour");
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert!(started.wait::<bool>(TIMEOUT).unwrap());
+    runtime.stop_script();
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        ScriptOutcome::Stopped { reason: None }
+    );
+    drop(run);
+    let next = runtime.run_script(
+        loose(&[(
+            "inspect.js",
+            r#"
+        import * as script from "lucent/script";
+        export default function* () {
+            yield* script.sleep(20);
+            yield* script.stop(JSON.stringify([typeof globalThis.leak, typeof globalThis.ticks]));
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        next.wait(TIMEOUT).unwrap(),
+        ScriptOutcome::StoppedByScript {
+            reason: Some(r#"["undefined","undefined"]"#.into()),
+        }
+    );
+}
+
+#[test]
+fn user_modules_cannot_reach_host_internals() {
+    let (_host, _session, runtime) = ready_runtime();
+    let run = runtime.run_script(
+        loose(&[(
+            "internals.js",
+            r#"
+        import * as api from "lucent/api";
+        import * as script from "lucent/script";
+        const internals = [typeof __host, typeof __lucent, typeof window.swf];
+        export default function* () {
+            const player = yield* api.player.get();
+            yield* script.stop(JSON.stringify([...internals, player?.username]));
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        ScriptOutcome::StoppedByScript {
+            reason: Some(r#"["undefined","undefined","undefined","player-a"]"#.into()),
+        }
+    );
+}
