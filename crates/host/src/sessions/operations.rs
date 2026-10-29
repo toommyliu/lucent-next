@@ -254,6 +254,7 @@ impl Endpoint {
 pub(crate) struct Request {
     pub(crate) id: u64,
     pub(crate) attachment: super::AttachmentId,
+    pub(crate) detached: Arc<AtomicBool>,
     pub(crate) operation: Operation,
     pub(crate) player: Endpoint,
 }
@@ -271,6 +272,9 @@ impl Operations {
             .name(format!("operations-{id}"))
             .spawn(move || {
                 while let Ok(Some(request)) = requests.recv() {
+                    if request.detached.load(Ordering::Acquire) {
+                        continue;
+                    }
                     let answer = match request.operation {
                         Operation::AcceptDrop { selector } => request
                             .player

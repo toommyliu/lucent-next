@@ -261,6 +261,7 @@ mod tests {
             .send(Some(crate::sessions::operations::Request {
                 id: 42,
                 attachment: crate::sessions::AttachmentId(0),
+                detached: Default::default(),
                 operation: lucent_protocol::operation::Operation::AcceptDrop {
                     selector: lucent_protocol::query::ItemSelector::Id(70.0),
                 },
