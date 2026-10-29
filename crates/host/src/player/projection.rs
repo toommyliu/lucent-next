@@ -177,6 +177,7 @@ mod tests {
             Running {
                 settings: Default::default(),
                 settings_applied: false,
+                operation_packets: Default::default(),
                 loader_events,
                 script_events: vec![(crate::sessions::AttachmentId(0), producer)],
                 projection: std::sync::Arc::new(parking_lot::RwLock::new(Projection::default())),
