@@ -337,17 +337,25 @@ fn a_killed_runs_accept_finishes_before_the_next_starts() {
         "order.js",
         r#"
         new Promise(resolve => {
-            window.onProbeAccept = () => resolve("accept");
+            const events = [];
+            const record = (event) => {
+                events.push(event);
+                if (events.length === 2) resolve(events);
+            };
+            window.onProbeAccept = () => record("accept");
             const previous = window.onExtensionResponse;
             window.onExtensionResponse = (...args) => {
-                if (JSON.parse(args[0]).dataObj.cmd === "getDrop") resolve("packet");
+                if (JSON.parse(args[0]).dataObj.cmd === "getDrop") record("packet");
                 previous?.(...args);
             };
         })
     "#,
     );
     let second = runtime.run_script(script, Default::default());
-    assert_eq!(order.wait::<String>(TIMEOUT).unwrap(), "packet");
+    assert_eq!(
+        order.wait::<Vec<String>>(TIMEOUT).unwrap(),
+        ["packet", "accept"]
+    );
     assert_eq!(
         second.wait(TIMEOUT).unwrap(),
         ScriptOutcome::StoppedByScript {
