@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use lucent_host::ScriptLink;
 use lucent_host::bridge::{Error, Pending, ScriptEvent};
 use lucent_protocol::bridge::{Value, from_json, to_json};
+use lucent_protocol::command::Command;
 use lucent_protocol::event::ProjectionEvent;
 use lucent_protocol::query::{Query, answer};
 use serde::Serialize;
@@ -26,6 +27,15 @@ pub(crate) fn swf(
         interrupt,
     )?;
     Ok(to_json(value).map(|value| value.to_string()))
+}
+
+pub(crate) fn command(
+    link: &ScriptLink,
+    interrupt: &Interrupt,
+    json: &str,
+) -> Result<String, String> {
+    let command: Command = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    wait(link.command(command), interrupt)
 }
 
 pub(crate) fn read(

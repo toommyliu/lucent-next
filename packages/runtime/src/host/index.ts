@@ -4,6 +4,7 @@ declare global {
   var __host: {
     swf(method: string, argsJson: string): string | undefined;
     read(queryJson: string): string;
+    command(commandJson: string): string;
     now(): number;
   };
   var __lucent: Readonly<{

@@ -57,6 +57,7 @@ impl Engine {
             for (name, function) in [
                 ("swf", v8::Function::new(scope, host_swf)),
                 ("read", v8::Function::new(scope, host_read)),
+                ("command", v8::Function::new(scope, host_command)),
                 ("now", v8::Function::new(scope, host_now)),
             ] {
                 let key = v8::String::new(scope, name).unwrap();
@@ -465,6 +466,24 @@ fn host_read(
     };
     let json = json.to_rust_string_lossy(scope);
     let result = host::read(
+        scope.get_slot::<ScriptLink>().unwrap(),
+        scope.get_slot::<Arc<Interrupt>>().unwrap(),
+        &json,
+    )
+    .map(Some);
+    return_reply(scope, reply, result);
+}
+
+fn host_command(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    reply: v8::ReturnValue<v8::Value>,
+) {
+    let Some(json) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let json = json.to_rust_string_lossy(scope);
+    let result = host::command(
         scope.get_slot::<ScriptLink>().unwrap(),
         scope.get_slot::<Arc<Interrupt>>().unwrap(),
         &json,
