@@ -1,7 +1,6 @@
 use lucent_protocol::{
     auth::{CredentialsSnapshot, ServerSnapshot},
-    command::{Command, RefreshContainer},
-    event::MapState,
+    command::RefreshContainer,
     item::ItemContainer,
     query::Answer,
     quest::QuestData,
@@ -16,63 +15,9 @@ use super::{
     decode_item,
     entity::LiveMonster,
     wire::{trim_js, wire_i64, wire_int},
-    world::{CellScope, decode_monster},
+    world::decode_monster,
 };
 use crate::bridge::Error;
-
-pub(crate) struct CommandScope {
-    epoch: u64,
-    world: WorldScope,
-}
-
-enum WorldScope {
-    Connection,
-    Area(MapState),
-    Cell(CellScope),
-}
-
-impl CommandScope {
-    pub(crate) fn capture(projection: &Projection, command: &Command) -> Self {
-        let world = match command {
-            Command::RefreshCells {}
-            | Command::HydrateMonster { .. }
-            | Command::RejectDrop { .. }
-            | Command::ConfirmShopClosed { .. }
-            | Command::RefreshCredentials {} => WorldScope::Area(projection.world.map.clone()),
-            Command::RefreshCellPads {} => WorldScope::Cell(projection.world.cell_scope()),
-            Command::RefreshContainer { .. }
-            | Command::Login { .. }
-            | Command::Logout {}
-            | Command::RefreshServers {}
-            | Command::RefreshLoggedIn {}
-            | Command::RefreshAcceptedQuests {}
-            | Command::RefreshEquippedConsumable {} => WorldScope::Connection,
-        };
-        Self {
-            epoch: projection.receipts.epoch(),
-            world,
-        }
-    }
-
-    pub(crate) fn commit<R>(
-        &self,
-        projection: &mut Projection,
-        commit: impl FnOnce(&mut Projection) -> Result<R, Error>,
-    ) -> Result<R, Error> {
-        if self.epoch != projection.receipts.epoch() {
-            return Err(Error::ConnectionChanged);
-        }
-        let matches = match &self.world {
-            WorldScope::Connection => true,
-            WorldScope::Area(area) => *area == projection.world.map,
-            WorldScope::Cell(cell) => *cell == projection.world.cell_scope(),
-        };
-        if !matches {
-            return Err(Error::ScopeChanged);
-        }
-        commit(projection)
-    }
-}
 
 pub(crate) fn decode_error(callback: &str, reason: impl ToString) -> Error {
     Error::CommandDecode {
@@ -317,74 +262,6 @@ mod tests {
     use super::super::{entity::LivePlayer, world::decode_player};
     use super::*;
     use serde_json::json;
-
-    #[test]
-    fn changed_connections_and_world_scopes_reject_answers_without_committing() {
-        let mut projection = Projection::default();
-        let scope = CommandScope::capture(
-            &projection,
-            &Command::RefreshContainer {
-                container: RefreshContainer::Bank,
-            },
-        );
-        projection.connection("OnConnection");
-        assert_eq!(
-            scope.commit(&mut projection, |projection| refresh_container(
-                projection,
-                RefreshContainer::Bank,
-                json!([{"ItemID": 1}])
-            )),
-            Err(Error::ConnectionChanged)
-        );
-        assert_eq!(projection.items.hydration(ItemContainer::Bank), 0);
-        assert!(projection.items.all(ItemContainer::Bank).is_empty());
-
-        projection.world.map.name = "testroom".into();
-        let scope = CommandScope::capture(&projection, &Command::RefreshCells {});
-        projection.world.map.room_number = 2.0;
-        assert_eq!(
-            scope.commit(&mut projection, |projection| refresh_cells(
-                projection,
-                json!(["Enter"])
-            )),
-            Err(Error::ScopeChanged)
-        );
-        assert_eq!(projection.world.cells(), Vec::<String>::new());
-        let scope = CommandScope::capture(&projection, &Command::RefreshCells {});
-        assert_eq!(
-            scope.commit(&mut projection, |projection| refresh_cells(
-                projection,
-                json!(["Enter", "r2"])
-            )),
-            Ok(vec!["Enter".into(), "r2".into()])
-        );
-
-        let (player, _) =
-            decode_player(&json!({"entID": 7, "uoName": "player-a", "strFrame": "Enter"})).unwrap();
-        projection.world.put_player(LivePlayer::new(player));
-        projection.world.set_self("player-a");
-        projection.world.set_cell_pads(vec!["Left".into()]);
-        let scope = CommandScope::capture(&projection, &Command::RefreshCellPads {});
-        projection
-            .world
-            .get_me()
-            .unwrap()
-            .update(|player| player.entity.cell = "r2".into());
-        assert_eq!(
-            scope.commit(&mut projection, |projection| refresh_cell_pads(
-                projection,
-                json!(["Right"])
-            )),
-            Err(Error::ScopeChanged)
-        );
-        assert_eq!(projection.world.cell_pads(), Vec::<String>::new());
-        projection
-            .world
-            .get_me()
-            .unwrap()
-            .update(|player| player.entity.cell = "Enter".into());
-        assert_eq!(projection.world.cell_pads(), vec!["Left".to_owned()]);
-    }
 
     #[test]
     fn malformed_answers_leave_previously_committed_state_intact() {

@@ -22,6 +22,7 @@ pub fn headless_host() -> Host {
 #[derive(Default)]
 pub struct ProbeMovie {
     constants: Vec<(String, serde_json::Value)>,
+    raises: Vec<(String, String, String)>,
 }
 
 impl ProbeMovie {
@@ -33,6 +34,17 @@ impl ProbeMovie {
         self.constants.push((name.into(), value));
         self
     }
+
+    pub fn raising(
+        mut self,
+        name: impl Into<String>,
+        event: impl Into<String>,
+        payload: impl Into<String>,
+    ) -> Self {
+        self.raises
+            .push((name.into(), event.into(), payload.into()));
+        self
+    }
 }
 
 pub fn headless_surface() -> Surface {
@@ -41,10 +53,7 @@ pub fn headless_surface() -> Surface {
 
 pub fn start_probe(host: &Host, movie: ProbeMovie) -> (Session, ScriptLink) {
     let mut session = host
-        .start_movie(
-            headless_surface(),
-            Movie(Arc::from(fixture_swf(&movie.constants))),
-        )
+        .start_movie(headless_surface(), Movie(Arc::from(fixture_swf(&movie))))
         .expect("couldn't start the probe player");
     let link = session.take_script_link().unwrap();
     session.send(ViewEvent::Resized(
@@ -141,7 +150,8 @@ fn push_json<'a>(output: &mut Vec<Action<'a>>, value: &'a serde_json::Value) {
     }
 }
 
-fn fixture_swf(constants: &[(String, serde_json::Value)]) -> Vec<u8> {
+fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
+    let constants = &movie.constants;
     let echo_body = actions(&[
         push(vec![Value::Str(string("x"))]),
         Action::GetVariable,
@@ -173,6 +183,24 @@ fn fixture_swf(constants: &[(String, serde_json::Value)]) -> Vec<u8> {
             (name.as_str(), actions(&body))
         })
         .collect();
+    let raise_bodies: Vec<(&str, Vec<u8>)> = movie
+        .raises
+        .iter()
+        .map(|(name, event, payload)| {
+            let mut body = vec![
+                push(vec![Value::Str(string(payload))]),
+                push(vec![Value::Str(string(event))]),
+                push(vec![Value::Int(2)]),
+            ];
+            body.extend(external_interface());
+            body.extend([
+                push(vec![Value::Str(string("call"))]),
+                Action::CallMethod,
+                Action::Pop,
+            ]);
+            (name.as_str(), actions(&body))
+        })
+        .collect();
     let mut callbacks = vec![
         ("probe.echo", vec![string("x")], echo_body.as_slice()),
         (
@@ -187,6 +215,7 @@ fn fixture_swf(constants: &[(String, serde_json::Value)]) -> Vec<u8> {
     callbacks.extend(
         constant_bodies
             .iter()
+            .chain(&raise_bodies)
             .map(|(name, body)| (*name, vec![], body.as_slice())),
     );
     let mut main = Vec::new();

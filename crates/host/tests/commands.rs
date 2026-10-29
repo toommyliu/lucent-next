@@ -617,6 +617,22 @@ fn logout_returns_null_when_the_loader_call_succeeds() {
 }
 
 #[test]
+fn logout_clears_credentials_when_the_disconnect_it_causes_resets_the_connection() {
+    let (_host, _session, link) = start(
+        ProbeMovie::new()
+            .constant("auth.login", Value::Null)
+            .raising("auth.logout", "onConnection", "OnConnectionLost"),
+    );
+    command(
+        &link,
+        json!({"kind": "login", "username": "player-a", "password": "secret"}),
+    )
+    .unwrap();
+    assert_eq!(command(&link, json!({"kind": "logout"})), Ok(Value::Null));
+    assert_eq!(auth(&link), logged_out());
+}
+
+#[test]
 fn refresh_credentials_before_readiness_returns_stored_values_without_a_loader_call() {
     let (_host, _session, link) = start(ProbeMovie::new().constant("auth.login", Value::Null));
     command(

@@ -5,8 +5,7 @@ use serde_json::{Value as Json, json};
 use super::Running;
 use crate::bridge::{self, Error, Value};
 use crate::projection::{
-    Projection,
-    commands::{self, CommandScope},
+    Projection, commands,
     world::{MonsterLookup, monster_lookup},
 };
 
@@ -24,23 +23,18 @@ impl Running {
 
     fn commit_command<R: Serialize>(
         &mut self,
-        scope: &CommandScope,
         commit: impl FnOnce(&mut Projection) -> Result<R, Error>,
     ) -> Result<String, Error> {
         self.drain_events();
-        let mut projection = self.projection.write();
-        scope
-            .commit(&mut projection, commit)
-            .map(|output| serde_json::to_string(&output).unwrap())
+        commit(&mut self.projection.write()).map(|output| serde_json::to_string(&output).unwrap())
     }
 
     pub(super) fn command(&mut self, command: Command) -> Result<String, Error> {
-        let scope = CommandScope::capture(&self.projection.read(), &command);
         match command {
             Command::RefreshContainer { container } => {
                 let (_, callback) = commands::container_kind(container);
                 let answer = self.command_answer(callback, vec![])?;
-                self.commit_command(&scope, |projection| {
+                self.commit_command(|projection| {
                     commands::refresh_container(projection, container, answer)
                 })
             }
@@ -50,9 +44,7 @@ impl Running {
                     .map(|id| Value::Number(id as f64))
                     .collect();
                 let answer = self.command_answer("shops.isOpen", args)?;
-                self.commit_command(&scope, |projection| {
-                    commands::confirm_shop_closed(projection, answer)
-                })
+                self.commit_command(|projection| commands::confirm_shop_closed(projection, answer))
             }
             Command::RejectDrop { selector } => {
                 let id = self
@@ -65,9 +57,7 @@ impl Running {
                     return Ok("false".into());
                 };
                 let answer = self.command_answer("drops.reject", vec![Value::Number(id as f64)])?;
-                self.commit_command(&scope, |projection| {
-                    commands::reject_drop(projection, id, answer)
-                })
+                self.commit_command(|projection| commands::reject_drop(projection, id, answer))
             }
             Command::RefreshCells {} => {
                 let loaded = commands::decode::<bool>(
@@ -75,12 +65,10 @@ impl Running {
                     self.command_answer("world.isLoaded", vec![])?,
                 )?;
                 if !loaded {
-                    return self.commit_command(&scope, |projection| Ok(projection.world.cells()));
+                    return self.commit_command(|projection| Ok(projection.world.cells()));
                 }
                 let answer = self.command_answer("world.getCells", vec![])?;
-                self.commit_command(&scope, |projection| {
-                    commands::refresh_cells(projection, answer)
-                })
+                self.commit_command(|projection| commands::refresh_cells(projection, answer))
             }
             Command::RefreshCellPads {} => {
                 let loaded = commands::decode::<bool>(
@@ -88,13 +76,10 @@ impl Running {
                     self.command_answer("world.isLoaded", vec![])?,
                 )?;
                 if !loaded {
-                    return self
-                        .commit_command(&scope, |projection| Ok(projection.world.cell_pads()));
+                    return self.commit_command(|projection| Ok(projection.world.cell_pads()));
                 }
                 let answer = self.command_answer("world.getCellPads", vec![])?;
-                self.commit_command(&scope, |projection| {
-                    commands::refresh_cell_pads(projection, answer)
-                })
+                self.commit_command(|projection| commands::refresh_cell_pads(projection, answer))
             }
             Command::HydrateMonster { selector } => {
                 if let Some(monster) = self.projection.read().world.resolve_monster(&selector) {
@@ -108,9 +93,7 @@ impl Running {
                     "world.getMonster",
                     vec![lucent_protocol::bridge::from_json(selector)],
                 )?;
-                self.commit_command(&scope, |projection| {
-                    commands::hydrate_monster(projection, answer)
-                })
+                self.commit_command(|projection| commands::hydrate_monster(projection, answer))
             }
             Command::Login { username, password } => {
                 let previous =
@@ -127,7 +110,7 @@ impl Running {
                             Value::String(credentials.password),
                         ],
                     )
-                    .and_then(|_| self.commit_command(&scope, |_| Ok(true)));
+                    .and_then(|_| self.commit_command(|_| Ok(true)));
                 if result.is_err() {
                     self.projection.write().auth.set_credentials(previous);
                 }
@@ -135,7 +118,7 @@ impl Running {
             }
             Command::Logout {} => {
                 let result = self.invoke_command("auth.logout", vec![]);
-                let output = self.commit_command(&scope, |projection| {
+                let output = self.commit_command(|projection| {
                     projection.auth.clear();
                     Ok(())
                 })?;
@@ -165,31 +148,27 @@ impl Running {
                         vec![Value::String("loginInfo.strPassword".into())],
                     )
                     .ok();
-                self.commit_command(&scope, |projection| {
+                self.commit_command(|projection| {
                     commands::refresh_credentials(projection, username, password)
                 })
             }
             Command::RefreshServers {} => {
                 let answer = self.command_answer("auth.getServers", vec![]).ok();
-                self.commit_command(&scope, |projection| {
-                    commands::refresh_servers(projection, answer)
-                })
+                self.commit_command(|projection| commands::refresh_servers(projection, answer))
             }
             Command::RefreshLoggedIn {} => {
                 let answer = self.command_answer("auth.isLoggedIn", vec![]).ok();
-                self.commit_command(&scope, |projection| {
-                    commands::refresh_logged_in(projection, answer)
-                })
+                self.commit_command(|projection| commands::refresh_logged_in(projection, answer))
             }
             Command::RefreshAcceptedQuests {} => {
                 let answer = self.command_answer("quests.getAccepted", vec![])?;
-                self.commit_command(&scope, |projection| {
+                self.commit_command(|projection| {
                     commands::refresh_accepted_quests(projection, answer)
                 })
             }
             Command::RefreshEquippedConsumable {} => {
                 let answer = self.command_answer("combat.getConsumableSkillItem", vec![])?;
-                self.commit_command(&scope, |projection| {
+                self.commit_command(|projection| {
                     commands::refresh_equipped_consumable(projection, answer)
                 })
             }
