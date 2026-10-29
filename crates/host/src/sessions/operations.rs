@@ -129,7 +129,8 @@ impl Endpoint {
             .try_read_for(CALL_TIMEOUT)
             .ok_or(Error::Timeout)?;
         self.check()?;
-        Ok(read(&projection))
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read(&projection)))
+            .map_err(|_| Error::ReadPanicked)
     }
     fn check(&self) -> Result<(), Error> {
         if self.stopped.load(Ordering::Acquire) {
