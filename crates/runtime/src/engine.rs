@@ -673,3 +673,6 @@ fn host_log(
         _ => tracing::info!(target: TARGET, "{}", text.to_rust_string_lossy(scope)),
     }
 }
+
+#[cfg(test)]
+mod tests;

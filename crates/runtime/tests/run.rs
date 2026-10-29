@@ -41,3 +41,15 @@ fn the_api_layer_listens_for_projection_events_before_the_first_turn() {
 
     assert_eq!(listening, "function");
 }
+
+#[test]
+#[ignore = "runs one thousand fresh isolates under externally supplied load"]
+fn a_thousand_trivial_runs_complete_without_watchdog_kills() {
+    let (_host, mut session, _setup) = common::ready_runtime();
+    for index in 1..=1000 {
+        common::completed(&mut session);
+        if index % 100 == 0 {
+            eprintln!("trivial runs completed={index} watchdog_kills=0");
+        }
+    }
+}
