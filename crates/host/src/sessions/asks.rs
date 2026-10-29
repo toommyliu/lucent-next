@@ -340,3 +340,38 @@ impl Shared {
         self.state.lock().routes.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expiring_a_full_answer_mailbox_drops_its_other_routes() {
+        let asker = AttachmentId(1);
+        let bot = AttachmentId(2);
+        let mut state = State::default();
+        state.links.insert(
+            asker,
+            Mailbox {
+                items: (0..EVENT_CAPACITY)
+                    .map(|_| ScriptEvent::Invalidated)
+                    .collect(),
+                ..Default::default()
+            },
+        );
+        for id in 0..3 {
+            state.routes.insert(
+                id,
+                Route {
+                    asked_by: asker,
+                    bot,
+                    deadline: Instant::now(),
+                },
+            );
+        }
+        state.expire(Instant::now(), &mut Vec::new());
+        assert!(state.routes.is_empty());
+        assert!(state.links[&asker].failed);
+        assert!(state.links[&asker].items.is_empty());
+    }
+}
