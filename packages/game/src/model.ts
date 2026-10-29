@@ -17,11 +17,6 @@ export abstract class LiveModel<State extends object> {
   }
 
   /** @internal */
-  update(patch: Partial<State>): void {
-    Object.assign(this.#data, patch);
-  }
-
-  /** @internal */
   replaceFrom(model: LiveModel<State>): void {
     if (this.#data === model.#data) return;
 

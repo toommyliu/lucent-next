@@ -113,7 +113,7 @@ export type MonsterSnapshot = Readonly<MonsterData> &
   };
 
 export class LiveMonster extends LiveEntity<MonsterData> implements Monster {
-  readonly #drops = new Map<number, MonsterDrop>();
+  readonly #drops: readonly MonsterDrop[];
 
   constructor(
     data: MonsterData,
@@ -121,14 +121,14 @@ export class LiveMonster extends LiveEntity<MonsterData> implements Monster {
     drops: readonly MonsterDrop[] = [],
   ) {
     super(data, auras);
-    this.replaceDrops(drops);
+    this.#drops = drops;
   }
 
   get aggressive(): boolean {
     return this.modelData.aggressive;
   }
   get drops(): readonly MonsterDrop[] {
-    return Array.from(this.#drops.values());
+    return [...this.#drops];
   }
   get level(): number {
     return this.modelData.level;
@@ -163,23 +163,6 @@ export class LiveMonster extends LiveEntity<MonsterData> implements Monster {
     return (
       name === "*" || (name !== "" && normalizeGameText(this.name) === name)
     );
-  }
-
-  /**
-   * Replaces the server-provided drop collection without replacing the monster.
-   * @internal
-   */
-  replaceDrops(drops: readonly MonsterDrop[]): void {
-    this.#drops.clear();
-    for (const drop of drops) {
-      this.#drops.set(drop.item.itemId, {
-        ...drop,
-        item: { ...drop.item },
-        questObjectives: [...drop.questObjectives],
-        requiredQuestIds: [...drop.requiredQuestIds],
-        requiredQuests: [...drop.requiredQuests],
-      });
-    }
   }
 
   toJSON(): MonsterSnapshot {

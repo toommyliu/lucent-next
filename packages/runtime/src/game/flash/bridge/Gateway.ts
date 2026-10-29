@@ -165,15 +165,6 @@ export const makeGateway = (target?: Window) =>
     const publishEvent = (event: Event) =>
       PubSub.publish(events, event).pipe(Effect.asVoid);
 
-    const reportDiagnostic = (
-      operation: string,
-      cause: unknown,
-      args?: readonly unknown[],
-    ) =>
-      Effect.sync(() =>
-        diagnosticSink.report("projection", operation, cause, args),
-      );
-
     const dispatch = (
       delivery: Delivery,
       handle: (event: Event) => Effect.Effect<void>,
@@ -258,7 +249,6 @@ export const makeGateway = (target?: Window) =>
       packets: Stream.fromPubSub(packets),
       rawPackets: Stream.fromPubSub(rawPackets),
       publishEvent,
-      reportDiagnostic,
       sendToClient,
       sendToServer,
       start,

@@ -1,11 +1,8 @@
-import * as Effect from "effect/Effect";
-
 export type DiagnosticPhase =
   | "callback-decode"
   | "callback-dispatch"
   | "invoke"
-  | "packet-decode"
-  | "projection";
+  | "packet-decode";
 
 export interface Diagnostic {
   readonly arguments?: readonly unknown[];
@@ -14,14 +11,6 @@ export interface Diagnostic {
   readonly phase: DiagnosticPhase;
   readonly timestamp: number;
 }
-
-export type DiagnosticReporter = (
-  operation: string,
-  cause: unknown,
-  args?: readonly unknown[],
-) => Effect.Effect<void>;
-
-export const ignoreDiagnostic: DiagnosticReporter = () => Effect.void;
 
 export const diagnosticTimestamp = (): number =>
   performance.timeOrigin + performance.now();

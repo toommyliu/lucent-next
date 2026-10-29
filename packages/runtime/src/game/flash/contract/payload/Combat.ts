@@ -49,7 +49,7 @@ const decodeMultiActionAcknowledgement = Schema.decodeUnknownOption(
 );
 const decodeAppliedAction = Schema.decodeUnknownOption(AppliedActionPayload);
 
-export const parseCombatEntityReferences = (
+const parseCombatEntityReferences = (
   value: string,
 ): readonly CombatEntityReference[] =>
   value.split(",").flatMap((token) => {

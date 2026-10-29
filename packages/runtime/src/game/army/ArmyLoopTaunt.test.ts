@@ -13,7 +13,12 @@ import type {
   ArmyLoopTauntReport,
   ArmyLoopTauntReportPayload,
 } from "@lucent/schemas/army";
-import { EntityState, LiveMonster, type PlayerSnapshot } from "@lucent/game";
+import {
+  EntityState,
+  LiveAura,
+  LiveMonster,
+  type PlayerSnapshot,
+} from "@lucent/game";
 import type { DesktopArmyBridge } from "../../shared/desktopBridge";
 import type { ApiService } from "../flash/api/Api";
 import type { Event } from "../flash/contract/Event";
@@ -31,43 +36,48 @@ const playerSnapshot = (name: string, playerNumber: number): PlayerSnapshot =>
     username: name,
   }) as PlayerSnapshot;
 
-const makeMonster = (monsterMapId: number, alive = true) =>
-  new LiveMonster({
-    aggressive: false,
-    cell: "r1",
-    hp: alive ? 100 : 0,
-    level: 1,
-    maxHp: 100,
-    maxMp: 100,
-    monsterId: 1,
-    monsterMapId,
-    mp: 100,
-    name: "Monster",
-    race: "None",
-    state: alive ? EntityState.InCombat : EntityState.Dead,
-  });
+interface Focus {
+  readonly icon: string;
+  readonly stack: number;
+}
 
-const applyFocus = (monster: LiveMonster, icon: string, stack = 1) =>
-  monster.projectAuras(
+const makeMonster = (
+  monsterMapId: number,
+  alive: boolean,
+  focus: Focus | undefined,
+) =>
+  new LiveMonster(
     {
-      type: "apply",
-      entries: [
-        {
-          name: "Focus",
-          icon,
-          stack,
-          timing: { type: "untimed" },
-          persistent: false,
-          restartDuration: false,
-        },
-      ],
+      aggressive: false,
+      cell: "r1",
+      hp: alive ? 100 : 0,
+      level: 1,
+      maxHp: 100,
+      maxMp: 100,
+      monsterId: 1,
+      monsterMapId,
+      mp: 100,
+      name: "Monster",
+      race: "None",
+      state: alive ? EntityState.InCombat : EntityState.Dead,
     },
-    0,
+    focus === undefined
+      ? []
+      : [
+          new LiveAura({
+            duration: 0,
+            icon: focus.icon,
+            kind: "active",
+            name: "Focus",
+            persistent: false,
+            stack: focus.stack,
+          }),
+        ],
   );
 
 interface Harness {
   readonly casts: readonly number[];
-  readonly monster: (id: number) => LiveMonster;
+  readonly setFocus: (id: number, focus: Focus | undefined) => void;
   readonly reports: readonly ArmyLoopTauntReport[];
   readonly emitEvent: (event: Event) => Effect.Effect<void>;
   readonly emitTaunt: (assignmentId?: number, monsterMapId?: number) => void;
@@ -93,14 +103,12 @@ const makeRuntime = Effect.fn("ArmyLoopTaunt.test.makeRuntime")(function* (
   const players = ["Alice", "Bob"];
   const casts: number[] = [];
   const reports: ArmyLoopTauntReport[] = [];
-  const monsters = new Map<number, LiveMonster>();
-  const monster = (id: number) => {
-    let current = monsters.get(id);
-    if (current === undefined) {
-      current = makeMonster(id, initialAlive[id] ?? true);
-      monsters.set(id, current);
-    }
-    return current;
+  const focus = new Map<number, Focus>();
+  const monster = (id: number) =>
+    makeMonster(id, initialAlive[id] ?? true, focus.get(id));
+  const setFocus = (id: number, next: Focus | undefined) => {
+    if (next === undefined) focus.delete(id);
+    else focus.set(id, next);
   };
   const commandResults =
     yield* Queue.unbounded<
@@ -206,9 +214,9 @@ const makeRuntime = Effect.fn("ArmyLoopTaunt.test.makeRuntime")(function* (
       map: { id: 101, name: "battleon", roomNumber: 1 },
       type: "join-map",
     }).pipe(Effect.asVoid),
-    monster,
     reports,
     runtime,
+    setFocus,
     emitEvent: (event) =>
       eventListener === undefined
         ? Effect.die("Loop Taunt event listener was not registered")
@@ -325,7 +333,7 @@ describe("Army Loop Taunt renderer", () => {
         },
       ]);
       beforeCast = Effect.gen(function* () {
-        applyFocus(harness.monster(42), "iwd1,ied1");
+        harness.setFocus(42, { icon: "iwd1,ied1", stack: 1 });
         yield* harness.emitEvent({
           icon: "iwd1,ied1",
           kind: "active",
@@ -362,7 +370,6 @@ describe("Army Loop Taunt renderer", () => {
           ],
         },
       ]);
-      const monster = harness.monster(42);
       const reportStates = () =>
         harness.reports
           .filter((report) => report.type === "focus-state")
@@ -374,45 +381,32 @@ describe("Army Loop Taunt renderer", () => {
         targetType: "monster",
       } as const;
 
-      applyFocus(monster, "other", 5);
+      harness.setFocus(42, { icon: "other", stack: 5 });
       yield* harness.emitEvent({
         ...event,
         type: "aura-added",
         stack: 5,
         icon: "other",
       });
-      applyFocus(monster, "iwd1,ied1", 5);
+      harness.setFocus(42, { icon: "iwd1,ied1", stack: 5 });
       yield* harness.emitEvent({ ...event, type: "aura-updated", stack: 5 });
       expect(reportStates()).toEqual([true]);
 
-      monster.projectAuras(
-        {
-          type: "withdraw",
-          entries: [{ type: "decay", name: "Focus", stack: 2 }],
-        },
-        0,
-      );
+      harness.setFocus(42, { icon: "iwd1,ied1", stack: 2 });
       yield* harness.emitEvent({ ...event, type: "aura-updated", stack: 2 });
       expect(reportStates()).toEqual([true]);
 
-      monster.projectAuras(
-        { type: "withdraw", entries: [{ type: "remove", name: "Focus" }] },
-        0,
-      );
-      applyFocus(monster, "iwd1,ied1");
+      harness.setFocus(42, { icon: "iwd1,ied1", stack: 1 });
       yield* harness.emitEvent({ ...event, type: "aura-removed" });
       yield* harness.emitEvent({ ...event, type: "aura-added", stack: 1 });
       expect(reportStates()).toEqual([true]);
 
-      applyFocus(monster, "other");
+      harness.setFocus(42, { icon: "other", stack: 1 });
       yield* harness.emitEvent({ ...event, type: "aura-updated", stack: 1 });
       expect(reportStates()).toEqual([true, false]);
-      applyFocus(monster, "iwd1,ied1");
+      harness.setFocus(42, { icon: "iwd1,ied1", stack: 1 });
       yield* harness.emitEvent({ ...event, type: "aura-added", stack: 1 });
-      monster.projectAuras(
-        { type: "withdraw", entries: [{ type: "remove", name: "Focus" }] },
-        0,
-      );
+      harness.setFocus(42, undefined);
       yield* harness.emitEvent({ ...event, type: "aura-removed" });
       expect(reportStates()).toEqual([true, false, true, false]);
     }),
