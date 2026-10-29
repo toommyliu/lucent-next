@@ -1,6 +1,8 @@
-use std::sync::{Condvar, Mutex};
+use std::io;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::alarm::Alarm;
 use crate::{Kill, RuntimeError};
 
 const TURN_LIMIT: Duration = Duration::from_millis(200);
@@ -8,7 +10,7 @@ const RETERMINATE: Duration = Duration::from_millis(20);
 
 pub(crate) struct Interrupt {
     state: Mutex<State>,
-    alarm: Condvar,
+    alarm: Alarm,
 }
 
 struct State {
@@ -31,16 +33,16 @@ pub(crate) enum Stop {
 }
 
 impl Interrupt {
-    pub(crate) fn new() -> Self {
-        Self {
+    pub(crate) fn new() -> io::Result<Self> {
+        Ok(Self {
             state: Mutex::new(State {
                 isolate: None,
                 clock: Clock::Idle,
                 stop: None,
                 armed: None,
             }),
-            alarm: Condvar::new(),
-        }
+            alarm: Alarm::new()?,
+        })
     }
 
     pub(crate) fn attach(&self, isolate: v8::IsolateHandle) {
@@ -69,7 +71,7 @@ impl Interrupt {
         if let Some(isolate) = &state.isolate {
             isolate.terminate_execution();
         }
-        self.alarm.notify_one();
+        self.alarm.ring();
     }
 
     pub(crate) fn begin_turn(&self) {
@@ -110,7 +112,7 @@ impl Interrupt {
 
     fn rouse(&self, state: &State, deadline: Instant) {
         if state.armed.is_none_or(|armed| deadline < armed) {
-            self.alarm.notify_one();
+            self.alarm.ring();
         }
     }
 
@@ -120,21 +122,18 @@ impl Interrupt {
             if matches!(state.stop, Some(Stop::Shutdown)) {
                 return;
             }
-            state = match state.clock {
-                Clock::Running(deadline) => {
-                    let left = deadline.saturating_duration_since(Instant::now());
-                    if left.is_zero() {
-                        state.kill(Kill::Watchdog);
-                        state.clock = Clock::Running(Instant::now() + RETERMINATE);
-                        continue;
-                    }
-                    state.armed = Some(deadline);
-                    let mut state = self.alarm.wait_timeout(state, left).unwrap().0;
-                    state.armed = None;
-                    state
+            let until = match state.clock {
+                Clock::Running(deadline) if deadline <= Instant::now() => {
+                    state.kill(Kill::Watchdog);
+                    state.clock = Clock::Running(Instant::now() + RETERMINATE);
+                    continue;
                 }
-                Clock::Idle | Clock::Blocked(_) => self.alarm.wait(state).unwrap(),
+                Clock::Running(deadline) => Some(deadline),
+                Clock::Idle | Clock::Blocked(_) => None,
             };
+            state.armed = until;
+            state = self.alarm.wait(&self.state, state, until);
+            state.armed = None;
         }
     }
 }

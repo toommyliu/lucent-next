@@ -1,3 +1,4 @@
+mod alarm;
 mod engine;
 mod host;
 mod interrupt;
@@ -94,7 +95,7 @@ impl PendingEval {
 
 impl Runtime {
     pub fn start(link: ScriptLink) -> Result<Self, RuntimeError> {
-        let interrupt = Arc::new(Interrupt::new());
+        let interrupt = Arc::new(Interrupt::new()?);
         let thread_interrupt = interrupt.clone();
         let (commands, incoming) = mpsc::channel();
         let (ready, boot) = mpsc::sync_channel(1);

@@ -13,5 +13,8 @@ thiserror = "2"
 tracing = "0.1"
 v8 = "152.2"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 lucent-host = { workspace = true, features = ["testing"] }
