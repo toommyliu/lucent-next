@@ -1,11 +1,59 @@
+mod common;
+
 use std::time::Duration;
 
 use lucent_host::testing::{self, ProbeMovie};
 use lucent_host::{ViewEvent, Viewport};
-use lucent_runtime::{Runtime, RuntimeError};
+use lucent_runtime::{Kill, Runtime, RuntimeError};
 use serde_json::{Value, json};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
+
+#[test]
+fn logout_reaches_a_runtime_rebuilt_on_a_logged_in_session() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, common::ready_movie());
+    let runtime = Runtime::start(link).unwrap();
+    common::ready(&runtime);
+    common::completed(&runtime);
+
+    assert!(matches!(
+        runtime
+            .eval("runaway.js", "while (true) {}")
+            .wait::<Value>(TIMEOUT),
+        Err(RuntimeError::Killed(Kill::Watchdog))
+    ));
+
+    let observed: Value = runtime
+        .eval(
+            "logout.js",
+            r#"
+            new Promise(resolve => {
+                const loggedIn = JSON.parse(__host.read('{"kind":"auth"}')).loggedIn;
+                const seen = [];
+                const onConnection = window.onConnection;
+                const onProjectionEvent = window.onProjectionEvent;
+                window.onConnection = status => {
+                    onConnection(status);
+                    seen.push(status);
+                };
+                window.onProjectionEvent = event => {
+                    onProjectionEvent(event);
+                    seen.push(event.type);
+                };
+                window.onDebug = () => resolve({ loggedIn, seen });
+                window.swf["probe.emit"]("onConnection", "OnConnectionLost");
+                window.swf["probe.emit"]("onDebug", "after");
+            })
+            "#,
+        )
+        .wait(TIMEOUT)
+        .unwrap();
+    assert_eq!(
+        observed,
+        json!({ "loggedIn": true, "seen": ["OnConnectionLost", "logout"] })
+    );
+}
 
 #[test]
 fn a_loader_callback_reaches_scripts_before_the_projection_events_it_produced() {
