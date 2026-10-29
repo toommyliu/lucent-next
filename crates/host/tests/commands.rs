@@ -880,6 +880,30 @@ fn loader_calls(link: &ScriptLink) -> Vec<Value> {
 #[test]
 fn update_settings_calls_the_loader_then_stores_the_record() {
     let (_host, _session, link) = start_settings();
+    use std::{
+        sync::{Arc, Mutex, Weak, mpsc},
+        task::{Wake, Waker},
+    };
+    struct Observe {
+        link: Weak<Mutex<ScriptLink>>,
+        seen: mpsc::Sender<Value>,
+    }
+    impl Wake for Observe {
+        fn wake(self: Arc<Self>) {
+            let link = self.link.upgrade().unwrap();
+            self.seen
+                .send(query(&link.lock().unwrap(), json!({"kind": "settings"})))
+                .unwrap();
+        }
+    }
+    let link = Arc::new(Mutex::new(link));
+    let (seen, snapshots) = mpsc::channel();
+    link.lock()
+        .unwrap()
+        .set_waker(Waker::from(Arc::new(Observe {
+            link: Arc::downgrade(&link),
+            seen,
+        })));
     let patch = json!({
         "animationsEnabled": false, "antiCounterEnabled": false, "collisionsEnabled": false,
         "customGuild": "Lucent", "customName": "Tommy", "deathAdsVisible": false,
@@ -887,7 +911,19 @@ fn update_settings_calls_the_loader_then_stores_the_record() {
         "enemyMagnetEnabled": true, "infiniteRangeEnabled": true,
         "provokeCellEnabled": true, "skipCutscenesEnabled": true,
     });
-    let updated = command(&link, json!({"kind": "updateSettings", "patch": patch})).unwrap();
+    let pending = link.lock().unwrap().command(
+        serde_json::from_value(json!({"kind": "updateSettings", "patch": patch})).unwrap(),
+    );
+    let updated: Value =
+        serde_json::from_str(&pending.recv_timeout(Duration::from_secs(5)).unwrap()).unwrap();
+    link.lock().unwrap().set_waker(Waker::noop().clone());
+    let link = Arc::try_unwrap(link).ok().unwrap().into_inner().unwrap();
+    let snapshots: Vec<Value> = snapshots.try_iter().collect();
+    assert_eq!(snapshots.len(), 13);
+    for snapshot in snapshots {
+        assert_eq!(snapshot["walkSpeed"], 8.0);
+        assert_eq!(snapshot["customNameConfigured"], false);
+    }
     assert_eq!(
         updated,
         json!({
