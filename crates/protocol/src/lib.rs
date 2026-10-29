@@ -18,3 +18,5 @@ pub mod query;
 pub mod readiness;
 
 pub mod command;
+
+pub mod script;
