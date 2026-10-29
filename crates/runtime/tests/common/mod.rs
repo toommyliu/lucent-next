@@ -137,7 +137,11 @@ pub fn start(
     ScriptRun::start(session.attach().unwrap(), script, inputs).unwrap()
 }
 
-pub fn await_event(link: &lucent_host::ScriptLink, name: &str) -> lucent_protocol::bridge::Event {
+pub fn await_event(
+    link: &lucent_host::ScriptLink,
+    name: &str,
+    run: Option<&ScriptRun>,
+) -> lucent_protocol::bridge::Event {
     use std::sync::Arc;
     use std::task::{Wake, Waker};
     use std::time::Instant;
@@ -149,7 +153,14 @@ pub fn await_event(link: &lucent_host::ScriptLink, name: &str) -> lucent_protoco
     }
     link.set_waker(Waker::from(Arc::new(Unpark(std::thread::current()))));
     let deadline = Instant::now() + TIMEOUT;
+    let mut outcome = None;
     loop {
+        outcome = outcome.or_else(|| {
+            run.and_then(|run| match run.wait(Duration::ZERO) {
+                Err(lucent_runtime::RuntimeError::Timeout) => None,
+                outcome => Some(outcome),
+            })
+        });
         let remaining = deadline.saturating_duration_since(Instant::now());
         assert!(!remaining.is_zero(), "did not receive {name}");
         match link.try_event().unwrap() {
@@ -157,7 +168,16 @@ pub fn await_event(link: &lucent_host::ScriptLink, name: &str) -> lucent_protoco
                 return event;
             }
             Some(_) => {}
-            None => std::thread::park_timeout(remaining),
+            None => {
+                if let Some(outcome) = outcome {
+                    panic!("run ended before {name}: {outcome:?}");
+                }
+                std::thread::park_timeout(if run.is_some() {
+                    remaining.min(Duration::from_millis(10))
+                } else {
+                    remaining
+                });
+            }
         }
     }
 }
@@ -166,7 +186,7 @@ pub fn started_run(session: &mut Session, source: &str) -> ScriptRun {
     let observer = session.attach().unwrap();
     let run = start(session, loose(&[("wait.js", source)]), BTreeMap::new());
     assert_eq!(
-        await_event(&observer, "onDebug").args,
+        await_event(&observer, "onDebug", Some(&run)).args,
         vec![lucent_protocol::bridge::Value::String("started".into())]
     );
     run

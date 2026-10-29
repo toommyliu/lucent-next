@@ -565,8 +565,25 @@ fn restarting_the_player_stops_a_run_and_a_new_link_runs_again() {
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));
-    await_event(&link, "onLoaded");
+    await_event(&link, "onLoaded", None);
     let setup = lucent_runtime::Runtime::start(link).unwrap();
     ready(&setup);
     completed(&mut session);
+}
+
+#[test]
+#[should_panic(expected = "run ended before onDebug: Ok(Completed)")]
+fn waiting_for_start_reports_a_script_that_completed_without_the_event() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    started_run(&mut session, "export default function* () {}");
+}
+
+#[test]
+#[should_panic(expected = "run ended before onDebug: Err(Killed(Watchdog))")]
+fn waiting_for_start_reports_a_script_that_was_killed_before_the_event() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    started_run(
+        &mut session,
+        "export default function* () { while (true) {} }",
+    );
 }

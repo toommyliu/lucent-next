@@ -413,7 +413,7 @@ fn a_killed_runs_queued_accepts_never_reach_the_loader() {
     "#,
     );
     assert_eq!(
-        common::await_event(&observer, "onProbeAccept").args,
+        common::await_event(&observer, "onProbeAccept", Some(&first)).args,
         vec![BridgeValue::Number(70.0)]
     );
     first.kill();

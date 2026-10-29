@@ -78,7 +78,7 @@ fn a_runaway_turn_is_killed_within_250_ms_and_a_new_runtime_works() {
             "runaway.js",
             format!(r#"window.swf["probe.emit"]("onDebug", String(Date.now())); {source}"#),
         );
-        let event = common::await_event(&observer, "onDebug");
+        let event = common::await_event(&observer, "onDebug", None);
         let lucent_protocol::bridge::Value::String(began) = &event.args[0] else {
             panic!("{event:?}")
         };
