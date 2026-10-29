@@ -303,26 +303,8 @@ const run = (state: FakeHostState, loader: Loader, command: Command) => {
   };
 
   switch (command.kind) {
-    case "updateSettings": {
-      const { customName, customGuild, ...values } = command.patch;
-      state.settings = {
-        ...state.settings,
-        ...values,
-        ...(values.frameRate === undefined
-          ? {}
-          : { frameRate: Math.max(1, Math.min(60, values.frameRate)) }),
-        ...(values.walkSpeed === undefined
-          ? {}
-          : { walkSpeed: Math.max(1, values.walkSpeed) }),
-        ...(customName === undefined
-          ? {}
-          : { customName: customName ?? "", customNameConfigured: customName !== null }),
-        ...(customGuild === undefined
-          ? {}
-          : { customGuild: customGuild ?? "", customGuildConfigured: customGuild !== null }),
-      };
+    case "updateSettings":
       return state.settings;
-    }
     case "reapplySettings":
       return null;
     case "refreshContainer": {

@@ -65,6 +65,7 @@ impl ScriptLink {
         pending
     }
 
+    #[cfg(feature = "testing")]
     pub fn query(&self, query: Query) -> Result<String, bridge::Error> {
         let mut query = Some(query);
         loop {

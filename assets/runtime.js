@@ -16517,7 +16517,17 @@ ${prefix}}`;
   var makeSettings = /* @__PURE__ */ __name((host) => {
     const get6 = /* @__PURE__ */ __name(() => host.read({ kind: "settings" }), "get");
     return {
-      apply: /* @__PURE__ */ __name((patch) => host.command({ kind: "updateSettings", patch }).pipe(asVoid2), "apply"),
+      apply: /* @__PURE__ */ __name((patch) => gen2(function* () {
+        for (const field2 of ["frameRate", "walkSpeed"]) {
+          if (typeof patch[field2] === "number" && !Number.isFinite(patch[field2])) {
+            return yield* die3(new Error(`${field2} must be a finite number`));
+          }
+        }
+        const result2 = yield* host.command({ kind: "updateSettings", patch });
+        if (isNone2(result2)) {
+          return yield* die3(new Error("host rejected settings patch"));
+        }
+      }), "apply"),
       get: get6,
       isAntiCounterEnabled: /* @__PURE__ */ __name(() => get6().pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled"),
       reapply: /* @__PURE__ */ __name(() => host.command({ kind: "reapplySettings", actionsOnly: false }).pipe(asVoid2), "reapply"),

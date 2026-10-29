@@ -164,6 +164,12 @@ fn settings_survive_a_kill() {
         .wait(TIMEOUT)
         .unwrap();
     assert_eq!(
+        initial,
+        ScriptOutcome::StoppedByScript {
+            reason: Some(r#"{"walkSpeed":8,"animations":true,"customName":null}"#.into()),
+        }
+    );
+    assert_eq!(
         runtime
             .run_script(set, Default::default())
             .wait(TIMEOUT)
@@ -187,7 +193,7 @@ fn settings_survive_a_kill() {
         .run_script(read_settings(), Default::default())
         .wait(TIMEOUT)
         .unwrap();
-    println!("initial={initial:?}\nbefore={before:?}\nafter={after:?}");
+
     let expected = ScriptOutcome::StoppedByScript {
         reason: Some(r#"{"walkSpeed":20,"animations":false,"customName":"Tommy"}"#.into()),
     };
