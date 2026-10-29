@@ -52,17 +52,23 @@ fn next(link: &ScriptLink) -> ScriptEvent {
         }
     }
 }
-fn answer(link: &ScriptLink, id: u64) -> bool {
+fn operation_result(link: &ScriptLink, id: u64) -> Result<bool, lucent_host::bridge::Error> {
+    let deadline = Instant::now() + WAIT;
     loop {
-        if let ScriptEvent::Operation {
+        if let Some(ScriptEvent::Operation {
             id: current,
             answer,
-        } = next(link)
+        }) = link.try_event()?
         {
             assert_eq!(current, id);
-            return matches!(answer.unwrap(), OperationAnswer::AcceptDrop(true));
+            return answer.map(|OperationAnswer::AcceptDrop(value)| value);
         }
+        assert!(Instant::now() < deadline, "accept {id} did not answer");
+        std::thread::sleep(Duration::from_millis(1));
     }
+}
+fn answer(link: &ScriptLink, id: u64) -> bool {
+    operation_result(link, id).unwrap()
 }
 fn accept(link: &ScriptLink) -> u64 {
     link.operate(Operation::AcceptDrop {
@@ -197,6 +203,17 @@ fn a_disconnect_and_an_unavailable_loader_free_the_resource() {
     while !matches!(next(&link), ScriptEvent::Loader { event, .. } if event.name == "onProbeAccept")
     {
     }
+    let pending_until = Instant::now() + Duration::from_millis(100);
+    while Instant::now() < pending_until {
+        assert!(
+            !matches!(
+                link.try_event().unwrap(),
+                Some(ScriptEvent::Operation { .. })
+            ),
+            "accept ended before the disconnect"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
     let disconnected = Instant::now();
     emit(&link, "onConnection", "OnConnectionLost".into());
     let second = accept(&link);
@@ -234,9 +251,8 @@ fn a_player_restart_ends_its_accept_and_the_session_worker_accepts_on_the_new_pl
     let stopped = Instant::now();
     session.restart(testing::headless_surface()).unwrap();
     assert_eq!(
-        old.try_event(),
-        Err(lucent_host::bridge::Error::Stopped),
-        "accept {old_id} must end with its player"
+        operation_result(&old, old_id),
+        Err(lucent_host::bridge::Error::Stopped)
     );
     assert!(stopped.elapsed() < Duration::from_secs(1));
     let current = session.take_script_link().unwrap();
