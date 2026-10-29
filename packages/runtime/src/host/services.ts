@@ -76,15 +76,6 @@ export const unavailableScriptServices = {
     setQuestAutomationEnabled: failure("environment"),
     syncToAll: failure("environment"),
   },
-  autoRelogin: {
-    getDelayMs: defect("autoRelogin"),
-    getServer: defect("autoRelogin"),
-    getState: defect("autoRelogin"),
-    isEnabled: defect("autoRelogin"),
-    setDelay: defect("autoRelogin"),
-    setEnabled: defect("autoRelogin"),
-    setServer: defect("autoRelogin"),
-  },
   fileSystem: {
     exists: reject("fileSystem"),
     list: reject("fileSystem"),
@@ -106,7 +97,7 @@ export const unavailableScriptServices = {
           }),
         ),
     }),
-} satisfies Omit<ScriptServicesShape, "autoZone">;
+} satisfies Omit<ScriptServicesShape, "autoZone" | "autoRelogin">;
 
 export const unavailableScriptDialogs = {
   alert: defect("dialogs"),

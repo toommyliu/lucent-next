@@ -11,6 +11,7 @@ import {
   type ScriptSource,
 } from "../game/scripting/ScriptRunner";
 import { ScriptServices } from "../game/scripting/ScriptServices";
+import { makeAutoReloginService } from "./autoRelogin";
 import { makeAutoZoneService } from "./autoZone";
 import { hideInternals } from "./loop";
 import { unavailableScriptDialogs, unavailableScriptServices } from "./services";
@@ -25,6 +26,7 @@ const runtime = ManagedRuntime.make(
         Layer.succeed(ScriptServices, {
           ...unavailableScriptServices,
           autoZone: makeAutoZoneService(__host),
+          autoRelogin: makeAutoReloginService(__host),
         }),
         Layer.succeed(ScriptDialogs, unavailableScriptDialogs),
       ),

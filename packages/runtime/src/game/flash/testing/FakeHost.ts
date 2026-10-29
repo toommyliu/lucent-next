@@ -221,6 +221,8 @@ const findPlayer = (
 
 const answer = (state: FakeHostState, query: Query): unknown => {
   switch (query.kind) {
+    case "autoRelogin":
+      return { config: { enabled: false, delayMs: 3000, server: null }, status: { phase: { tag: "armed" }, attemptsRemaining: null, lastError: null, captured: false } };
     case "autoZone":
       return state.autoZone;
     case "settings":

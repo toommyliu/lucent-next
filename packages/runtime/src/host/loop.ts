@@ -1,11 +1,13 @@
 import type {
+  AutoReloginRecords,
   AutoZoneConfig,
   OperationAnswer,
   ProjectionEvent,
   ScriptOutcome,
 } from "@lucent/game/protocol";
 
-import { completeOperation } from "./operations";
+import { completeOperation, startOperation } from "./operations";
+import { completeAsk } from "./asks";
 
 import type { ScriptSource } from "../game/scripting/ScriptRunner";
 
@@ -15,6 +17,10 @@ declare global {
     read(queryJson: string): string;
     command(commandJson: string): string;
     operate(operationJson: string): string;
+    ask(payloadJson: string): string;
+    cancelAsk(id: string): void;
+    answer(answerJson: string): void;
+    publishAutoRelogin(recordsJson: string): void;
     now(): number;
     log(level: "info" | "warn" | "error" | "debug", text: string): void;
   };
@@ -31,6 +37,9 @@ declare global {
 
   interface Window {
     onHostEventsLost?: () => void;
+    onAutoReloginEventsLost?: () => void;
+    onAutoReloginChanged?: (records: AutoReloginRecords) => void;
+    onBotAsk?: (id: string, payload: unknown) => void;
     onAutoZoneChanged?: (config: AutoZoneConfig) => void;
     onProjectionEvent?: (event: ProjectionEvent) => void;
     onProjectionInvalidated?: () => void;
@@ -38,6 +47,10 @@ declare global {
 }
 
 type ScriptEvent =
+  | { type: "autorelogin"; records: AutoReloginRecords }
+  | { type: "ask"; id: string; askedBy: string; payload: unknown }
+  | { type: "answer"; id: string; answer: unknown; error: string | null }
+  | { type: "operationstarted"; id: string }
   | {
       type: "loader";
       name: string;
@@ -110,9 +123,17 @@ export const turn = (itemsJson: string): string[] => {
   };
   const items = JSON.parse(itemsJson) as ScriptEvent[];
   const lost = items.some((item) => item.type === "eventslost");
-  if (lost) invoke(() => window.onHostEventsLost?.());
+  if (lost) { invoke(() => window.onHostEventsLost?.()); invoke(() => window.onAutoReloginEventsLost?.()); }
   for (const item of items) {
-    if (item.type === "loader") {
+    if (item.type === "autorelogin") {
+      if (!lost) invoke(() => window.onAutoReloginChanged?.(item.records));
+    } else if (item.type === "ask") {
+      invoke(() => window.onBotAsk?.(item.id, item.payload));
+    } else if (item.type === "answer") {
+      completeAsk(item.id, item.answer, item.error);
+    } else if (item.type === "operationstarted") {
+      startOperation(item.id);
+    } else if (item.type === "loader") {
       invoke(() => {
         const callback: unknown = Reflect.get(window, item.name);
         if (typeof callback === "function") callback.apply(window, item.args);

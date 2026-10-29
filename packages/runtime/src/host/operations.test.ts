@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import * as Effect from "effect/Effect";
 
 import { makeFakeApi, makeFakeHostState } from "../game/flash/testing/FakeHost";
-import { completeOperation } from "./operations";
+import { completeOperation, startOperation } from "./operations";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -19,6 +19,7 @@ it("answers false when the host loses an accept answer", async () => {
     result = yield* api.drops.accept(70);
   })));
   await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce());
+  startOperation("lost");
   await vi.advanceTimersByTimeAsync(15_000);
   expect(result).toBeUndefined();
   await vi.advanceTimersByTimeAsync(20_000);
@@ -38,6 +39,7 @@ it("keeps a slow real accept alive and clears its deadline after the answer", as
     result = yield* api.drops.accept(70);
   })));
   await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce());
+  startOperation("slow");
   await vi.advanceTimersByTimeAsync(15_000);
   expect(result).toBeUndefined();
   completeOperation("slow", { kind: "acceptDrop", value: true }, null);

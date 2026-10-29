@@ -1494,3 +1494,48 @@ fn set_enabled_returns_the_state_after_capture() {
         lucent_protocol::script::ScriptOutcome::Completed
     );
 }
+
+#[test]
+fn relogin_setters_publish_sanitized_records_before_they_answer() {
+    let (_host, mut session, observer) = start();
+    let _bot = Bot::start(session.attach().unwrap()).unwrap();
+    let run = common::start(
+        &mut session,
+        common::loose(&[(
+            "configure.js",
+            r#"
+        import * as relogin from "lucent/autorelogin";
+        export default function* () {
+            yield* relogin.setDelay("7 seconds");
+            yield* relogin.setServer("  Artix  ");
+            for (let i = 0; i < 2; i++) {
+                const state = yield* relogin.setEnabled(true);
+                const read = yield* relogin.getState();
+                if (!state.captured || JSON.stringify(state) !== JSON.stringify(read)) throw new Error(JSON.stringify({state, read}));
+                if (state.username !== undefined || "password" in state) throw new Error("Captured credentials escaped");
+            }
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        lucent_protocol::script::ScriptOutcome::Completed
+    );
+    let records = session.auto_relogin();
+    assert!(records.config.enabled);
+    assert_eq!(records.config.delay_ms, 7000.0);
+    assert_eq!(records.config.server.as_deref(), Some("Artix"));
+    assert!(records.status.captured);
+    let serialized = serde_json::to_string(&records).unwrap();
+    assert!(!serialized.contains("player-a"));
+    assert!(!serialized.contains("password"));
+    assert_eq!(
+        observer
+            .query(lucent_protocol::query::Query::AutoRelogin {})
+            .unwrap(),
+        serialized
+    );
+    assert_eq!(session.pending_ask_count(), 0);
+}

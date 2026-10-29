@@ -12,6 +12,7 @@ import { Bridge, layer as bridgeLayer } from "./game/flash/bridge/Bridge";
 import { DiagnosticSink } from "./game/flash/bridge/DiagnosticSink";
 import { Gateway, layer as gatewayLayer } from "./game/flash/bridge/Gateway";
 import { HostState, layer as hostStateLayer } from "./game/flash/state/HostState";
+import { botRelogin } from "./host/botRelogin";
 import { turn, wake } from "./host/loop";
 
 const causes = new Map<string, unknown>();
@@ -65,7 +66,7 @@ const services = apiLayer.pipe(Layer.provideMerge(host));
 const botLayer = Layer.effectDiscard(
   Effect.flatMap(Gateway, (gateway) => gateway.start()),
 ).pipe(Layer.provideMerge(services), Layer.provide(diagnostics));
-const runtime = ManagedRuntime.make(autoZone.pipe(Layer.provideMerge(botLayer)));
+const runtime = ManagedRuntime.make(Layer.mergeAll(autoZone, botRelogin).pipe(Layer.provideMerge(botLayer)));
 runtime.runSync(Effect.void);
 runtime.runPromise(settingsPolicy);
 

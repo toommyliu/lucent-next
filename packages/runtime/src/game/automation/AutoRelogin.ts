@@ -1,3 +1,4 @@
+import type { AutoReloginConfig, AutoReloginRecords } from "@lucent/game/protocol";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Data from "effect/Data";
@@ -200,16 +201,17 @@ const lifecycle = (
 export const makeAutoRelogin = Effect.fnUntraced(function* (
   api: AutoReloginApi,
   fibers: FiberMapType.FiberMap<string>,
+  config?: AutoReloginConfig,
 ) {
   const state = yield* SubscriptionRef.make<State>({
     attemptsRemaining: undefined,
-    delayMs: defaultDelay,
-    enabled: false,
+    delayMs: config?.delayMs ?? defaultDelay,
+    enabled: config?.enabled ?? false,
     generation: 0,
     lastError: undefined,
     password: undefined,
     phase: { tag: "armed" },
-    server: undefined,
+    server: config?.server ?? undefined,
     username: undefined,
   });
   const loginPermit = yield* Semaphore.make(1);
@@ -218,6 +220,12 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
   const getState = () =>
     SubscriptionRef.get(state).pipe(Effect.map(publicState));
   const changes = SubscriptionRef.changes(state).pipe(Stream.map(publicState));
+  const records = (current: State): AutoReloginRecords => ({
+    config: { enabled: current.enabled, delayMs: current.delayMs, server: current.server ?? null },
+    status: { phase: current.phase, attemptsRemaining: current.attemptsRemaining ?? null, lastError: current.lastError ?? null, captured: current.username !== undefined && current.password !== undefined },
+  });
+  const getRecords = () => SubscriptionRef.get(state).pipe(Effect.map(records));
+  const recordChanges = SubscriptionRef.changes(state).pipe(Stream.map(records));
 
   const isPlayerReady = () =>
     api.player.isReady().pipe(Effect.catchCause(() => Effect.succeed(false)));
@@ -950,6 +958,8 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
 
   return {
     changes,
+    getRecords,
+    recordChanges,
     getDelayMs,
     getServer,
     getState,

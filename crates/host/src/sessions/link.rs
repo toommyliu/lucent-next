@@ -1,5 +1,4 @@
-use lucent_protocol::auto_zone::AutoZoneConfig;
-use lucent_protocol::{query::Query, settings::GameSettings};
+use lucent_protocol::query::Query;
 use parking_lot::RwLock;
 use std::sync::{
     Arc,
@@ -14,14 +13,14 @@ use crate::player::{Inbox, Msg};
 use crate::projection::{Projection, answer};
 
 pub struct ScriptLink {
+    asks: Arc<super::asks::Shared>,
     id: u64,
     attachment: AttachmentId,
     detached: Arc<AtomicBool>,
     inbox: Inbox,
     events: ScriptEvents,
     projection: Arc<RwLock<Projection>>,
-    settings: Arc<RwLock<GameSettings>>,
-    auto_zone: Arc<RwLock<AutoZoneConfig>>,
+    records: super::Records,
     stopped: Arc<AtomicBool>,
     packets: Arc<super::operations::Packets>,
     operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
@@ -32,20 +31,20 @@ impl ScriptLink {
         id: u64,
         attachment: AttachmentId,
         events: ScriptEvents,
-        settings: Arc<RwLock<GameSettings>>,
-        auto_zone: Arc<RwLock<AutoZoneConfig>>,
+        records: super::Records,
         player: super::operations::Endpoint,
         operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
+        asks: Arc<super::asks::Shared>,
     ) -> Self {
         Self {
+            asks,
             id,
             attachment,
             detached: Arc::default(),
             inbox: player.inbox,
             events,
             projection: player.projection,
-            settings,
-            auto_zone,
+            records,
             stopped: player.stopped,
             packets: player.packets,
             operations,
@@ -57,7 +56,16 @@ impl ScriptLink {
     }
 
     pub fn try_event(&self) -> Result<Option<ScriptEvent>, bridge::Error> {
-        self.events.try_recv()
+        if self.stopped.load(Ordering::Acquire) {
+            return Err(bridge::Error::Stopped);
+        }
+        if self.events.overflowed() {
+            return self.events.try_recv();
+        }
+        match self.asks.try_event(self.attachment)? {
+            Some(event) => Ok(Some(event)),
+            None => self.events.try_recv(),
+        }
     }
 
     pub fn overflowed(&self) -> bool {
@@ -65,11 +73,41 @@ impl ScriptLink {
     }
 
     pub fn set_waker(&self, waker: Waker) {
-        self.events.set_waker(waker);
+        self.events.set_waker(waker.clone());
+        self.asks.set_waker(self.attachment, waker);
     }
 
     pub fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {
         self.inbox.call_loader(name, args)
+    }
+
+    pub fn claim_bot(&self) -> Result<(), bridge::Error> {
+        self.asks.claim_bot(self.attachment)
+    }
+
+    pub fn ask(&self, payload: serde_json::Value) -> Result<u64, bridge::Error> {
+        if self.stopped.load(Ordering::Acquire) {
+            return Err(bridge::Error::Stopped);
+        }
+        self.asks.ask(self.attachment, payload)
+    }
+    pub fn cancel_ask(&self, id: u64) {
+        self.asks.cancel(self.attachment, id);
+    }
+    pub fn answer(
+        &self,
+        id: u64,
+        answer: Result<serde_json::Value, bridge::Error>,
+    ) -> Result<(), bridge::Error> {
+        self.asks.answer(self.attachment, id, answer)
+    }
+    pub fn publish_auto_relogin(
+        &self,
+        records: lucent_protocol::auto_relogin::AutoReloginRecords,
+    ) -> Result<(), bridge::Error> {
+        self.asks.publish(self.attachment, records.clone(), || {
+            *self.records.auto_relogin.write() = records;
+        })
     }
 
     pub fn operate(
@@ -127,8 +165,18 @@ impl ScriptLink {
         if self.stopped.load(Ordering::Acquire) {
             return Err(bridge::Error::Stopped);
         }
+        if matches!(query, Some(Query::AutoRelogin {})) {
+            let records = self
+                .records
+                .auto_relogin
+                .try_read_for(timeout)
+                .ok_or(bridge::Error::Timeout)?;
+            query.take();
+            return Ok(serde_json::to_string(&*records).unwrap());
+        }
         if matches!(query, Some(Query::AutoZone {})) {
             let config = self
+                .records
                 .auto_zone
                 .try_read_for(timeout)
                 .ok_or(bridge::Error::Timeout)?;
@@ -140,6 +188,7 @@ impl ScriptLink {
         }
         let start = Instant::now();
         let settings = self
+            .records
             .settings
             .try_read_for(timeout)
             .ok_or(bridge::Error::Timeout)?;
@@ -154,7 +203,8 @@ impl ScriptLink {
             answer(
                 projection,
                 &settings,
-                &self.auto_zone,
+                &self.records.auto_zone,
+                &self.records.auto_relogin,
                 query.take().unwrap(),
             )
         })
@@ -195,6 +245,7 @@ impl ScriptLink {
 impl Drop for ScriptLink {
     fn drop(&mut self) {
         self.detached.store(true, Ordering::Release);
+        self.asks.detach(self.attachment);
         self.inbox.post(Msg::Detach(self.attachment));
     }
 }

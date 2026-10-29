@@ -275,6 +275,10 @@ impl Operations {
                     if request.detached.load(Ordering::Acquire) {
                         continue;
                     }
+                    request.player.inbox.post(Msg::OperationAnswer(
+                        request.attachment,
+                        ScriptEvent::OperationStarted { id: request.id },
+                    ));
                     let answer = match request.operation {
                         Operation::AcceptDrop { selector } => request
                             .player

@@ -26,6 +26,7 @@ fn auras(auras: Vec<LiveAura>, kind: Option<AuraKind>) -> Vec<AuraData> {
 struct State<'a> {
     projection: &'a Projection,
     settings: &'a GameSettings,
+    auto_relogin: &'a parking_lot::RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>,
     auto_zone: &'a parking_lot::RwLock<AutoZoneConfig>,
 }
 
@@ -33,6 +34,7 @@ pub fn answer(
     projection: &Projection,
     settings: &GameSettings,
     auto_zone: &parking_lot::RwLock<AutoZoneConfig>,
+    auto_relogin: &parking_lot::RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>,
     query: Query,
 ) -> String {
     lucent_protocol::query::answer(
@@ -40,12 +42,16 @@ pub fn answer(
             projection,
             settings,
             auto_zone,
+            auto_relogin,
         },
         query,
     )
 }
 
 impl Answer for State<'_> {
+    fn auto_relogin(&self) -> lucent_protocol::auto_relogin::AutoReloginRecords {
+        self.auto_relogin.read().clone()
+    }
     fn auto_zone(&self) -> AutoZoneConfig {
         self.auto_zone.read().clone()
     }

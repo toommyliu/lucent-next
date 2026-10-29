@@ -91,6 +91,19 @@ pub(crate) fn invoke(player: &mut Player, name: &str, args: Vec<Value>) -> Resul
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScriptEvent {
+    AutoReloginChanged {
+        records: lucent_protocol::auto_relogin::AutoReloginRecords,
+    },
+    Ask {
+        request: crate::sessions::asks::Request,
+    },
+    Answer {
+        id: u64,
+        answer: Result<serde_json::Value, Error>,
+    },
+    OperationStarted {
+        id: u64,
+    },
     AutoZoneChanged {
         config: lucent_protocol::auto_zone::AutoZoneConfig,
     },
