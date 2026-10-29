@@ -120,7 +120,7 @@ fn module_errors_name_the_script_and_location() {
         (
             "evaluate.js",
             "throw new Error('broken module');",
-            "evaluate.js:1:7: Error: broken module",
+            "evaluate.js:1:7: broken module",
         ),
         (
             "await.js",
@@ -151,6 +151,38 @@ fn module_errors_name_the_script_and_location() {
             message,
             "@lucent/dailies/tests/broken.js:1:18: SyntaxError: Unexpected token ';'"
         ),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_nested_module_evaluation_error_keeps_the_throwing_module_in_its_details() {
+    let (_host, _session, runtime) = ready_runtime();
+    let script = package(
+        "lucent-dailies",
+        "tests/entry.js",
+        &[
+            ("tests/entry.js", "import './middle.js';"),
+            ("tests/middle.js", "import './throwing.js';"),
+            ("tests/throwing.js", "throw new Error('nested failure');"),
+        ],
+    );
+    match runtime
+        .run_script(script, Default::default())
+        .wait(TIMEOUT)
+        .unwrap()
+    {
+        ScriptOutcome::Failed { message, details } => {
+            assert_eq!(
+                message,
+                "@lucent/dailies/tests/throwing.js:1:7: nested failure"
+            );
+            assert!(
+                details
+                    .unwrap()
+                    .contains("at @lucent/dailies/tests/throwing.js:1:7")
+            );
+        }
         other => panic!("{other:?}"),
     }
 }

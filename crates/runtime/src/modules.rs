@@ -48,7 +48,23 @@ pub(crate) fn load(
     v8::tc_scope!(let tc, scope);
     let result = graph(tc, &script, builtins);
     match result {
-        Ok(namespace) => reply.set(namespace),
+        Ok(entry) => {
+            let Some(value) = entry.evaluate(tc) else {
+                if tc.has_caught() {
+                    tc.rethrow();
+                }
+                return;
+            };
+            let promise = v8::Local::<v8::Promise>::try_from(value).unwrap();
+            promise.mark_as_handled();
+            if promise.state() == v8::PromiseState::Rejected {
+                let reason = promise.result(tc);
+                tc.throw_exception(reason);
+                tc.rethrow();
+            } else {
+                reply.set(entry.get_module_namespace());
+            }
+        }
         Err(message) if !tc.is_execution_terminating() => {
             tc.reset();
             throw(tc, &message);
@@ -105,7 +121,7 @@ fn graph<'s>(
     tc: &mut v8::PinnedRef<'s, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
     script: &Script,
     builtins: v8::Local<v8::Object>,
-) -> Result<v8::Local<'s, v8::Value>, String> {
+) -> Result<v8::Local<'s, v8::Module>, String> {
     let entry = compile(tc, script, script.entry())?;
     let mut modules = BTreeMap::from([(script.entry().clone(), entry)]);
     let mut queue = VecDeque::from([script.entry().clone()]);
@@ -196,15 +212,7 @@ fn graph<'s>(
                 .ok_or_else(|| located(tc))?;
         }
     }
-    let value = entry.evaluate(tc).ok_or_else(|| located(tc))?;
-    let promise = v8::Local::<v8::Promise>::try_from(value).unwrap();
-    promise.mark_as_handled();
-    if promise.state() == v8::PromiseState::Rejected {
-        let reason = promise.result(tc);
-        let message = v8::Exception::create_message(tc, reason);
-        return Err(message_text(tc, message, reason));
-    }
-    Ok(entry.get_module_namespace())
+    Ok(entry)
 }
 
 fn resolve<'s>(
