@@ -1,6 +1,4 @@
 // @ts-check
 
-module.exports = {
-  ...require("./lib/elders-blood"),
-  ...require("./lib/wheel-of-doom"),
-};
+export * from "./lib/elders-blood";
+export * from "./lib/wheel-of-doom";

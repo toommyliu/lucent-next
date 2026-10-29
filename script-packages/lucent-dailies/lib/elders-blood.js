@@ -1,7 +1,7 @@
 // @ts-check
 
-const api = require("lucent/api");
-const script = require("lucent/script");
+import * as api from "lucent/api";
+import * as script from "lucent/script";
 
 const QUEST_ID = 802;
 const REWARD_ITEM_ID = 5586;
@@ -74,4 +74,4 @@ function* farmEldersBlood() {
   return { status: "failed" };
 }
 
-module.exports = { farmEldersBlood };
+export { farmEldersBlood };

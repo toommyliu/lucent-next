@@ -1,8 +1,8 @@
 // @ts-check
 
-const api = require("lucent/api");
-const script = require("lucent/script");
-const { collect, acceptDrop, quantity, unbank } = require("./inventory");
+import * as api from "lucent/api";
+import * as script from "lucent/script";
+import { collect, acceptDrop, quantity, unbank } from "./inventory";
 
 /** @param {number} questId
  * @param {number} target
@@ -89,4 +89,4 @@ function* ensureScroll({ questId, reward, target }) {
   }
 }
 
-module.exports = { prepareScroll, ensureScroll };
+export { prepareScroll, ensureScroll };
