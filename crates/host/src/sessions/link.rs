@@ -195,6 +195,67 @@ mod tests {
     }
 
     #[test]
+    fn an_orphaned_accept_runs_to_its_end() {
+        let host = testing::headless_host();
+        let (mut session, link) = testing::start_probe(&host, testing::ProbeMovie::new()
+            .constant("auth.isLoggedIn", serde_json::json!(true))
+            .accepting_drop(Duration::from_millis(100), serde_json::json!({
+                "type":"json","dataObj":{"cmd":"getDrop","ItemID":70,"bSuccess":true,"iQtyNow":3}
+            }).to_string()));
+        link.call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onExtensionResponse".into()),
+                Value::String(
+                    serde_json::json!({"type":"json","dataObj":{"cmd":"dropItem","items":{"70":{
+                        "ItemID":70,"sName":"Dropped Item","iQty":2
+                    }}}})
+                    .to_string(),
+                ),
+            ],
+        )
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+        let id = link
+            .operate(lucent_protocol::operation::Operation::AcceptDrop {
+                selector: lucent_protocol::query::ItemSelector::Id(70.0),
+            })
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        loop {
+            if matches!(link.try_event().unwrap(), Some(ScriptEvent::Loader { event, .. }) if event.name == "onProbeAccept")
+            {
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(1));
+        }
+        let observer = session.attach().unwrap();
+        drop(link);
+        loop {
+            if let Some(ScriptEvent::Operation {
+                id: answered,
+                answer,
+            }) = observer.try_event().unwrap()
+            {
+                assert_eq!(answered, id);
+                assert_eq!(
+                    answer,
+                    Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
+                        true
+                    ))
+                );
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "orphaned worker never answered"
+            );
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[test]
     fn a_contended_read_times_out_without_calling_its_reader_and_stops_with_its_player() {
         let host = testing::headless_host();
         let mut session = host.start_session(testing::headless_surface()).unwrap();

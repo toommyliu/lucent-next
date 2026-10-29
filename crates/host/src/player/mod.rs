@@ -504,6 +504,26 @@ mod tests {
     }
 
     #[test]
+    fn operation_answers_arrive_before_the_first_viewport() {
+        let (tx, rx) = mpsc::channel();
+        let (producer, events) = crate::bridge::script_events(16);
+        let answer = crate::bridge::ScriptEvent::Operation {
+            id: 42,
+            answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
+                false,
+            )),
+        };
+        tx.send(Msg::Attach(AttachmentId(0), producer)).unwrap();
+        tx.send(Msg::OperationAnswer(answer.clone())).unwrap();
+        tx.send(Msg::View(ViewEvent::Resized(
+            Viewport::new(100.0, 100.0, 1.0).unwrap(),
+        )))
+        .unwrap();
+        let _attachment = first_viewport(&rx, false, &Default::default()).unwrap();
+        assert_eq!(events.try_recv(), Ok(Some(answer)));
+    }
+
+    #[test]
     fn attachments_before_the_viewport_are_kept_until_detached_or_stopped() {
         let viewport = Viewport::new(1024.0, 768.0, 1.0).unwrap();
         let (first, first_events) = crate::bridge::script_events(1);

@@ -118,43 +118,6 @@ fn accepts_run_one_at_a_time() {
 }
 
 #[test]
-fn an_orphaned_accept_runs_to_its_end() {
-    let host = testing::headless_host();
-    let (session, link) = testing::start_probe(
-        &host,
-        ProbeMovie::new()
-            .constant("auth.isLoggedIn", json!(true))
-            .accepting_drop(
-                Duration::from_millis(100),
-                packet(json!({"cmd":"getDrop","ItemID":70,"bSuccess":true,"iQtyNow":3})),
-            ),
-    );
-    drop_item(&link, "Item", false);
-    accept(&link);
-    while !matches!(next(&link), ScriptEvent::Loader { event, .. } if event.name == "onProbeAccept")
-    {
-    }
-    drop(link);
-    let deadline = Instant::now() + WAIT;
-    loop {
-        let quantity = session
-            .read_projection(|state| {
-                state
-                    .items
-                    .get(ItemContainer::Inventory, 70)
-                    .map(|item| item.data().quantity)
-            })
-            .recv_timeout(WAIT)
-            .unwrap();
-        if quantity == Some(3.0) {
-            break;
-        }
-        assert!(Instant::now() < deadline);
-        std::thread::sleep(Duration::from_millis(10));
-    }
-}
-
-#[test]
 fn a_missing_packet_times_out_and_frees_the_resource() {
     let host = testing::headless_host();
     let (_session, link) = testing::start_probe(
@@ -227,12 +190,18 @@ fn a_disconnect_and_an_unavailable_loader_free_the_resource() {
         &host,
         ProbeMovie::new()
             .constant("auth.isLoggedIn", json!(true))
-            .raising("drops.accept", "onConnection", "OnConnectionLost"),
+            .accepting_drop(Duration::ZERO, packet(json!({"cmd":"unrelated"}))),
     );
     drop_item(&link, "Item", false);
     let first = accept(&link);
+    while !matches!(next(&link), ScriptEvent::Loader { event, .. } if event.name == "onProbeAccept")
+    {
+    }
+    let disconnected = Instant::now();
+    emit(&link, "onConnection", "OnConnectionLost".into());
     let second = accept(&link);
     assert!(!answer(&link, first));
+    assert!(disconnected.elapsed() < Duration::from_secs(1));
     assert!(!answer(&link, second));
     let (_session, link) = testing::start_probe(
         &host,
@@ -258,12 +227,18 @@ fn a_player_restart_ends_its_accept_and_the_session_worker_accepts_on_the_new_pl
             ),
     );
     drop_item(&old, "Item", false);
-    accept(&old);
+    let old_id = accept(&old);
     while !matches!(next(&old), ScriptEvent::Loader { event, .. } if event.name == "onProbeAccept")
     {
     }
+    let stopped = Instant::now();
     session.restart(testing::headless_surface()).unwrap();
-    assert_eq!(old.try_event(), Err(lucent_host::bridge::Error::Stopped));
+    assert_eq!(
+        old.try_event(),
+        Err(lucent_host::bridge::Error::Stopped),
+        "accept {old_id} must end with its player"
+    );
+    assert!(stopped.elapsed() < Duration::from_secs(1));
     let current = session.take_script_link().unwrap();
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
