@@ -260,6 +260,7 @@ mod tests {
             .sender
             .send(Some(crate::sessions::operations::Request {
                 id: 42,
+                attachment: crate::sessions::AttachmentId(0),
                 operation: lucent_protocol::operation::Operation::AcceptDrop {
                     selector: lucent_protocol::query::ItemSelector::Id(70.0),
                 },
@@ -297,7 +298,7 @@ mod tests {
     }
 
     fn operation_answer(inbox: &mpsc::Receiver<Msg>, timeout: Duration) -> ScriptEvent {
-        let Msg::OperationAnswer(answer) = inbox.recv_timeout(timeout).unwrap() else {
+        let Msg::OperationAnswer(_, answer) = inbox.recv_timeout(timeout).unwrap() else {
             panic!("expected operation answer");
         };
         answer

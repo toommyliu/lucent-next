@@ -253,6 +253,7 @@ impl Endpoint {
 
 pub(crate) struct Request {
     pub(crate) id: u64,
+    pub(crate) attachment: super::AttachmentId,
     pub(crate) operation: Operation,
     pub(crate) player: Endpoint,
 }
@@ -276,13 +277,13 @@ impl Operations {
                             .accept(selector)
                             .map(OperationAnswer::AcceptDrop),
                     };
-                    request
-                        .player
-                        .inbox
-                        .post(Msg::OperationAnswer(ScriptEvent::Operation {
+                    request.player.inbox.post(Msg::OperationAnswer(
+                        request.attachment,
+                        ScriptEvent::Operation {
                             id: request.id,
                             answer,
-                        }));
+                        },
+                    ));
                 }
             })?;
         Ok(Self {

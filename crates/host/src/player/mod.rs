@@ -174,7 +174,7 @@ pub(crate) enum Msg {
     Detach(AttachmentId),
     #[cfg(feature = "testing")]
     LinkCount(mpsc::Sender<Result<usize, BridgeError>>),
-    OperationAnswer(crate::bridge::ScriptEvent),
+    OperationAnswer(AttachmentId, crate::bridge::ScriptEvent),
     View(ViewEvent),
     Mute(bool),
     Poll(async_task::Runnable),
@@ -270,6 +270,16 @@ fn run(
 
 type ScriptAttachments = Vec<(AttachmentId, ScriptEventSender)>;
 
+fn deliver_operation_answer(
+    script_events: &ScriptAttachments,
+    attachment: AttachmentId,
+    answer: crate::bridge::ScriptEvent,
+) {
+    if let Some((_, stream)) = script_events.iter().find(|(id, _)| *id == attachment) {
+        stream.send(answer);
+    }
+}
+
 fn first_viewport(
     inbox: &mpsc::Receiver<Msg>,
     mut muted: bool,
@@ -301,10 +311,8 @@ fn first_viewport(
                 };
                 let _ = reply.send(result);
             }
-            Msg::OperationAnswer(answer) => {
-                for (_, stream) in &script_events {
-                    stream.send(answer.clone());
-                }
+            Msg::OperationAnswer(attachment, answer) => {
+                deliver_operation_answer(&script_events, attachment, answer);
             }
             Msg::Stop => return None,
             Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
@@ -400,7 +408,9 @@ impl Running {
             Msg::LinkCount(reply) => {
                 let _ = reply.send(Ok(self.script_events.len()));
             }
-            Msg::OperationAnswer(answer) => self.publish(answer),
+            Msg::OperationAnswer(attachment, answer) => {
+                deliver_operation_answer(&self.script_events, attachment, answer);
+            }
             Msg::Read(read) => (read.0)(Ok(&self.projection.read())),
             Msg::Command(command, reply) => {
                 let result = self.command(command);
@@ -521,7 +531,8 @@ mod tests {
         };
         tx.send(Msg::Attach(AttachmentId(0), producer)).unwrap();
         tx.send(Msg::Attach(AttachmentId(1), second)).unwrap();
-        tx.send(Msg::OperationAnswer(answer.clone())).unwrap();
+        tx.send(Msg::OperationAnswer(AttachmentId(0), answer.clone()))
+            .unwrap();
         tx.send(Msg::View(ViewEvent::Resized(
             Viewport::new(100.0, 100.0, 1.0).unwrap(),
         )))
@@ -540,12 +551,15 @@ mod tests {
                 Msg::Attach(AttachmentId(0), producer),
                 Msg::Attach(AttachmentId(1), second),
                 Msg::Detach(AttachmentId(0)),
-                Msg::OperationAnswer(crate::bridge::ScriptEvent::Operation {
-                    id: 42,
-                    answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
-                        false,
-                    )),
-                }),
+                Msg::OperationAnswer(
+                    AttachmentId(0),
+                    crate::bridge::ScriptEvent::Operation {
+                        id: 42,
+                        answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
+                            false,
+                        )),
+                    },
+                ),
             ];
             if before_viewport {
                 let (tx, rx) = mpsc::channel();

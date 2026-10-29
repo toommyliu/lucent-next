@@ -79,6 +79,7 @@ impl ScriptLink {
         self.operations
             .try_send(Some(super::operations::Request {
                 id,
+                attachment: self.attachment,
                 operation,
                 player: super::operations::Endpoint {
                     inbox: self.inbox.clone(),
@@ -216,11 +217,10 @@ mod tests {
         )
         .recv_timeout(Duration::from_secs(1))
         .unwrap();
-        let id = link
-            .operate(lucent_protocol::operation::Operation::AcceptDrop {
-                selector: lucent_protocol::query::ItemSelector::Id(70.0),
-            })
-            .unwrap();
+        link.operate(lucent_protocol::operation::Operation::AcceptDrop {
+            selector: lucent_protocol::query::ItemSelector::Id(70.0),
+        })
+        .unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(1);
         loop {
             if matches!(link.try_event().unwrap(), Some(ScriptEvent::Loader { event, .. }) if event.name == "onProbeAccept")
@@ -232,6 +232,11 @@ mod tests {
         }
         let observer = session.attach().unwrap();
         drop(link);
+        let id = observer
+            .operate(lucent_protocol::operation::Operation::AcceptDrop {
+                selector: lucent_protocol::query::ItemSelector::Id(999.0),
+            })
+            .unwrap();
         loop {
             if let Some(ScriptEvent::Operation {
                 id: answered,
@@ -242,17 +247,27 @@ mod tests {
                 assert_eq!(
                     answer,
                     Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
-                        true
+                        false
                     ))
                 );
                 break;
             }
             assert!(
                 std::time::Instant::now() < deadline,
-                "orphaned worker never answered"
+                "worker did not finish the orphaned accept and answer the next request"
             );
             thread::sleep(Duration::from_millis(1));
         }
+        assert_eq!(
+            observer
+                .read(|projection| projection
+                    .items
+                    .get(lucent_protocol::item::ItemContainer::Inventory, 70)
+                    .map(|item| item.data().quantity))
+                .unwrap(),
+            Some(3.0)
+        );
+        assert_eq!(observer.try_event(), Ok(None));
     }
 
     #[test]
