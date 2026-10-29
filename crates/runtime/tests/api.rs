@@ -201,29 +201,62 @@ fn settings_updates_report_rejected_patches_without_changing_the_record() {
     let (_session, link) = testing::start_probe(&host, common::ready_movie());
     let runtime = Runtime::start(link).unwrap();
     common::ready(&runtime);
-    let outcome = runtime.run_script(common::loose(&[("invalid.js", r#"
+    for (patch, expected) in [
+        (
+            r#"{ frameRate: "30", animations: false }"#,
+            "host rejected settings patch",
+        ),
+        (
+            r#"{ renderingMode: "invalid", walkSpeed: 20 }"#,
+            "host rejected settings patch",
+        ),
+        (
+            "{ frameRate: NaN, animations: false }",
+            "frameRate must be a finite number",
+        ),
+        (
+            "{ frameRate: Infinity, animations: false }",
+            "frameRate must be a finite number",
+        ),
+        (
+            "{ frameRate: -Infinity, animations: false }",
+            "frameRate must be a finite number",
+        ),
+        (
+            "{ walkSpeed: NaN, animations: false }",
+            "walkSpeed must be a finite number",
+        ),
+        (
+            "{ walkSpeed: Infinity, animations: false }",
+            "walkSpeed must be a finite number",
+        ),
+        (
+            "{ walkSpeed: -Infinity, animations: false }",
+            "walkSpeed must be a finite number",
+        ),
+    ] {
+        let source = format!(
+            r#"
+            import * as api from "lucent/api";
+            export default function* () {{ yield* api.settings.update({patch}); }}
+        "#
+        );
+        let outcome = runtime
+            .run_script(
+                common::loose(&[("invalid.js", &source)]),
+                Default::default(),
+            )
+            .wait(TIMEOUT)
+            .unwrap();
+        let ScriptOutcome::Failed { message, .. } = outcome else {
+            panic!("accepted {patch}: {outcome:?}")
+        };
+        assert!(message.contains(expected), "{patch}: {message}");
+    }
+    let outcome = runtime.run_script(common::loose(&[("read.js", r#"
         import * as api from "lucent/api";
         import * as script from "lucent/script";
-        import { Effect } from "effect";
-        export default function* () {
-            const patches = [
-                { frameRate: "30", animations: false },
-                { renderingMode: "invalid", walkSpeed: 20 },
-                ...[NaN, Infinity, -Infinity].flatMap(value => [
-                    { frameRate: value, animations: false },
-                    { walkSpeed: value, animations: false },
-                ]),
-            ];
-            const errors = [];
-            for (const patch of patches) {
-                const error = yield* api.settings.update(patch).pipe(
-                    Effect.matchCause({ onSuccess: () => "accepted", onFailure: cause => String(cause) }),
-                );
-                errors.push(error);
-            }
-            const state = yield* api.settings.get();
-            yield* script.stop(JSON.stringify({ errors, frameRate: state.frameRate, walkSpeed: state.walkSpeed, animations: state.animations }));
-        }
+        export default function* () { yield* script.stop(JSON.stringify(yield* api.settings.get())); }
     "#)]), Default::default()).wait(TIMEOUT).unwrap();
     let ScriptOutcome::StoppedByScript {
         reason: Some(reason),
@@ -232,30 +265,6 @@ fn settings_updates_report_rejected_patches_without_changing_the_record() {
         panic!("{outcome:?}")
     };
     let observed: Value = serde_json::from_str(&reason).unwrap();
-    let errors = observed["errors"].as_array().unwrap();
-    for error in &errors[..2] {
-        assert!(
-            error
-                .as_str()
-                .unwrap()
-                .contains("host rejected settings patch"),
-            "{observed}"
-        );
-    }
-    for (index, error) in errors[2..].iter().enumerate() {
-        let field = if index % 2 == 0 {
-            "frameRate"
-        } else {
-            "walkSpeed"
-        };
-        assert!(
-            error
-                .as_str()
-                .unwrap()
-                .contains(&format!("{field} must be a finite number")),
-            "{observed}"
-        );
-    }
     assert_eq!(observed["frameRate"], 24.0);
     assert_eq!(observed["walkSpeed"], 8.0);
     assert_eq!(observed["animations"], true);

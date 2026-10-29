@@ -193,7 +193,10 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
     ]);
     let emit_body = actions(&emit);
     let ready_body = actions(&[
-        push(vec![Value::Str(string("_root.probeReady")), Value::Bool(true)]),
+        push(vec![
+            Value::Str(string("_root.probeReady")),
+            Value::Bool(true),
+        ]),
         Action::SetVariable,
         push(vec![Value::Bool(true)]),
         Action::Return,
