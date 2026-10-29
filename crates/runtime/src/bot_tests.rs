@@ -1,12 +1,13 @@
+#[path = "../tests/common/mod.rs"]
 mod common;
 
 use std::time::{Duration, Instant};
 
+use crate::{Bot, Kill, RuntimeError};
 use lucent_host::bridge::Value;
 use lucent_host::testing;
 use lucent_host::{ScriptLink, Session};
 use lucent_protocol::command::Command;
-use lucent_runtime::{Bot, Kill, RuntimeError};
 use serde_json::json;
 
 use common::TIMEOUT;
@@ -376,7 +377,7 @@ fn overflow_logs_identify_the_runtime() {
             .iter()
             .any(|text| text == "bot events overflowed and were lost")
     );
-    let runtime = lucent_runtime::Runtime::start(session.attach().unwrap()).unwrap();
+    let runtime = crate::Runtime::start(session.attach().unwrap()).unwrap();
     assert!(matches!(
         runtime.eval("flood.js", flood).wait::<()>(TIMEOUT),
         Err(RuntimeError::EventsLost)
