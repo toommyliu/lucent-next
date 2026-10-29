@@ -133,34 +133,7 @@ impl Running {
     pub(super) fn command(&mut self, command: Command) -> Result<String, Error> {
         match command {
             Command::UpdateSettings { mut patch } => {
-                patch.frame_rate = patch.frame_rate.map(|value| value.clamp(1.0, 60.0));
-                patch.walk_speed = patch.walk_speed.map(|value| value.max(1.0));
-                let mut next = self.settings.read().clone();
-                macro_rules! update {
-                    ($($field:ident),*) => { $(if let Some(value) = patch.$field { next.$field = value; })* };
-                }
-                update!(
-                    animations_enabled,
-                    anti_counter_enabled,
-                    collisions_enabled,
-                    death_ads_visible,
-                    enemy_magnet_enabled,
-                    frame_rate,
-                    infinite_range_enabled,
-                    other_players_visible,
-                    provoke_cell_enabled,
-                    rendering_mode,
-                    skip_cutscenes_enabled,
-                    walk_speed
-                );
-                if let Some(value) = &patch.custom_guild {
-                    next.custom_guild = value.clone().unwrap_or_default();
-                    next.custom_guild_configured = value.is_some();
-                }
-                if let Some(value) = &patch.custom_name {
-                    next.custom_name = value.clone().unwrap_or_default();
-                    next.custom_name_configured = value.is_some();
-                }
+                let next = patched_settings(&self.settings.read(), &mut patch);
                 self.send_settings(&patch, &next);
                 *self.settings.write() = next.clone();
                 Ok(serde_json::to_string(&next).unwrap())
@@ -314,4 +287,36 @@ impl Running {
             }
         }
     }
+}
+
+pub(super) fn patched_settings(state: &GameSettings, patch: &mut SettingsPatch) -> GameSettings {
+    patch.frame_rate = patch.frame_rate.map(|value| value.clamp(1.0, 60.0));
+    patch.walk_speed = patch.walk_speed.map(|value| value.max(1.0));
+    let mut next = state.clone();
+    macro_rules! update {
+        ($($field:ident),*) => { $(if let Some(value) = patch.$field { next.$field = value; })* };
+    }
+    update!(
+        animations_enabled,
+        anti_counter_enabled,
+        collisions_enabled,
+        death_ads_visible,
+        enemy_magnet_enabled,
+        frame_rate,
+        infinite_range_enabled,
+        other_players_visible,
+        provoke_cell_enabled,
+        rendering_mode,
+        skip_cutscenes_enabled,
+        walk_speed
+    );
+    if let Some(value) = &patch.custom_guild {
+        next.custom_guild = value.clone().unwrap_or_default();
+        next.custom_guild_configured = value.is_some();
+    }
+    if let Some(value) = &patch.custom_name {
+        next.custom_name = value.clone().unwrap_or_default();
+        next.custom_name_configured = value.is_some();
+    }
+    next
 }

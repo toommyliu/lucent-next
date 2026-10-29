@@ -35,15 +35,14 @@ impl Running {
                 }
             };
             let invalidated = projection.receipts.epoch() != epoch;
+            let ready = projection.current_readiness().missing.is_empty();
             drop(projection);
             if let Some(event) = event {
-                let loaded =
-                    matches!(&event, ScriptEvent::Loader { event, .. } if event.name == "onLoaded");
                 self.publish(event);
-                if loaded && !self.settings_applied {
-                    self.settings_applied = true;
-                    self.reapply_settings(false);
-                }
+            }
+            if ready && !self.settings_applied {
+                self.settings_applied = true;
+                self.reapply_settings(false);
             }
             if invalidated {
                 self.publish(ScriptEvent::Invalidated);
@@ -386,7 +385,7 @@ mod tests {
         let (request, reply) = Read::new(|_| 42);
         sender.send(Msg::Read(request)).unwrap();
         sender.send(Msg::Stop).unwrap();
-        assert!(first_viewport(&receiver, false).is_none());
+        assert!(first_viewport(&receiver, false, &Default::default()).is_none());
         assert_eq!(
             reply.recv_timeout(Duration::ZERO),
             Err(BridgeError::NotReady)

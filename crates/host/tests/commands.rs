@@ -1149,6 +1149,7 @@ fn settings_updated_before_the_first_viewport_are_stored_and_applied_when_ready(
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));
+    testing::wait_loaded(&link);
     link.call_loader("probe.echo", vec![])
         .recv_timeout(Duration::from_secs(5))
         .unwrap();

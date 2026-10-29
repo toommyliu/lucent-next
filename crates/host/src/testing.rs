@@ -90,7 +90,7 @@ impl Wake for Unpark {
     }
 }
 
-fn wait_loaded(link: &ScriptLink) {
+pub fn wait_loaded(link: &ScriptLink) {
     link.set_waker(Waker::from(Arc::new(Unpark(thread::current()))));
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
