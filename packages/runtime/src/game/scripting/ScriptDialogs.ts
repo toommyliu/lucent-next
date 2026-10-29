@@ -8,6 +8,8 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
+import { playBeep } from "../audio/beep";
+
 export interface ScriptDialogSource {
   readonly sourceName: string;
 }
@@ -58,8 +60,6 @@ interface PendingDialog {
   readonly request: ScriptDialogRequest;
   readonly response: Deferred.Deferred<ScriptDialogResponse>;
 }
-
-import { playBeep } from "../audio/beep";
 
 export interface ScriptDialogsShape {
   readonly beep: (times: number) => Effect.Effect<void>;

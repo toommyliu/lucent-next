@@ -16,7 +16,6 @@ export default function* run() {
   return result;
 }
 
-
 /** @satisfies {import("lucent/script").ScriptInputsDefinition} */
 export const inputs = {
   id: "lucent-dailies-spin-wheel-of-doom",

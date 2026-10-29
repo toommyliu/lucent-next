@@ -189,6 +189,39 @@ fn a_nested_module_evaluation_error_keeps_the_throwing_module_in_its_details() {
 }
 
 #[test]
+fn two_importers_evaluate_their_shared_module_once() {
+    let (_host, _session, runtime) = ready_runtime();
+    let script = loose(&[
+        (
+            "entry.js",
+            r#"
+            import "./first.js";
+            import "./second.js";
+            import * as script from "lucent/script";
+            export default function* () {
+                yield* script.stop(String(globalThis.sharedModuleEvaluations));
+            }
+            "#,
+        ),
+        ("first.js", "import './shared.js';"),
+        ("second.js", "import './shared.js';"),
+        (
+            "shared.js",
+            "globalThis.sharedModuleEvaluations = (globalThis.sharedModuleEvaluations ?? 0) + 1;",
+        ),
+    ]);
+    assert_eq!(
+        runtime
+            .run_script(script, Default::default())
+            .wait(TIMEOUT)
+            .unwrap(),
+        ScriptOutcome::StoppedByScript {
+            reason: Some("1".into())
+        }
+    );
+}
+
+#[test]
 fn builtin_default_named_and_namespace_exports_share_members() {
     let (_host, _session, runtime) = ready_runtime();
     let script = loose(&[(
@@ -222,7 +255,7 @@ fn builtin_default_named_and_namespace_exports_share_members() {
 }
 
 #[test]
-fn replacing_a_script_settles_the_first_run_before_the_next_completes() {
+fn replacing_a_script_stops_the_first_run_with_a_replacement_reason() {
     let (_host, _session, runtime) = ready_runtime();
     let first = yielding(&runtime);
     completed(&runtime);
@@ -332,6 +365,18 @@ fn the_watchdog_kills_a_script_and_rebuilds_for_the_next_run() {
         .wait(TIMEOUT)
         .unwrap_err();
     assert!(matches!(error, RuntimeError::Killed(Kill::Watchdog)));
+    completed(&runtime);
+}
+
+#[test]
+fn an_explicit_kill_ends_a_script_and_rebuilds_for_the_next_run() {
+    let (_host, _session, runtime) = ready_runtime();
+    let run = yielding(&runtime);
+    runtime.kill();
+    assert!(matches!(
+        run.wait(TIMEOUT),
+        Err(RuntimeError::Killed(Kill::Requested))
+    ));
     completed(&runtime);
 }
 

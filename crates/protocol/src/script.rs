@@ -122,6 +122,7 @@ pub struct Script {
 pub enum ScriptError {
     MissingEntry(ModulePath),
     MissingPackageMain { name: String, path: ModulePath },
+    PackageMainMismatch { name: String, path: ModulePath },
 }
 
 impl fmt::Display for ScriptError {
@@ -130,6 +131,12 @@ impl fmt::Display for ScriptError {
             Self::MissingEntry(path) => write!(f, "Missing script entry: {path}"),
             Self::MissingPackageMain { name, path } => {
                 write!(f, "Missing main module for {name}: {path}")
+            }
+            Self::PackageMainMismatch { name, path } => {
+                write!(
+                    f,
+                    "Main module for {name} must belong to that package: {path}"
+                )
             }
         }
     }
@@ -147,6 +154,12 @@ impl Script {
             return Err(ScriptError::MissingEntry(entry));
         }
         for (name, path) in &packages {
+            if path.package() != Some(name.as_str()) {
+                return Err(ScriptError::PackageMainMismatch {
+                    name: name.clone(),
+                    path: path.clone(),
+                });
+            }
             if !modules.contains_key(path) {
                 return Err(ScriptError::MissingPackageMain {
                     name: name.clone(),

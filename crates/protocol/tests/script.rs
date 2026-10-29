@@ -99,6 +99,32 @@ fn script_requires_sources_and_resolves_in_order() {
 }
 
 #[test]
+fn package_mains_must_belong_to_the_package_table_key() {
+    for (main, expected) in [
+        (
+            ModulePath::in_package("@lucent/other", "index.js").unwrap(),
+            "Main module for @lucent/dailies must belong to that package: @lucent/other/index.js",
+        ),
+        (
+            ModulePath::loose("index.js").unwrap(),
+            "Main module for @lucent/dailies must belong to that package: index.js",
+        ),
+    ] {
+        let entry = ModulePath::loose("run.js").unwrap();
+        assert_eq!(
+            Script::new(
+                entry.clone(),
+                BTreeMap::from([(entry, "".into()), (main.clone(), "".into())]),
+                BTreeMap::from([("@lucent/dailies".into(), main)]),
+            )
+            .unwrap_err()
+            .to_string(),
+            expected
+        );
+    }
+}
+
+#[test]
 fn outcomes_decode_the_wire_contract() {
     for (json, expected) in [
         (r#"{"kind":"completed"}"#, ScriptOutcome::Completed),

@@ -28,7 +28,6 @@ export default function* run() {
   });
 }
 
-
 /** @satisfies {import("lucent/script").ScriptInputsDefinition} */
 export const inputs = {
   id: "lucent-consumables",
