@@ -3,12 +3,10 @@ import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
 
 import { Api } from "../flash/api/Api";
-import { Automation } from "./Automation";
 
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const api = yield* Api;
-    yield* Automation;
     const fibers = yield* FiberMap.make<string>();
     const whenPlayerReady = (effect: Effect.Effect<void>) =>
       api.player

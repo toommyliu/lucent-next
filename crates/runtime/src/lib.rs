@@ -18,7 +18,7 @@ use lucent_host::bridge::Error as EventError;
 use lucent_protocol::script::{Script, ScriptInputs, ScriptOutcome};
 use serde::de::DeserializeOwned;
 
-use engine::Engine;
+use engine::{Bundle, Engine};
 use interrupt::{Interrupt, Stop};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -53,6 +53,7 @@ pub struct Runtime {
     commands: mpsc::Sender<Command>,
     interrupt: Arc<Interrupt>,
     thread: Option<thread::JoinHandle<()>>,
+    terminal: mpsc::Receiver<Result<(), RuntimeError>>,
 }
 
 enum Command {
@@ -107,6 +108,7 @@ pub struct ScriptRun {
 }
 
 enum Execution {
+    Bot,
     Evals,
     Script,
     StartScript {
@@ -114,6 +116,34 @@ enum Execution {
         inputs: ScriptInputs,
         reply: mpsc::Sender<Result<String, RuntimeError>>,
     },
+}
+
+pub struct Bot(Runtime);
+
+impl Bot {
+    pub fn start(link: ScriptLink) -> Result<Self, RuntimeError> {
+        Runtime::spawn(link, Execution::Bot).map(Self)
+    }
+
+    pub fn wait(&self, timeout: Duration) -> Result<(), RuntimeError> {
+        self.0
+            .terminal
+            .recv_timeout(timeout)
+            .map_err(|error| match error {
+                RecvTimeoutError::Timeout => RuntimeError::Timeout,
+                RecvTimeoutError::Disconnected => RuntimeError::Stopped,
+            })?
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn eval(&self, name: impl Into<String>, source: impl Into<String>) -> PendingEval {
+        self.0.eval(name, source)
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn kill(&self) {
+        self.0.kill();
+    }
 }
 
 impl ScriptRun {
@@ -160,6 +190,8 @@ impl Runtime {
         let thread_interrupt = interrupt.clone();
         let (commands, incoming) = mpsc::channel();
         let (ready, boot) = mpsc::sync_channel(1);
+        let (finished, terminal) = mpsc::channel();
+        let bot = matches!(execution, Execution::Bot);
         let wake = Arc::new(EventWake {
             commands: commands.clone(),
             queued: AtomicBool::new(false),
@@ -178,18 +210,23 @@ impl Runtime {
                     Ok(watchdog) => watchdog,
                     Err(error) => {
                         interrupt.shut_down();
-                        let _ = ready.send(Err(error.into()));
+                        let _ = finished.send(Err(error.into()));
                         return;
                     }
                 };
                 let result = (|| {
                     link.set_waker(Waker::from(wake.clone()));
-                    let engine = Engine::new(link, interrupt.clone())?;
+                    let bundle = if bot { Bundle::Bot } else { Bundle::Script };
+                    let engine = Engine::new(link, interrupt.clone(), bundle)?;
                     run(engine, execution, &incoming, &wake, &interrupt, &ready)
                 })();
-                if let Err(error) = result {
-                    let _ = ready.send(Err(error));
+                if bot
+                    && let Err(error) = &result
+                    && !matches!(error, RuntimeError::Stopped)
+                {
+                    tracing::error!(%error, "bot runtime failed");
                 }
+                let _ = finished.send(result);
                 interrupt.shut_down();
                 let _ = watchdog.join();
             })?;
@@ -197,8 +234,16 @@ impl Runtime {
             commands,
             interrupt,
             thread: Some(thread),
+            terminal,
         };
-        boot.recv().map_err(|_| RuntimeError::Stopped)??;
+        if boot.recv().is_err() {
+            return Err(runtime
+                .terminal
+                .recv()
+                .unwrap_or(Err(RuntimeError::Stopped))
+                .err()
+                .unwrap_or(RuntimeError::Stopped));
+        }
         Ok(runtime)
     }
 
@@ -238,7 +283,7 @@ fn run(
     incoming: &mpsc::Receiver<Command>,
     wake: &EventWake,
     interrupt: &Arc<Interrupt>,
-    ready: &mpsc::SyncSender<Result<(), RuntimeError>>,
+    ready: &mpsc::SyncSender<()>,
 ) -> Result<(), RuntimeError> {
     if matches!(execution, Execution::StartScript { .. }) {
         interrupt.prepare_script();
@@ -271,30 +316,48 @@ fn run(
             Ok(Command::Wake) => {
                 wake.queued.store(false, Ordering::Release);
                 let Some(items) = take_events(&mut engine) else {
-                    return Ok(());
+                    return if matches!(execution, Execution::Bot) {
+                        Err(RuntimeError::Stopped)
+                    } else {
+                        Ok(())
+                    };
                 };
                 items
             }
             Ok(Command::Kill) | Err(RecvTimeoutError::Timeout) => Vec::new(),
             Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => return Ok(()),
         };
-        let deadline = engine.turn(&serde_json::to_string(&items).unwrap());
+        let turn = engine.turn(&serde_json::to_string(&items).unwrap());
         match interrupt.end_turn() {
             None => {}
             Some(Stop::Kill(kill)) => {
-                tracing::warn!(%kill, "script runtime killed");
+                if !matches!(execution, Execution::Bot) {
+                    tracing::warn!(%kill, "script runtime killed");
+                }
                 engine.kill(kill);
                 while let Ok(command) = incoming.try_recv() {
                     if let Command::Eval { reply, .. } = command {
                         let _ = reply.send(Err(RuntimeError::Killed(kill)));
                     }
                 }
-                return Ok(());
+                return if matches!(execution, Execution::Bot) {
+                    Err(RuntimeError::Killed(kill))
+                } else {
+                    Ok(())
+                };
             }
             Some(Stop::Shutdown) => return Ok(()),
         }
+        let deadline = match turn {
+            Ok(deadline) => deadline,
+            Err(error) if matches!(execution, Execution::Bot) => return Err(error),
+            Err(error) => {
+                tracing::error!(%error, "script turn failed");
+                None
+            }
+        };
         if let Some(ready) = ready.take() {
-            let _ = ready.send(Ok(()));
+            let _ = ready.send(());
             if let Execution::StartScript {
                 script,
                 inputs,

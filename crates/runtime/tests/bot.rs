@@ -2,7 +2,7 @@ mod common;
 
 use std::time::{Duration, Instant};
 
-use lucent_host::bridge::{ScriptEvent, Value};
+use lucent_host::bridge::Value;
 use lucent_host::testing;
 use lucent_host::{ScriptLink, Session};
 use lucent_protocol::command::Command;
@@ -62,11 +62,15 @@ fn script_kills_never_restart_the_bot() {
     let (_host, mut session, observer) = start();
     drain(&observer);
     let bot = Bot::start(session.attach().unwrap()).unwrap();
+    #[cfg(feature = "testing")]
+    bot.eval("identity.js", "globalThis.identity = { turns: 0 }; null")
+        .wait::<()>(TIMEOUT)
+        .unwrap();
     assert_eq!(
         next_call(&observer, "settings.setWalkSpeed")[1],
         Value::Number(30.0)
     );
-    for _ in 0..3 {
+    for _index in 0..3 {
         let run = common::start(
             &mut session,
             common::loose(&[("loop.js", "export default function* () { while (true) {} }")]),
@@ -80,6 +84,13 @@ fn script_kills_never_restart_the_bot() {
             bot.wait(Duration::ZERO),
             Err(RuntimeError::Timeout)
         ));
+        #[cfg(feature = "testing")]
+        assert_eq!(
+            bot.eval("identity.js", "++identity.turns")
+                .wait::<u32>(TIMEOUT)
+                .unwrap(),
+            _index + 1
+        );
         drain(&observer);
         assert_eq!(
             next_call(&observer, "settings.setWalkSpeed")[1],
@@ -100,7 +111,10 @@ fn the_settings_policy_reapplies_through_the_host() {
     update(&observer, json!({"walkSpeed":45}));
     drain(&observer);
     let began = Instant::now();
-    assert_eq!(next_call(&observer, "settings.enemyMagnet")[1], Value::Null);
+    assert_eq!(
+        next_call(&observer, "settings.enemyMagnet")[1],
+        Value::Undefined
+    );
     assert!(began.elapsed() < Duration::from_millis(1500));
     assert_eq!(
         next_call(&observer, "settings.setWalkSpeed")[1],
@@ -110,15 +124,79 @@ fn the_settings_policy_reapplies_through_the_host() {
     drain(&observer);
     let until = Instant::now() + Duration::from_millis(1200);
     while Instant::now() < until {
-        let event = Some(ScriptEvent::Loader {
-            event: common::await_event(&observer, "onProbeCall", None),
-            projected: vec![],
-        });
-        if let ScriptEvent::Loader { event, .. } = event {
-            assert_ne!(
-                event.args.first(),
-                Some(&Value::String("settings.enemyMagnet".into()))
-            );
-        }
+        let event = common::await_event(&observer, "onProbeCall", None);
+        assert_ne!(
+            event.args.first(),
+            Some(&Value::String("settings.enemyMagnet".into()))
+        );
+    }
+}
+
+#[test]
+fn a_player_restart_stops_the_bot_and_a_new_bot_reads_the_host_settings() {
+    let (_host, mut session, observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    session.restart(testing::headless_surface()).unwrap();
+    assert!(matches!(bot.wait(TIMEOUT), Err(RuntimeError::Stopped)));
+    drop(bot);
+    drop(observer);
+    let observer = session.attach().unwrap();
+    session.send(lucent_host::ViewEvent::Resized(
+        lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
+    ));
+    testing::wait_loaded(&observer);
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(
+            &observer
+                .query(serde_json::from_value(json!({"kind":"settings"})).unwrap())
+                .unwrap()
+        )
+        .unwrap()["walkSpeed"],
+        json!(30.0)
+    );
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
+    for (source, expected) in [
+        ("while (true) {}", Kill::Watchdog),
+        (
+            "const arrays = []; while (true) { arrays.push(new Array(100000).fill(1)); }",
+            Kill::HeapLimit,
+        ),
+    ] {
+        let (_host, mut session, observer) = start();
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        assert_eq!(
+            bot.eval(
+                "exports.js",
+                "[typeof __lucent.start, typeof __lucent.stop]"
+            )
+            .wait::<Vec<String>>(TIMEOUT)
+            .unwrap(),
+            vec!["undefined", "undefined"]
+        );
+        let pending = bot.eval("bad-automation.js", source);
+        assert!(
+            matches!(pending.wait::<()>(TIMEOUT), Err(RuntimeError::Killed(kill)) if kill == expected)
+        );
+        assert!(matches!(bot.wait(TIMEOUT), Err(RuntimeError::Killed(kill)) if kill == expected));
+        assert!(matches!(
+            bot.eval("dead.js", "42").wait::<u32>(TIMEOUT),
+            Err(RuntimeError::Stopped)
+        ));
+        drop(bot);
+        drain(&observer);
+        let _replacement = Bot::start(session.attach().unwrap()).unwrap();
+        assert_eq!(
+            next_call(&observer, "settings.setWalkSpeed")[1],
+            Value::Number(30.0)
+        );
     }
 }
