@@ -20,26 +20,29 @@ pub struct ScriptLink {
     projection: Arc<RwLock<Projection>>,
     settings: Arc<RwLock<GameSettings>>,
     stopped: Arc<AtomicBool>,
+    packets: Arc<super::operations::Packets>,
+    operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
 }
 
 impl ScriptLink {
     pub(crate) fn new(
         id: u64,
         attachment: AttachmentId,
-        inbox: Inbox,
         events: ScriptEvents,
-        projection: Arc<RwLock<Projection>>,
         settings: Arc<RwLock<GameSettings>>,
-        stopped: Arc<AtomicBool>,
+        player: super::operations::Endpoint,
+        operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
     ) -> Self {
         Self {
             id,
             attachment,
-            inbox,
+            inbox: player.inbox,
             events,
-            projection,
+            projection: player.projection,
             settings,
-            stopped,
+            stopped: player.stopped,
+            packets: player.packets,
+            operations,
         }
     }
 
@@ -61,6 +64,34 @@ impl ScriptLink {
 
     pub fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {
         self.inbox.call_loader(name, args)
+    }
+
+    pub fn operate(
+        &self,
+        operation: lucent_protocol::operation::Operation,
+    ) -> Result<u64, bridge::Error> {
+        use std::sync::atomic::AtomicU64;
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        if self.stopped.load(Ordering::Acquire) {
+            return Err(bridge::Error::Stopped);
+        }
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        self.operations
+            .try_send(Some(super::operations::Request {
+                id,
+                operation,
+                player: super::operations::Endpoint {
+                    inbox: self.inbox.clone(),
+                    projection: self.projection.clone(),
+                    stopped: self.stopped.clone(),
+                    packets: self.packets.clone(),
+                },
+            }))
+            .map_err(|error| match error {
+                std::sync::mpsc::TrySendError::Full(_) => bridge::Error::Overflow,
+                std::sync::mpsc::TrySendError::Disconnected(_) => bridge::Error::Stopped,
+            })?;
+        Ok(id)
     }
 
     pub fn command(&self, command: lucent_protocol::command::Command) -> Pending<String> {

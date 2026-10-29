@@ -1,4 +1,10 @@
-import type { ProjectionEvent, ScriptOutcome } from "@lucent/game/protocol";
+import type {
+  OperationAnswer,
+  ProjectionEvent,
+  ScriptOutcome,
+} from "@lucent/game/protocol";
+
+import { completeOperation } from "./operations";
 
 import type { ScriptSource } from "../game/scripting/ScriptRunner";
 
@@ -7,6 +13,7 @@ declare global {
     swf(method: string, argsJson: string): string | undefined;
     read(queryJson: string): string;
     command(commandJson: string): string;
+    operate(operationJson: string): string;
     now(): number;
     log(level: "info" | "warn" | "error" | "debug", text: string): void;
   };
@@ -34,7 +41,13 @@ type ScriptEvent =
       args: unknown[];
       projected: ProjectionEvent[];
     }
-  | { type: "invalidated" };
+  | { type: "invalidated" }
+  | {
+      type: "operation";
+      id: string;
+      answer: OperationAnswer | null;
+      error: string | null;
+    };
 
 interface Timer {
   readonly id: number;
@@ -97,6 +110,8 @@ export const turn = (itemsJson: string): string[] => {
       for (const event of item.projected) {
         invoke(() => window.onProjectionEvent?.(event));
       }
+    } else if (item.type === "operation") {
+      completeOperation(item.id, item.answer, item.error);
     } else {
       invoke(() => window.onProjectionInvalidated?.());
     }

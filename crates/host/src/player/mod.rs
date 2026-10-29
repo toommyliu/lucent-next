@@ -58,6 +58,7 @@ pub(crate) struct Handle {
     pub(crate) inbox: Inbox,
     pub(crate) projection: Arc<RwLock<Projection>>,
     pub(crate) stopped: Arc<AtomicBool>,
+    pub(crate) operation_packets: Arc<crate::sessions::operations::Packets>,
     exited: mpsc::Receiver<Result<(), PlayerError>>,
     thread: Option<thread::JoinHandle<()>>,
 }
@@ -75,6 +76,7 @@ impl Handle {
 impl Drop for Handle {
     fn drop(&mut self) {
         self.stopped.store(true, Ordering::Release);
+        self.operation_packets.stop();
         self.inbox.post(Msg::Stop);
         match self.exited.recv_timeout(STOP_TIMEOUT) {
             Ok(result) => {
@@ -104,13 +106,16 @@ pub(crate) fn spawn(
     let projection = Arc::new(RwLock::new(Projection::default()));
     let stopped = Arc::new(AtomicBool::new(false));
     let thread_stopped = stopped.clone();
+    let operation_packets = Arc::new(crate::sessions::operations::Packets::default());
+    let thread_packets = operation_packets.clone();
     let bridge = PlayerBridge {
         projection: projection.clone(),
         provider,
+        operation_packets: operation_packets.clone(),
         loader_events,
     };
     let thread = thread::Builder::new().name(name).spawn(move || {
-        let _stopped = StopOnDrop(thread_stopped);
+        let _stopped = StopOnDrop(thread_stopped, thread_packets);
         let result = run(rx, outbox, surface, net, options, bridge);
         if let Err(error) = &result {
             tracing::error!(%error, "player failed");
@@ -121,16 +126,18 @@ pub(crate) fn spawn(
         inbox,
         projection,
         stopped,
+        operation_packets,
         exited,
         thread: Some(thread),
     })
 }
 
-struct StopOnDrop(Arc<AtomicBool>);
+struct StopOnDrop(Arc<AtomicBool>, Arc<crate::sessions::operations::Packets>);
 
 impl Drop for StopOnDrop {
     fn drop(&mut self) {
         self.0.store(true, Ordering::Release);
+        self.1.stop();
     }
 }
 
@@ -167,6 +174,7 @@ pub(crate) enum Msg {
     Detach(AttachmentId),
     #[cfg(feature = "testing")]
     LinkCount(mpsc::Sender<Result<usize, BridgeError>>),
+    OperationAnswer(crate::bridge::ScriptEvent),
     View(ViewEvent),
     Mute(bool),
     Poll(async_task::Runnable),
@@ -294,12 +302,13 @@ fn first_viewport(
                 let _ = reply.send(result);
             }
             Msg::Stop => return None,
-            Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
+            Msg::View(_) | Msg::Poll(_) | Msg::Wake | Msg::OperationAnswer(_) => {}
         }
     }
 }
 
 struct PlayerBridge {
+    operation_packets: Arc<crate::sessions::operations::Packets>,
     projection: Arc<RwLock<Projection>>,
     provider: Bridge,
     loader_events: Events,
@@ -308,6 +317,7 @@ struct PlayerBridge {
 struct Running {
     settings: Arc<RwLock<GameSettings>>,
     settings_applied: bool,
+    operation_packets: Arc<crate::sessions::operations::Packets>,
     loader_events: Events,
     script_events: ScriptAttachments,
     projection: Arc<RwLock<Projection>>,
@@ -331,6 +341,7 @@ impl Running {
         bridge: PlayerBridge,
     ) -> Result<Running, PlayerError> {
         let PlayerBridge {
+            operation_packets,
             projection,
             provider,
             loader_events,
@@ -359,6 +370,7 @@ impl Running {
         Ok(Running {
             settings: options.settings,
             settings_applied: false,
+            operation_packets,
             loader_events,
             script_events: Vec::new(),
             projection,
@@ -383,6 +395,7 @@ impl Running {
             Msg::LinkCount(reply) => {
                 let _ = reply.send(Ok(self.script_events.len()));
             }
+            Msg::OperationAnswer(answer) => self.publish(answer),
             Msg::Read(read) => (read.0)(Ok(&self.projection.read())),
             Msg::Command(command, reply) => {
                 let result = self.command(command);
@@ -477,6 +490,7 @@ mod tests {
             settings_applied: false,
             loader_events,
             script_events: Vec::new(),
+            operation_packets: Arc::default(),
             projection: Arc::new(RwLock::new(Projection::default())),
             player: PlayerBuilder::new().build(),
             tasks: Tasks::default(),

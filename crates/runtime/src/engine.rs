@@ -63,6 +63,7 @@ impl Engine {
                 ("swf", v8::Function::new(scope, host_swf)),
                 ("read", v8::Function::new(scope, host_read)),
                 ("command", v8::Function::new(scope, host_command)),
+                ("operate", v8::Function::new(scope, host_operate)),
                 ("now", v8::Function::new(scope, host_now)),
                 ("log", v8::Function::new(scope, host_log)),
             ] {
@@ -566,6 +567,19 @@ fn host_read(
         &json,
     )
     .map(Some);
+    return_reply(scope, reply, result);
+}
+
+fn host_operate(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    reply: v8::ReturnValue<v8::Value>,
+) {
+    let Some(json) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let json = json.to_rust_string_lossy(scope);
+    let result = host::operate(scope.get_slot::<ScriptLink>().unwrap(), &json).map(Some);
     return_reply(scope, reply, result);
 }
 

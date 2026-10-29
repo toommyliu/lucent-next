@@ -45,12 +45,13 @@ impl Running {
                 self.reapply_settings(false);
             }
             if invalidated {
+                self.operation_packets.invalidate();
                 self.publish(ScriptEvent::Invalidated);
             }
         }
     }
 
-    fn publish(&self, event: ScriptEvent) {
+    pub(super) fn publish(&self, event: ScriptEvent) {
         if let Some(((_, last), rest)) = self.script_events.split_last() {
             for (_, stream) in rest {
                 stream.send(event.clone());
@@ -125,6 +126,7 @@ impl Running {
             }
         }
         projected.extend(projection.login_if_ready());
+        self.operation_packets.packet(&packet);
         tracing::debug!(
             command = packet.command(),
             direction = ?packet.direction(),

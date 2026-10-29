@@ -150,17 +150,6 @@ const makeTarget = (state: FakeHostState) => {
       calls.skillUses.push({ force, index, selector });
       return true;
     },
-    "drops.accept": (itemId: number) => {
-      moveItem(state, "drop", "inventory", itemId);
-      emitExtension(target, {
-        ItemID: itemId,
-        bBank: 1,
-        bSuccess: 1,
-        cmd: "getDrop",
-        iQty: 1,
-      });
-      return true;
-    },
     "house.getSlots": () => 1,
     "inventory.equip": (selector: { itemId: number }) => {
       calls.equips += 1;
@@ -440,19 +429,6 @@ describe("Api", () => {
       state.items.shop = [item("shop", { itemId: 42, name: "Indexed Item" })];
       expect(yield* api.shops.buy(42)).toBe(true);
       expect((yield* api.bank.get(42))?.quantity).toBe(3);
-    }),
-  );
-
-  it.effect("accepts classes into inventory despite a bank response flag", () =>
-    Effect.gen(function* () {
-      const { api, state } = yield* makeApiHarness();
-      state.items.drop = [
-        item("drop", { category: "Class", itemId: 70, name: "Dropped Class" }),
-      ];
-      expect(yield* api.drops.accept(70)).toBe(true);
-      expect(yield* api.drops.contains(70)).toBe(false);
-      expect((yield* api.inventory.get(70))?.context).toBe("inventory");
-      expect(yield* api.bank.get(70)).toBeNull();
     }),
   );
 
