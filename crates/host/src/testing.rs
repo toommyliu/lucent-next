@@ -23,11 +23,17 @@ pub fn headless_host() -> Host {
 pub struct ProbeMovie {
     constants: Vec<(String, serde_json::Value)>,
     raises: Vec<(String, String, String)>,
+    records: Vec<String>,
 }
 
 impl ProbeMovie {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn recording(mut self, name: impl Into<String>) -> Self {
+        self.records.push(name.into());
+        self
     }
 
     pub fn constant(mut self, name: impl Into<String>, value: serde_json::Value) -> Self {
@@ -201,6 +207,28 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
             (name.as_str(), actions(&body))
         })
         .collect();
+    let record_bodies: Vec<(&str, Vec<u8>)> = movie
+        .records
+        .iter()
+        .map(|name| {
+            let mut body = vec![
+                push(vec![Value::Str(string("value"))]),
+                Action::GetVariable,
+                push(vec![
+                    Value::Str(string(name)),
+                    Value::Str(string("onProbeCall")),
+                    Value::Int(3),
+                ]),
+            ];
+            body.extend(external_interface());
+            body.extend([
+                push(vec![Value::Str(string("call"))]),
+                Action::CallMethod,
+                Action::Pop,
+            ]);
+            (name.as_str(), actions(&body))
+        })
+        .collect();
     let mut callbacks = vec![
         ("probe.echo", vec![string("x")], echo_body.as_slice()),
         (
@@ -217,6 +245,11 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
             .iter()
             .chain(&raise_bodies)
             .map(|(name, body)| (*name, vec![], body.as_slice())),
+    );
+    callbacks.extend(
+        record_bodies
+            .iter()
+            .map(|(name, body)| (*name, vec![string("value")], body.as_slice())),
     );
     let mut main = Vec::new();
     for (name, params, body) in callbacks {

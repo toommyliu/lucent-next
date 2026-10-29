@@ -4,7 +4,7 @@ use lucent_host::ScriptLink;
 use lucent_host::bridge::Value as LoaderValue;
 use lucent_host::testing::{self, ProbeMovie};
 use lucent_protocol::command::Command;
-use lucent_protocol::query::{Query, answer};
+use lucent_protocol::query::Query;
 use serde_json::{Value, json};
 
 fn command(link: &ScriptLink, command: Value) -> Result<Value, String> {
@@ -17,9 +17,7 @@ fn command(link: &ScriptLink, command: Value) -> Result<Value, String> {
 
 fn query(link: &ScriptLink, query: Value) -> Value {
     let query: Query = serde_json::from_value(query).unwrap();
-    let answer = link
-        .read(move |projection| answer(projection, query))
-        .unwrap();
+    let answer = link.query(query).unwrap();
     serde_json::from_str(&answer).unwrap()
 }
 
@@ -828,5 +826,237 @@ fn commands_before_the_viewport_are_not_ready_and_stop_with_the_session() {
         link.command(Command::RefreshLoggedIn {})
             .recv_timeout(Duration::from_secs(5)),
         Err(lucent_host::bridge::Error::Stopped)
+    );
+}
+fn settings_movie() -> ProbeMovie {
+    [
+        "settings.setAnimationsEnabled",
+        "settings.setCollisionsEnabled",
+        "settings.setCustomGuild",
+        "settings.resetCustomGuild",
+        "settings.setCustomName",
+        "settings.resetCustomName",
+        "settings.setDeathAdsVisible",
+        "settings.setOtherPlayersVisible",
+        "settings.setWalkSpeed",
+        "settings.setLagKillerEnabled",
+        "settings.setFrameRate",
+        "settings.enemyMagnet",
+        "settings.infiniteRange",
+        "settings.provokeCell",
+        "settings.skipCutscenes",
+    ]
+    .into_iter()
+    .fold(ProbeMovie::new(), |movie, name| movie.recording(name))
+}
+
+fn start_settings() -> (lucent_host::Host, lucent_host::Session, ScriptLink) {
+    let (host, session, link) = start(settings_movie());
+    link.call_loader("probe.echo", vec![])
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    loader_calls(&link);
+    (host, session, link)
+}
+
+fn loader_calls(link: &ScriptLink) -> Vec<Value> {
+    let mut calls = vec![];
+    while let Some(event) = link.try_event().unwrap() {
+        if let lucent_host::bridge::ScriptEvent::Loader { event, .. } = event {
+            if event.name == "onProbeCall" {
+                calls.push(json!(
+                    event
+                        .args
+                        .into_iter()
+                        .map(|arg| lucent_protocol::bridge::to_json(arg).unwrap_or(Value::Null))
+                        .collect::<Vec<_>>()
+                ));
+            }
+        }
+    }
+    calls
+}
+
+#[test]
+fn update_settings_calls_the_loader_then_stores_the_record() {
+    let (_host, _session, link) = start_settings();
+    let patch = json!({
+        "animationsEnabled": false, "antiCounterEnabled": false, "collisionsEnabled": false,
+        "customGuild": "Lucent", "customName": "Tommy", "deathAdsVisible": false,
+        "otherPlayersVisible": false, "walkSpeed": 20, "renderingMode": "minimal", "frameRate": 12,
+        "enemyMagnetEnabled": true, "infiniteRangeEnabled": true,
+        "provokeCellEnabled": true, "skipCutscenesEnabled": true,
+    });
+    let updated = command(&link, json!({"kind": "updateSettings", "patch": patch})).unwrap();
+    assert_eq!(
+        updated,
+        json!({
+            "animationsEnabled": false, "antiCounterEnabled": false, "collisionsEnabled": false,
+            "customGuild": "Lucent", "customGuildConfigured": true, "customName": "Tommy", "customNameConfigured": true,
+            "deathAdsVisible": false, "otherPlayersVisible": false, "walkSpeed": 20.0,
+            "renderingMode": "minimal", "frameRate": 12.0, "enemyMagnetEnabled": true,
+            "infiniteRangeEnabled": true, "provokeCellEnabled": true, "skipCutscenesEnabled": true,
+        })
+    );
+    assert_eq!(query(&link, json!({"kind": "settings"})), updated);
+    let expected = vec![
+        json!(["settings.setAnimationsEnabled", false]),
+        json!(["settings.setCollisionsEnabled", false]),
+        json!(["settings.setCustomGuild", "Lucent"]),
+        json!(["settings.setCustomName", "Tommy"]),
+        json!(["settings.setDeathAdsVisible", false]),
+        json!(["settings.setOtherPlayersVisible", false]),
+        json!(["settings.setWalkSpeed", 20.0]),
+        json!(["settings.setLagKillerEnabled", true]),
+        json!(["settings.setFrameRate", 2.0]),
+        json!(["settings.enemyMagnet", null]),
+        json!(["settings.infiniteRange", null]),
+        json!(["settings.provokeCell", null]),
+        json!(["settings.skipCutscenes", null]),
+    ];
+    assert_eq!(loader_calls(&link), expected);
+    command(&link, json!({"kind": "updateSettings", "patch": patch})).unwrap();
+    assert_eq!(loader_calls(&link), expected);
+    command(&link, json!({"kind": "updateSettings", "patch": {
+        "customGuild": null, "customName": null, "frameRate": 99, "walkSpeed": 0,
+        "renderingMode": "interface-only", "enemyMagnetEnabled": false,
+        "infiniteRangeEnabled": false, "provokeCellEnabled": false, "skipCutscenesEnabled": false,
+    }})).unwrap();
+    assert_eq!(
+        loader_calls(&link),
+        vec![
+            json!(["settings.resetCustomGuild", null]),
+            json!(["settings.resetCustomName", null]),
+            json!(["settings.setWalkSpeed", 1.0]),
+            json!(["settings.setLagKillerEnabled", true]),
+            json!(["settings.setFrameRate", 60.0])
+        ]
+    );
+    let reset = query(&link, json!({"kind": "settings"}));
+    assert_eq!(reset["customNameConfigured"], false);
+    assert_eq!(reset["customGuildConfigured"], false);
+    assert_eq!(reset["customName"], "");
+    assert_eq!(reset["customGuild"], "");
+    command(
+        &link,
+        json!({"kind": "updateSettings", "patch": {"frameRate": 0, "renderingMode": "full"}}),
+    )
+    .unwrap();
+    assert_eq!(
+        loader_calls(&link),
+        vec![
+            json!(["settings.setLagKillerEnabled", false]),
+            json!(["settings.setFrameRate", 1.0])
+        ]
+    );
+    command(&link, json!({"kind": "updateSettings", "patch": {}})).unwrap();
+    assert_eq!(loader_calls(&link), Vec::<Value>::new());
+    assert_eq!(
+        query(&link, json!({"kind": "settings"}))["customNameConfigured"],
+        false
+    );
+}
+
+#[test]
+fn recurring_settings_and_user_changes_run_in_player_order() {
+    let (_host, _session, link) = start_settings();
+    let reapply = link.command(
+        serde_json::from_value(json!({"kind": "reapplySettings", "actionsOnly": false})).unwrap(),
+    );
+    let update = link.command(
+        serde_json::from_value(
+            json!({"kind": "updateSettings", "patch": {"animationsEnabled": false}}),
+        )
+        .unwrap(),
+    );
+    reapply.recv_timeout(Duration::from_secs(5)).unwrap();
+    update.recv_timeout(Duration::from_secs(5)).unwrap();
+    let animations: Vec<Value> = loader_calls(&link)
+        .into_iter()
+        .filter(|call| call[0] == "settings.setAnimationsEnabled")
+        .collect();
+    assert_eq!(
+        animations,
+        vec![
+            json!(["settings.setAnimationsEnabled", true]),
+            json!(["settings.setAnimationsEnabled", false])
+        ]
+    );
+    assert_eq!(
+        query(&link, json!({"kind": "settings"}))["animationsEnabled"],
+        false
+    );
+    command(&link, json!({"kind": "updateSettings", "patch": {"enemyMagnetEnabled": true, "provokeCellEnabled": true}})).unwrap();
+    loader_calls(&link);
+    command(
+        &link,
+        json!({"kind": "reapplySettings", "actionsOnly": true}),
+    )
+    .unwrap();
+    assert_eq!(
+        loader_calls(&link),
+        vec![
+            json!(["settings.enemyMagnet", null]),
+            json!(["settings.provokeCell", null])
+        ]
+    );
+}
+
+#[test]
+fn a_restarted_player_gets_the_stored_settings() {
+    use std::{
+        sync::Arc,
+        task::{Wake, Waker},
+    };
+    struct Unpark(std::thread::Thread);
+    impl Wake for Unpark {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+    let (_host, mut session, link) = start_settings();
+    command(
+        &link,
+        json!({"kind": "updateSettings", "patch": {"walkSpeed": 20, "customGuild": "Lucent"}}),
+    )
+    .unwrap();
+    session.restart(testing::headless_surface()).unwrap();
+    assert!(
+        link.query(serde_json::from_value(json!({"kind": "settings"})).unwrap())
+            .is_err()
+    );
+    let current = session.take_script_link().unwrap();
+    current.set_waker(Waker::from(Arc::new(Unpark(std::thread::current()))));
+    session.send(lucent_host::ViewEvent::Resized(
+        lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
+    ));
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        assert!(!left.is_zero(), "restarted loader did not become ready");
+        match current.try_event().unwrap() {
+            Some(lucent_host::bridge::ScriptEvent::Loader { event, .. })
+                if event.name == "onLoaded" =>
+            {
+                break;
+            }
+            Some(_) => {}
+            None => std::thread::park_timeout(left),
+        }
+    }
+    current
+        .call_loader("probe.echo", vec![])
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    let calls = loader_calls(&current);
+    assert!(calls.contains(&json!(["settings.setWalkSpeed", 20.0])));
+    assert!(calls.contains(&json!(["settings.setCustomGuild", "Lucent"])));
+    assert_eq!(
+        query(&current, json!({"kind": "settings"}))["walkSpeed"],
+        20.0
+    );
+    assert_eq!(
+        query(&current, json!({"kind": "settings"}))["customGuild"],
+        "Lucent"
     );
 }

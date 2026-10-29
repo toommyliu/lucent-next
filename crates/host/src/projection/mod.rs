@@ -10,6 +10,7 @@ mod items;
 pub mod monster_drops;
 pub mod packet;
 mod queries;
+pub use queries::answer;
 pub mod quests;
 mod readiness;
 pub mod shops;

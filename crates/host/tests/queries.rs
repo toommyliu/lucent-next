@@ -3,14 +3,12 @@ use std::time::Duration;
 use lucent_host::ScriptLink;
 use lucent_host::bridge::Value as LoaderValue;
 use lucent_host::testing::{self, ProbeMovie};
-use lucent_protocol::query::{Query, answer};
+use lucent_protocol::query::Query;
 use serde_json::{Value, json};
 
 fn query(link: &ScriptLink, query: Value) -> Value {
     let query: Query = serde_json::from_value(query).unwrap();
-    let answer = link
-        .read(move |projection| answer(projection, query))
-        .unwrap();
+    let answer = link.query(query).unwrap();
     serde_json::from_str(&answer).unwrap()
 }
 

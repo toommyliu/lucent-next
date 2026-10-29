@@ -6,6 +6,7 @@ mod projection;
 pub(crate) mod surface;
 pub(crate) mod view;
 
+use lucent_protocol::settings::GameSettings;
 use parking_lot::RwLock;
 use std::ops::ControlFlow;
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -49,6 +50,7 @@ pub(crate) struct Options {
     pub(crate) clipboard: Clipboard,
     pub(crate) audio: Audio,
     pub(crate) muted: bool,
+    pub(crate) settings: Arc<RwLock<GameSettings>>,
 }
 
 pub(crate) struct Handle {
@@ -282,6 +284,8 @@ struct PlayerBridge {
 }
 
 struct Running {
+    settings: Arc<RwLock<GameSettings>>,
+    settings_applied: bool,
     loader_events: Events,
     script_events: Option<ScriptEventSender>,
     projection: Arc<RwLock<Projection>>,
@@ -331,6 +335,8 @@ impl Running {
             .build();
         let now = Instant::now();
         Ok(Running {
+            settings: options.settings,
+            settings_applied: false,
             loader_events,
             script_events: None,
             projection,
@@ -440,6 +446,8 @@ mod tests {
         let now = Instant::now();
         let (_provider, loader_events) = Bridge::new();
         Running {
+            settings: Arc::new(RwLock::new(GameSettings::default())),
+            settings_applied: false,
             loader_events,
             script_events: None,
             projection: Arc::new(RwLock::new(Projection::default())),

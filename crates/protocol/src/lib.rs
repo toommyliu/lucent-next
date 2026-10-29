@@ -20,3 +20,5 @@ pub mod readiness;
 pub mod command;
 
 pub mod script;
+
+pub mod settings;

@@ -4,9 +4,10 @@ use lucent_protocol::{
     event::{AuraKind, MapState},
     item::{ItemContainer, ItemSnapshot},
     monster_drop::MonsterDrop,
-    query::{Answer, ItemSelector, MonsterSelector, PlayerSelector},
+    query::{Answer, ItemSelector, MonsterSelector, PlayerSelector, Query},
     quest::QuestData,
     readiness::ReadinessSnapshot,
+    settings::GameSettings,
     shop::ShopData,
     world::{MonsterSnapshot, PlayerSnapshot},
 };
@@ -21,27 +22,51 @@ fn auras(auras: Vec<LiveAura>, kind: Option<AuraKind>) -> Vec<AuraData> {
         .collect()
 }
 
-impl Answer for Projection {
+struct State<'a> {
+    projection: &'a Projection,
+    settings: &'a GameSettings,
+}
+
+pub fn answer(projection: &Projection, settings: &GameSettings, query: Query) -> String {
+    lucent_protocol::query::answer(
+        &State {
+            projection,
+            settings,
+        },
+        query,
+    )
+}
+
+impl Answer for State<'_> {
+    fn settings(&self) -> GameSettings {
+        self.settings.clone()
+    }
+
     fn map(&self) -> MapState {
-        self.world.map.clone()
+        self.projection.world.map.clone()
     }
 
     fn me(&self) -> Option<PlayerSnapshot> {
-        self.world.get_me().map(|player| player.snapshot_data())
+        self.projection
+            .world
+            .get_me()
+            .map(|player| player.snapshot_data())
     }
 
     fn self_entity_id(&self) -> Option<i64> {
-        self.world.self_entity_id
+        self.projection.world.self_entity_id
     }
 
     fn player(&self, selector: PlayerSelector) -> Option<PlayerSnapshot> {
-        self.world
+        self.projection
+            .world
             .resolve_player(&selector)
             .map(|player| player.snapshot_data())
     }
 
     fn players(&self) -> Vec<PlayerSnapshot> {
-        self.world
+        self.projection
+            .world
             .players()
             .iter()
             .map(|player| player.snapshot_data())
@@ -49,19 +74,22 @@ impl Answer for Projection {
     }
 
     fn player_auras(&self, entity_id: i64, aura_kind: Option<AuraKind>) -> Vec<AuraData> {
-        self.world
+        self.projection
+            .world
             .get_player_by_id(entity_id)
             .map_or_else(Vec::new, |player| auras(player.auras(), aura_kind))
     }
 
     fn monster(&self, selector: MonsterSelector) -> Option<MonsterSnapshot> {
-        self.world
+        self.projection
+            .world
             .resolve_monster(&selector)
             .map(|monster| monster.snapshot_data())
     }
 
     fn monsters(&self) -> Vec<MonsterSnapshot> {
-        self.world
+        self.projection
+            .world
             .monsters()
             .iter()
             .map(|monster| monster.snapshot_data())
@@ -69,33 +97,37 @@ impl Answer for Projection {
     }
 
     fn monster_auras(&self, monster_map_id: i64, aura_kind: Option<AuraKind>) -> Vec<AuraData> {
-        self.world
+        self.projection
+            .world
             .get_monster(monster_map_id)
             .map_or_else(Vec::new, |monster| auras(monster.auras(), aura_kind))
     }
 
     fn monster_drops(&self, monster_map_id: i64) -> Option<Vec<MonsterDrop>> {
-        self.world
+        self.projection
+            .world
             .monster_drops(monster_map_id)
             .map(<[MonsterDrop]>::to_vec)
     }
 
     fn cells(&self) -> Vec<String> {
-        self.world.cells()
+        self.projection.world.cells()
     }
 
     fn cell_pads(&self) -> Vec<String> {
-        self.world.cell_pads()
+        self.projection.world.cell_pads()
     }
 
     fn item(&self, container: ItemContainer, selector: ItemSelector) -> Option<ItemSnapshot> {
-        self.items
+        self.projection
+            .items
             .resolve(container, &selector)
             .map(|item| item.data().snapshot_data())
     }
 
     fn items(&self, container: ItemContainer) -> Vec<ItemSnapshot> {
-        self.items
+        self.projection
+            .items
             .all(container)
             .iter()
             .map(|item| item.data().snapshot_data())
@@ -103,19 +135,23 @@ impl Answer for Projection {
     }
 
     fn item_hydration(&self, container: ItemContainer) -> u64 {
-        self.items.hydration(container)
+        self.projection.items.hydration(container)
     }
 
     fn readiness(&self) -> ReadinessSnapshot {
-        self.current_readiness()
+        self.projection.current_readiness()
     }
 
     fn quest(&self, id: f64) -> Option<QuestData> {
-        self.quests.get(id).map(|quest| quest.data().clone())
+        self.projection
+            .quests
+            .get(id)
+            .map(|quest| quest.data().clone())
     }
 
     fn quests(&self) -> Vec<QuestData> {
-        self.quests
+        self.projection
+            .quests
             .all()
             .iter()
             .map(|quest| quest.data().clone())
@@ -123,7 +159,8 @@ impl Answer for Projection {
     }
 
     fn accepted_quests(&self) -> Vec<QuestData> {
-        self.quests
+        self.projection
+            .quests
             .accepted()
             .iter()
             .map(|quest| quest.data().clone())
@@ -131,10 +168,10 @@ impl Answer for Projection {
     }
 
     fn shop(&self) -> Option<ShopData> {
-        self.shops.get().map(|shop| shop.data())
+        self.projection.shops.get().map(|shop| shop.data())
     }
 
     fn auth(&self) -> AuthSnapshot {
-        self.auth.snapshot()
+        self.projection.auth.snapshot()
     }
 }

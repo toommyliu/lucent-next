@@ -37,7 +37,13 @@ impl Running {
             let invalidated = projection.receipts.epoch() != epoch;
             drop(projection);
             if let Some(event) = event {
+                let loaded =
+                    matches!(&event, ScriptEvent::Loader { event, .. } if event.name == "onLoaded");
                 self.publish(event);
+                if loaded && !self.settings_applied {
+                    self.settings_applied = true;
+                    self.reapply_settings(false);
+                }
             }
             if invalidated {
                 self.publish(ScriptEvent::Invalidated);
@@ -164,6 +170,8 @@ mod tests {
         let now = Instant::now();
         (
             Running {
+                settings: Default::default(),
+                settings_applied: false,
                 loader_events,
                 script_events: Some(producer),
                 projection: std::sync::Arc::new(parking_lot::RwLock::new(Projection::default())),

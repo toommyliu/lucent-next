@@ -33,10 +33,12 @@ import { makeApi } from "../api/Api";
 import { Bridge, makeBridge } from "../bridge/Bridge";
 import { Gateway, makeGateway } from "../bridge/Gateway";
 import { HostState, type HostStateService } from "../state/HostState";
+import { makeSettingsState, type SettingsState } from "../state/Settings";
 
 const normalizeGameText = (value: string): string => value.trim().toLowerCase();
 
 export interface FakeHostState {
+  settings: SettingsState;
   map: MapState;
   selfEntityId: number | null;
   players: PlayerSnapshot[];
@@ -63,6 +65,7 @@ const readinessKeys: readonly ReadinessKey[] = [
 ];
 
 export const makeFakeHostState = (): FakeHostState => ({
+  settings: makeSettingsState(),
   map: { id: 0, name: "", roomNumber: 0 },
   selfEntityId: null,
   players: [],
@@ -215,6 +218,8 @@ const findPlayer = (
 
 const answer = (state: FakeHostState, query: Query): unknown => {
   switch (query.kind) {
+    case "settings":
+      return state.settings;
     case "map":
       return state.map;
     case "me":
@@ -298,6 +303,28 @@ const run = (state: FakeHostState, loader: Loader, command: Command) => {
   };
 
   switch (command.kind) {
+    case "updateSettings": {
+      const { customName, customGuild, ...values } = command.patch;
+      state.settings = {
+        ...state.settings,
+        ...values,
+        ...(values.frameRate === undefined
+          ? {}
+          : { frameRate: Math.max(1, Math.min(60, values.frameRate)) }),
+        ...(values.walkSpeed === undefined
+          ? {}
+          : { walkSpeed: Math.max(1, values.walkSpeed) }),
+        ...(customName === undefined
+          ? {}
+          : { customName: customName ?? "", customNameConfigured: customName !== null }),
+        ...(customGuild === undefined
+          ? {}
+          : { customGuild: customGuild ?? "", customGuildConfigured: customGuild !== null }),
+      };
+      return state.settings;
+    }
+    case "reapplySettings":
+      return null;
     case "refreshContainer": {
       const answer = call(`${command.container}.getItems`) as ItemSnapshot[];
       state.items[command.container] = answer.filter(

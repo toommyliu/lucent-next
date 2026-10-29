@@ -1,6 +1,7 @@
 use crate::auth::{CredentialsSnapshot, ServerSnapshot};
 use crate::query::{ItemSelector, MonsterSelector};
 use crate::quest::QuestData;
+use crate::settings::{GameSettings, SettingsPatch};
 use crate::world::MonsterSnapshot;
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, ts_rs::TS)]
@@ -34,6 +35,8 @@ macro_rules! commands {
 }
 
 commands! {
+    UpdateSettings { patch: SettingsPatch } => GameSettings,
+    ReapplySettings { actions_only: bool } => (),
     RefreshContainer { container: RefreshContainer } => usize,
     ConfirmShopClosed { shop_id: Option<i64> } => bool,
     RejectDrop { selector: ItemSelector } => bool,

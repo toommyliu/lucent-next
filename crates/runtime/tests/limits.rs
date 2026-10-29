@@ -3,8 +3,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use lucent_host::Session;
+use lucent_host::projection::answer;
 use lucent_host::testing::{self, ProbeMovie};
-use lucent_protocol::query::{Query, answer};
+use lucent_protocol::query::Query;
 use lucent_runtime::{Kill, PendingEval, Runtime, RuntimeError};
 use serde_json::{Value, json};
 
@@ -187,7 +188,7 @@ fn dropping_a_runtime_blocked_in_a_loader_call_returns_promptly() {
     drop(release);
     let map: Value = serde_json::from_str(
         &session
-            .read_projection(|projection| answer(projection, Query::Map {}))
+            .read_projection(|projection| answer(projection, &Default::default(), Query::Map {}))
             .recv_timeout(TIMEOUT)
             .unwrap(),
     )
@@ -232,7 +233,7 @@ fn a_killed_script_runs_none_of_its_queued_callbacks() {
 
     let map: Value = serde_json::from_str(
         &session
-            .read_projection(|projection| answer(projection, Query::Map {}))
+            .read_projection(|projection| answer(projection, &Default::default(), Query::Map {}))
             .recv_timeout(TIMEOUT)
             .unwrap(),
     )

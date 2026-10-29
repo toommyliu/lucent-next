@@ -164,7 +164,10 @@ fn settings_survive_a_kill() {
         .wait(TIMEOUT)
         .unwrap();
     assert_eq!(
-        runtime.run_script(set, Default::default()).wait(TIMEOUT).unwrap(),
+        runtime
+            .run_script(set, Default::default())
+            .wait(TIMEOUT)
+            .unwrap(),
         ScriptOutcome::Completed
     );
     let before = runtime
