@@ -1,8 +1,8 @@
 use std::{env, fs, path::PathBuf};
 
 use lucent_protocol::{
-    aura::*, auth::*, event::*, hydration::*, item::*, monster_drop::*, packet::*, query::*,
-    quest::*, readiness::*, shop::*, world::*,
+    aura::*, auth::*, command::*, event::*, hydration::*, item::*, monster_drop::*, packet::*,
+    query::*, quest::*, readiness::*, shop::*, world::*,
 };
 use ts_rs::{Config, TS};
 
@@ -15,6 +15,9 @@ fn declarations(config: &Config) -> String {
         ServerData,
         ServerSnapshot,
         AuthSnapshot,
+        CredentialsSnapshot,
+        RefreshContainer,
+        Command,
         HydrationMethod,
         HydrationRequest,
         HydrationResult,
@@ -64,6 +67,7 @@ fn declarations(config: &Config) -> String {
         MonsterDrop
     );
     output.push_str(&query_outputs(config));
+    output.push_str(&command_outputs(config));
     output.push_str(&format!(
         "\nexport const EntityState = {{ Dead: {}, Idle: {}, InCombat: {} }} as const;\n",
         i64::from(EntityState::Dead),

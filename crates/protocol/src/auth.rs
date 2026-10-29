@@ -27,3 +27,10 @@ pub struct AuthSnapshot {
     pub password: String,
     pub servers: Vec<ServerSnapshot>,
 }
+
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CredentialsSnapshot {
+    pub username: String,
+    pub password: String,
+}

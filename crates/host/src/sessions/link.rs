@@ -6,7 +6,7 @@ use std::sync::{
 use std::task::Waker;
 use std::time::Duration;
 
-use crate::bridge::{self, PendingCall, ScriptEvent, ScriptEvents, Value};
+use crate::bridge::{self, Pending, PendingCall, ScriptEvent, ScriptEvents, Value};
 use crate::player::Inbox;
 use crate::projection::Projection;
 
@@ -53,6 +53,12 @@ impl ScriptLink {
 
     pub fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {
         self.inbox.call_loader(name, args)
+    }
+
+    pub fn command(&self, command: lucent_protocol::command::Command) -> Pending<String> {
+        let (reply, pending) = Pending::channel();
+        self.inbox.post(crate::player::Msg::Command(command, reply));
+        pending
     }
 
     pub fn read<R>(&self, read: impl FnOnce(&Projection) -> R) -> Result<R, bridge::Error> {

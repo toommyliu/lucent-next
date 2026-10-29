@@ -26,6 +26,12 @@ pub enum Error {
     Overflow,
     #[error("the projection read panicked")]
     ReadPanicked,
+    #[error("couldn't decode {callback}: {reason}")]
+    CommandDecode { callback: String, reason: String },
+    #[error("the connection changed while the command was running")]
+    ConnectionChanged,
+    #[error("the area or cell changed while the command was running")]
+    ScopeChanged,
 }
 
 pub struct Pending<T>(mpsc::Receiver<Result<T, Error>>);

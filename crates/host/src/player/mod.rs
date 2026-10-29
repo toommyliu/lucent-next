@@ -1,4 +1,5 @@
 mod backends;
+mod commands;
 pub(crate) mod frames;
 mod net;
 mod projection;
@@ -154,6 +155,10 @@ impl Read {
 
 pub(crate) enum Msg {
     Read(Read),
+    Command(
+        lucent_protocol::command::Command,
+        mpsc::Sender<Result<String, BridgeError>>,
+    ),
     Call(Call),
     Attach(ScriptEventSender),
     View(ViewEvent),
@@ -261,6 +266,9 @@ fn first_viewport(
             Msg::Attach(producer) => script_events = Some(producer),
             Msg::Call(call) => call.reject(BridgeError::NotReady),
             Msg::Read(read) => (read.0)(Err(BridgeError::NotReady)),
+            Msg::Command(_, reply) => {
+                let _ = reply.send(Err(BridgeError::NotReady));
+            }
             Msg::Stop => return None,
             Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
         }
@@ -343,6 +351,10 @@ impl Running {
             Msg::Stop => return ControlFlow::Break(()),
             Msg::Attach(producer) => self.script_events = Some(producer),
             Msg::Read(read) => (read.0)(Ok(&self.projection.read())),
+            Msg::Command(command, reply) => {
+                let result = self.command(command);
+                let _ = reply.send(result);
+            }
             Msg::Mute(muted) => self.set_muted(muted),
             Msg::Call(mut call) => {
                 let result = call.dispatch(&mut self.player.lock().unwrap());

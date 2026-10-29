@@ -781,3 +781,21 @@ fn refresh_equipped_consumable_with_an_empty_slot_unequips_every_consumable() {
         ])
     );
 }
+
+#[test]
+fn commands_before_the_viewport_are_not_ready_and_stop_with_the_session() {
+    let host = testing::headless_host();
+    let mut session = host.start_session(testing::headless_surface()).unwrap();
+    let link = session.take_script_link().unwrap();
+    assert_eq!(
+        link.command(Command::RefreshLoggedIn {})
+            .recv_timeout(Duration::from_secs(5)),
+        Err(lucent_host::bridge::Error::NotReady)
+    );
+    drop(session);
+    assert_eq!(
+        link.command(Command::RefreshLoggedIn {})
+            .recv_timeout(Duration::from_secs(5)),
+        Err(lucent_host::bridge::Error::Stopped)
+    );
+}

@@ -16,3 +16,5 @@ pub mod shop;
 pub mod hydration;
 pub mod query;
 pub mod readiness;
+
+pub mod command;

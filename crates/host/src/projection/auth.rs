@@ -1,6 +1,6 @@
 use super::wire::{wire_bool, wire_int};
 use indexmap::IndexMap;
-use lucent_protocol::auth::{AuthSnapshot, ServerData, ServerSnapshot};
+use lucent_protocol::auth::{AuthSnapshot, CredentialsSnapshot, ServerData, ServerSnapshot};
 use serde_json::Value;
 use std::sync::{Arc, RwLock};
 
@@ -32,6 +32,18 @@ impl std::fmt::Debug for AuthState {
     }
 }
 impl AuthState {
+    pub fn credentials(&self) -> CredentialsSnapshot {
+        CredentialsSnapshot {
+            username: self.username.clone(),
+            password: self.password.clone(),
+        }
+    }
+
+    pub(crate) fn set_credentials(&mut self, credentials: CredentialsSnapshot) {
+        self.username = credentials.username;
+        self.password = credentials.password;
+    }
+
     pub fn snapshot(&self) -> AuthSnapshot {
         AuthSnapshot {
             logged_in: self.logged_in,

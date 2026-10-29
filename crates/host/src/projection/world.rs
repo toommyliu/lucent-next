@@ -160,14 +160,26 @@ pub struct MonsterWrite {
 #[derive(Debug, Default)]
 pub struct WorldStore {
     pub map: MapState,
-    pub cells: Vec<String>,
-    pub cell_pads: Vec<String>,
+    cells: Option<ScopedList<MapState>>,
+    cell_pads: Option<ScopedList<CellScope>>,
     pub self_name: String,
     pub self_entity_id: Option<i64>,
     players: IndexMap<String, LivePlayer>,
     player_ids: IndexMap<i64, String>,
     monsters: IndexMap<i64, LiveMonster>,
     monster_drops: IndexMap<i64, Vec<MonsterDrop>>,
+}
+
+#[derive(Debug)]
+struct ScopedList<S> {
+    scope: S,
+    values: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CellScope {
+    pub area: MapState,
+    pub cell: Option<String>,
 }
 
 pub(crate) enum MonsterLookup<'a> {
@@ -197,6 +209,41 @@ pub(crate) fn monster_lookup(selector: &MonsterSelector) -> MonsterLookup<'_> {
 }
 
 impl WorldStore {
+    pub(crate) fn cell_scope(&self) -> CellScope {
+        CellScope {
+            area: self.map.clone(),
+            cell: self.get_me().map(|me| me.data().entity.cell),
+        }
+    }
+
+    pub fn cells(&self) -> Vec<String> {
+        self.cells
+            .as_ref()
+            .filter(|list| list.scope == self.map)
+            .map_or_else(Vec::new, |list| list.values.clone())
+    }
+
+    pub fn cell_pads(&self) -> Vec<String> {
+        self.cell_pads
+            .as_ref()
+            .filter(|list| list.scope == self.cell_scope())
+            .map_or_else(Vec::new, |list| list.values.clone())
+    }
+
+    pub(crate) fn set_cells(&mut self, values: Vec<String>) {
+        self.cells = Some(ScopedList {
+            scope: self.map.clone(),
+            values,
+        });
+    }
+
+    pub(crate) fn set_cell_pads(&mut self, values: Vec<String>) {
+        self.cell_pads = Some(ScopedList {
+            scope: self.cell_scope(),
+            values,
+        });
+    }
+
     pub fn resolve_player(&self, selector: &PlayerSelector) -> Option<LivePlayer> {
         match selector {
             PlayerSelector::EntityId(id) => self.get_player_by_id(selector_id(*id)?),
@@ -280,8 +327,8 @@ impl WorldStore {
     }
     pub fn clear_area(&mut self) {
         self.map = MapState::default();
-        self.cells.clear();
-        self.cell_pads.clear();
+        self.cells = None;
+        self.cell_pads = None;
         self.players.clear();
         self.player_ids.clear();
         self.monsters.clear();

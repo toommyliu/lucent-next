@@ -2,6 +2,7 @@ pub mod auras;
 pub mod auth;
 mod baselines;
 mod combat;
+pub(crate) mod commands;
 mod entity;
 mod item;
 mod item_mutations;

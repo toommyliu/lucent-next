@@ -81,11 +81,11 @@ impl Answer for Projection {
     }
 
     fn cells(&self) -> Vec<String> {
-        self.world.cells.clone()
+        self.world.cells()
     }
 
     fn cell_pads(&self) -> Vec<String> {
-        self.world.cell_pads.clone()
+        self.world.cell_pads()
     }
 
     fn item(&self, container: ItemContainer, selector: ItemSelector) -> Option<ItemSnapshot> {

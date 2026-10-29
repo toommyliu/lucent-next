@@ -3,6 +3,9 @@
 export type ServerData = { chat: number, count: number, language: string, max: number, memberOnly: boolean, name: string, online: boolean, };
 export type ServerSnapshot = { full: boolean, chat: number, count: number, language: string, max: number, memberOnly: boolean, name: string, online: boolean, };
 export type AuthSnapshot = { loggedIn: boolean, username: string, password: string, servers: Array<ServerSnapshot>, };
+export type CredentialsSnapshot = { username: string, password: string, };
+export type RefreshContainer = "bank" | "house" | "inventory";
+export type Command = { "kind": "refreshContainer", container: RefreshContainer, } | { "kind": "confirmShopClosed", shopId?: number | null, } | { "kind": "rejectDrop", selector: ItemSelector, } | { "kind": "refreshCells", } | { "kind": "refreshCellPads", } | { "kind": "hydrateMonster", selector: MonsterSelector, } | { "kind": "login", username: string, password: string, } | { "kind": "logout", } | { "kind": "refreshCredentials", } | { "kind": "refreshServers", } | { "kind": "refreshLoggedIn", } | { "kind": "refreshAcceptedQuests", } | { "kind": "refreshEquippedConsumable", };
 export type HydrationMethod = "player.getUserId" | "player.getData" | "world.isLoaded" | "player.getCell" | "player.getPad";
 export type HydrationRequest = { method: HydrationMethod, args: Array<unknown>, };
 export type HydrationResult = { "status": "unavailable" } | { "status": "value", "value": unknown };
@@ -51,5 +54,6 @@ export type QuestData = { cadence: QuestCadence, id: number, name: string, once:
 export type ShopData = { house: boolean, id: number, items: Array<ItemSnapshot>, limited: boolean, merge: boolean, name: string, };
 export type MonsterDrop = { eventDrop: boolean, icon: string, item: ItemSnapshot, questGated: boolean, questObjectives: Array<string>, rarity: number, rarityName: string, rateBoostPercent: number | null, ratePercent: number | null, requiredQuestIds: Array<number>, requiredQuests: Array<string>, stackSize: number, variableQuantity: boolean, };
 export type QueryOutputs = { map: MapState, me: PlayerSnapshot | null, selfEntityId: number | null, player: PlayerSnapshot | null, players: Array<PlayerSnapshot>, playerAuras: Array<AuraData>, monster: MonsterSnapshot | null, monsters: Array<MonsterSnapshot>, monsterAuras: Array<AuraData>, monsterDrops: Array<MonsterDrop> | null, cells: Array<string>, cellPads: Array<string>, item: ItemSnapshot | null, items: Array<ItemSnapshot>, itemHydration: number, readiness: ReadinessSnapshot, quest: QuestData | null, quests: Array<QuestData>, acceptedQuests: Array<QuestData>, shop: ShopData | null, auth: AuthSnapshot, };
+export type CommandOutputs = { refreshContainer: number, confirmShopClosed: boolean, rejectDrop: boolean, refreshCells: Array<string>, refreshCellPads: Array<string>, hydrateMonster: MonsterSnapshot | null, login: boolean, logout: null, refreshCredentials: CredentialsSnapshot, refreshServers: Array<ServerSnapshot>, refreshLoggedIn: boolean, refreshAcceptedQuests: Array<QuestData>, refreshEquippedConsumable: number | null, };
 
 export const EntityState = { Dead: 0, Idle: 1, InCombat: 2 } as const;
