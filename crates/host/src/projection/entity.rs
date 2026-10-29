@@ -389,16 +389,18 @@ impl LiveMonster {
         Arc::ptr_eq(&self.0, &other.0)
     }
     pub fn snapshot(&self) -> Value {
+        serde_json::to_value(self.snapshot_data()).unwrap()
+    }
+    pub fn snapshot_data(&self) -> MonsterSnapshot {
         let record = self.0.read().unwrap();
-        serde_json::to_value(MonsterSnapshot {
+        MonsterSnapshot {
             data: record.data.clone(),
             fields: record
                 .data
                 .entity
                 .snapshot_fields(record.auras.all().iter().map(LiveAura::data).collect()),
             drops: record.drops.values().cloned().collect(),
-        })
-        .unwrap()
+        }
     }
     pub fn auras(&self) -> Vec<LiveAura> {
         self.0.read().unwrap().auras.all()

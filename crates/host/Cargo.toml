@@ -26,6 +26,7 @@ thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "io-util", "sync", "macros"] }
 tracing = "0.1"
 url = "2.5"
+parking_lot = "0.12"
 indexmap = "2"
 regex = "1"
 serde = "1"

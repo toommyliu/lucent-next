@@ -41,3 +41,45 @@ fn a_script_calls_the_loader_and_reads_projected_state() {
         }
     );
 }
+
+#[derive(Debug, Deserialize, PartialEq)]
+struct Refreshed {
+    stored: u64,
+    names: Vec<String>,
+}
+
+#[test]
+fn a_script_refreshes_the_bank_through_a_host_command_and_reads_the_stored_items() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(
+        &host,
+        ProbeMovie::new().constant(
+            "bank.getItems",
+            serde_json::json!([
+                {"ItemID": 1, "sName": "Sword", "sType": "Sword"},
+                {"ItemID": 2, "sName": "Shield", "sType": "Shield"}
+            ]),
+        ),
+    );
+    let runtime = Runtime::start(link).unwrap();
+
+    let refreshed: Refreshed = runtime
+        .eval(
+            "bank.js",
+            r#"
+            const stored = JSON.parse(__host.command(JSON.stringify({ kind: "refreshContainer", container: "bank" })));
+            const items = JSON.parse(__host.read(JSON.stringify({ kind: "items", container: "bank" })));
+            ({ stored, names: items.map((item) => item.name) });
+        "#,
+        )
+        .wait(Duration::from_secs(5))
+        .unwrap();
+
+    assert_eq!(
+        refreshed,
+        Refreshed {
+            stored: 2,
+            names: vec!["Sword".into(), "Shield".into()]
+        }
+    );
+}

@@ -12,6 +12,10 @@ pub(crate) fn trim_js(value: &str) -> &str {
     })
 }
 
+pub(crate) fn selector_id(number: f64) -> Option<i64> {
+    (number.fract() == 0.0 && number.abs() <= 9_007_199_254_740_991.0).then_some(number as i64)
+}
+
 pub(crate) fn wire_number(value: &Value) -> Option<f64> {
     let number = match value {
         Value::Number(number) => number.as_f64()?,

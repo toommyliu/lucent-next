@@ -19,17 +19,31 @@ pub fn headless_host() -> Host {
     .expect("couldn't start the headless host")
 }
 
-pub struct ProbeMovie(Movie);
-
-impl Default for ProbeMovie {
-    fn default() -> Self {
-        Self::new()
-    }
+#[derive(Default)]
+pub struct ProbeMovie {
+    constants: Vec<(String, serde_json::Value)>,
+    raises: Vec<(String, String, String)>,
 }
 
 impl ProbeMovie {
     pub fn new() -> Self {
-        Self(Movie(Arc::from(fixture_swf())))
+        Self::default()
+    }
+
+    pub fn constant(mut self, name: impl Into<String>, value: serde_json::Value) -> Self {
+        self.constants.push((name.into(), value));
+        self
+    }
+
+    pub fn raising(
+        mut self,
+        name: impl Into<String>,
+        event: impl Into<String>,
+        payload: impl Into<String>,
+    ) -> Self {
+        self.raises
+            .push((name.into(), event.into(), payload.into()));
+        self
     }
 }
 
@@ -39,7 +53,7 @@ pub fn headless_surface() -> Surface {
 
 pub fn start_probe(host: &Host, movie: ProbeMovie) -> (Session, ScriptLink) {
     let mut session = host
-        .start_movie(headless_surface(), movie.0)
+        .start_movie(headless_surface(), Movie(Arc::from(fixture_swf(&movie))))
         .expect("couldn't start the probe player");
     let link = session.take_script_link().unwrap();
     session.send(ViewEvent::Resized(
@@ -105,7 +119,39 @@ fn external_interface() -> Vec<Action<'static>> {
     ]
 }
 
-fn fixture_swf() -> Vec<u8> {
+fn push_json<'a>(output: &mut Vec<Action<'a>>, value: &'a serde_json::Value) {
+    use serde_json::Value as Json;
+    match value {
+        Json::Null => output.push(push(vec![Value::Null])),
+        Json::Bool(value) => output.push(push(vec![Value::Bool(*value)])),
+        Json::Number(value) => output.push(push(vec![match value
+            .as_i64()
+            .and_then(|value| i32::try_from(value).ok())
+        {
+            Some(value) => Value::Int(value),
+            None => Value::Double(value.as_f64().unwrap()),
+        }])),
+        Json::String(value) => output.push(push(vec![Value::Str(string(value))])),
+        Json::Array(values) => {
+            for value in values.iter().rev() {
+                push_json(output, value);
+            }
+            output.push(push(vec![Value::Int(values.len() as i32)]));
+            output.push(Action::InitArray);
+        }
+        Json::Object(fields) => {
+            for (key, value) in fields {
+                output.push(push(vec![Value::Str(string(key))]));
+                push_json(output, value);
+            }
+            output.push(push(vec![Value::Int(fields.len() as i32)]));
+            output.push(Action::InitObject);
+        }
+    }
+}
+
+fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
+    let constants = &movie.constants;
     let echo_body = actions(&[
         push(vec![Value::Str(string("x"))]),
         Action::GetVariable,
@@ -128,16 +174,52 @@ fn fixture_swf() -> Vec<u8> {
     ]);
     let emit_body = actions(&emit);
     let user_id_body = actions(&[push(vec![Value::Int(7)]), Action::Return]);
-    let mut main = Vec::new();
-    for (name, params, body) in [
+    let constant_bodies: Vec<(&str, Vec<u8>)> = constants
+        .iter()
+        .map(|(name, value)| {
+            let mut body = Vec::new();
+            push_json(&mut body, value);
+            body.push(Action::Return);
+            (name.as_str(), actions(&body))
+        })
+        .collect();
+    let raise_bodies: Vec<(&str, Vec<u8>)> = movie
+        .raises
+        .iter()
+        .map(|(name, event, payload)| {
+            let mut body = vec![
+                push(vec![Value::Str(string(payload))]),
+                push(vec![Value::Str(string(event))]),
+                push(vec![Value::Int(2)]),
+            ];
+            body.extend(external_interface());
+            body.extend([
+                push(vec![Value::Str(string("call"))]),
+                Action::CallMethod,
+                Action::Pop,
+            ]);
+            (name.as_str(), actions(&body))
+        })
+        .collect();
+    let mut callbacks = vec![
         ("probe.echo", vec![string("x")], echo_body.as_slice()),
         (
             "probe.emit",
             vec![string("name"), string("payload")],
             emit_body.as_slice(),
         ),
-        ("player.getUserId", vec![], user_id_body.as_slice()),
-    ] {
+    ];
+    if !constants.iter().any(|(name, _)| name == "player.getUserId") {
+        callbacks.push(("player.getUserId", vec![], user_id_body.as_slice()));
+    }
+    callbacks.extend(
+        constant_bodies
+            .iter()
+            .chain(&raise_bodies)
+            .map(|(name, body)| (*name, vec![], body.as_slice())),
+    );
+    let mut main = Vec::new();
+    for (name, params, body) in callbacks {
         main.push(Action::DefineFunction(DefineFunction {
             name: string(""),
             params,
@@ -192,6 +274,37 @@ mod tests {
     use crate::bridge::{Error, Value};
 
     #[test]
+    fn a_constant_answers_its_loader_call_with_nested_values() {
+        let host = headless_host();
+        let (_session, link) = start_probe(
+            &host,
+            ProbeMovie::new()
+                .constant(
+                    "bank.getItems",
+                    serde_json::json!([
+                        {"ItemID": 1, "sName": "Sword", "iQty": 2.5, "bTemp": false},
+                        {"ItemID": -3, "sName": "", "tags": [null, "a"]}
+                    ]),
+                )
+                .constant("player.getUserId", serde_json::json!(9)),
+        );
+        assert_eq!(
+            link.call_loader("bank.getItems", vec![])
+                .recv_timeout(Duration::from_secs(5))
+                .map(lucent_protocol::bridge::to_json),
+            Ok(Some(serde_json::json!([
+                {"ItemID": 1.0, "bTemp": false, "iQty": 2.5, "sName": "Sword"},
+                {"ItemID": -3.0, "sName": "", "tags": [null, "a"]}
+            ])))
+        );
+        assert_eq!(
+            link.call_loader("player.getUserId", vec![])
+                .recv_timeout(Duration::from_secs(5)),
+            Ok(Value::Number(9.0))
+        );
+    }
+
+    #[test]
     fn restart_reloads_the_movie_and_ends_the_previous_link() {
         let host = headless_host();
         let (mut session, old) = start_probe(&host, ProbeMovie::new());
@@ -203,11 +316,7 @@ mod tests {
                 .recv_timeout(Duration::from_secs(1)),
             Err(Error::Stopped)
         );
-        assert_eq!(
-            old.read_projection(|_| 42)
-                .recv_timeout(Duration::from_secs(1)),
-            Err(Error::Stopped)
-        );
+        assert_eq!(old.read(|_| 42), Err(Error::Stopped));
         let current = session.take_script_link().unwrap();
         assert_eq!(current.id(), old.id());
         session.send(ViewEvent::Resized(

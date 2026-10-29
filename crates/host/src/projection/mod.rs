@@ -2,12 +2,14 @@ pub mod auras;
 pub mod auth;
 mod baselines;
 mod combat;
+pub(crate) mod commands;
 mod entity;
 mod item;
 mod item_mutations;
 mod items;
 pub mod monster_drops;
 pub mod packet;
+mod queries;
 pub mod quests;
 mod readiness;
 pub mod shops;
@@ -168,15 +170,5 @@ impl Projection {
                 epoch: self.receipts.epoch(),
             }),
         }
-    }
-}
-
-impl lucent_protocol::query::Answer for Projection {
-    fn map(&self) -> lucent_protocol::event::MapState {
-        self.world.map.clone()
-    }
-
-    fn me(&self) -> Option<lucent_protocol::world::PlayerSnapshot> {
-        self.world.get_me().map(|player| player.snapshot_data())
     }
 }

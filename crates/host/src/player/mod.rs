@@ -1,13 +1,18 @@
 mod backends;
+mod commands;
 pub(crate) mod frames;
 mod net;
 mod projection;
 pub(crate) mod surface;
 pub(crate) mod view;
 
+use parking_lot::RwLock;
 use std::ops::ControlFlow;
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{
+    Arc, LazyLock, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -48,6 +53,8 @@ pub(crate) struct Options {
 
 pub(crate) struct Handle {
     pub(crate) inbox: Inbox,
+    pub(crate) projection: Arc<RwLock<Projection>>,
+    pub(crate) stopped: Arc<AtomicBool>,
     exited: mpsc::Receiver<Result<(), PlayerError>>,
     thread: Option<thread::JoinHandle<()>>,
 }
@@ -64,6 +71,7 @@ impl Handle {
 
 impl Drop for Handle {
     fn drop(&mut self) {
+        self.stopped.store(true, Ordering::Release);
         self.inbox.post(Msg::Stop);
         match self.exited.recv_timeout(STOP_TIMEOUT) {
             Ok(result) => {
@@ -90,11 +98,16 @@ pub(crate) fn spawn(
     let (exit_tx, exited) = mpsc::sync_channel(1);
     let outbox = inbox.clone();
     let (provider, loader_events) = Bridge::new();
+    let projection = Arc::new(RwLock::new(Projection::default()));
+    let stopped = Arc::new(AtomicBool::new(false));
+    let thread_stopped = stopped.clone();
     let bridge = PlayerBridge {
+        projection: projection.clone(),
         provider,
         loader_events,
     };
     let thread = thread::Builder::new().name(name).spawn(move || {
+        let _stopped = StopOnDrop(thread_stopped);
         let result = run(rx, outbox, surface, net, options, bridge);
         if let Err(error) = &result {
             tracing::error!(%error, "player failed");
@@ -103,9 +116,19 @@ pub(crate) fn spawn(
     })?;
     Ok(Handle {
         inbox,
+        projection,
+        stopped,
         exited,
         thread: Some(thread),
     })
+}
+
+struct StopOnDrop(Arc<AtomicBool>);
+
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
 }
 
 type ReadCallback = Box<dyn FnOnce(Result<&Projection, BridgeError>) + Send>;
@@ -132,6 +155,10 @@ impl Read {
 
 pub(crate) enum Msg {
     Read(Read),
+    Command(
+        lucent_protocol::command::Command,
+        mpsc::Sender<Result<String, BridgeError>>,
+    ),
     Call(Call),
     Attach(ScriptEventSender),
     View(ViewEvent),
@@ -239,6 +266,9 @@ fn first_viewport(
             Msg::Attach(producer) => script_events = Some(producer),
             Msg::Call(call) => call.reject(BridgeError::NotReady),
             Msg::Read(read) => (read.0)(Err(BridgeError::NotReady)),
+            Msg::Command(_, reply) => {
+                let _ = reply.send(Err(BridgeError::NotReady));
+            }
             Msg::Stop => return None,
             Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
         }
@@ -246,6 +276,7 @@ fn first_viewport(
 }
 
 struct PlayerBridge {
+    projection: Arc<RwLock<Projection>>,
     provider: Bridge,
     loader_events: Events,
 }
@@ -253,7 +284,7 @@ struct PlayerBridge {
 struct Running {
     loader_events: Events,
     script_events: Option<ScriptEventSender>,
-    projection: Projection,
+    projection: Arc<RwLock<Projection>>,
     player: Arc<Mutex<Player>>,
     tasks: Tasks,
     viewport: Viewport,
@@ -274,6 +305,7 @@ impl Running {
         bridge: PlayerBridge,
     ) -> Result<Running, PlayerError> {
         let PlayerBridge {
+            projection,
             provider,
             loader_events,
         } = bridge;
@@ -301,7 +333,7 @@ impl Running {
         Ok(Running {
             loader_events,
             script_events: None,
-            projection: Projection::default(),
+            projection,
             player,
             tasks,
             viewport,
@@ -318,7 +350,11 @@ impl Running {
         match msg {
             Msg::Stop => return ControlFlow::Break(()),
             Msg::Attach(producer) => self.script_events = Some(producer),
-            Msg::Read(read) => (read.0)(Ok(&self.projection)),
+            Msg::Read(read) => (read.0)(Ok(&self.projection.read())),
+            Msg::Command(command, reply) => {
+                let result = self.command(command);
+                let _ = reply.send(result);
+            }
             Msg::Mute(muted) => self.set_muted(muted),
             Msg::Call(mut call) => {
                 let result = call.dispatch(&mut self.player.lock().unwrap());
@@ -406,7 +442,7 @@ mod tests {
         Running {
             loader_events,
             script_events: None,
-            projection: Projection::default(),
+            projection: Arc::new(RwLock::new(Projection::default())),
             player: PlayerBuilder::new().build(),
             tasks: Tasks::default(),
             viewport: Viewport::new(1024.0, 768.0, 1.0).unwrap(),

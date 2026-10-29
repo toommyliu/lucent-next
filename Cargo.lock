@@ -4050,6 +4050,7 @@ dependencies = [
  "lucent-host",
  "lucent-protocol",
  "objc2 0.6.5",
+ "parking_lot",
  "raw-window-handle",
  "regex",
  "reqwest",

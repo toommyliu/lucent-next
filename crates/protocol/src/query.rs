@@ -1,10 +1,44 @@
-use crate::event::MapState;
-use crate::world::PlayerSnapshot;
+use crate::aura::AuraData;
+use crate::auth::AuthSnapshot;
+use crate::event::{AuraKind, MapState};
+use crate::item::{ItemContainer, ItemSnapshot};
+use crate::monster_drop::MonsterDrop;
+use crate::quest::QuestData;
+use crate::readiness::ReadinessSnapshot;
+use crate::shop::ShopData;
+use crate::world::{MonsterSnapshot, PlayerSnapshot};
+
+#[derive(Clone, Debug, serde::Deserialize, ts_rs::TS)]
+#[serde(untagged)]
+pub enum PlayerSelector {
+    EntityId(f64),
+    Username(String),
+}
+
+#[derive(Clone, Debug, serde::Deserialize, ts_rs::TS)]
+#[serde(untagged, rename_all_fields = "camelCase")]
+pub enum MonsterSelector {
+    Id(f64),
+    Name(String),
+    MonsterMapId { monster_map_id: f64 },
+    Named { name: String },
+}
+
+#[derive(Clone, Debug, serde::Deserialize, ts_rs::TS)]
+#[serde(untagged, rename_all_fields = "camelCase")]
+pub enum ItemSelector {
+    Id(f64),
+    Name(String),
+    ShopItemId { shop_item_id: f64 },
+    ItemId { item_id: f64 },
+    Named { name: String },
+}
 
 macro_rules! queries {
     ($($variant:ident { $($field:ident: $input:ty),* } => $output:ty),* $(,)?) => {
         #[derive(Debug, serde::Deserialize, ts_rs::TS)]
-        #[serde(tag = "kind", rename_all = "camelCase")]
+        #[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+        #[ts(optional_fields = nullable)]
         pub enum Query {
             $($variant { $($field: $input),* }),*
         }
@@ -38,4 +72,23 @@ macro_rules! queries {
 queries! {
     Map {} => MapState,
     Me {} => Option<PlayerSnapshot>,
+    SelfEntityId {} => Option<i64>,
+    Player { selector: PlayerSelector } => Option<PlayerSnapshot>,
+    Players {} => Vec<PlayerSnapshot>,
+    PlayerAuras { entity_id: i64, aura_kind: Option<AuraKind> } => Vec<AuraData>,
+    Monster { selector: MonsterSelector } => Option<MonsterSnapshot>,
+    Monsters {} => Vec<MonsterSnapshot>,
+    MonsterAuras { monster_map_id: i64, aura_kind: Option<AuraKind> } => Vec<AuraData>,
+    MonsterDrops { monster_map_id: i64 } => Option<Vec<MonsterDrop>>,
+    Cells {} => Vec<String>,
+    CellPads {} => Vec<String>,
+    Item { container: ItemContainer, selector: ItemSelector } => Option<ItemSnapshot>,
+    Items { container: ItemContainer } => Vec<ItemSnapshot>,
+    ItemHydration { container: ItemContainer } => u64,
+    Readiness {} => ReadinessSnapshot,
+    Quest { id: f64 } => Option<QuestData>,
+    Quests {} => Vec<QuestData>,
+    AcceptedQuests {} => Vec<QuestData>,
+    Shop {} => Option<ShopData>,
+    Auth {} => AuthSnapshot,
 }

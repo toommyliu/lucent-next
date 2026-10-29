@@ -4,13 +4,16 @@ use lucent_protocol::event::{
     AuraKind, EntityKind, LocationChange, MapState, Point, ProjectionEvent,
 };
 use lucent_protocol::monster_drop::MonsterDrop;
+use lucent_protocol::query::{MonsterSelector, PlayerSelector};
 use lucent_protocol::world::{EntityData, EntityPatch, EntityState, MonsterData, PlayerData};
 use lucent_protocol::{Packet, PacketDirection, PacketEncoding};
+use regex::Regex;
 use serde_json::{Map, Value};
+use std::sync::LazyLock;
 
 use super::auras::{aura_events, seed_auras};
 use super::entity::{LiveMonster, LivePlayer};
-use super::wire::{trim_js, wire_bool, wire_i64, wire_int, wire_number};
+use super::wire::{selector_id, trim_js, wire_bool, wire_i64, wire_int, wire_number};
 use super::{ItemStore, ProjectionOutput, ReadinessKey, ReadinessReceipts};
 
 fn optional<T>(
@@ -157,8 +160,8 @@ pub struct MonsterWrite {
 #[derive(Debug, Default)]
 pub struct WorldStore {
     pub map: MapState,
-    pub cells: Vec<String>,
-    pub cell_pads: Vec<String>,
+    cells: Option<ScopedList<MapState>>,
+    cell_pads: Option<ScopedList<CellScope>>,
     pub self_name: String,
     pub self_entity_id: Option<i64>,
     players: IndexMap<String, LivePlayer>,
@@ -167,7 +170,103 @@ pub struct WorldStore {
     monster_drops: IndexMap<i64, Vec<MonsterDrop>>,
 }
 
+#[derive(Debug)]
+struct ScopedList<S> {
+    scope: S,
+    values: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CellScope {
+    pub area: MapState,
+    pub cell: Option<String>,
+}
+
+pub(crate) enum MonsterLookup<'a> {
+    Id(f64),
+    Name(&'a str),
+}
+
+pub(crate) fn monster_lookup(selector: &MonsterSelector) -> MonsterLookup<'_> {
+    match selector {
+        MonsterSelector::Id(id) | MonsterSelector::MonsterMapId { monster_map_id: id } => {
+            MonsterLookup::Id(*id)
+        }
+        MonsterSelector::Named { name } => MonsterLookup::Name(trim_js(name)),
+        MonsterSelector::Name(name) => {
+            let name = trim_js(name);
+            static ID: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"(?i)^id[.:'-]([1-9][0-9]*)$").unwrap());
+            let id = ID
+                .captures(name)
+                .and_then(|captures| captures[1].parse::<f64>().ok());
+            match id {
+                Some(id) => MonsterLookup::Id(id),
+                None => MonsterLookup::Name(name),
+            }
+        }
+    }
+}
+
 impl WorldStore {
+    pub(crate) fn cell_scope(&self) -> CellScope {
+        CellScope {
+            area: self.map.clone(),
+            cell: self.get_me().map(|me| me.data().entity.cell),
+        }
+    }
+
+    pub fn cells(&self) -> Vec<String> {
+        self.cells
+            .as_ref()
+            .filter(|list| list.scope == self.map)
+            .map_or_else(Vec::new, |list| list.values.clone())
+    }
+
+    pub fn cell_pads(&self) -> Vec<String> {
+        self.cell_pads
+            .as_ref()
+            .filter(|list| list.scope == self.cell_scope())
+            .map_or_else(Vec::new, |list| list.values.clone())
+    }
+
+    pub(crate) fn set_cells(&mut self, values: Vec<String>) {
+        self.cells = Some(ScopedList {
+            scope: self.map.clone(),
+            values,
+        });
+    }
+
+    pub(crate) fn set_cell_pads(&mut self, values: Vec<String>) {
+        self.cell_pads = Some(ScopedList {
+            scope: self.cell_scope(),
+            values,
+        });
+    }
+
+    pub fn resolve_player(&self, selector: &PlayerSelector) -> Option<LivePlayer> {
+        match selector {
+            PlayerSelector::EntityId(id) => self.get_player_by_id(selector_id(*id)?),
+            PlayerSelector::Username(name) => self.get_player(name),
+        }
+    }
+
+    pub fn resolve_monster(&self, selector: &MonsterSelector) -> Option<LiveMonster> {
+        match monster_lookup(selector) {
+            MonsterLookup::Id(id) => self.get_monster(selector_id(id)?),
+            MonsterLookup::Name(name) => {
+                let name = normalized_name(name);
+                self.monsters
+                    .values()
+                    .find(|monster| {
+                        !name.is_empty()
+                            && (name == "*" || normalized_name(&monster.data().name) == name)
+                    })
+                    .cloned()
+            }
+        }
+    }
+
     pub fn players(&self) -> Vec<LivePlayer> {
         self.players.values().cloned().collect()
     }
@@ -228,8 +327,8 @@ impl WorldStore {
     }
     pub fn clear_area(&mut self) {
         self.map = MapState::default();
-        self.cells.clear();
-        self.cell_pads.clear();
+        self.cells = None;
+        self.cell_pads = None;
         self.players.clear();
         self.player_ids.clear();
         self.monsters.clear();

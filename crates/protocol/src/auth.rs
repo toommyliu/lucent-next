@@ -18,3 +18,19 @@ pub struct ServerSnapshot {
     pub data: ServerData,
     pub full: bool,
 }
+
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthSnapshot {
+    pub logged_in: bool,
+    pub username: String,
+    pub password: String,
+    pub servers: Vec<ServerSnapshot>,
+}
+
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CredentialsSnapshot {
+    pub username: String,
+    pub password: String,
+}

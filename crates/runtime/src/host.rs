@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use lucent_host::ScriptLink;
 use lucent_host::bridge::{Error, Pending, ScriptEvent};
 use lucent_protocol::bridge::{Value, from_json, to_json};
+use lucent_protocol::command::Command;
 use lucent_protocol::event::ProjectionEvent;
 use lucent_protocol::query::{Query, answer};
 use serde::Serialize;
@@ -28,16 +29,41 @@ pub(crate) fn swf(
     Ok(to_json(value).map(|value| value.to_string()))
 }
 
+pub(crate) fn command(
+    link: &ScriptLink,
+    interrupt: &Interrupt,
+    json: &str,
+) -> Result<String, String> {
+    let command: Command = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    wait(link.command(command), interrupt)
+}
+
 pub(crate) fn read(
     link: &ScriptLink,
     interrupt: &Interrupt,
     query: &str,
 ) -> Result<String, String> {
     let query: Query = serde_json::from_str(query).map_err(|error| error.to_string())?;
-    wait(
-        link.read_projection(move |projection| answer(projection, query)),
-        interrupt,
-    )
+    interrupt.block();
+    let mut query = Some(query);
+    let deadline = Instant::now() + HOST_TIMEOUT;
+    let result = loop {
+        if let Some(stop) = interrupt.stop() {
+            break Err(RuntimeError::from(stop).to_string());
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            break Err(Error::Timeout.to_string());
+        }
+        match link.read_for(left.min(STOP_SLICE), |projection| {
+            answer(projection, query.take().unwrap())
+        }) {
+            Err(Error::Timeout) => {}
+            result => break result.map_err(|error| error.to_string()),
+        }
+    };
+    interrupt.unblock();
+    result
 }
 
 fn wait<T>(pending: Pending<T>, interrupt: &Interrupt) -> Result<T, String> {

@@ -10,23 +10,36 @@ use lucent_protocol::{
 use super::Running;
 use crate::bridge::{self, Error, Event, ScriptEvent, Value};
 use crate::projection::{
-    PacketProjection,
+    PacketProjection, Projection,
     packet::{PacketDecode, parse_packet},
 };
 
 impl Running {
     pub(super) fn drain_events(&mut self) {
         loop {
-            let epoch = self.projection.receipts.epoch();
-            match self.loader_events.try_recv() {
-                Err(Error::Overflow) => self.invalidate_projection(),
-                Ok(Some(event)) => {
-                    let projected = self.project_event(&event);
-                    self.publish(ScriptEvent::Loader { event, projected });
+            let received = match self.loader_events.try_recv() {
+                Ok(Some(event)) => Some(event),
+                Err(Error::Overflow) => None,
+                _ => break,
+            };
+            let mut projection = self.projection.write();
+            let epoch = projection.receipts.epoch();
+            let event = match received {
+                None => {
+                    self.invalidate_projection(&mut projection);
+                    None
                 }
-                Ok(None) | Err(_) => break,
+                Some(event) => {
+                    let projected = self.project_event(&mut projection, &event);
+                    Some(ScriptEvent::Loader { event, projected })
+                }
+            };
+            let invalidated = projection.receipts.epoch() != epoch;
+            drop(projection);
+            if let Some(event) = event {
+                self.publish(event);
             }
-            if self.projection.receipts.epoch() != epoch {
+            if invalidated {
                 self.publish(ScriptEvent::Invalidated);
             }
         }
@@ -38,24 +51,24 @@ impl Running {
         }
     }
 
-    fn invalidate_projection(&mut self) {
-        self.projection.connection("OnConnectionLost");
+    fn invalidate_projection(&self, projection: &mut Projection) {
+        projection.connection("OnConnectionLost");
         tracing::debug!(
-            epoch = self.projection.receipts.epoch(),
+            epoch = projection.receipts.epoch(),
             "projection invalidated after event overflow"
         );
     }
 
-    fn project_event(&mut self, event: &Event) -> Vec<ProjectionEvent> {
+    fn project_event(&self, projection: &mut Projection, event: &Event) -> Vec<ProjectionEvent> {
         let Some(Value::String(raw)) = event.args.first() else {
             return vec![];
         };
         let direction = match event.name.as_str() {
             "onConnection" => {
-                self.projection.connection(raw);
+                projection.connection(raw);
                 tracing::debug!(
                     status = raw,
-                    epoch = self.projection.receipts.epoch(),
+                    epoch = projection.receipts.epoch(),
                     "projection connection changed"
                 );
                 return vec![];
@@ -68,7 +81,7 @@ impl Running {
         let PacketDecode::Parsed(packet) = parse_packet(direction, raw) else {
             return vec![];
         };
-        let mut progress = self.projection.packet(&packet, now_ms(), true);
+        let mut progress = projection.packet(&packet, now_ms(), true);
         let mut projected = vec![];
         loop {
             match progress {
@@ -96,8 +109,7 @@ impl Running {
                     .ok()
                     .and_then(to_json)
                     .map_or(HydrationResult::Unavailable, HydrationResult::Value);
-                    let Ok(next) = self.projection.resume_hydration(pending, result, now_ms())
-                    else {
+                    let Ok(next) = projection.resume_hydration(pending, result, now_ms()) else {
                         break;
                     };
                     progress = next;
@@ -107,14 +119,14 @@ impl Running {
         tracing::debug!(
             command = packet.command(),
             direction = ?packet.direction(),
-            epoch = self.projection.receipts.epoch(),
-            missing = ?self.projection.current_readiness().missing,
-            map = self.projection.world.map.name,
-            cell = self.projection.world.get_me().map(|me| me.data().entity.cell.clone()),
-            hp = self.projection.world.get_me().map(|me| me.data().entity.hp),
-            players = self.projection.world.players().len(),
-            monsters = self.projection.world.monsters().len(),
-            inventory = self.projection.items.all(lucent_protocol::item::ItemContainer::Inventory).len(),
+            epoch = projection.receipts.epoch(),
+            missing = ?projection.current_readiness().missing,
+            map = projection.world.map.name,
+            cell = projection.world.get_me().map(|me| me.data().entity.cell.clone()),
+            hp = projection.world.get_me().map(|me| me.data().entity.hp),
+            players = projection.world.players().len(),
+            monsters = projection.world.monsters().len(),
+            inventory = projection.items.all(lucent_protocol::item::ItemContainer::Inventory).len(),
             "projection processed packet"
         );
         projected
@@ -154,7 +166,7 @@ mod tests {
             Running {
                 loader_events,
                 script_events: Some(producer),
-                projection: Projection::default(),
+                projection: std::sync::Arc::new(parking_lot::RwLock::new(Projection::default())),
                 player: PlayerBuilder::new().build(),
                 tasks: Tasks::default(),
                 viewport: Viewport::new(1024.0, 768.0, 1.0).unwrap(),
@@ -259,7 +271,7 @@ mod tests {
     #[test]
     fn session_input_overflow_invalidates_before_reads_and_fresh_baselines_recover() {
         let (mut running, bridge, events) = running(2, 16);
-        running.projection.auth.username = "player-a".into();
+        running.projection.write().auth.username = "player-a".into();
         extension(
             &mut running,
             &bridge,
@@ -303,7 +315,7 @@ mod tests {
     #[test]
     fn session_observer_overflow_reports_loss_without_invalidating_projection() {
         let (mut running, bridge, events) = running(16, 1);
-        running.projection.auth.username = "player-a".into();
+        running.projection.write().auth.username = "player-a".into();
         area(&mut running, &bridge);
         extension(
             &mut running,
@@ -407,7 +419,7 @@ mod tests {
     #[test]
     fn session_connection_loss_invalidates_preceding_baselines_and_old_world() {
         let (mut running, bridge, _events) = running(16, 16);
-        running.projection.auth.username = "player-a".into();
+        running.projection.write().auth.username = "player-a".into();
         area(&mut running, &bridge);
         extension(
             &mut running,
