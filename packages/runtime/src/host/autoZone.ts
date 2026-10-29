@@ -10,12 +10,14 @@ export const makeAutoZoneService = (
     enabled: config.enabled,
     map: config.map ?? undefined,
   });
-  const getState = () => Effect.sync(() => state(
-    JSON.parse(host.read(JSON.stringify({ kind: "autoZone" }))) as AutoZoneConfig,
-  ));
-  const patch = (patch: AutoZonePatch) => Effect.sync(() => state(
-    JSON.parse(host.command(JSON.stringify({ kind: "patchAutoZone", patch }))) as AutoZoneConfig,
-  ));
+  const getState = () =>
+    Effect.sync(() => state(
+      JSON.parse(host.read(JSON.stringify({ kind: "autoZone" }))) as AutoZoneConfig,
+    ));
+  const patch = (patch: AutoZonePatch) =>
+    Effect.sync(() => state(
+      JSON.parse(host.command(JSON.stringify({ kind: "patchAutoZone", patch }))) as AutoZoneConfig,
+    ));
 
   return {
     getState,

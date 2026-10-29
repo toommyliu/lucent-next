@@ -15808,8 +15808,9 @@ ${prefix}}`;
     yield* addFinalizer3(() => sync2(dispose));
     const applyConfig = /* @__PURE__ */ __name((config) => gen2(function* () {
       const previous = yield* get4(state);
-      yield* set3(state, { enabled: config.enabled, map: config.map ?? void 0 });
-      if (previous.map !== (config.map ?? void 0) || !config.enabled) {
+      const next = { enabled: config.enabled, map: config.map ?? void 0 };
+      yield* set3(state, next);
+      if (previous.map !== next.map || !next.enabled) {
         yield* remove2(fibers, "auto-zone-transition");
       }
     }), "applyConfig");
@@ -15841,21 +15842,33 @@ ${prefix}}`;
       setMap
     };
   });
-  var layer6 = effectDiscard(gen2(function* () {
-    const api = yield* Api;
-    const host4 = yield* HostState;
-    const fibers = yield* make6();
-    const config = yield* host4.read({ kind: "autoZone" });
-    const autoZone = yield* makeAutoZone(api, fibers, { enabled: config.enabled, map: config.map ?? void 0 });
-    const runFork3 = runForkWith2(yield* context2());
-    const onChange = /* @__PURE__ */ __name((config2) => {
-      runFork3(autoZone.applyConfig(config2));
-    }, "onChange");
-    window.onAutoZoneChanged = onChange;
-    yield* addFinalizer3(() => sync2(() => {
-      if (window.onAutoZoneChanged === onChange) delete window.onAutoZoneChanged;
-    }));
-  }));
+  var layer6 = effectDiscard(
+    gen2(function* () {
+      const api = yield* Api;
+      const host4 = yield* HostState;
+      const fibers = yield* make6();
+      const config = yield* host4.read({ kind: "autoZone" });
+      const autoZone = yield* makeAutoZone(api, fibers, {
+        enabled: config.enabled,
+        map: config.map ?? void 0
+      });
+      const runFork3 = runForkWith2(yield* context2());
+      const onChange = /* @__PURE__ */ __name((config2) => {
+        runFork3(autoZone.applyConfig(config2));
+      }, "onChange");
+      const onLost = /* @__PURE__ */ __name(() => {
+        runFork3(host4.read({ kind: "autoZone" }).pipe(
+          flatMap3(autoZone.applyConfig)
+        ));
+      }, "onLost");
+      window.onAutoZoneChanged = onChange;
+      window.onHostEventsLost = onLost;
+      yield* addFinalizer3(() => sync2(() => {
+        if (window.onAutoZoneChanged === onChange) delete window.onAutoZoneChanged;
+        if (window.onHostEventsLost === onLost) delete window.onHostEventsLost;
+      }));
+    })
+  );
 
   // packages/runtime/src/game/automation/retryLoop.ts
   var makeRetryLoop = /* @__PURE__ */ __name((name) => {
@@ -15945,7 +15958,10 @@ ${prefix}}`;
         errors.push(describe(cause));
       }
     }, "invoke");
-    for (const item of JSON.parse(itemsJson)) {
+    const items = JSON.parse(itemsJson);
+    const lost = items.some((item) => item.type === "eventslost");
+    if (lost) invoke(() => window.onHostEventsLost?.());
+    for (const item of items) {
       if (item.type === "loader") {
         invoke(() => {
           const callback3 = Reflect.get(window, item.name);
@@ -15955,10 +15971,10 @@ ${prefix}}`;
           invoke(() => window.onProjectionEvent?.(event));
         }
       } else if (item.type === "autozone") {
-        invoke(() => window.onAutoZoneChanged?.(item.config));
+        if (!lost) invoke(() => window.onAutoZoneChanged?.(item.config));
       } else if (item.type === "operation") {
         completeOperation(item.id, item.answer, item.error);
-      } else {
+      } else if (item.type === "invalidated") {
         invoke(() => window.onProjectionInvalidated?.());
       }
     }

@@ -244,7 +244,10 @@
         errors.push(describe(cause));
       }
     }, "invoke");
-    for (const item of JSON.parse(itemsJson)) {
+    const items = JSON.parse(itemsJson);
+    const lost = items.some((item) => item.type === "eventslost");
+    if (lost) invoke(() => window.onHostEventsLost?.());
+    for (const item of items) {
       if (item.type === "loader") {
         invoke(() => {
           const callback3 = Reflect.get(window, item.name);
@@ -254,10 +257,10 @@
           invoke(() => window.onProjectionEvent?.(event));
         }
       } else if (item.type === "autozone") {
-        invoke(() => window.onAutoZoneChanged?.(item.config));
+        if (!lost) invoke(() => window.onAutoZoneChanged?.(item.config));
       } else if (item.type === "operation") {
         completeOperation(item.id, item.answer, item.error);
-      } else {
+      } else if (item.type === "invalidated") {
         invoke(() => window.onProjectionInvalidated?.());
       }
     }
@@ -21077,7 +21080,10 @@ ${prefix}}`;
       provide2(
         mergeAll2(
           scriptApiLayer,
-          succeed6(ScriptServices, { ...unavailableScriptServices, autoZone: makeAutoZoneService(__host) }),
+          succeed6(ScriptServices, {
+            ...unavailableScriptServices,
+            autoZone: makeAutoZoneService(__host)
+          }),
           succeed6(ScriptDialogs, unavailableScriptDialogs)
         )
       )

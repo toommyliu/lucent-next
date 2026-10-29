@@ -239,13 +239,15 @@ export const makeAutoZone = Effect.fnUntraced(function* (
   });
   yield* Effect.addFinalizer(() => Effect.sync(dispose));
 
-  const applyConfig = (config: AutoZoneConfig) => Effect.gen(function* () {
-    const previous = yield* SubscriptionRef.get(state);
-    yield* SubscriptionRef.set(state, { enabled: config.enabled, map: config.map ?? undefined });
-    if (previous.map !== (config.map ?? undefined) || !config.enabled) {
-      yield* FiberMap.remove(fibers, "auto-zone-transition");
-    }
-  });
+  const applyConfig = (config: AutoZoneConfig) =>
+    Effect.gen(function* () {
+      const previous = yield* SubscriptionRef.get(state);
+      const next = { enabled: config.enabled, map: config.map ?? undefined };
+      yield* SubscriptionRef.set(state, next);
+      if (previous.map !== next.map || !next.enabled) {
+        yield* FiberMap.remove(fibers, "auto-zone-transition");
+      }
+    });
 
   const changes = SubscriptionRef.changes(state);
 
@@ -288,16 +290,30 @@ export const makeAutoZone = Effect.fnUntraced(function* (
 
 export type AutoZone = Effect.Success<ReturnType<typeof makeAutoZone>>;
 
-export const layer = Layer.effectDiscard(Effect.gen(function* () {
-  const api = yield* Api;
-  const host = yield* HostState;
-  const fibers = yield* FiberMap.make<string>();
-  const config = yield* host.read({ kind: "autoZone" });
-  const autoZone = yield* makeAutoZone(api, fibers, { enabled: config.enabled, map: config.map ?? undefined });
-  const runFork = Effect.runForkWith(yield* Effect.context<never>());
-  const onChange = (config: AutoZoneConfig) => { runFork(autoZone.applyConfig(config)); };
-  window.onAutoZoneChanged = onChange;
-  yield* Effect.addFinalizer(() => Effect.sync(() => {
-    if (window.onAutoZoneChanged === onChange) delete window.onAutoZoneChanged;
-  }));
-}));
+export const layer = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const api = yield* Api;
+    const host = yield* HostState;
+    const fibers = yield* FiberMap.make<string>();
+    const config = yield* host.read({ kind: "autoZone" });
+    const autoZone = yield* makeAutoZone(api, fibers, {
+      enabled: config.enabled,
+      map: config.map ?? undefined,
+    });
+    const runFork = Effect.runForkWith(yield* Effect.context<never>());
+    const onChange = (config: AutoZoneConfig) => {
+      runFork(autoZone.applyConfig(config));
+    };
+    const onLost = () => {
+      runFork(host.read({ kind: "autoZone" }).pipe(
+        Effect.flatMap(autoZone.applyConfig),
+      ));
+    };
+    window.onAutoZoneChanged = onChange;
+    window.onHostEventsLost = onLost;
+    yield* Effect.addFinalizer(() => Effect.sync(() => {
+      if (window.onAutoZoneChanged === onChange) delete window.onAutoZoneChanged;
+      if (window.onHostEventsLost === onLost) delete window.onHostEventsLost;
+    }));
+  }),
+);

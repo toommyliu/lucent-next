@@ -94,6 +94,7 @@ fn wait<T>(pending: Pending<T>, interrupt: &Interrupt) -> Result<T, String> {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub(crate) enum Item {
+    EventsLost,
     AutoZone {
         config: lucent_protocol::auto_zone::AutoZoneConfig,
     },

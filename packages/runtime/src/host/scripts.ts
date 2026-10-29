@@ -22,7 +22,10 @@ const runtime = ManagedRuntime.make(
     Layer.provide(
       Layer.mergeAll(
         scriptApiLayer,
-        Layer.succeed(ScriptServices, { ...unavailableScriptServices, autoZone: makeAutoZoneService(__host) }),
+        Layer.succeed(ScriptServices, {
+          ...unavailableScriptServices,
+          autoZone: makeAutoZoneService(__host),
+        }),
         Layer.succeed(ScriptDialogs, unavailableScriptDialogs),
       ),
     ),

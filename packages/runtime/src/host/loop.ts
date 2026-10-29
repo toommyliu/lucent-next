@@ -30,6 +30,7 @@ declare global {
   }>;
 
   interface Window {
+    onHostEventsLost?: () => void;
     onAutoZoneChanged?: (config: AutoZoneConfig) => void;
     onProjectionEvent?: (event: ProjectionEvent) => void;
     onProjectionInvalidated?: () => void;
@@ -43,6 +44,7 @@ type ScriptEvent =
       args: unknown[];
       projected: ProjectionEvent[];
     }
+  | { type: "eventslost" }
   | { type: "autozone"; config: AutoZoneConfig }
   | { type: "invalidated" }
   | {
@@ -106,7 +108,10 @@ export const turn = (itemsJson: string): string[] => {
       errors.push(describe(cause));
     }
   };
-  for (const item of JSON.parse(itemsJson) as ScriptEvent[]) {
+  const items = JSON.parse(itemsJson) as ScriptEvent[];
+  const lost = items.some((item) => item.type === "eventslost");
+  if (lost) invoke(() => window.onHostEventsLost?.());
+  for (const item of items) {
     if (item.type === "loader") {
       invoke(() => {
         const callback: unknown = Reflect.get(window, item.name);
@@ -116,10 +121,10 @@ export const turn = (itemsJson: string): string[] => {
         invoke(() => window.onProjectionEvent?.(event));
       }
     } else if (item.type === "autozone") {
-      invoke(() => window.onAutoZoneChanged?.(item.config));
+      if (!lost) invoke(() => window.onAutoZoneChanged?.(item.config));
     } else if (item.type === "operation") {
       completeOperation(item.id, item.answer, item.error);
-    } else {
+    } else if (item.type === "invalidated") {
       invoke(() => window.onProjectionInvalidated?.());
     }
   }

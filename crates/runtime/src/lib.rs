@@ -381,6 +381,8 @@ fn take_events(engine: &mut Engine) -> Option<Vec<host::Item>> {
             Ok(None) => return Some(items),
             Err(EventError::Overflow) => {
                 engine.events_lost();
+                items.clear();
+                items.push(host::Item::EventsLost);
             }
             Err(_) => return None,
         }
