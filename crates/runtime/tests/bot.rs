@@ -19,6 +19,12 @@ fn start() -> (lucent_host::Host, Session, ScriptLink) {
             .recording("settings.setWalkSpeed")
             .recording("settings.enemyMagnet"),
     );
+    become_ready(&link);
+    update(&link, json!({"walkSpeed":30,"enemyMagnetEnabled":true}));
+    (host, session, link)
+}
+
+fn become_ready(link: &ScriptLink) {
     for packet in [
         json!({"cmd":"loadInventoryBig","items":[],"hitems":[]}),
         json!({"cmd":"moveToArea","areaId":1,"areaName":"battleon-1",
@@ -34,8 +40,6 @@ fn start() -> (lucent_host::Host, Session, ScriptLink) {
         .recv_timeout(TIMEOUT)
         .unwrap();
     }
-    update(&link, json!({"walkSpeed":30,"enemyMagnetEnabled":true}));
-    (host, session, link)
 }
 
 fn update(link: &ScriptLink, patch: serde_json::Value) {
@@ -45,7 +49,9 @@ fn update(link: &ScriptLink, patch: serde_json::Value) {
 }
 
 fn next_call(link: &ScriptLink, method: &str) -> Vec<Value> {
+    let deadline = Instant::now() + TIMEOUT;
     loop {
+        assert!(Instant::now() < deadline, "did not receive {method}");
         let event = common::await_event(link, "onProbeCall", None);
         if event.args.first() == Some(&Value::String(method.into())) {
             return event.args;
@@ -112,8 +118,11 @@ fn the_settings_policy_reapplies_through_the_host() {
     drain(&observer);
     let began = Instant::now();
     assert_eq!(
-        next_call(&observer, "settings.enemyMagnet")[1],
-        Value::Undefined
+        common::await_event(&observer, "onProbeCall", None).args,
+        vec![
+            Value::String("settings.enemyMagnet".into()),
+            Value::Undefined
+        ]
     );
     assert!(began.elapsed() < Duration::from_millis(1500));
     assert_eq!(
@@ -145,25 +154,39 @@ fn a_player_restart_stops_the_bot_and_a_new_bot_reads_the_host_settings() {
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));
     testing::wait_loaded(&observer);
+    become_ready(&observer);
+    drain(&observer);
     let bot = Bot::start(session.attach().unwrap()).unwrap();
     assert!(matches!(
         bot.wait(Duration::ZERO),
         Err(RuntimeError::Timeout)
     ));
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(
-            &observer
-                .query(serde_json::from_value(json!({"kind":"settings"})).unwrap())
-                .unwrap()
-        )
-        .unwrap()["walkSpeed"],
-        json!(30.0)
+        next_call(&observer, "settings.setWalkSpeed")[1],
+        Value::Number(30.0)
     );
 }
 
 #[cfg(feature = "testing")]
 #[test]
 fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use tracing_subscriber::prelude::*;
+    struct Errors(Arc<AtomicUsize>);
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Errors {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() == tracing::Level::ERROR {
+                self.0.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
     for (source, expected) in [
         ("while (true) {}", Kill::Watchdog),
         (
@@ -171,6 +194,10 @@ fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
             Kill::HeapLimit,
         ),
     ] {
+        let errors = Arc::new(AtomicUsize::new(0));
+        let dispatch =
+            tracing::Dispatch::new(tracing_subscriber::registry().with(Errors(errors.clone())));
+        let _guard = tracing::dispatcher::set_default(&dispatch);
         let (_host, mut session, observer) = start();
         let bot = Bot::start(session.attach().unwrap()).unwrap();
         assert_eq!(
@@ -192,6 +219,7 @@ fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
             Err(RuntimeError::Stopped)
         ));
         drop(bot);
+        assert_eq!(errors.load(Ordering::Relaxed), 1);
         drain(&observer);
         let _replacement = Bot::start(session.attach().unwrap()).unwrap();
         assert_eq!(

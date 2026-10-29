@@ -33,7 +33,8 @@ fn a_trivial_scripts_first_turn_stays_below_half_the_watchdog_budget() {
     drop(link);
     for sample in 1..=10 {
         let interrupt = Arc::new(Interrupt::new().unwrap());
-        let mut engine = Engine::new(session.attach().unwrap(), interrupt).unwrap();
+        let mut engine =
+            Engine::new(session.attach().unwrap(), interrupt, super::Bundle::Script).unwrap();
         let entry = ModulePath::loose("trivial.js").unwrap();
         let script = Script::new(
             entry.clone(),
@@ -48,7 +49,7 @@ fn a_trivial_scripts_first_turn_stays_below_half_the_watchdog_budget() {
         let (reply, outcome) = mpsc::channel();
         let began = Instant::now();
         engine.start(script, Default::default(), reply);
-        engine.turn("[]");
+        engine.turn("[]").unwrap();
         let elapsed = began.elapsed();
         match engine
             .evaluate("observed.js", "globalThis.loaded === true")
@@ -63,7 +64,7 @@ fn a_trivial_scripts_first_turn_stays_below_half_the_watchdog_budget() {
                 break json.unwrap();
             }
             assert!(Instant::now() < deadline, "script did not complete");
-            engine.turn("[]");
+            engine.turn("[]").unwrap();
             std::thread::sleep(Duration::from_millis(1));
         };
         assert_eq!(
