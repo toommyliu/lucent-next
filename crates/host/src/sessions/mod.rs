@@ -114,6 +114,15 @@ pub struct Session {
 }
 
 impl Session {
+    #[cfg(feature = "testing")]
+    pub fn attached_link_count(&self) -> crate::bridge::Pending<usize> {
+        let (reply, pending) = crate::bridge::Pending::channel();
+        if let Some(player) = &self.player {
+            player.inbox.post(player::Msg::LinkCount(reply));
+        }
+        pending
+    }
+
     /// Runs after preceding events and returns owned, serializable data.
     ///
     /// ```

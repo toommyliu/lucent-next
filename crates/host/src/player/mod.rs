@@ -163,6 +163,8 @@ pub(crate) enum Msg {
     ),
     Call(Call),
     Attach(ScriptEventSender),
+    #[cfg(feature = "testing")]
+    LinkCount(mpsc::Sender<Result<usize, BridgeError>>),
     View(ViewEvent),
     Mute(bool),
     Poll(async_task::Runnable),
@@ -269,6 +271,10 @@ fn first_viewport(
             }
             Msg::Mute(mute) => muted = mute,
             Msg::Attach(producer) => script_events = Some(producer),
+            #[cfg(feature = "testing")]
+            Msg::LinkCount(reply) => {
+                let _ = reply.send(Ok(usize::from(script_events.is_some())));
+            }
             Msg::Call(call) => call.reject(BridgeError::NotReady),
             Msg::Read(read) => (read.0)(Err(BridgeError::NotReady)),
             Msg::Command(command, reply) => {
@@ -367,6 +373,10 @@ impl Running {
         match msg {
             Msg::Stop => return ControlFlow::Break(()),
             Msg::Attach(producer) => self.script_events = Some(producer),
+            #[cfg(feature = "testing")]
+            Msg::LinkCount(reply) => {
+                let _ = reply.send(Ok(usize::from(self.script_events.is_some())));
+            }
             Msg::Read(read) => (read.0)(Ok(&self.projection.read())),
             Msg::Command(command, reply) => {
                 let result = self.command(command);
