@@ -70,13 +70,13 @@ impl Running {
         };
         let direction = match event.name.as_str() {
             "onConnection" => {
-                projection.connection(raw);
+                let output = projection.connection(raw);
                 tracing::debug!(
                     status = raw,
                     epoch = projection.receipts.epoch(),
                     "projection connection changed"
                 );
-                return vec![];
+                return output.events;
             }
             "onExtensionResponse" => PacketDirection::Extension,
             "packetFromClient" => PacketDirection::Client,
@@ -121,6 +121,7 @@ impl Running {
                 }
             }
         }
+        projected.extend(projection.login_if_ready());
         tracing::debug!(
             command = packet.command(),
             direction = ?packet.direction(),
@@ -499,5 +500,100 @@ mod tests {
             })
         );
         assert_eq!(events.try_recv().unwrap(), None);
+    }
+
+    #[test]
+    fn login_and_logout_follow_readiness_and_connection_loss_once_per_session() {
+        for inventory_first in [false, true] {
+            let (mut running, bridge, events) = running(32, 32);
+            running.projection.write().auth.username = "player-a".into();
+            queue(
+                &mut running,
+                &bridge,
+                "onConnection",
+                "OnConnectionLost".into(),
+            );
+            read(&mut running, |_| ());
+            assert!(matches!(
+                events.try_recv().unwrap(),
+                Some(ScriptEvent::Loader { projected, .. }) if projected.is_empty()
+            ));
+            assert_eq!(events.try_recv().unwrap(), Some(ScriptEvent::Invalidated));
+
+            for _ in 0..2 {
+                for inventory in [inventory_first, !inventory_first] {
+                    if inventory {
+                        extension(
+                            &mut running,
+                            &bridge,
+                            json!({"cmd":"loadInventoryBig", "items":[], "hitems":[]}),
+                        );
+                    } else {
+                        area(&mut running, &bridge);
+                    }
+                }
+                assert!(read(&mut running, |state| state
+                    .current_readiness()
+                    .missing
+                    .is_empty()));
+                let Some(ScriptEvent::Loader { projected, .. }) = events.try_recv().unwrap() else {
+                    panic!("expected the first readiness callback");
+                };
+                assert!(!projected.contains(&ProjectionEvent::Login));
+                let Some(ScriptEvent::Loader { event, projected }) = events.try_recv().unwrap()
+                else {
+                    panic!("expected the readiness-completing callback");
+                };
+                assert_eq!(event.name, "onExtensionResponse");
+                assert_eq!(projected.last(), Some(&ProjectionEvent::Login));
+                assert_eq!(
+                    projected
+                        .iter()
+                        .filter(|event| **event == ProjectionEvent::Login)
+                        .count(),
+                    1
+                );
+
+                area(&mut running, &bridge);
+                read(&mut running, |_| ());
+                assert!(matches!(
+                    events.try_recv().unwrap(),
+                    Some(ScriptEvent::Loader { projected, .. }) if !projected.contains(&ProjectionEvent::Login)
+                ));
+
+                queue(
+                    &mut running,
+                    &bridge,
+                    "onConnection",
+                    "OnConnectionLost".into(),
+                );
+                read(&mut running, |_| ());
+                assert_eq!(
+                    events.try_recv().unwrap(),
+                    Some(ScriptEvent::Loader {
+                        event: Event {
+                            name: "onConnection".into(),
+                            args: vec![Value::String("OnConnectionLost".into())],
+                        },
+                        projected: vec![ProjectionEvent::Logout],
+                    })
+                );
+                assert_eq!(events.try_recv().unwrap(), Some(ScriptEvent::Invalidated));
+
+                queue(
+                    &mut running,
+                    &bridge,
+                    "onConnection",
+                    "OnConnectionLost".into(),
+                );
+                read(&mut running, |_| ());
+                assert!(matches!(
+                    events.try_recv().unwrap(),
+                    Some(ScriptEvent::Loader { projected, .. }) if projected.is_empty()
+                ));
+                assert_eq!(events.try_recv().unwrap(), Some(ScriptEvent::Invalidated));
+                assert_eq!(events.try_recv().unwrap(), None);
+            }
+        }
     }
 }

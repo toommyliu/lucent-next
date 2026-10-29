@@ -55,21 +55,39 @@ pub struct Projection {
     pub quests: quests::QuestStore,
     pub shops: shops::ShopStore,
     pub world: world::WorldStore,
+    session_logged_in: bool,
 }
 
 impl Projection {
-    pub fn connection(&mut self, status: &str) {
+    pub fn connection(&mut self, status: &str) -> ProjectionOutput {
         match status {
             "OnConnectionLost" | "OnConnectionFailed" => self.auth.logged_in = false,
             "OnConnection" => {}
-            _ => return,
+            _ => return ProjectionOutput::default(),
         }
+        let logout = status == "OnConnectionLost" && self.session_logged_in;
+        self.session_logged_in = false;
         self.world.clear_area();
         self.world.clear_self();
         self.quests.clear();
         self.shops.clear();
         self.items.clear();
         self.receipts.reset();
+        ProjectionOutput {
+            events: if logout {
+                vec![ProjectionEvent::Logout]
+            } else {
+                vec![]
+            },
+        }
+    }
+
+    pub(crate) fn login_if_ready(&mut self) -> Option<ProjectionEvent> {
+        if self.session_logged_in || !self.current_readiness().missing.is_empty() {
+            return None;
+        }
+        self.session_logged_in = true;
+        Some(ProjectionEvent::Login)
     }
 
     pub fn readiness(&self, map_name: &str, self_bound: bool) -> ReadinessSnapshot {
