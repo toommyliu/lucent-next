@@ -1,9 +1,7 @@
 // @ts-check
 
-const { farmEldersBlood } = require("@lucent/dailies");
+import { farmEldersBlood } from "@lucent/dailies";
 
-function* run() {
+export default function* run() {
   return yield* farmEldersBlood();
 }
-
-module.exports = run;

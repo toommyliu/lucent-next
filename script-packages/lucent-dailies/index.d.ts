@@ -26,11 +26,11 @@ declare module "@lucent/dailies" {
    * @param options Whether to bank rewards after each spin.
    * @example
    * ```js
-   * const dailies = require("@lucent/dailies");
+   * import * as dailies from "@lucent/dailies";
    *
-   * module.exports = function* run() {
+   * export default function* run() {
    *   return yield* dailies.spinWheelOfDoom({ bankRewards: true });
-   * };
+   * }
    * ```
    */
   export function spinWheelOfDoom(
@@ -48,11 +48,11 @@ declare module "@lucent/dailies" {
    *
    * @example
    * ```js
-   * const dailies = require("@lucent/dailies");
+   * import * as dailies from "@lucent/dailies";
    *
-   * module.exports = function* run() {
+   * export default function* run() {
    *   return yield* dailies.farmEldersBlood();
-   * };
+   * }
    * ```
    */
   export function farmEldersBlood(): ScriptGenerator<EldersBloodResult>;

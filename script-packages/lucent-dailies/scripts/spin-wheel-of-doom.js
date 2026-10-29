@@ -1,12 +1,12 @@
 // @ts-check
 
-const script = require("lucent/script");
-const s = require("lucent/schema");
-const { spinWheelOfDoom } = require("@lucent/dailies");
+import * as script from "lucent/script";
+import * as s from "lucent/schema";
+import { spinWheelOfDoom } from "@lucent/dailies";
 
 const bankRewardsSchema = s.boolean().default(false);
 
-function* run() {
+export default function* run() {
   const bankRewards = bankRewardsSchema.parse(
     yield* script.inputs.get("bankRewards"),
   );
@@ -16,10 +16,8 @@ function* run() {
   return result;
 }
 
-module.exports = run;
-
 /** @satisfies {import("lucent/script").ScriptInputsDefinition} */
-module.exports.inputs = {
+export const inputs = {
   id: "lucent-dailies-spin-wheel-of-doom",
   fields: [
     {

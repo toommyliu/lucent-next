@@ -37,12 +37,11 @@ import type {
 } from "@lucent/schemas/scriptInputs";
 import type {
   ArmyEquipSetOptions,
-  ArmyError,
   ArmyRunStepOptions,
   ArmySession,
 } from "../army/Army";
+import type { ArmyError, ArmyLoopTauntError } from "../army/ArmyErrors";
 import type {
-  ArmyLoopTauntError,
   ArmyLoopTauntHandle,
   ArmyLoopTauntPlan,
 } from "../army/ArmyLoopTaunt";

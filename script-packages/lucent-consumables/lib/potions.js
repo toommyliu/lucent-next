@@ -3,12 +3,12 @@
 /** @typedef {import("./types").PotionRecipe} PotionRecipe */
 /** @typedef {import("./types").Session} Session */
 
-const api = require("lucent/api");
-const script = require("lucent/script");
-const { materials } = require("./catalog");
-const { acquire, materialSource } = require("./supplies");
-const { quantity, unbank, acceptDrop } = require("./inventory");
-const { collectRewards } = require("./rewards");
+import * as api from "lucent/api";
+import * as script from "lucent/script";
+import { materials } from "./catalog";
+import { acquire, materialSource } from "./supplies";
+import { quantity, unbank, acceptDrop } from "./inventory";
+import { collectRewards } from "./rewards";
 
 /** @param {string} name
  * @param {PotionRecipe} recipe
@@ -192,4 +192,4 @@ function* ensurePotion(name, recipe, target, session) {
   }
 }
 
-module.exports = { preparePotion, ensurePotion };
+export { preparePotion, ensurePotion };

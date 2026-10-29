@@ -11,10 +11,10 @@ import type { DesktopArmyBridge } from "../../shared/desktopBridge";
 import { Api, type ApiService } from "../flash/api/Api";
 import {
   ArmyApi,
-  ArmyError,
   type ArmyApiRuntimeShape,
   layer as armyLayer,
 } from "./Army";
+import { ArmyError } from "./ArmyErrors";
 
 afterEach(() => vi.unstubAllGlobals());
 

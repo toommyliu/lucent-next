@@ -460,4 +460,4 @@ const materials = {
   },
 };
 
-module.exports = { potions, scrolls, materials };
+export { potions, scrolls, materials };

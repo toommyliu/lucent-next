@@ -2,7 +2,7 @@ use std::{env, fs, path::PathBuf};
 
 use lucent_protocol::{
     aura::*, auth::*, command::*, event::*, hydration::*, item::*, monster_drop::*, packet::*,
-    query::*, quest::*, readiness::*, shop::*, world::*,
+    query::*, quest::*, readiness::*, script::*, shop::*, world::*,
 };
 use ts_rs::{Config, TS};
 
@@ -64,7 +64,8 @@ fn declarations(config: &Config) -> String {
         QuestReward,
         QuestData,
         ShopData,
-        MonsterDrop
+        MonsterDrop,
+        ScriptOutcome
     );
     output.push_str(&query_outputs(config));
     output.push_str(&command_outputs(config));

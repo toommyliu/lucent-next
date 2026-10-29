@@ -6,11 +6,11 @@
 /** @typedef {NonNullable<ReturnType<typeof snapshotOffer>>} Offer */
 /** @typedef {{ source: Source, target: number } | { scroll: import("./types").ScrollRecipe, target: number } | { source: Source, info: Offer, units: number }} Step */
 
-const api = require("lucent/api");
-const script = require("lucent/script");
-const { materials } = require("./catalog");
-const { quantity, unbank, acceptDrop } = require("./inventory");
-const { ensureScroll } = require("./scrolls");
+import * as api from "lucent/api";
+import * as script from "lucent/script";
+import { materials } from "./catalog";
+import { quantity, unbank, acceptDrop } from "./inventory";
+import { ensureScroll } from "./scrolls";
 
 /** @param {import("./types").ShopLocation} source */
 function* open(source) {
@@ -285,4 +285,4 @@ function* acquire(goals, session) {
   }
 }
 
-module.exports = { acquire, materialSource };
+export { acquire, materialSource };

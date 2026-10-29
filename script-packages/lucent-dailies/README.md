@@ -1,13 +1,15 @@
 # `@lucent/dailies`
 
-```js
-const dailies = require("@lucent/dailies");
+Scripts use ES modules and export a generator function as their default export.
 
-module.exports = function* run() {
+```js
+import * as dailies from "@lucent/dailies";
+
+export default function* run() {
   const eldersBlood = yield* dailies.farmEldersBlood();
   const wheelOfDoom = yield* dailies.spinWheelOfDoom({ bankRewards: true });
   return { eldersBlood, wheelOfDoom };
-};
+}
 ```
 
 `farmEldersBlood` completes the Elders' Blood daily. It skips the quest when

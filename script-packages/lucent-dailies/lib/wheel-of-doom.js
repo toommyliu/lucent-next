@@ -1,8 +1,8 @@
 // @ts-check
 
-const api = require("lucent/api");
-const s = require("lucent/schema");
-const { wheelRewardNames } = require("./wheel-rewards");
+import * as api from "lucent/api";
+import * as s from "lucent/schema";
+import { wheelRewardNames } from "./wheel-rewards";
 
 const optionsSchema = s.object({
   bankRewards: s.boolean().default(false),
@@ -90,4 +90,4 @@ function* spinWheelOfDoom(options = {}) {
   return { daily, weekly };
 }
 
-module.exports = { spinWheelOfDoom };
+export { spinWheelOfDoom };

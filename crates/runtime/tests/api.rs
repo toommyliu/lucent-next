@@ -1,10 +1,10 @@
-use std::time::Duration;
+mod common;
 
-use lucent_host::testing::{self, ProbeMovie};
+use common::TIMEOUT;
+use lucent_host::testing;
+use lucent_protocol::script::ScriptOutcome;
 use lucent_runtime::Runtime;
 use serde_json::{Value, json};
-
-const TIMEOUT: Duration = Duration::from_secs(10);
 
 fn area() -> String {
     json!({
@@ -36,7 +36,7 @@ fn the_api_layer_reads_and_changes_host_state_through_its_services() {
     let host = testing::headless_host();
     let (_session, link) = testing::start_probe(
         &host,
-        ProbeMovie::new()
+        common::ready_movie()
             .raising("flash.sendClientPacket", "onExtensionResponse", area())
             .constant("auth.isLoggedIn", json!(true))
             .constant("bank.loadItems", Value::Null)
@@ -63,43 +63,50 @@ fn the_api_layer_reads_and_changes_host_state_through_its_services() {
     );
     let runtime = Runtime::start(link).unwrap();
 
-    let observed: Value = runtime
-        .eval(
-            "api.js",
-            r#"
-            (async () => {
-                const run = __lucent.run;
-                const joined = await run((api) =>
-                    api.wait.forEvent(
-                        { type: "join-map" },
-                        { trigger: api.packet.sendToClient("join"), timeout: "5 seconds" },
-                    ),
+    common::ready(&runtime);
+    let script = common::loose(&[(
+        "api.js",
+        r#"
+            import * as api from "lucent/api";
+            import * as script from "lucent/script";
+            export default function* () {
+                const joined = yield* api.events.once(
+                    { type: "join-map" },
+                    { trigger: api.packet.sendToClient("join"), timeout: "5 seconds" },
                 );
-                const me = await run((api) => api.player.get());
-                const players = await run((api) => api.players.getAll());
-                const frogzard = await run((api) => api.monsters.get("frogzard"));
-                const ghost = await run((api) => api.monsters.get("id.9"));
-                const loaded = await run((api) => api.bank.load());
-                const bank = await run((api) => api.bank.getAll());
-                const servers = await run((api) => api.auth.getServers());
-                return {
+                const me = yield* api.player.get();
+                const players = yield* api.players.getAll();
+                const frogzard = yield* api.monsters.get("frogzard");
+                const ghost = yield* api.monsters.get("id.9");
+                const loaded = yield* api.bank.load();
+                const bank = yield* api.bank.getAll();
+                const servers = yield* api.auth.getServers();
+                yield* script.stop(JSON.stringify({
                     joined,
-                    map: await run((api) => api.map.getName()),
+                    map: yield* api.map.getName(),
                     me: me === null ? null : [me.entityId, me.username, me.alive],
                     players: players.map((player) => player.username),
                     frogzard: frogzard === null ? null : [frogzard.monsterMapId, frogzard.cell, frogzard.hpPercent],
                     ghost: ghost === null ? null : [ghost.monsterMapId, ghost.name],
-                    loggedIn: await run((api) => api.auth.isLoggedIn()),
+                    loggedIn: yield* api.auth.isLoggedIn(),
                     loaded,
                     bank: bank.map((item) => [item.itemId, item.name, item.banked]),
                     servers: servers.map((server) => [server.name, server.full]),
-                };
-            })()
+                }));
+            }
             "#,
-        )
+    )]);
+    let outcome = runtime
+        .run_script(script, Default::default())
         .wait(TIMEOUT)
         .unwrap();
 
+    let observed: Value = match outcome {
+        ScriptOutcome::StoppedByScript {
+            reason: Some(reason),
+        } => serde_json::from_str(&reason).unwrap(),
+        other => panic!("{other:?}"),
+    };
     assert_eq!(
         observed,
         json!({

@@ -1,6 +1,6 @@
 // @ts-check
 
-const s = require("lucent/schema");
+import * as s from "lucent/schema";
 
 const rewardSchema = s.object({ sName: s.string().min(1) });
 const packetSchema = s.object({
@@ -26,4 +26,4 @@ function wheelRewardNames(packet, boostItemId) {
   return [...new Set(names.filter((name) => name !== undefined))];
 }
 
-module.exports = { wheelRewardNames };
+export { wheelRewardNames };

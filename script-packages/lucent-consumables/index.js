@@ -1,12 +1,12 @@
 // @ts-check
 
-const api = require("lucent/api");
-const script = require("lucent/script");
-const s = require("lucent/schema");
-const { potions, scrolls } = require("./lib/catalog");
-const { preparePotion, ensurePotion } = require("./lib/potions");
-const { prepareScroll } = require("./lib/scrolls");
-const { acquire } = require("./lib/supplies");
+import * as api from "lucent/api";
+import * as script from "lucent/script";
+import * as s from "lucent/schema";
+import { potions, scrolls } from "./lib/catalog";
+import { preparePotion, ensurePotion } from "./lib/potions";
+import { prepareScroll } from "./lib/scrolls";
+import { acquire } from "./lib/supplies";
 
 const optionsSchema = s.object({
   potionMethod: s.enum(["buy", "craft"]).default("buy"),
@@ -102,10 +102,11 @@ function* ensure(requests, options = {}) {
   );
 }
 
-module.exports = {
-  ensure,
-  potionNames: Object.freeze(
-    Object.keys(potions).filter((name) => name !== "Scroll of Life Steal"),
-  ),
-  scrollNames: Object.freeze([...Object.keys(scrolls), "Scroll of Life Steal"]),
-};
+export { ensure };
+export const potionNames = Object.freeze(
+  Object.keys(potions).filter((name) => name !== "Scroll of Life Steal"),
+);
+export const scrollNames = Object.freeze([
+  ...Object.keys(scrolls),
+  "Scroll of Life Steal",
+]);

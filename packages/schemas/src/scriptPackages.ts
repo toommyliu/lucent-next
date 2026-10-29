@@ -20,29 +20,6 @@ export const ScriptPackageRepositorySubdirectorySchema = Schema.String.check(
 export type ScriptPackageRepositorySubdirectory =
   typeof ScriptPackageRepositorySubdirectorySchema.Type;
 
-export const SCRIPT_BUILTIN_MODULE_SPECIFIERS = [
-  "effect",
-  "lucent/api",
-  "lucent/autorelogin",
-  "lucent/autozone",
-  "lucent/filesystem",
-  "lucent/http",
-  "lucent/schema",
-  "lucent/script",
-] as const;
-
-export type ScriptBuiltinModuleSpecifier =
-  (typeof SCRIPT_BUILTIN_MODULE_SPECIFIERS)[number];
-
-const scriptBuiltinModuleSpecifiers = new Set<string>(
-  SCRIPT_BUILTIN_MODULE_SPECIFIERS,
-);
-
-export const isScriptBuiltinModuleSpecifier = (
-  specifier: string,
-): specifier is ScriptBuiltinModuleSpecifier =>
-  scriptBuiltinModuleSpecifiers.has(specifier);
-
 const isReservedScriptPackageName = (name: string): boolean =>
   name === "effect" ||
   name === "lucent" /* Reserved */ ||
@@ -115,84 +92,6 @@ export const ScriptPackageCompatibilitySchema = Schema.Union([
 
 export type ScriptPackageCompatibility =
   typeof ScriptPackageCompatibilitySchema.Type;
-
-export const ScriptModuleImportSchema = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal("builtin"),
-    specifier: Schema.Literals(SCRIPT_BUILTIN_MODULE_SPECIFIERS),
-  }),
-  Schema.Struct({
-    kind: Schema.Literal("module"),
-    moduleId: Schema.String,
-  }),
-]);
-
-export type ScriptModuleImport = typeof ScriptModuleImportSchema.Type;
-
-export const ScriptModuleSourceSchema = Schema.Struct({
-  id: Schema.String,
-  format: Schema.Literals(["commonjs", "unsupported-esm"]),
-  imports: Schema.Record(Schema.String, ScriptModuleImportSchema),
-  localPath: Schema.String,
-  path: Schema.String,
-  packageName: Schema.optionalKey(Schema.String),
-  revision: Schema.String,
-  source: Schema.String,
-});
-
-export type ScriptModuleSource = typeof ScriptModuleSourceSchema.Type;
-
-export const ScriptExecutionPackageSchema = Schema.Struct({
-  name: Schema.String,
-  rootPath: Schema.String,
-  mainModuleId: Schema.NullOr(Schema.String),
-  compatibility: ScriptPackageCompatibilitySchema,
-});
-
-export type ScriptExecutionPackage = typeof ScriptExecutionPackageSchema.Type;
-
-export const ScriptExecutionSnapshotSchema = Schema.Struct({
-  entryModuleId: Schema.String,
-  modules: Schema.Array(ScriptModuleSourceSchema),
-  packages: Schema.Array(ScriptExecutionPackageSchema),
-  revision: Schema.String,
-});
-
-export type ScriptExecutionSnapshot = typeof ScriptExecutionSnapshotSchema.Type;
-
-export const isRelativeScriptModuleSpecifier = (specifier: string): boolean =>
-  specifier === "." ||
-  specifier === ".." ||
-  specifier.startsWith("./") ||
-  specifier.startsWith("../");
-
-export const resolveRelativeScriptModulePath = (
-  importerPath: string,
-  specifier: string,
-): string | null => {
-  const base = importerPath.split("/").slice(0, -1);
-  for (const segment of specifier.split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
-      if (base.length === 0) return null;
-      base.pop();
-      continue;
-    }
-    base.push(segment);
-  }
-  return base.join("/");
-};
-
-export const scriptModulePathCandidates = (path: string): readonly string[] =>
-  path.endsWith(".js") || path.endsWith(".cjs")
-    ? [path]
-    : [
-        path,
-        `${path}.js`,
-        `${path}.cjs`,
-        `${path}/index.js`,
-        `${path}/index.cjs`,
-      ];
 
 export const ScriptCatalogEntrySchema = Schema.Struct({
   name: Schema.String,

@@ -1,7 +1,7 @@
 // @ts-check
 
-const api = require("lucent/api");
-const script = require("lucent/script");
+import * as api from "lucent/api";
+import * as script from "lucent/script";
 
 /** @param {string | number} item */
 function* quantity(item) {
@@ -39,4 +39,4 @@ function* collect(item, target) {
   return false;
 }
 
-module.exports = { quantity, unbank, acceptDrop, collect };
+export { quantity, unbank, acceptDrop, collect };

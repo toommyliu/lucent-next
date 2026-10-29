@@ -5,7 +5,6 @@ import type { ScriptRunnerStatus } from "./ScriptRunner";
 export interface FatalScriptAlert {
   readonly key: string;
   readonly sourceName: string;
-  readonly sourcePath?: string;
   readonly message: string;
   readonly detailsText?: string;
 }
@@ -43,13 +42,11 @@ const errorDetailsText = (error: unknown): string | undefined => {
 export const fatalScriptAlertFromError = (
   sourceName: string,
   error: unknown,
-  sourcePath?: string,
 ): FatalScriptAlert => {
   const detailsText = errorDetailsText(error);
   return {
     key: `error:${(nextErrorAlertId += 1).toString(36)}`,
     sourceName,
-    ...(sourcePath === undefined ? {} : { sourcePath }),
     message: displayScriptSourceText(errorMessage(error)),
     ...(detailsText === undefined
       ? {}
@@ -62,7 +59,6 @@ export const fatalScriptAlertFromStatus = (
 ): FatalScriptAlert => ({
   key: `status:${status.failedAt}:${status.name}`,
   sourceName: status.name,
-  ...(status.path === undefined ? {} : { sourcePath: status.path }),
   message: displayScriptSourceText(status.message),
   ...(status.detailsText === undefined
     ? {}

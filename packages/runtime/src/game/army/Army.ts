@@ -24,29 +24,12 @@ import {
 import { Api, type ApiService } from "../flash/api/Api";
 import { isDirectInventoryConsumable } from "../flash/api/Inventory";
 import type { ScriptArmyApi } from "../scripting/ScriptApi";
+import { ArmyError, ArmyLoopTauntError } from "./ArmyErrors";
 import {
-  ArmyLoopTauntError,
   type ArmyLoopTauntHandle,
   type ArmyLoopTauntRuntimePlan,
   makeArmyLoopTauntRuntime,
 } from "./ArmyLoopTaunt";
-
-export class ArmyError extends Error {
-  readonly _tag = "ArmyError";
-
-  constructor(message: string, cause?: unknown) {
-    super(message);
-    this.name = "ArmyError";
-    if (cause !== undefined) {
-      Object.defineProperty(this, "cause", {
-        configurable: true,
-        enumerable: false,
-        value: cause,
-        writable: true,
-      });
-    }
-  }
-}
 
 export interface ArmyRunStepOptions {
   readonly timeout?: Duration.Input;
@@ -812,7 +795,6 @@ export const layer = Layer.effect(
   Effect.flatMap(Api, (api) => makeArmyApi(api)),
 );
 
-export { ArmyLoopTauntError } from "./ArmyLoopTaunt";
 export type {
   ArmyLoopTauntAssignment,
   ArmyLoopTauntHandle,

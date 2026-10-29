@@ -1,6 +1,6 @@
 // @ts-check
 
-const s = require("lucent/schema");
+import * as s from "lucent/schema";
 
 const packetSchema = s.object({
   items: s.union([s.record(s.unknown()), s.array(s.unknown())]),
@@ -26,4 +26,4 @@ function collectRewards(data, rewards) {
   }
 }
 
-module.exports = { collectRewards };
+export { collectRewards };

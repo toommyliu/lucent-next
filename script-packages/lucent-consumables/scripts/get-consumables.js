@@ -1,8 +1,8 @@
 // @ts-check
 
-const script = require("lucent/script");
-const s = require("lucent/schema");
-const consumables = require("@lucent/consumables");
+import * as script from "lucent/script";
+import * as s from "lucent/schema";
+import * as consumables from "@lucent/consumables";
 
 const consumable = s.enum([...consumables.potionNames, ...consumables.scrollNames]);
 const positiveInt = s.number().int().min(1);
@@ -16,7 +16,7 @@ const inputsSchema = s.object({
   maxCrafts: positiveInt,
 });
 
-function* run() {
+export default function* run() {
   const { potions, scrolls, quantity, potionMethod, mode, maxGold, maxCrafts } =
     inputsSchema.parse(yield* script.inputs.getAll());
   const requests = [...potions, ...scrolls].map((item) => ({ item, quantity }));
@@ -28,10 +28,8 @@ function* run() {
   });
 }
 
-module.exports = run;
-
 /** @satisfies {import("lucent/script").ScriptInputsDefinition} */
-module.exports.inputs = {
+export const inputs = {
   id: "lucent-consumables",
   fields: [
     {

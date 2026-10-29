@@ -2,10 +2,12 @@
 
 A script package containing a loose script and library for obtaining Scrolls and Potions.
 
-```js
-const consumables = require("@lucent/consumables");
+Scripts use ES modules and export a generator function as their default export.
 
-module.exports = function* run() {
+```js
+import * as consumables from "@lucent/consumables";
+
+export default function* run() {
   yield* consumables.ensure(
     [
       { item: "Malice Potion", quantity: 25 },
@@ -14,5 +16,5 @@ module.exports = function* run() {
     ],
     { potionMethod: "buy", mode: "farm", maxGold: 1_000_000 },
   );
-};
+}
 ```

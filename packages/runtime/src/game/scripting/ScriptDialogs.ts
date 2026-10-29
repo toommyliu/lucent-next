@@ -8,6 +8,8 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
+import { playBeep } from "../audio/beep";
+
 export interface ScriptDialogSource {
   readonly sourceName: string;
 }
@@ -60,6 +62,7 @@ interface PendingDialog {
 }
 
 export interface ScriptDialogsShape {
+  readonly beep: (times: number) => Effect.Effect<void>;
   readonly alert: (
     source: ScriptDialogSource,
     message: string,
@@ -224,6 +227,7 @@ export const makeScriptDialogs = Effect.fnUntraced(function* () {
     );
 
   return ScriptDialogs.of({
+    beep: (times) => Effect.sync(() => playBeep(times)),
     alert,
     confirm,
     getCurrent: () =>
