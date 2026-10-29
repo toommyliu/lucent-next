@@ -261,7 +261,6 @@ pub(crate) fn refresh_equipped_consumable(
 
 #[cfg(test)]
 mod tests {
-    use super::super::{entity::LivePlayer, world::decode_player};
     use super::*;
     use serde_json::json;
 
