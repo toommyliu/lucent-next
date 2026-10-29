@@ -12,7 +12,6 @@ import type { BridgeService } from "../bridge/Bridge";
 import { packetData } from "../contract/Packet";
 import { decodeMonsterDrops } from "../contract/payload/MonsterDrops";
 import { isSelectable, type HostStateService } from "../state/HostState";
-import type { Events } from "./Events";
 import type { Wait } from "./Wait";
 
 const monsterDropRequestSpacing = Schedule.spaced("350 millis").pipe(
@@ -28,7 +27,6 @@ interface MonsterDropRequest {
 export const makeMonsters = Effect.fnUntraced(function* (
   bridge: BridgeService,
   host: HostStateService,
-  events: Events,
   wait: Wait,
 ) {
   const readMonster = (selector: MonsterQuery) =>
@@ -209,21 +207,6 @@ export const makeMonsters = Effect.fnUntraced(function* (
     );
   });
 
-  yield* events.on({ type: "join-map" }, () =>
-    readMonsters().pipe(Effect.flatMap(ensureCurrentCell)),
-  );
-  yield* events.on({ type: "player-location" }, (event) =>
-    host
-      .read({ kind: "me" })
-      .pipe(
-        Effect.flatMap((player) =>
-          player?.entityId === event.entityId
-            ? readMonsters().pipe(Effect.flatMap(ensureCurrentCell))
-            : Effect.void,
-        ),
-      ),
-  );
-
   const reread = (monsters: readonly LiveMonster[]) => {
     const ids = new Set(monsters.map((monster) => monster.monsterMapId));
     return readMonsters().pipe(
@@ -269,6 +252,7 @@ export const makeMonsters = Effect.fnUntraced(function* (
     );
 
   return {
+    ensureCurrentCell,
     api: {
       get,
       getAll,

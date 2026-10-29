@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { apiLayer } from "../game/flash/apiLayer";
+import { scriptApiLayer } from "../game/flash/apiLayer";
 import { ScriptDialogs } from "../game/scripting/ScriptDialogs";
 import {
   ScriptRunner,
@@ -14,13 +14,13 @@ import { ScriptServices } from "../game/scripting/ScriptServices";
 import { hideInternals } from "./loop";
 import { unavailableScriptDialogs, unavailableScriptServices } from "./services";
 
-const api = ManagedRuntime.make(apiLayer);
+const api = ManagedRuntime.make(scriptApiLayer);
 api.runSync(Effect.void);
 const runtime = ManagedRuntime.make(
   scriptRunnerLayer.pipe(
     Layer.provide(
       Layer.mergeAll(
-        apiLayer,
+        scriptApiLayer,
         Layer.succeed(ScriptServices, unavailableScriptServices),
         Layer.succeed(ScriptDialogs, unavailableScriptDialogs),
       ),

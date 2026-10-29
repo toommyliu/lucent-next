@@ -4842,14 +4842,14 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Layer.js
   var TypeId6 = "~effect/Layer";
   var MemoMapTypeId = "~effect/Layer/MemoMap";
-  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer7) => {
+  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer8) => {
     const entry = {
       observers: 0,
       deferred: makeUnsafe2(),
       scope: makeUnsafe3(),
       finalizer: /* @__PURE__ */ __name((exit3) => suspend(() => {
         if (--entry.observers > 0) return void_;
-        memoMap.map.delete(layer7);
+        memoMap.map.delete(layer8);
         return close(entry.scope, exit3);
       }), "finalizer")
     };
@@ -4896,24 +4896,24 @@ ${prefix}}`;
       this.parent = parent;
     }
     map = /* @__PURE__ */ new Map();
-    get(layer7, scope3) {
-      const local = this.map.get(layer7);
+    get(layer8, scope3) {
+      const local = this.map.get(layer8);
       if (local) {
         memoMapObserve(local, scope3);
         return local.deferred.effect ?? _await(local.deferred);
       }
-      return this.parent?.get(layer7, scope3);
+      return this.parent?.get(layer8, scope3);
     }
-    getOrElseMemoize(layer7, scope3, build) {
+    getOrElseMemoize(layer8, scope3, build) {
       return suspend(() => {
         let deferred;
         return onExitPrimitive(suspend(() => {
-          const existing = this.get(layer7, scope3);
+          const existing = this.get(layer8, scope3);
           if (existing) return existing;
-          const entry = makeMemoMapEntry(this, layer7);
+          const entry = makeMemoMapEntry(this, layer8);
           if (!memoMapObserve(entry, scope3)) return build(this, scope3);
           deferred = entry.deferred;
-          this.map.set(layer7, entry);
+          this.map.set(layer8, entry);
           return build(this, entry.scope);
         }), (exit3) => {
           if (deferred) doneUnsafe(deferred, exit3);
@@ -4948,9 +4948,10 @@ ${prefix}}`;
   }, "effect");
   var effectImpl = /* @__PURE__ */ __name((service3, effect2) => effectContext(map3(effect2, (value) => make2(service3, value))), "effectImpl");
   var effectContext = /* @__PURE__ */ __name((effect2) => fromBuildMemo((_, scope3) => provide(effect2, scope3)), "effectContext");
+  var effectDiscard = /* @__PURE__ */ __name((effect2) => effectContext(as(effect2, empty())), "effectDiscard");
   var mergeAllEffect = /* @__PURE__ */ __name((layers, memoMap, scope3) => {
     const parentScope = forkUnsafe2(scope3, "parallel");
-    return forEach(layers, (layer7) => layer7.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
+    return forEach(layers, (layer8) => layer8.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
       concurrency: layers.length
     }).pipe(map3((context3) => mergeAll(...context3)));
   }, "mergeAllEffect");
@@ -5087,16 +5088,16 @@ ${prefix}}`;
   var metadataFn = /* @__PURE__ */ __name(() => {
     let n = 0;
     let previous;
-    let start2;
+    let start3;
     return (now, input) => {
-      if (start2 === void 0) start2 = now;
-      const elapsed = now - start2;
+      if (start3 === void 0) start3 = now;
+      const elapsed = now - start3;
       const elapsedSincePrevious = previous === void 0 ? 0 : now - previous;
       previous = now;
       return {
         input,
         attempt: ++n,
-        start: start2,
+        start: start3,
         now,
         elapsed,
         elapsedSincePrevious
@@ -5335,7 +5336,7 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/ManagedRuntime.js
   var TypeId8 = "~effect/ManagedRuntime";
-  var make6 = /* @__PURE__ */ __name((layer7, options) => {
+  var make6 = /* @__PURE__ */ __name((layer8, options) => {
     const memoMap = options?.memoMap ?? makeMemoMapUnsafe();
     const scope3 = makeUnsafe3("sequential");
     const layerScope = forkUnsafe2(scope3, "sequential");
@@ -5353,7 +5354,7 @@ ${prefix}}`;
     let buildFiber;
     const contextEffect = withFiber2((fiber2) => {
       if (!buildFiber) {
-        buildFiber = runFork2(tap2(buildWithMemoMap(layer7, memoMap, layerScope), (context3) => sync2(() => {
+        buildFiber = runFork2(tap2(buildWithMemoMap(layer8, memoMap, layerScope), (context3) => sync2(() => {
           self.cachedContext = context3;
         })), {
           ...defaultRunOptions,
@@ -9869,9 +9870,9 @@ ${prefix}}`;
         return;
       }
       const count = Math.min(slides, this.buffer.capacity);
-      const start2 = this.buffer.index - count;
+      const start3 = this.buffer.index - count;
       for (let i = 0; i < count; i++) {
-        const entry = this.buffer.slideValues[(start2 + i) % this.buffer.capacity];
+        const entry = this.buffer.slideValues[(start3 + i) % this.buffer.capacity];
         if (entry.index > this.newestIndex) {
           this.index = (this.index + 1) % this.values.length;
           this.values[(this.index + this.remaining - 1) % this.values.length] = entry.value;
@@ -10833,7 +10834,7 @@ ${prefix}}`;
       }
       yield* publish(packets, packet.value);
     }), "dispatch");
-    const start2 = /* @__PURE__ */ __name((handle = () => void_3) => suspend2(() => {
+    const start3 = /* @__PURE__ */ __name((handle = () => void_3) => suspend2(() => {
       if (started) return void_3;
       started = true;
       const drain2 = forever3(
@@ -10864,7 +10865,7 @@ ${prefix}}`;
       rawPackets: fromPubSub(rawPackets),
       sendToClient,
       sendToServer,
-      start: start2,
+      start: start3,
       subscribeEvents: subscribe(events),
       subscribePackets: subscribe(packets)
     };
@@ -15278,7 +15279,7 @@ ${prefix}}`;
   var monsterDropRequestSpacing = spaced("350 millis").pipe(
     jittered
   );
-  var makeMonsters = fnUntraced2(function* (bridge, host3, events, wait) {
+  var makeMonsters = fnUntraced2(function* (bridge, host3, wait) {
     const readMonster = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host3.read({ kind: "monster", selector }).pipe(
       map5(
         (monster) => monster === null ? null : toLiveMonster(monster)
@@ -15403,18 +15404,6 @@ ${prefix}}`;
         monsters.filter((monster) => monster.isInCell(player.cell))
       );
     });
-    yield* events.on(
-      { type: "join-map" },
-      () => readMonsters().pipe(flatMap3(ensureCurrentCell))
-    );
-    yield* events.on(
-      { type: "player-location" },
-      (event) => host3.read({ kind: "me" }).pipe(
-        flatMap3(
-          (player) => player?.entityId === event.entityId ? readMonsters().pipe(flatMap3(ensureCurrentCell)) : void_3
-        )
-      )
-    );
     const reread = /* @__PURE__ */ __name((monsters) => {
       const ids = new Set(monsters.map((monster) => monster.monsterMapId));
       return readMonsters().pipe(
@@ -15448,6 +15437,7 @@ ${prefix}}`;
       )
     ), "isAvailable");
     return {
+      ensureCurrentCell,
       api: {
         get: get5,
         getAll,
@@ -16202,6 +16192,35 @@ ${prefix}}`;
     };
   }, "makeQuests");
 
+  // packages/runtime/src/game/flash/api/ScriptReactions.ts
+  var start = fnUntraced2(function* ({
+    antiCounter,
+    events,
+    gateway,
+    host: host3,
+    monsters
+  }) {
+    const ensureCurrentCell = /* @__PURE__ */ __name(() => monsters.lookup.getAll().pipe(flatMap3(monsters.ensureCurrentCell)), "ensureCurrentCell");
+    yield* events.on({ type: "join-map" }, ensureCurrentCell);
+    yield* events.on(
+      { type: "player-location" },
+      (event) => host3.read({ kind: "me" }).pipe(
+        flatMap3(
+          (player) => player?.entityId === event.entityId ? ensureCurrentCell() : void_3
+        )
+      )
+    );
+    yield* gateway.start(antiCounter.handleEvent);
+  });
+  var ScriptReactions = class extends Service()(
+    "lucent/renderer/flash/ScriptReactions"
+  ) {
+    static {
+      __name(this, "ScriptReactions");
+    }
+  };
+  var layer4 = effectDiscard(flatMap3(ScriptReactions, start));
+
   // packages/runtime/src/game/flash/api/Settings.ts
   var makeSettings = /* @__PURE__ */ __name((host3) => {
     const get5 = /* @__PURE__ */ __name(() => host3.read({ kind: "settings" }), "get");
@@ -16582,7 +16601,7 @@ ${prefix}}`;
     const bank = yield* makeBank(bridge, host3, auth, inventory, house, wait);
     const drops = yield* makeDrops(bridge, host3, auth);
     const map8 = makeMap(bridge, host3, wait);
-    const monsterServices = yield* makeMonsters(bridge, host3, events, wait);
+    const monsterServices = yield* makeMonsters(bridge, host3, wait);
     const monsters = monsterServices.api;
     const players = makePlayers(host3);
     const player = makePlayer(bridge, host3, auth, inventory, map8, wait);
@@ -16607,7 +16626,6 @@ ${prefix}}`;
       tempInventory,
       wait
     );
-    yield* gateway.start(antiCounter.handleEvent);
     return {
       api: {
         auth,
@@ -16629,10 +16647,20 @@ ${prefix}}`;
         tempInventory,
         wait
       },
-      projectionReadiness
+      projectionReadiness,
+      scriptReactions: {
+        antiCounter,
+        events,
+        gateway,
+        host: host3,
+        monsters: monsterServices
+      }
     };
   });
-  var makeApi = makeApiServices.pipe(map5(({ api: api2 }) => api2));
+  var makeApi = makeApiServices.pipe(
+    tap2(({ scriptReactions }) => start(scriptReactions)),
+    map5(({ api: api2 }) => api2)
+  );
   var Api = class extends Service()(
     "lucent/renderer/flash/Api"
   ) {
@@ -16640,11 +16668,12 @@ ${prefix}}`;
       __name(this, "Api");
     }
   };
-  var layer4 = effectContext(
+  var layer5 = effectContext(
     makeApiServices.pipe(
       map5(
-        ({ api: api2, projectionReadiness }) => make2(Api, api2).pipe(
-          add(ProjectionReadiness, projectionReadiness)
+        ({ api: api2, projectionReadiness, scriptReactions }) => make2(Api, api2).pipe(
+          add(ProjectionReadiness, projectionReadiness),
+          add(ScriptReactions, scriptReactions)
         )
       )
     )
@@ -16653,7 +16682,13 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/apiLayer.ts
   var gatewayLayer = layer2.pipe(provideMerge(layer));
   var hostLayer = layer3.pipe(provideMerge(gatewayLayer));
-  var apiLayer = layer4.pipe(provideMerge(hostLayer));
+  var servicesLayer = layer5.pipe(provideMerge(hostLayer));
+  var apiLayer = effectDiscard(
+    flatMap3(Gateway, (gateway) => gateway.start())
+  ).pipe(provideMerge(servicesLayer));
+  var scriptApiLayer = layer4.pipe(
+    provideMerge(servicesLayer)
+  );
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
   var TypeId21 = "~effect/SubscriptionRef";
@@ -16746,20 +16781,20 @@ ${prefix}}`;
     ];
     for (let repetition = 0; repetition < times; repetition += 1) {
       for (const note of notes) {
-        const start2 = now + repetition * REPEAT_INTERVAL + note.offset;
-        const end2 = start2 + note.attack + note.decay;
+        const start3 = now + repetition * REPEAT_INTERVAL + note.offset;
+        const end2 = start3 + note.attack + note.decay;
         const oscillator = context3.createOscillator();
         const envelope = context3.createGain();
         oscillator.type = "sine";
-        oscillator.frequency.setValueAtTime(note.frequency, start2);
-        envelope.gain.setValueAtTime(SILENCE, start2);
+        oscillator.frequency.setValueAtTime(note.frequency, start3);
+        envelope.gain.setValueAtTime(SILENCE, start3);
         envelope.gain.exponentialRampToValueAtTime(
           note.peak,
-          start2 + note.attack
+          start3 + note.attack
         );
         envelope.gain.exponentialRampToValueAtTime(SILENCE, end2);
         oscillator.connect(envelope).connect(master);
-        oscillator.start(start2);
+        oscillator.start(start3);
         oscillator.stop(end2 + SOURCE_STOP_PADDING);
       }
     }
@@ -16900,7 +16935,7 @@ ${prefix}}`;
       respond
     });
   });
-  var layer5 = effect(ScriptDialogs, makeScriptDialogs());
+  var layer6 = effect(ScriptDialogs, makeScriptDialogs());
 
   // packages/runtime/src/game/scripting/scriptAsyncScope.ts
   var runCleanup = /* @__PURE__ */ __name((cleanup) => suspend2(() => {
@@ -20010,7 +20045,7 @@ ${prefix}}`;
     ).pipe(map5(snapshotScriptRuntimeOptions)), "setOptions");
     return { optionsRef, bindAccount, getOptions, setOptions };
   });
-  var layer6 = effect(
+  var layer7 = effect(
     ScriptRunner,
     gen2(function* () {
       const scope3 = yield* scope2;
@@ -20735,7 +20770,7 @@ ${prefix}}`;
         { type: "connection" },
         (event) => isConnectionLoss(event) ? handleConnectionLoss(id) : void_3
       ).pipe(tap2((dispose) => scope4.addCleanup(dispose))), "installReadinessWatcher");
-      const start2 = /* @__PURE__ */ __name((source, inputs) => {
+      const start3 = /* @__PURE__ */ __name((source, inputs) => {
         const sourceSnapshot = { ...source };
         const inputSnapshot = { ...inputs };
         return gen2(function* () {
@@ -20851,7 +20886,7 @@ ${prefix}}`;
         ), "onOptions"),
         onStatus: /* @__PURE__ */ __name((listener) => observe(changes(statusRef), snapshotStatus, listener), "onStatus"),
         setOptions,
-        start: start2,
+        start: start3,
         stop: stop2
       });
     })
@@ -21024,13 +21059,13 @@ ${prefix}}`;
   };
 
   // packages/runtime/src/host/scripts.ts
-  var api = make6(apiLayer);
+  var api = make6(scriptApiLayer);
   api.runSync(void_3);
   var runtime = make6(
-    layer6.pipe(
+    layer7.pipe(
       provide2(
         mergeAll2(
-          apiLayer,
+          scriptApiLayer,
           succeed6(ScriptServices, unavailableScriptServices),
           succeed6(ScriptDialogs, unavailableScriptDialogs)
         )
@@ -21039,7 +21074,7 @@ ${prefix}}`;
     { memoMap: api.memoMap }
   );
   runtime.runSync(void_3);
-  var start = /* @__PURE__ */ __name((load, name, inputsJson) => {
+  var start2 = /* @__PURE__ */ __name((load, name, inputsJson) => {
     hideInternals();
     return runtime.runPromise(
       gen2(function* () {
@@ -21069,5 +21104,5 @@ ${prefix}}`;
   ), "stop");
 
   // packages/runtime/src/host/index.ts
-  Object.assign(globalThis, { __lucent: Object.freeze({ start, stop, turn, wake }) });
+  Object.assign(globalThis, { __lucent: Object.freeze({ start: start2, stop, turn, wake }) });
 })();

@@ -4676,14 +4676,14 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Layer.js
   var TypeId6 = "~effect/Layer";
   var MemoMapTypeId = "~effect/Layer/MemoMap";
-  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer5) => {
+  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer6) => {
     const entry = {
       observers: 0,
       deferred: makeUnsafe2(),
       scope: makeUnsafe3(),
       finalizer: /* @__PURE__ */ __name((exit3) => suspend(() => {
         if (--entry.observers > 0) return void_;
-        memoMap.map.delete(layer5);
+        memoMap.map.delete(layer6);
         return close(entry.scope, exit3);
       }), "finalizer")
     };
@@ -4730,24 +4730,24 @@ ${prefix}}`;
       this.parent = parent;
     }
     map = /* @__PURE__ */ new Map();
-    get(layer5, scope3) {
-      const local = this.map.get(layer5);
+    get(layer6, scope3) {
+      const local = this.map.get(layer6);
       if (local) {
         memoMapObserve(local, scope3);
         return local.deferred.effect ?? _await(local.deferred);
       }
-      return this.parent?.get(layer5, scope3);
+      return this.parent?.get(layer6, scope3);
     }
-    getOrElseMemoize(layer5, scope3, build) {
+    getOrElseMemoize(layer6, scope3, build) {
       return suspend(() => {
         let deferred;
         return onExitPrimitive(suspend(() => {
-          const existing = this.get(layer5, scope3);
+          const existing = this.get(layer6, scope3);
           if (existing) return existing;
-          const entry = makeMemoMapEntry(this, layer5);
+          const entry = makeMemoMapEntry(this, layer6);
           if (!memoMapObserve(entry, scope3)) return build(this, scope3);
           deferred = entry.deferred;
-          this.map.set(layer5, entry);
+          this.map.set(layer6, entry);
           return build(this, entry.scope);
         }), (exit3) => {
           if (deferred) doneUnsafe(deferred, exit3);
@@ -4782,9 +4782,10 @@ ${prefix}}`;
   }, "effect");
   var effectImpl = /* @__PURE__ */ __name((service3, effect2) => effectContext(map2(effect2, (value) => make2(service3, value))), "effectImpl");
   var effectContext = /* @__PURE__ */ __name((effect2) => fromBuildMemo((_, scope3) => provide(effect2, scope3)), "effectContext");
+  var effectDiscard = /* @__PURE__ */ __name((effect2) => effectContext(as(effect2, empty())), "effectDiscard");
   var mergeAllEffect = /* @__PURE__ */ __name((layers, memoMap, scope3) => {
     const parentScope = forkUnsafe2(scope3, "parallel");
-    return forEach(layers, (layer5) => layer5.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
+    return forEach(layers, (layer6) => layer6.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
       concurrency: layers.length
     }).pipe(map2((context3) => mergeAll(...context3)));
   }, "mergeAllEffect");
@@ -4884,16 +4885,16 @@ ${prefix}}`;
   var metadataFn = /* @__PURE__ */ __name(() => {
     let n = 0;
     let previous;
-    let start;
+    let start2;
     return (now, input) => {
-      if (start === void 0) start = now;
-      const elapsed = now - start;
+      if (start2 === void 0) start2 = now;
+      const elapsed = now - start2;
       const elapsedSincePrevious = previous === void 0 ? 0 : now - previous;
       previous = now;
       return {
         input,
         attempt: ++n,
-        start,
+        start: start2,
         now,
         elapsed,
         elapsedSincePrevious
@@ -5095,7 +5096,7 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/ManagedRuntime.js
   var TypeId8 = "~effect/ManagedRuntime";
-  var make5 = /* @__PURE__ */ __name((layer5, options) => {
+  var make5 = /* @__PURE__ */ __name((layer6, options) => {
     const memoMap = options?.memoMap ?? makeMemoMapUnsafe();
     const scope3 = makeUnsafe3("sequential");
     const layerScope = forkUnsafe2(scope3, "sequential");
@@ -5113,7 +5114,7 @@ ${prefix}}`;
     let buildFiber;
     const contextEffect = withFiber2((fiber2) => {
       if (!buildFiber) {
-        buildFiber = runFork2(tap2(buildWithMemoMap(layer5, memoMap, layerScope), (context3) => sync2(() => {
+        buildFiber = runFork2(tap2(buildWithMemoMap(layer6, memoMap, layerScope), (context3) => sync2(() => {
           self.cachedContext = context3;
         })), {
           ...defaultRunOptions,
@@ -9185,9 +9186,9 @@ ${prefix}}`;
         return;
       }
       const count = Math.min(slides, this.buffer.capacity);
-      const start = this.buffer.index - count;
+      const start2 = this.buffer.index - count;
       for (let i = 0; i < count; i++) {
-        const entry = this.buffer.slideValues[(start + i) % this.buffer.capacity];
+        const entry = this.buffer.slideValues[(start2 + i) % this.buffer.capacity];
         if (entry.index > this.newestIndex) {
           this.index = (this.index + 1) % this.values.length;
           this.values[(this.index + this.remaining - 1) % this.values.length] = entry.value;
@@ -10149,7 +10150,7 @@ ${prefix}}`;
       }
       yield* publish(packets, packet.value);
     }), "dispatch");
-    const start = /* @__PURE__ */ __name((handle = () => void_3) => suspend2(() => {
+    const start2 = /* @__PURE__ */ __name((handle = () => void_3) => suspend2(() => {
       if (started) return void_3;
       started = true;
       const drain2 = forever3(
@@ -10180,7 +10181,7 @@ ${prefix}}`;
       rawPackets: fromPubSub(rawPackets),
       sendToClient,
       sendToServer,
-      start,
+      start: start2,
       subscribeEvents: subscribe(events),
       subscribePackets: subscribe(packets)
     };
@@ -13990,7 +13991,7 @@ ${prefix}}`;
   var monsterDropRequestSpacing = spaced("350 millis").pipe(
     jittered
   );
-  var makeMonsters = fnUntraced2(function* (bridge, host3, events, wait) {
+  var makeMonsters = fnUntraced2(function* (bridge, host3, wait) {
     const readMonster = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host3.read({ kind: "monster", selector }).pipe(
       map4(
         (monster) => monster === null ? null : toLiveMonster(monster)
@@ -14115,18 +14116,6 @@ ${prefix}}`;
         monsters.filter((monster) => monster.isInCell(player.cell))
       );
     });
-    yield* events.on(
-      { type: "join-map" },
-      () => readMonsters().pipe(flatMap3(ensureCurrentCell))
-    );
-    yield* events.on(
-      { type: "player-location" },
-      (event) => host3.read({ kind: "me" }).pipe(
-        flatMap3(
-          (player) => player?.entityId === event.entityId ? readMonsters().pipe(flatMap3(ensureCurrentCell)) : void_3
-        )
-      )
-    );
     const reread = /* @__PURE__ */ __name((monsters) => {
       const ids = new Set(monsters.map((monster) => monster.monsterMapId));
       return readMonsters().pipe(
@@ -14160,6 +14149,7 @@ ${prefix}}`;
       )
     ), "isAvailable");
     return {
+      ensureCurrentCell,
       api: {
         get: get4,
         getAll,
@@ -14912,6 +14902,35 @@ ${prefix}}`;
     };
   }, "makeQuests");
 
+  // packages/runtime/src/game/flash/api/ScriptReactions.ts
+  var start = fnUntraced2(function* ({
+    antiCounter,
+    events,
+    gateway,
+    host: host3,
+    monsters
+  }) {
+    const ensureCurrentCell = /* @__PURE__ */ __name(() => monsters.lookup.getAll().pipe(flatMap3(monsters.ensureCurrentCell)), "ensureCurrentCell");
+    yield* events.on({ type: "join-map" }, ensureCurrentCell);
+    yield* events.on(
+      { type: "player-location" },
+      (event) => host3.read({ kind: "me" }).pipe(
+        flatMap3(
+          (player) => player?.entityId === event.entityId ? ensureCurrentCell() : void_3
+        )
+      )
+    );
+    yield* gateway.start(antiCounter.handleEvent);
+  });
+  var ScriptReactions = class extends Service()(
+    "lucent/renderer/flash/ScriptReactions"
+  ) {
+    static {
+      __name(this, "ScriptReactions");
+    }
+  };
+  var layer4 = effectDiscard(flatMap3(ScriptReactions, start));
+
   // packages/runtime/src/game/flash/api/Settings.ts
   var makeSettings = /* @__PURE__ */ __name((host3) => {
     const get4 = /* @__PURE__ */ __name(() => host3.read({ kind: "settings" }), "get");
@@ -15292,7 +15311,7 @@ ${prefix}}`;
     const bank = yield* makeBank(bridge, host3, auth, inventory, house, wait);
     const drops = yield* makeDrops(bridge, host3, auth);
     const map7 = makeMap(bridge, host3, wait);
-    const monsterServices = yield* makeMonsters(bridge, host3, events, wait);
+    const monsterServices = yield* makeMonsters(bridge, host3, wait);
     const monsters = monsterServices.api;
     const players = makePlayers(host3);
     const player = makePlayer(bridge, host3, auth, inventory, map7, wait);
@@ -15317,7 +15336,6 @@ ${prefix}}`;
       tempInventory,
       wait
     );
-    yield* gateway.start(antiCounter.handleEvent);
     return {
       api: {
         auth,
@@ -15339,10 +15357,20 @@ ${prefix}}`;
         tempInventory,
         wait
       },
-      projectionReadiness
+      projectionReadiness,
+      scriptReactions: {
+        antiCounter,
+        events,
+        gateway,
+        host: host3,
+        monsters: monsterServices
+      }
     };
   });
-  var makeApi = makeApiServices.pipe(map4(({ api }) => api));
+  var makeApi = makeApiServices.pipe(
+    tap2(({ scriptReactions }) => start(scriptReactions)),
+    map4(({ api }) => api)
+  );
   var Api = class extends Service()(
     "lucent/renderer/flash/Api"
   ) {
@@ -15350,11 +15378,12 @@ ${prefix}}`;
       __name(this, "Api");
     }
   };
-  var layer4 = effectContext(
+  var layer5 = effectContext(
     makeApiServices.pipe(
       map4(
-        ({ api, projectionReadiness }) => make2(Api, api).pipe(
-          add(ProjectionReadiness, projectionReadiness)
+        ({ api, projectionReadiness, scriptReactions }) => make2(Api, api).pipe(
+          add(ProjectionReadiness, projectionReadiness),
+          add(ScriptReactions, scriptReactions)
         )
       )
     )
@@ -15363,7 +15392,13 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/apiLayer.ts
   var gatewayLayer = layer2.pipe(provideMerge(layer));
   var hostLayer = layer3.pipe(provideMerge(gatewayLayer));
-  var apiLayer = layer4.pipe(provideMerge(hostLayer));
+  var servicesLayer = layer5.pipe(provideMerge(hostLayer));
+  var apiLayer = effectDiscard(
+    flatMap3(Gateway, (gateway) => gateway.start())
+  ).pipe(provideMerge(servicesLayer));
+  var scriptApiLayer = layer4.pipe(
+    provideMerge(servicesLayer)
+  );
 
   // packages/runtime/src/host/loop.ts
   var host2 = __host;
