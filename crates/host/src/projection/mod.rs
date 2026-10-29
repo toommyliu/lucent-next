@@ -65,7 +65,7 @@ impl Projection {
             "OnConnection" => {}
             _ => return ProjectionOutput::default(),
         }
-        let logout = status == "OnConnectionLost" && self.session_logged_in;
+        let logout = self.session_logged_in;
         self.session_logged_in = false;
         self.reset();
         ProjectionOutput {
