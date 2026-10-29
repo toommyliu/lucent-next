@@ -405,33 +405,24 @@ fn event_overflow_finishes_script_cleanup_before_reporting_loss() {
     let (mut session, link) = lucent_host::testing::start_probe(&host, ready_movie());
     let setup = lucent_runtime::Runtime::start(link).unwrap();
     ready(&setup);
-    let emitter = session.attach().unwrap();
-    let run = started_run(
+    let run = start(
         &mut session,
-        r#"
+        loose(&[(
+            "overflow.js",
+            r#"
         import * as api from "lucent/api";
         import * as script from "lucent/script";
         export default function* () {
             script.signal.addEventListener("abort", () => console.log("overflow cleanup"));
-            yield* api.packet.sendToClient("started");
-            const until = Date.now() + 150;
-            while (Date.now() < until) {}
+            for (let index = 0; index < 1100; index++) {
+                yield* api.packet.sendToClient("burst");
+            }
             yield* script.sleep("1 hour");
         }
     "#,
+        )]),
+        Default::default(),
     );
-    for index in 0..1100 {
-        emitter
-            .call_loader(
-                "probe.emit",
-                vec![
-                    lucent_protocol::bridge::Value::String("onDebug".into()),
-                    lucent_protocol::bridge::Value::String(index.to_string()),
-                ],
-            )
-            .recv_timeout(TIMEOUT)
-            .unwrap();
-    }
     let outcome = run.wait(TIMEOUT);
     assert!(
         matches!(outcome, Err(RuntimeError::EventsLost)),
