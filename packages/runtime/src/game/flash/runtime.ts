@@ -17,6 +17,7 @@ import * as Api from "./api/Api";
 import * as Bridge from "./bridge/Bridge";
 import * as DiagnosticSink from "./bridge/DiagnosticSink";
 import * as Gateway from "./bridge/Gateway";
+import * as HostState from "./state/HostState";
 
 const rendererLogLevels: Partial<
   Record<LogLevel.LogLevel, RendererLogRecord["level"]>
@@ -61,7 +62,8 @@ const diagnosticLayer =
     : DiagnosticSink.noopLayer;
 const bridgeLayer = Bridge.layer.pipe(Layer.provideMerge(diagnosticLayer));
 const gatewayLayer = Gateway.layer.pipe(Layer.provideMerge(bridgeLayer));
-export const apiLayer = Api.layer.pipe(Layer.provideMerge(gatewayLayer));
+const hostLayer = HostState.layer.pipe(Layer.provideMerge(gatewayLayer));
+export const apiLayer = Api.layer.pipe(Layer.provideMerge(hostLayer));
 
 const consumerLayer = Layer.mergeAll(
   Automation.layer,

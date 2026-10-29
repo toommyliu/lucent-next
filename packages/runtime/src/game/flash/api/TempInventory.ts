@@ -2,18 +2,22 @@ import { normalizeItemQuantity } from "@lucent/game";
 import type { ItemQuery } from "@lucent/game";
 import * as Effect from "effect/Effect";
 
-import type { Store } from "../state/Store";
+import {
+  itemQuantity,
+  readItem,
+  readItems,
+  type HostStateService,
+} from "../state/HostState";
 
-export const makeTempInventory = (store: Store) => {
-  const contains = (selector: ItemQuery, quantity?: number) => {
-    return store.items
-      .quantity("temporary", selector)
-      .pipe(Effect.map((owned) => owned >= normalizeItemQuantity(quantity)));
-  };
+export const makeTempInventory = (host: HostStateService) => {
+  const contains = (selector: ItemQuery, quantity?: number) =>
+    itemQuantity(host, "temporary", selector).pipe(
+      Effect.map((owned) => owned >= normalizeItemQuantity(quantity)),
+    );
 
-  const get = (selector: ItemQuery) => store.items.get("temporary", selector);
+  const get = (selector: ItemQuery) => readItem(host, "temporary", selector);
 
-  const getAll = () => store.items.getAll("temporary");
+  const getAll = () => readItems(host, "temporary");
 
   return {
     contains,

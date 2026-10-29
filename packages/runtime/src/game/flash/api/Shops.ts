@@ -1,4 +1,8 @@
-import { normalizeItemQuantity, toItemSelector } from "@lucent/game";
+import {
+  normalizeItemQuantity,
+  toItemSelector,
+  toLiveShop,
+} from "@lucent/game";
 import type { ItemQuery, LiveItem, ShopItemQuery } from "@lucent/game";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -7,8 +11,12 @@ import * as Schema from "effect/Schema";
 import type { BridgeService } from "../bridge/Bridge";
 import { PositiveWireInt, WireBoolean, WireInt } from "../contract/Coercion";
 import { packetData } from "../contract/Packet";
-import { ItemPayloads, toBankItems, toItem } from "../contract/payload/Items";
-import type { Store } from "../state/Store";
+import {
+  itemQuantity,
+  readItem,
+  readItems,
+  type HostStateService,
+} from "../state/HostState";
 import type { Inventory } from "./Inventory";
 import type { Wait } from "./Wait";
 
@@ -36,40 +44,16 @@ const selectorFor = (item: LiveItem) =>
 
 export const makeShops = (
   bridge: BridgeService,
-  store: Store,
+  host: HostStateService,
   inventory: Inventory,
   wait: Wait,
 ) => {
-  const refreshPurchasedContainer = (
-    container: "bank" | "house" | "inventory",
-  ) => {
-    const method =
-      container === "bank"
-        ? "bank.getItems"
-        : container === "house"
-          ? "house.getItems"
-          : "inventory.getItems";
-    return bridge.invoke(method, undefined, ItemPayloads).pipe(
-      Effect.flatMap(
-        Option.match({
-          onNone: () => Effect.void,
-          onSome: (payloads) => {
-            const items =
-              container === "bank"
-                ? toBankItems(payloads)
-                : payloads.map((payload) =>
-                    toItem(payload, { context: container }),
-                  );
-            return store.items.replace(container, items);
-          },
-        }),
-      ),
-    );
-  };
+  const get = (selector: ShopItemQuery) => readItem(host, "shop", selector);
 
-  const get = (selector: ShopItemQuery) => {
-    return store.items.get("shop", selector);
-  };
+  const getCurrent = () =>
+    host
+      .read({ kind: "shop" })
+      .pipe(Effect.map((shop) => (shop === null ? null : toLiveShop(shop))));
 
   const isOpen = (shopId?: number) => {
     if (shopId !== undefined && !isShopId(shopId)) {
@@ -85,11 +69,13 @@ export const makeShops = (
         Effect.flatMap(
           Option.match({
             onNone: () =>
-              store.shops.get.pipe(
-                Effect.map((shop) =>
-                  shopId !== undefined ? shop?.id === shopId : shop !== null,
+              host
+                .read({ kind: "shop" })
+                .pipe(
+                  Effect.map((shop) =>
+                    shopId !== undefined ? shop?.id === shopId : shop !== null,
+                  ),
                 ),
-              ),
             onSome: (open) => Effect.succeed(open),
           }),
         ),
@@ -115,8 +101,10 @@ export const makeShops = (
         { timeout: "3 seconds" },
       );
       if (settled) {
-        yield* store.shops.set(null);
-        yield* store.items.replace("shop", []);
+        yield* host.command({
+          kind: "confirmShopClosed",
+          shopId: shopId ?? null,
+        });
       }
       return settled;
     });
@@ -126,7 +114,7 @@ export const makeShops = (
     if (!isShopId(shopId)) return Effect.succeed(false);
     return Effect.gen(function* () {
       if (yield* isOpen(shopId)) return true;
-      const current = yield* store.shops.get;
+      const current = yield* host.read({ kind: "shop" });
       // The client reopens cached non-limited shops without emitting a loadShop packet.
       const reopensCachedShop =
         current?.id === shopId && current.limited === false;
@@ -176,7 +164,10 @@ export const makeShops = (
       );
       if (packet === null) return false;
 
-      const [shop, open] = yield* Effect.all([store.shops.get, isOpen(shopId)]);
+      const [shop, open] = yield* Effect.all([
+        host.read({ kind: "shop" }),
+        isOpen(shopId),
+      ]);
       return shop?.id === shopId && open;
     });
   };
@@ -207,9 +198,9 @@ export const makeShops = (
             return false;
           }
           const startingQuantities = yield* Effect.all({
-            bank: store.items.quantity("bank", item.itemId),
-            house: store.items.quantity("house", item.itemId),
-            inventory: store.items.quantity("inventory", item.itemId),
+            bank: itemQuantity(host, "bank", item.itemId),
+            house: itemQuantity(host, "house", item.itemId),
+            inventory: itemQuantity(host, "inventory", item.itemId),
           });
           let response: typeof BuyResponse.Type | undefined;
           const packet = yield* wait.forPacket(
@@ -243,8 +234,8 @@ export const makeShops = (
               : item.houseItem
                 ? "house"
                 : "inventory";
-          yield* refreshPurchasedContainer(container);
-          const owned = yield* store.items.quantity(container, item.itemId);
+          yield* host.command({ kind: "refreshContainer", container });
+          const owned = yield* itemQuantity(host, container, item.itemId);
           return owned >= startingQuantities[container] + requested;
         });
       }),
@@ -283,8 +274,7 @@ export const makeShops = (
     );
   };
 
-  const getAll = () => store.items.getAll("shop");
-  const getCurrent = () => store.shops.get;
+  const getAll = () => readItems(host, "shop");
 
   const getMaxBuyQuantity = (selector: ShopItemQuery) =>
     get(selector).pipe(
@@ -302,7 +292,9 @@ export const makeShops = (
       Effect.flatMap(
         Option.match({
           onNone: () =>
-            store.shops.get.pipe(Effect.map((shop) => shop?.merge ?? false)),
+            host
+              .read({ kind: "shop" })
+              .pipe(Effect.map((shop) => shop?.merge ?? false)),
           onSome: (merge) => Effect.succeed(merge),
         }),
       ),

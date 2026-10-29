@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import type { BridgeService } from "../bridge/Bridge";
-import type { Store } from "../state/Store";
+import type { HostStateService } from "../state/HostState";
 import { makeQuests } from "./Quests";
 import type { Wait } from "./Wait";
 
@@ -38,7 +38,7 @@ const makeHarness = () => {
 
   return {
     completions,
-    quests: makeQuests(bridge, {} as Store, wait),
+    quests: makeQuests(bridge, {} as HostStateService, wait),
   };
 };
 

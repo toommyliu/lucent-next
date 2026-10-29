@@ -1,4 +1,8 @@
-import { orderMonstersByPriority, toMonsterSelector } from "@lucent/game";
+import {
+  orderMonstersByPriority,
+  toLiveAura,
+  toMonsterSelector,
+} from "@lucent/game";
 import type { ItemQuery, LiveMonster, MonsterQuery } from "@lucent/game";
 import {
   normalizeCombatProfile,
@@ -27,7 +31,7 @@ import {
 } from "../contract/Coercion";
 import { packetData } from "../contract/Packet";
 import { decodeCombatActionAcknowledgements } from "../contract/payload/Combat";
-import type { Store } from "../state/Store";
+import type { HostStateService } from "../state/HostState";
 import type { AntiCounter } from "./internal/AntiCounter";
 import { getCombatProfileClassWarning } from "./internal/CombatProfileClass";
 import { makeCombatProfileConsumables } from "./internal/CombatProfileConsumables";
@@ -142,7 +146,7 @@ const normalizeSkillInterval = (
 export const makeCombat = (
   bridge: BridgeService,
   antiCounter: AntiCounter,
-  store: Store,
+  host: HostStateService,
   drops: Drops,
   events: Events,
   inventory: Inventory,
@@ -162,9 +166,19 @@ export const makeCombat = (
     targetValue.pipe(
       Effect.flatMap((target) => {
         if (target === null) return Effect.succeed([]);
-        return target.type === "monster"
-          ? store.world.getMonsterAuras(target.monsterMapId, options)
-          : store.world.getPlayerAuras(target.entityId, options);
+        return (
+          target.type === "monster"
+            ? host.read({
+                kind: "monsterAuras",
+                monsterMapId: target.monsterMapId,
+                auraKind: options?.kind ?? null,
+              })
+            : host.read({
+                kind: "playerAuras",
+                entityId: target.entityId,
+                auraKind: options?.kind ?? null,
+              })
+        ).pipe(Effect.map((auras) => auras.map(toLiveAura)));
       }),
     );
 
@@ -231,7 +245,7 @@ export const makeCombat = (
           | Exclude<typeof ConsumableCastDispatch.Type, null>
           | undefined;
         let confirmation: ConsumableCastResult | null = null;
-        const projectedSourceId = yield* store.world.getSelfEntityId;
+        const projectedSourceId = yield* host.read({ kind: "selfEntityId" });
         const sourceId =
           projectedSourceId ??
           (yield* bridge
@@ -592,6 +606,7 @@ export const makeCombat = (
     runtime: CombatProfileSession | null,
   ) =>
     Effect.gen(function* () {
+      const startMap = yield* host.read({ kind: "map" });
       const available = yield* monsters.getAvailable();
       const monster = available.find((candidate) =>
         candidate.matches(selector),
@@ -613,17 +628,24 @@ export const makeCombat = (
         )
         .pipe(Effect.map((event) => event !== null));
       const projectedEnd = wait.untilSome(
-        store.world
-          .getMonster(monster.monsterMapId)
-          .pipe(
-            Effect.map((current) =>
-              current !== monster
-                ? Option.some(false)
-                : current.dead
-                  ? Option.some(true)
-                  : Option.none(),
-            ),
+        Effect.all([
+          host.read({
+            kind: "monster",
+            selector: { monsterMapId: monster.monsterMapId },
+          }),
+          host.read({ kind: "map" }),
+        ]).pipe(
+          Effect.map(([current, currentMap]) =>
+            current === null ||
+            currentMap.id !== startMap.id ||
+            currentMap.name !== startMap.name ||
+            currentMap.roomNumber !== startMap.roomNumber
+              ? Option.some(false)
+              : current.dead
+                ? Option.some(true)
+                : Option.none(),
           ),
+        ),
         { interval: "250 millis" },
       );
       return yield* Effect.raceFirst(

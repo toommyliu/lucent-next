@@ -7,7 +7,13 @@ import * as Semaphore from "effect/Semaphore";
 import type { BridgeService } from "../bridge/Bridge";
 import { PositiveWireInt, WireBoolean, WireInt } from "../contract/Coercion";
 import { packetData } from "../contract/Packet";
-import type { Store } from "../state/Store";
+import {
+  isSelectable,
+  itemQuantity,
+  readItem,
+  readItems,
+  type HostStateService,
+} from "../state/HostState";
 import type { Auth } from "./Auth";
 import type { Wait } from "./Wait";
 
@@ -23,23 +29,25 @@ const decodeAcceptResponse = Schema.decodeUnknownOption(AcceptResponse);
 
 export const makeDrops = Effect.fnUntraced(function* (
   bridge: BridgeService,
-  store: Store,
+  host: HostStateService,
   auth: Auth,
   wait: Wait,
 ) {
   const accepts = yield* Semaphore.make(1);
 
+  const get = (selector: ItemQuery) => readItem(host, "drop", selector);
+
   const accept = (selector: ItemQuery) => {
     return accepts.withPermits(1)(
       Effect.gen(function* () {
         if (!(yield* auth.isLoggedIn())) return false;
-        const drop = yield* store.items.get("drop", selector);
+        const drop = yield* get(selector);
         if (drop === null) return false;
 
         const before = yield* Effect.all({
-          bank: store.items.quantity("bank", drop.itemId),
-          house: store.items.quantity("house", drop.itemId),
-          inventory: store.items.quantity("inventory", drop.itemId),
+          bank: itemQuantity(host, "bank", drop.itemId),
+          house: itemQuantity(host, "house", drop.itemId),
+          inventory: itemQuantity(host, "inventory", drop.itemId),
         });
         let response: typeof AcceptResponse.Type | undefined;
         const packet = yield* wait.forPacket(
@@ -77,44 +85,29 @@ export const makeDrops = Effect.fnUntraced(function* (
         const expected =
           response.iQtyNow ??
           before[container] + (response.iQty ?? drop.quantity);
-        const owned = yield* store.items.get(container, drop.itemId);
+        const owned = yield* readItem(host, container, drop.itemId);
         return owned !== null && owned.quantity >= expected;
       }),
     );
   };
 
-  const contains = (selector: ItemQuery) => {
-    return store.items
-      .get("drop", selector)
-      .pipe(Effect.map((drop) => drop !== null));
-  };
+  const contains = (selector: ItemQuery) =>
+    get(selector).pipe(Effect.map((drop) => drop !== null));
 
-  const get = (selector: ItemQuery) => store.items.get("drop", selector);
-
-  const getAll = () => store.items.getAll("drop");
+  const getAll = () => readItems(host, "drop");
 
   const isCustomUiEnabled = () =>
     bridge
       .invoke("drops.isUsingCustomDrops", undefined, Schema.Boolean)
       .pipe(Effect.map(Option.getOrElse(() => false)));
 
-  const reject = (selector: ItemQuery) => {
-    return Effect.gen(function* () {
+  const reject = (selector: ItemQuery) =>
+    Effect.gen(function* () {
       if (!(yield* auth.isLoggedIn())) return false;
-      const drop = yield* store.items.get("drop", selector);
-      if (drop === null) return false;
-      const rejected = yield* bridge.invoke(
-        "drops.reject",
-        [drop.itemId],
-        Schema.Boolean,
-      );
-      if (Option.isNone(rejected) || !rejected.value) {
-        return false;
-      }
-      yield* store.items.remove("drop", drop.itemId);
-      return true;
+      if (!isSelectable(selector)) return false;
+      const rejected = yield* host.command({ kind: "rejectDrop", selector });
+      return Option.getOrElse(rejected, () => false);
     });
-  };
 
   const toggleUi = () =>
     bridge.invoke("drops.toggleUi", undefined, Schema.Void).pipe(Effect.asVoid);

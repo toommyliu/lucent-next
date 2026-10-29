@@ -3,10 +3,8 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import type { BridgeService } from "../bridge/Bridge";
-import type { Store } from "../state/Store";
+import type { HostStateService } from "../state/HostState";
 import type { Wait } from "./Wait";
-
-const Strings = Schema.Array(Schema.String);
 
 export interface CellPositionOptions {
   /** Destination cell. */
@@ -15,47 +13,39 @@ export interface CellPositionOptions {
   readonly pad?: string;
 }
 
-export const makeMap = (bridge: BridgeService, store: Store, wait: Wait) => {
+export const makeMap = (
+  bridge: BridgeService,
+  host: HostStateService,
+  wait: Wait,
+) => {
   const isLoaded = () =>
     bridge
       .invoke("world.isLoaded", undefined, Schema.Boolean)
       .pipe(Effect.map(Option.getOrElse(() => false)));
 
   const getCellPads = () =>
-    isLoaded().pipe(
-      Effect.flatMap((loaded) =>
-        loaded
-          ? bridge.invoke("world.getCellPads", undefined, Strings).pipe(
-              Effect.flatMap(
-                Option.match({
-                  onNone: () => store.world.getCellPads,
-                  onSome: (cellPads) =>
-                    store.world.setCellPads(cellPads).pipe(Effect.as(cellPads)),
-                }),
-              ),
-            )
-          : store.world.getCellPads,
+    host.command({ kind: "refreshCellPads" }).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => host.read({ kind: "cellPads" }),
+          onSome: Effect.succeed,
+        }),
       ),
     );
 
   const getCells = () =>
-    isLoaded().pipe(
-      Effect.flatMap((loaded) =>
-        loaded
-          ? bridge.invoke("world.getCells", undefined, Strings).pipe(
-              Effect.flatMap(
-                Option.match({
-                  onNone: () => store.world.getCells,
-                  onSome: (cells) =>
-                    store.world.setCells(cells).pipe(Effect.as(cells)),
-                }),
-              ),
-            )
-          : store.world.getCells,
+    host.command({ kind: "refreshCells" }).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => host.read({ kind: "cells" }),
+          onSome: Effect.succeed,
+        }),
       ),
     );
 
-  const getId = () => store.world.getMap.pipe(Effect.map((map) => map.id));
+  const getMap = () => host.read({ kind: "map" });
+
+  const getId = () => getMap().pipe(Effect.map((map) => map.id));
 
   const getMapItem = (itemId: number) => {
     if (!Number.isSafeInteger(itemId) || itemId <= 0) return Effect.void;
@@ -69,10 +59,10 @@ export const makeMap = (bridge: BridgeService, store: Store, wait: Wait) => {
     );
   };
 
-  const getName = () => store.world.getMap.pipe(Effect.map((map) => map.name));
+  const getName = () => getMap().pipe(Effect.map((map) => map.name));
 
   const getRoomNumber = () =>
-    store.world.getMap.pipe(Effect.map((map) => map.roomNumber));
+    getMap().pipe(Effect.map((map) => map.roomNumber));
 
   const loadSwf = (swf: string) =>
     bridge.invoke("world.loadSwf", [swf], Schema.Void).pipe(Effect.asVoid);

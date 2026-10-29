@@ -4,7 +4,8 @@ import * as Layer from "effect/Layer";
 
 import { Bridge } from "../bridge/Bridge";
 import { Gateway } from "../bridge/Gateway";
-import { makePipeline } from "../protocol/Pipeline";
+import { isProjectionEvent } from "../contract/Event";
+import { HostState } from "../state/HostState";
 import { makeStore } from "../state/Store";
 import { makeAuth } from "./Auth";
 import { makeAntiCounter } from "./internal/AntiCounter";
@@ -33,35 +34,35 @@ import { makeWaitApi } from "./Wait";
 const makeApiServices = Effect.gen(function* () {
   const bridge = yield* Bridge;
   const gateway = yield* Gateway;
+  const host = yield* HostState;
   const store = yield* makeStore;
   const wait = makeWaitApi(bridge, gateway);
   const events = yield* makeEvents(gateway, wait);
-  const packet = yield* makePacket(gateway, store, wait);
-  const auth = makeAuth(bridge, store, wait);
-  const house = makeHouse(bridge, store);
-  const inventory = makeInventory(bridge, store, house, wait);
-  const bank = yield* makeBank(bridge, store, auth, inventory, house, wait);
-  const drops = yield* makeDrops(bridge, store, auth, wait);
-  const map = makeMap(bridge, store, wait);
-  const monsterServices = yield* makeMonsters(bridge, store, events, wait);
+  const packet = yield* makePacket(gateway, host, wait);
+  const auth = makeAuth(bridge, host, wait);
+  const house = makeHouse(bridge, host);
+  const inventory = makeInventory(bridge, host, house, wait);
+  const bank = yield* makeBank(bridge, host, auth, inventory, house, wait);
+  const drops = yield* makeDrops(bridge, host, auth, wait);
+  const map = makeMap(bridge, host, wait);
+  const monsterServices = yield* makeMonsters(bridge, host, events, wait);
   const monsters = monsterServices.api;
-  const players = makePlayers(store);
-  const player = makePlayer(bridge, store, auth, inventory, map, wait);
+  const players = makePlayers(host);
+  const player = makePlayer(bridge, host, auth, inventory, map, wait);
   const sessionEvents = yield* makeSessionEvents(
     wait.until(player.isReady()).pipe(Effect.asVoid),
     gateway.publishEvent,
   );
-  const projectionReadiness = makeProjectionReadiness(store);
-  const quests = makeQuests(bridge, store, wait);
+  const projectionReadiness = makeProjectionReadiness(host);
+  const quests = makeQuests(bridge, host, wait);
   const settings = yield* makeSettings(bridge, store);
   const antiCounter = makeAntiCounter(bridge, settings.isAntiCounterEnabled);
-  const shops = makeShops(bridge, store, inventory, wait);
-  const tempInventory = makeTempInventory(store);
-  const debug = typeof window !== "undefined" && window.desktop.debug;
+  const shops = makeShops(bridge, host, inventory, wait);
+  const tempInventory = makeTempInventory(host);
   const combat = makeCombat(
     bridge,
     antiCounter,
-    store,
+    host,
     drops,
     events,
     inventory,
@@ -73,18 +74,13 @@ const makeApiServices = Effect.gen(function* () {
     tempInventory,
     wait,
   );
-  const pipeline = makePipeline(
-    store,
-    {
-      handleEvent: antiCounter.handleEvent,
-      handleRuntimeEvent: sessionEvents.handleRuntimeEvent,
-      publishEvent: gateway.publishEvent,
-      ...(debug ? { reportDiagnostic: gateway.reportDiagnostic } : {}),
-    },
-    bridge,
+  yield* gateway.start((event) =>
+    isProjectionEvent(event)
+      ? antiCounter.handleEvent(event)
+      : sessionEvents
+          .handleRuntimeEvent(event)
+          .pipe(Effect.andThen(antiCounter.handleEvent(event))),
   );
-
-  yield* gateway.start(pipeline.packet, pipeline.runtime);
 
   return {
     api: {

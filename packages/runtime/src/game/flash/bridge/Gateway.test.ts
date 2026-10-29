@@ -1,12 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 
-import { makeWait } from "../protocol/Wait";
 import { Bridge, makeBridge } from "./Bridge";
 import { makeGateway } from "./Gateway";
 
@@ -17,54 +16,61 @@ const swfTarget = {
 } as unknown as Pick<Window, "swf">;
 
 describe("Gateway", () => {
+  it.effect("owns callbacks until disposal", () => {
+    const target = {} as Window;
+
+    return Effect.gen(function* () {
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* makeGateway(target);
+          expect(target.packetFromClient).toBeTypeOf("function");
+          expect(target.onProjectionEvent).toBeTypeOf("function");
+        }),
+      );
+
+      expect(target.packetFromClient).toBeUndefined();
+      expect(target.onProjectionEvent).toBeUndefined();
+    }).pipe(Effect.provide(Layer.effect(Bridge, makeBridge(swfTarget))));
+  });
+
   it.effect(
-    "owns callbacks until disposal and publishes after projection",
+    "delivers a loader callback before the projection events it produced",
     () => {
       const target = {} as Window;
-      const projected: string[] = [];
 
-      return Effect.gen(function* () {
-        yield* Effect.scoped(
-          Effect.gen(function* () {
-            const gateway = yield* makeGateway(target);
-            const projecting = yield* Deferred.make<void>();
-            const release = yield* Deferred.make<void>();
-            yield* gateway.start((packet) =>
-              Effect.sync(() => {
-                projected.push(packet.command);
-              }).pipe(
-                Effect.andThen(Deferred.succeed(projecting, undefined)),
-                Effect.andThen(Deferred.await(release)),
-              ),
-            );
-            const wait = makeWait(gateway);
-            const waiting = yield* wait
-              .forPacket(
-                { command: "moveToCell", direction: "client" },
-                {
-                  timeout: "1 second",
-                  trigger: Effect.sync(() => {
-                    target.packetFromClient?.(
-                      "%xt%zm%moveToCell%1%battleon-1%Enter%Spawn%",
-                    );
-                  }).pipe(Effect.as(true)),
-                },
-              )
-              .pipe(Effect.forkScoped);
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const gateway = yield* makeGateway(target);
+          const packets = yield* gateway.subscribePackets;
+          const events = yield* gateway.subscribeEvents;
+          const packetsBeforeEvent: Array<readonly [string, number]> = [];
+          yield* gateway.start((event) =>
+            PubSub.remaining(packets).pipe(
+              Effect.map((published) => {
+                packetsBeforeEvent.push([event.type, published]);
+              }),
+            ),
+          );
 
-            yield* Deferred.await(projecting);
-            yield* Effect.yieldNow;
-            expect(waiting.pollUnsafe()).toBeUndefined();
-            yield* Deferred.succeed(release, undefined);
-            const packet = yield* Fiber.join(waiting);
-            expect(packet?.command).toBe("moveToCell");
-            expect(projected).toEqual(["moveToCell"]);
-            expect(target.packetFromClient).toBeTypeOf("function");
-          }),
-        );
+          target.onExtensionResponse?.(
+            JSON.stringify({
+              dataObj: { areaId: 5, areaName: "battleon-1", cmd: "moveToArea" },
+              type: "json",
+            }),
+          );
+          target.onProjectionEvent?.({
+            map: { id: 5, name: "battleon", roomNumber: 1 },
+            type: "join-map",
+          });
 
-        expect(target.packetFromClient).toBeUndefined();
-      }).pipe(Effect.provide(Layer.effect(Bridge, makeBridge(swfTarget))));
+          expect(yield* PubSub.take(events)).toEqual({
+            map: { id: 5, name: "battleon", roomNumber: 1 },
+            type: "join-map",
+          });
+          expect(packetsBeforeEvent).toEqual([["join-map", 1]]);
+          expect((yield* PubSub.take(packets)).command).toBe("moveToArea");
+        }),
+      ).pipe(Effect.provide(Layer.effect(Bridge, makeBridge(swfTarget))));
     },
   );
 
@@ -76,7 +82,7 @@ describe("Gateway", () => {
       return Effect.scoped(
         Effect.gen(function* () {
           const gateway = yield* makeGateway(target);
-          yield* gateway.start(() => Effect.void);
+          yield* gateway.start();
           const capture = yield* gateway.rawPackets.pipe(
             Stream.runHead,
             Effect.forkScoped,

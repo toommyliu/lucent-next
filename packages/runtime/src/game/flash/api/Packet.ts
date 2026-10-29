@@ -16,7 +16,7 @@ import {
   type PacketSelector,
   type RawPacket,
 } from "../contract/Packet";
-import type { Store } from "../state/Store";
+import type { HostStateService } from "../state/HostState";
 import type { Wait } from "./Wait";
 
 interface OnPacket {
@@ -41,7 +41,7 @@ export type { ClientPacketEncoding, ServerPacketEncoding };
 
 export const makePacket = Effect.fnUntraced(function* (
   gateway: GatewayService,
-  store: Store,
+  host: HostStateService,
   wait: Wait,
 ) {
   const scope = yield* Effect.scope;
@@ -61,8 +61,8 @@ export const makePacket = Effect.fnUntraced(function* (
       if (!placeholders.some((token) => packet.includes(`{${token}}`))) {
         return packet;
       }
-      const map = yield* store.world.getMap;
-      const player = yield* store.world.getMe;
+      const map = yield* host.read({ kind: "map" });
+      const player = yield* host.read({ kind: "me" });
       return packet
         .replaceAll("{MAP_ID}", String(map.id))
         .replaceAll("{ROOM_NUMBER}", String(map.roomNumber))
