@@ -422,3 +422,24 @@ fn walk_speed_resends_never_go_backwards() {
         assert_eq!(previous, 530.0);
     });
 }
+
+#[cfg(feature = "testing")]
+#[test]
+fn a_policy_defect_ends_the_bot_instead_of_silencing_a_tick() {
+    let (_host, mut session, observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    next_call(&observer, "settings.setWalkSpeed");
+    bot.eval(
+        "malformed-readiness.js",
+        r#"
+        const read = __host.read;
+        __host.read = query => JSON.parse(query).kind === "readiness" ? "{}" : read(query);
+        null;
+    "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    assert!(
+        matches!(bot.wait(Duration::from_secs(2)), Err(RuntimeError::JavaScript(error)) if error.contains("length"))
+    );
+}
