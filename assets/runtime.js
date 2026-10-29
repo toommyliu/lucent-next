@@ -10748,18 +10748,16 @@ ${prefix}}`;
     static {
       __name(this, "LiveEntity");
     }
-    #auras = /* @__PURE__ */ new Map();
+    #auras;
     constructor(data, auras = []) {
       super(data);
-      for (const aura of auras) {
-        this.#auras.set(this.auraKey(aura.kind, aura.name), aura);
-      }
+      this.#auras = auras;
     }
     get alive() {
       return this.hp > 0 && this.state !== EntityState.Dead;
     }
     get auras() {
-      return Array.from(this.#auras.values());
+      return [...this.#auras];
     }
     get cell() {
       return this.modelData.cell;
@@ -10796,7 +10794,7 @@ ${prefix}}`;
     }
     getAura(name, options) {
       const normalizedName = normalizeGameText(name);
-      for (const aura of this.#auras.values()) {
+      for (const aura of this.#auras) {
         if (normalizeGameText(aura.name) === normalizedName && (options?.kind === void 0 || aura.kind === options.kind)) {
           return aura;
         }
@@ -10805,9 +10803,6 @@ ${prefix}}`;
     }
     hasAura(name, options) {
       return this.getAura(name, options) !== null;
-    }
-    auraKey(kind, name) {
-      return `${kind}:${name}`;
     }
     isInCell(cell) {
       return normalizeGameText(this.cell) === normalizeGameText(cell);
@@ -11374,76 +11369,6 @@ ${prefix}}`;
   ), "itemQuantity");
   var isHydrated = /* @__PURE__ */ __name((host, container) => host.read({ kind: "itemHydration", container }).pipe(map4((version) => version > 0)), "isHydrated");
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
-  var TypeId20 = "~effect/SubscriptionRef";
-  var Proto2 = {
-    ...PipeInspectableProto,
-    [TypeId20]: {
-      _A: identity
-    },
-    toJSON() {
-      return {
-        _id: "SubscriptionRef",
-        value: this.value
-      };
-    }
-  };
-  var make14 = /* @__PURE__ */ __name((value) => map4(unbounded({
-    replay: 1
-  }), (pubsub) => {
-    const self = Object.create(Proto2);
-    self.semaphore = makeUnsafe5(1);
-    self.value = value;
-    self.pubsub = pubsub;
-    publishUnsafe(self.pubsub, value);
-    return self;
-  }), "make");
-  var changes = /* @__PURE__ */ __name((self) => fromPubSub(self.pubsub), "changes");
-  var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
-  var setUnsafe = /* @__PURE__ */ __name((self, value) => {
-    self.value = value;
-    publishUnsafe(self.pubsub, value);
-  }, "setUnsafe");
-  var updateAndGet = /* @__PURE__ */ dual(2, (self, update2) => self.semaphore.withPermit(sync2(() => {
-    const newValue = update2(self.value);
-    setUnsafe(self, newValue);
-    return newValue;
-  })));
-
-  // packages/runtime/src/game/flash/state/Settings.ts
-  var makeSettingsState = /* @__PURE__ */ __name(() => ({
-    animationsEnabled: true,
-    antiCounterEnabled: true,
-    collisionsEnabled: true,
-    customGuild: "",
-    customGuildConfigured: false,
-    customName: "",
-    customNameConfigured: false,
-    deathAdsVisible: true,
-    enemyMagnetEnabled: false,
-    frameRate: 24,
-    infiniteRangeEnabled: false,
-    otherPlayersVisible: true,
-    provokeCellEnabled: false,
-    renderingMode: "full",
-    skipCutscenesEnabled: false,
-    walkSpeed: 8
-  }), "makeSettingsState");
-
-  // packages/runtime/src/game/flash/state/Store.ts
-  var makeStore = gen2(function* () {
-    const settingsRef = yield* make14(makeSettingsState());
-    const settings = {
-      changes: changes(settingsRef),
-      get: get4(settingsRef),
-      patch: /* @__PURE__ */ __name((patch) => updateAndGet(settingsRef, (state) => ({
-        ...state,
-        ...patch
-      })), "patch")
-    };
-    return { settings };
-  });
-
   // packages/runtime/src/game/flash/api/Auth.ts
   var Credentials = Struct({
     password: String4,
@@ -11733,10 +11658,10 @@ ${prefix}}`;
   }, "makeAntiCounter");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/FiberMap.js
-  var TypeId21 = "~effect/FiberMap";
-  var isFiberMap = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId21), "isFiberMap");
-  var Proto3 = {
-    [TypeId21]: TypeId21,
+  var TypeId20 = "~effect/FiberMap";
+  var isFiberMap = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId20), "isFiberMap");
+  var Proto2 = {
+    [TypeId20]: TypeId20,
     [Symbol.iterator]() {
       if (this.state._tag === "Closed") {
         return empty2();
@@ -11752,7 +11677,7 @@ ${prefix}}`;
     }
   };
   var makeUnsafe6 = /* @__PURE__ */ __name((backing, deferred) => {
-    const self = Object.create(Proto3);
+    const self = Object.create(Proto2);
     self.state = {
       _tag: "Open",
       backing
@@ -11760,7 +11685,7 @@ ${prefix}}`;
     self.deferred = deferred;
     return self;
   }, "makeUnsafe");
-  var make15 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe6(empty4(), makeUnsafe2())), (map7) => suspend2(() => {
+  var make14 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe6(empty4(), makeUnsafe2())), (map7) => suspend2(() => {
     const state = map7.state;
     if (state._tag === "Closed") return void_3;
     map7.state = {
@@ -11770,7 +11695,7 @@ ${prefix}}`;
   })), "make");
   var internalFiberId = -1;
   var isInternalInterruption = /* @__PURE__ */ toPredicate(/* @__PURE__ */ compose(filterInterruptors, /* @__PURE__ */ has(internalFiberId)));
-  var setUnsafe2 = /* @__PURE__ */ dual((args2) => isFiberMap(args2[0]), (self, key, fiber2, options) => {
+  var setUnsafe = /* @__PURE__ */ dual((args2) => isFiberMap(args2[0]), (self, key, fiber2, options) => {
     if (self.state._tag === "Closed") {
       fiber2.interruptUnsafe(internalFiberId);
       return;
@@ -11837,14 +11762,14 @@ ${prefix}}`;
       return sync2(constInterruptedFiber);
     }
     const fiber2 = forkUnsafe(parent, effect2, options?.startImmediately ?? true, true);
-    setUnsafe2(self, key, fiber2, options);
+    setUnsafe(self, key, fiber2, options);
     return succeed7(fiber2);
   }), "runImpl");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Ref.js
-  var TypeId22 = "~effect/Ref";
+  var TypeId21 = "~effect/Ref";
   var RefProto = {
-    [TypeId22]: {
+    [TypeId21]: {
       _A: identity
     },
     ...PipeInspectableProto,
@@ -11860,8 +11785,8 @@ ${prefix}}`;
     self.ref = make10(value);
     return self;
   }, "makeUnsafe");
-  var make16 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe7(value)), "make");
-  var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
+  var make15 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe7(value)), "make");
+  var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
   var set3 = /* @__PURE__ */ dual(2, (self, value) => sync2(() => set(self.ref, value)));
   var getAndSet = /* @__PURE__ */ dual(2, (self, value) => sync2(() => {
     const current = self.ref.current;
@@ -11880,13 +11805,13 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/api/internal/SessionEvents.ts
   var readinessKey = "player-ready";
   var makeSessionEvents = fn2("makeSessionEvents")(function* (awaitPlayerReady, publishEvent) {
-    const fibers = yield* make15();
+    const fibers = yield* make14();
     const lifecycle = yield* make13(1);
-    const loggedIn = yield* make16(false);
+    const loggedIn = yield* make15(false);
     const clearSession = lifecycle.withPermits(1)(set3(loggedIn, false));
     const publishLogin = lifecycle.withPermits(1)(
       gen2(function* () {
-        if (yield* get5(loggedIn)) return;
+        if (yield* get4(loggedIn)) return;
         yield* publishEvent({ type: "login" });
         yield* set3(loggedIn, true);
       }).pipe(uninterruptible2)
@@ -12433,13 +12358,13 @@ ${prefix}}`;
     players,
     ...skill5ItemId === void 0 ? {} : { skill5ItemId }
   }), "makeCombatProfileRuntimeDeps");
-  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map4(make16({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
+  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map4(make15({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
   var resetCombatProfileCursor = /* @__PURE__ */ __name((cursor) => update(cursor.state, (state) => ({
     index: 0,
     resetVersion: state.resetVersion + 1
   })), "resetCombatProfileCursor");
   var makeCombatProfileMessageTriggerState = /* @__PURE__ */ __name(() => gen2(function* () {
-    const state = yield* make16(/* @__PURE__ */ new Map());
+    const state = yield* make15(/* @__PURE__ */ new Map());
     const semaphore = yield* make13(1);
     return {
       semaphore,
@@ -12595,7 +12520,7 @@ ${prefix}}`;
           castTarget
         );
       }
-      const startState = yield* get5(cursor.state);
+      const startState = yield* get4(cursor.state);
       for (let offset = 0; offset < steps.length; offset += 1) {
         const stepIndex = (startState.index + offset) % steps.length;
         const step = steps[stepIndex];
@@ -12611,7 +12536,7 @@ ${prefix}}`;
         if (prepared === null) {
           continue;
         }
-        const resetVersionBeforeCast = (yield* get5(cursor.state)).resetVersion;
+        const resetVersionBeforeCast = (yield* get4(cursor.state)).resetVersion;
         const cast = yield* castPreparedCombatProfileStep(
           deps,
           step,
@@ -12640,7 +12565,7 @@ ${prefix}}`;
   var castCombatProfileMessageTrigger = /* @__PURE__ */ __name((deps, trigger, triggerIndex, event, state, now = Date.now()) => state.semaphore.withPermits(1)(
     gen2(function* () {
       const cooldownMs = trigger.cooldownMs ?? 0;
-      const lastCast = (yield* get5(state.state)).get(triggerIndex);
+      const lastCast = (yield* get4(state.state)).get(triggerIndex);
       if (lastCast !== void 0 && now - lastCast < cooldownMs) {
         return false;
       }
@@ -12750,7 +12675,7 @@ ${prefix}}`;
       const cursor = yield* makeCombatProfileCursor();
       const messageState = yield* makeCombatProfileMessageTriggerState();
       const actionGate = yield* make13(1);
-      const state = yield* make16({
+      const state = yield* make15({
         generation: 0,
         resetPending: false,
         target: void 0
@@ -12799,11 +12724,11 @@ ${prefix}}`;
               )) {
                 return;
               }
-              const observed = yield* get5(state);
+              const observed = yield* get4(state);
               if (observed.resetPending) return;
               yield* actionGate.withPermits(1)(
                 gen2(function* () {
-                  const current = yield* get5(state);
+                  const current = yield* get4(state);
                   if (current.resetPending || current.generation !== observed.generation) {
                     return;
                   }
@@ -12828,7 +12753,7 @@ ${prefix}}`;
                       return;
                     }
                   }
-                  const beforeCast = yield* get5(state);
+                  const beforeCast = yield* get4(state);
                   if (beforeCast.resetPending || beforeCast.generation !== observed.generation) {
                     return;
                   }
@@ -12854,7 +12779,7 @@ ${prefix}}`;
       }
       const resolveTarget = fn2("CombatProfileSession.resolveTarget")(
         function* (monsters) {
-          const initial = yield* get5(state);
+          const initial = yield* get4(state);
           if (initial.resetPending) return void 0;
           const allowFallback = options.allowTargetFallback ?? true;
           const active = initial.target;
@@ -12946,7 +12871,7 @@ ${prefix}}`;
           );
         }
       );
-      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get5(state).pipe(
+      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get4(state).pipe(
         map4(
           (current) => !current.resetPending && current.generation === lease.generation && current.target?.monsterMapId === lease.monster.monsterMapId
         )
@@ -13309,8 +13234,10 @@ ${prefix}}`;
       if (!(yield* isHydrated(host, "inventory"))) return 0;
       return yield* bridge.invoke(slotMethods[pool], void 0, WireInt).pipe(map4(getOrElse(() => 0)));
     });
-    const getUsedSlots = /* @__PURE__ */ __name((pool = "bag") => getAll().pipe(
-      map4((items) => items.filter((item) => item.pool === pool).length)
+    const getUsedSlots = /* @__PURE__ */ __name((pool = "bag") => host.read({ kind: "items", container: "inventory" }).pipe(
+      map4(
+        (items) => items.filter((item) => item.pool === pool).length
+      )
     ), "getUsedSlots");
     const canAccept = fn2("Inventory.canAccept")(function* (item, replacing) {
       const pool = item.pool;
@@ -14192,7 +14119,7 @@ ${prefix}}`;
     ), "contains");
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "house"), "getAll");
     const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("house.getSlots", void 0, WireInt).pipe(map4(getOrElse(() => 0))), "getSlots");
-    const getUsedSlots = /* @__PURE__ */ __name(() => getAll().pipe(map4((items) => items.length)), "getUsedSlots");
+    const getUsedSlots = /* @__PURE__ */ __name(() => host.read({ kind: "items", container: "house" }).pipe(map4((items) => items.length)), "getUsedSlots");
     const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "house", selector), "get");
     const getAvailableSlots = /* @__PURE__ */ __name(() => zipWith2(
       getSlots(),
@@ -14668,12 +14595,10 @@ ${prefix}}`;
       )
     ), "readLocation");
     const getAuras = /* @__PURE__ */ __name((options) => get6().pipe(
-      flatMap3(
-        (player) => player === null ? succeed7([]) : host.read({
-          kind: "playerAuras",
-          entityId: player.entityId,
-          auraKind: options?.kind ?? null
-        }).pipe(map4((auras2) => auras2.map(toLiveAura)))
+      map4(
+        (player) => (player?.auras ?? []).filter(
+          (aura) => options?.kind === void 0 || aura.kind === options.kind
+        )
       )
     ), "getAuras");
     const factionCache = /* @__PURE__ */ new Map();
@@ -15012,21 +14937,9 @@ ${prefix}}`;
   }, "makePlayers");
 
   // packages/runtime/src/game/flash/api/ProjectionReadiness.ts
-  var makeProjectionReadiness = /* @__PURE__ */ __name((host) => {
-    const inspect = fn2("ProjectionReadiness.inspect")(function* () {
-      const snapshot = yield* host.read({
-        kind: "readiness"
-      });
-      return snapshot;
-    });
-    const get6 = fn2("ProjectionReadiness.get")(function* () {
-      return (yield* inspect()).state;
-    });
-    const isReady = fn2("ProjectionReadiness.isReady")(function* () {
-      return (yield* inspect()).missing.length === 0;
-    });
-    return { get: get6, inspect, isReady };
-  }, "makeProjectionReadiness");
+  var makeProjectionReadiness = /* @__PURE__ */ __name((host) => ({
+    inspect: /* @__PURE__ */ __name(() => host.read({ kind: "readiness" }), "inspect")
+  }), "makeProjectionReadiness");
   var ProjectionReadiness = class extends Service()("lucent/renderer/flash/ProjectionReadiness") {
     static {
       __name(this, "ProjectionReadiness");
@@ -15205,6 +15118,62 @@ ${prefix}}`;
     };
   }, "makeQuests");
 
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
+  var TypeId22 = "~effect/SubscriptionRef";
+  var Proto3 = {
+    ...PipeInspectableProto,
+    [TypeId22]: {
+      _A: identity
+    },
+    toJSON() {
+      return {
+        _id: "SubscriptionRef",
+        value: this.value
+      };
+    }
+  };
+  var make16 = /* @__PURE__ */ __name((value) => map4(unbounded({
+    replay: 1
+  }), (pubsub) => {
+    const self = Object.create(Proto3);
+    self.semaphore = makeUnsafe5(1);
+    self.value = value;
+    self.pubsub = pubsub;
+    publishUnsafe(self.pubsub, value);
+    return self;
+  }), "make");
+  var changes = /* @__PURE__ */ __name((self) => fromPubSub(self.pubsub), "changes");
+  var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
+  var setUnsafe2 = /* @__PURE__ */ __name((self, value) => {
+    self.value = value;
+    publishUnsafe(self.pubsub, value);
+  }, "setUnsafe");
+  var updateAndGet = /* @__PURE__ */ dual(2, (self, update2) => self.semaphore.withPermit(sync2(() => {
+    const newValue = update2(self.value);
+    setUnsafe2(self, newValue);
+    return newValue;
+  })));
+
+  // packages/runtime/src/game/flash/state/Settings.ts
+  var makeSettingsState = /* @__PURE__ */ __name(() => ({
+    animationsEnabled: true,
+    antiCounterEnabled: true,
+    collisionsEnabled: true,
+    customGuild: "",
+    customGuildConfigured: false,
+    customName: "",
+    customNameConfigured: false,
+    deathAdsVisible: true,
+    enemyMagnetEnabled: false,
+    frameRate: 24,
+    infiniteRangeEnabled: false,
+    otherPlayersVisible: true,
+    provokeCellEnabled: false,
+    renderingMode: "full",
+    skipCutscenesEnabled: false,
+    walkSpeed: 8
+  }), "makeSettingsState");
+
   // packages/runtime/src/game/flash/api/Settings.ts
   var MINIMAL_RENDERING_FRAME_RATE = 2;
   var normalizeFrameRate = /* @__PURE__ */ __name((frameRate) => Math.max(1, Math.min(60, frameRate)), "normalizeFrameRate");
@@ -15240,11 +15209,20 @@ ${prefix}}`;
     return frameRateLimit === null ? state.frameRate : Math.min(state.frameRate, frameRateLimit);
   }, "effectiveFrameRate");
   var isNonMinimalRenderingMode = /* @__PURE__ */ __name((mode) => mode !== "minimal", "isNonMinimalRenderingMode");
-  var makeSettings = fnUntraced2(function* (bridge, store) {
+  var makeSettings = fnUntraced2(function* (bridge) {
+    const stateRef = yield* make16(makeSettingsState());
+    const stored = {
+      changes: changes(stateRef),
+      get: get5(stateRef),
+      patch: /* @__PURE__ */ __name((patch) => updateAndGet(stateRef, (state) => ({
+        ...state,
+        ...patch
+      })), "patch")
+    };
     const scope3 = yield* scope2;
     const updates = yield* make13(1);
-    const frameRateLimit = yield* make16(null);
-    const resumeRenderingMode = yield* make16("full");
+    const frameRateLimit = yield* make15(null);
+    const resumeRenderingMode = yield* make15("full");
     const runFork3 = runForkWith2(yield* context2());
     const command = /* @__PURE__ */ __name((method, value) => bridge.invoke(method, value === void 0 ? void 0 : [value], Void2).pipe(asVoid2), "command");
     const execute = fnUntraced2(function* (patch, state) {
@@ -15271,7 +15249,7 @@ ${prefix}}`;
         );
       }
       if (patch.frameRate !== void 0 || patch.renderingMode !== void 0) {
-        const limit = yield* get5(frameRateLimit);
+        const limit = yield* get4(frameRateLimit);
         effects.push(
           command("settings.setFrameRate", effectiveFrameRate(state, limit))
         );
@@ -15292,7 +15270,7 @@ ${prefix}}`;
     });
     const applyUnlocked = fnUntraced2(function* (input) {
       const patch = normalizePatch(input);
-      const current = yield* store.settings.get;
+      const current = yield* stored.get;
       const { customGuild, customName, ...values2 } = patch;
       const statePatch = {
         ...values2,
@@ -15307,7 +15285,7 @@ ${prefix}}`;
       };
       const next = { ...current, ...statePatch };
       yield* execute(patch, next);
-      yield* store.settings.patch(statePatch);
+      yield* stored.patch(statePatch);
       if (patch.renderingMode === "minimal") {
         if (isNonMinimalRenderingMode(current.renderingMode)) {
           yield* set3(resumeRenderingMode, current.renderingMode);
@@ -15320,32 +15298,32 @@ ${prefix}}`;
     const action = /* @__PURE__ */ __name((key, method) => updates.withPermits(1)(
       gen2(function* () {
         yield* command(method);
-        const state = yield* store.settings.get;
-        yield* store.settings.patch({ [key]: !state[key] });
+        const state = yield* stored.get;
+        yield* stored.patch({ [key]: !state[key] });
       })
     ), "action");
     const reapply = /* @__PURE__ */ __name(() => updates.withPermits(1)(
       gen2(function* () {
-        const state = yield* store.settings.get;
+        const state = yield* stored.get;
         yield* execute(reapplyPatch(state), state);
       })
     ), "reapply");
     const reapplyActions = /* @__PURE__ */ __name(() => updates.withPermits(1)(
       gen2(function* () {
-        const state = yield* store.settings.get;
+        const state = yield* stored.get;
         yield* execute(recurringActionsPatch(state), state);
       })
     ), "reapplyActions");
     const set4 = /* @__PURE__ */ __name((key) => (value) => apply({ [key]: value }), "set");
-    const changes2 = store.settings.changes;
-    const get6 = /* @__PURE__ */ __name(() => store.settings.get, "get");
+    const changes2 = stored.changes;
+    const get6 = /* @__PURE__ */ __name(() => stored.get, "get");
     const enemyMagnet = /* @__PURE__ */ __name(() => action("enemyMagnetEnabled", "settings.enemyMagnet"), "enemyMagnet");
     const infiniteRange = /* @__PURE__ */ __name(() => action("infiniteRangeEnabled", "settings.infiniteRange"), "infiniteRange");
     const provokeCell = /* @__PURE__ */ __name(() => action("provokeCellEnabled", "settings.provokeCell"), "provokeCell");
     const skipCutscenes = /* @__PURE__ */ __name(() => action("skipCutscenesEnabled", "settings.skipCutscenes"), "skipCutscenes");
-    const isAntiCounterEnabled = /* @__PURE__ */ __name(() => store.settings.get.pipe(map4((state) => state.antiCounterEnabled)), "isAntiCounterEnabled");
-    const getRenderingMode = /* @__PURE__ */ __name(() => store.settings.get.pipe(map4((state) => state.renderingMode)), "getRenderingMode");
-    const onState = /* @__PURE__ */ __name((listener) => store.settings.changes.pipe(
+    const isAntiCounterEnabled = /* @__PURE__ */ __name(() => stored.get.pipe(map4((state) => state.antiCounterEnabled)), "isAntiCounterEnabled");
+    const getRenderingMode = /* @__PURE__ */ __name(() => stored.get.pipe(map4((state) => state.renderingMode)), "getRenderingMode");
+    const onState = /* @__PURE__ */ __name((listener) => stored.changes.pipe(
       runForEach2((state) => sync2(() => listener(state))),
       forkIn2(scope3),
       map4((fiber2) => () => {
@@ -15360,7 +15338,7 @@ ${prefix}}`;
     const resetCustomGuild = updates.withPermits(1)(
       gen2(function* () {
         yield* command("settings.resetCustomGuild");
-        yield* store.settings.patch({
+        yield* stored.patch({
           customGuild: "",
           customGuildConfigured: false
         });
@@ -15369,7 +15347,7 @@ ${prefix}}`;
     const resetCustomName = updates.withPermits(1)(
       gen2(function* () {
         yield* command("settings.resetCustomName");
-        yield* store.settings.patch({
+        yield* stored.patch({
           customName: "",
           customNameConfigured: false
         });
@@ -15382,7 +15360,7 @@ ${prefix}}`;
       gen2(function* () {
         const normalized = limit === null ? null : normalizeFrameRate(limit);
         yield* set3(frameRateLimit, normalized);
-        const state = yield* store.settings.get;
+        const state = yield* stored.get;
         yield* command(
           "settings.setFrameRate",
           effectiveFrameRate(state, normalized)
@@ -15397,7 +15375,7 @@ ${prefix}}`;
     const setWalkSpeed = set4("walkSpeed");
     const restoreRenderingMode = /* @__PURE__ */ __name(() => updates.withPermits(1)(
       gen2(function* () {
-        const mode = yield* get5(resumeRenderingMode);
+        const mode = yield* get4(resumeRenderingMode);
         yield* applyUnlocked({ renderingMode: mode });
       })
     ), "restoreRenderingMode");
@@ -15784,7 +15762,6 @@ ${prefix}}`;
     const bridge = yield* Bridge;
     const gateway = yield* Gateway;
     const host = yield* HostState;
-    const store = yield* makeStore;
     const wait = makeWaitApi(bridge, gateway);
     const events = yield* makeEvents(gateway, wait);
     const packet = yield* makePacket(gateway, host, wait);
@@ -15804,7 +15781,7 @@ ${prefix}}`;
     );
     const projectionReadiness = makeProjectionReadiness(host);
     const quests = makeQuests(bridge, host, wait);
-    const settings = yield* makeSettings(bridge, store);
+    const settings = yield* makeSettings(bridge);
     const antiCounter = makeAntiCounter(bridge, settings.isAntiCounterEnabled);
     const shops = makeShops(bridge, host, inventory, wait);
     const tempInventory = makeTempInventory(host);

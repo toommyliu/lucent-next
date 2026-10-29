@@ -4,14 +4,14 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+import * as SubscriptionRef from "effect/SubscriptionRef";
 
 import type { BridgeService } from "../bridge/Bridge";
 import type {
   RenderingMode,
   SettingsPatch as SettingsPatchValue,
 } from "../contract/Settings";
-import type { Store } from "../state/Store";
-import type { SettingsState } from "../state/Settings";
+import { makeSettingsState, type SettingsState } from "../state/Settings";
 
 export const MINIMAL_RENDERING_FRAME_RATE = 2;
 
@@ -71,8 +71,17 @@ const isNonMinimalRenderingMode = (
 
 export const makeSettings = Effect.fnUntraced(function* (
   bridge: BridgeService,
-  store: Store,
 ) {
+  const stateRef = yield* SubscriptionRef.make(makeSettingsState());
+  const stored = {
+    changes: SubscriptionRef.changes(stateRef),
+    get: SubscriptionRef.get(stateRef),
+    patch: (patch: Partial<SettingsState>) =>
+      SubscriptionRef.updateAndGet(stateRef, (state) => ({
+        ...state,
+        ...patch,
+      })),
+  };
   const scope = yield* Effect.scope;
   const updates = yield* Semaphore.make(1);
   const frameRateLimit = yield* Ref.make<number | null>(null);
@@ -140,7 +149,7 @@ export const makeSettings = Effect.fnUntraced(function* (
     input: SettingsPatchValue,
   ) {
     const patch = normalizePatch(input);
-    const current = yield* store.settings.get;
+    const current = yield* stored.get;
     const { customGuild, customName, ...values } = patch;
     const statePatch = {
       ...values,
@@ -160,7 +169,7 @@ export const makeSettings = Effect.fnUntraced(function* (
     const next: SettingsState = { ...current, ...statePatch };
 
     yield* execute(patch, next);
-    yield* store.settings.patch(statePatch);
+    yield* stored.patch(statePatch);
 
     if (patch.renderingMode === "minimal") {
       if (isNonMinimalRenderingMode(current.renderingMode)) {
@@ -185,15 +194,15 @@ export const makeSettings = Effect.fnUntraced(function* (
     updates.withPermits(1)(
       Effect.gen(function* () {
         yield* command(method);
-        const state = yield* store.settings.get;
-        yield* store.settings.patch({ [key]: !state[key] });
+        const state = yield* stored.get;
+        yield* stored.patch({ [key]: !state[key] });
       }),
     );
 
   const reapply = () =>
     updates.withPermits(1)(
       Effect.gen(function* () {
-        const state = yield* store.settings.get;
+        const state = yield* stored.get;
         yield* execute(reapplyPatch(state), state);
       }),
     );
@@ -201,7 +210,7 @@ export const makeSettings = Effect.fnUntraced(function* (
   const reapplyActions = () =>
     updates.withPermits(1)(
       Effect.gen(function* () {
-        const state = yield* store.settings.get;
+        const state = yield* stored.get;
         yield* execute(recurringActionsPatch(state), state);
       }),
     );
@@ -211,8 +220,8 @@ export const makeSettings = Effect.fnUntraced(function* (
     (value: SettingsPatchValue[K]) =>
       apply({ [key]: value });
 
-  const changes = store.settings.changes;
-  const get = () => store.settings.get;
+  const changes = stored.changes;
+  const get = () => stored.get;
   const enemyMagnet = () =>
     action("enemyMagnetEnabled", "settings.enemyMagnet");
   const infiniteRange = () =>
@@ -222,11 +231,11 @@ export const makeSettings = Effect.fnUntraced(function* (
   const skipCutscenes = () =>
     action("skipCutscenesEnabled", "settings.skipCutscenes");
   const isAntiCounterEnabled = () =>
-    store.settings.get.pipe(Effect.map((state) => state.antiCounterEnabled));
+    stored.get.pipe(Effect.map((state) => state.antiCounterEnabled));
   const getRenderingMode = () =>
-    store.settings.get.pipe(Effect.map((state) => state.renderingMode));
+    stored.get.pipe(Effect.map((state) => state.renderingMode));
   const onState = (listener: (state: SettingsState) => void) =>
-    store.settings.changes.pipe(
+    stored.changes.pipe(
       Stream.runForEach((state) => Effect.sync(() => listener(state))),
       Effect.forkIn(scope),
       Effect.map((fiber) => () => {
@@ -241,7 +250,7 @@ export const makeSettings = Effect.fnUntraced(function* (
   const resetCustomGuild = updates.withPermits(1)(
     Effect.gen(function* () {
       yield* command("settings.resetCustomGuild");
-      yield* store.settings.patch({
+      yield* stored.patch({
         customGuild: "",
         customGuildConfigured: false,
       });
@@ -250,7 +259,7 @@ export const makeSettings = Effect.fnUntraced(function* (
   const resetCustomName = updates.withPermits(1)(
     Effect.gen(function* () {
       yield* command("settings.resetCustomName");
-      yield* store.settings.patch({
+      yield* stored.patch({
         customName: "",
         customNameConfigured: false,
       });
@@ -264,7 +273,7 @@ export const makeSettings = Effect.fnUntraced(function* (
       Effect.gen(function* () {
         const normalized = limit === null ? null : normalizeFrameRate(limit);
         yield* Ref.set(frameRateLimit, normalized);
-        const state = yield* store.settings.get;
+        const state = yield* stored.get;
         yield* command(
           "settings.setFrameRate",
           effectiveFrameRate(state, normalized),

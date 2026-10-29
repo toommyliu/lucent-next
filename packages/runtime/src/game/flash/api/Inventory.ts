@@ -93,9 +93,13 @@ export const makeInventory = (
   });
 
   const getUsedSlots = (pool: InventoryPool = "bag") =>
-    getAll().pipe(
-      Effect.map((items) => items.filter((item) => item.pool === pool).length),
-    );
+    host
+      .read({ kind: "items", container: "inventory" })
+      .pipe(
+        Effect.map(
+          (items) => items.filter((item) => item.pool === pool).length,
+        ),
+      );
 
   const canAccept = Effect.fn("Inventory.canAccept")(function* (
     item: LiveItem,

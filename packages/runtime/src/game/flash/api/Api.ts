@@ -6,7 +6,6 @@ import { Bridge } from "../bridge/Bridge";
 import { Gateway } from "../bridge/Gateway";
 import { isProjectionEvent } from "../contract/Event";
 import { HostState } from "../state/HostState";
-import { makeStore } from "../state/Store";
 import { makeAuth } from "./Auth";
 import { makeAntiCounter } from "./internal/AntiCounter";
 import { makeSessionEvents } from "./internal/SessionEvents";
@@ -35,7 +34,6 @@ const makeApiServices = Effect.gen(function* () {
   const bridge = yield* Bridge;
   const gateway = yield* Gateway;
   const host = yield* HostState;
-  const store = yield* makeStore;
   const wait = makeWaitApi(bridge, gateway);
   const events = yield* makeEvents(gateway, wait);
   const packet = yield* makePacket(gateway, host, wait);
@@ -55,7 +53,7 @@ const makeApiServices = Effect.gen(function* () {
   );
   const projectionReadiness = makeProjectionReadiness(host);
   const quests = makeQuests(bridge, host, wait);
-  const settings = yield* makeSettings(bridge, store);
+  const settings = yield* makeSettings(bridge);
   const antiCounter = makeAntiCounter(bridge, settings.isAntiCounterEnabled);
   const shops = makeShops(bridge, host, inventory, wait);
   const tempInventory = makeTempInventory(host);

@@ -1,12 +1,6 @@
 import { LiveModel, normalizeGameText } from "./model";
 import { EntityState } from "./protocol";
-import type {
-  Aura,
-  AuraKind,
-  AuraQueryOptions,
-  AuraSnapshot,
-  LiveAura,
-} from "./aura";
+import type { Aura, AuraQueryOptions, AuraSnapshot, LiveAura } from "./aura";
 
 export { EntityState } from "./protocol";
 
@@ -61,13 +55,11 @@ export abstract class LiveEntity<State extends EntityData>
   extends LiveModel<State>
   implements Entity
 {
-  readonly #auras = new Map<string, LiveAura>();
+  readonly #auras: readonly LiveAura[];
 
   constructor(data: State, auras: readonly LiveAura[] = []) {
     super(data);
-    for (const aura of auras) {
-      this.#auras.set(this.auraKey(aura.kind, aura.name), aura);
-    }
+    this.#auras = auras;
   }
 
   get alive(): boolean {
@@ -75,7 +67,7 @@ export abstract class LiveEntity<State extends EntityData>
   }
 
   get auras(): readonly LiveAura[] {
-    return Array.from(this.#auras.values());
+    return [...this.#auras];
   }
 
   get cell(): string {
@@ -124,7 +116,7 @@ export abstract class LiveEntity<State extends EntityData>
 
   getAura(name: string, options?: AuraQueryOptions): LiveAura | null {
     const normalizedName = normalizeGameText(name);
-    for (const aura of this.#auras.values()) {
+    for (const aura of this.#auras) {
       if (
         normalizeGameText(aura.name) === normalizedName &&
         (options?.kind === undefined || aura.kind === options.kind)
@@ -137,10 +129,6 @@ export abstract class LiveEntity<State extends EntityData>
 
   hasAura(name: string, options?: AuraQueryOptions): boolean {
     return this.getAura(name, options) !== null;
-  }
-
-  private auraKey(kind: AuraKind, name: string): string {
-    return `${kind}:${name}`;
   }
 
   isInCell(cell: string): boolean {

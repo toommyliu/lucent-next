@@ -4,7 +4,6 @@ import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 
 import { makeBridge } from "../bridge/Bridge";
-import { makeStore } from "../state/Store";
 import { makeSettings } from "./Settings";
 
 describe("Settings", () => {
@@ -25,26 +24,22 @@ describe("Settings", () => {
         },
       } as unknown as Window;
       const bridge = yield* makeBridge(target);
-      const store = yield* makeStore;
       const applying = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
-      const settings = yield* makeSettings(
-        {
-          ...bridge,
-          invoke: (method, args, schema) =>
-            Effect.gen(function* () {
-              if (
-                method === "settings.setAnimationsEnabled" &&
-                args?.[0] === true
-              ) {
-                yield* Deferred.succeed(applying, undefined);
-                yield* Deferred.await(release);
-              }
-              return yield* bridge.invoke(method, args, schema);
-            }),
-        },
-        store,
-      );
+      const settings = yield* makeSettings({
+        ...bridge,
+        invoke: (method, args, schema) =>
+          Effect.gen(function* () {
+            if (
+              method === "settings.setAnimationsEnabled" &&
+              args?.[0] === true
+            ) {
+              yield* Deferred.succeed(applying, undefined);
+              yield* Deferred.await(release);
+            }
+            return yield* bridge.invoke(method, args, schema);
+          }),
+      });
 
       const reapply = yield* settings.reapply().pipe(Effect.forkScoped);
       yield* Deferred.await(applying);

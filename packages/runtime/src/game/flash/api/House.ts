@@ -25,7 +25,10 @@ export const makeHouse = (bridge: BridgeService, host: HostStateService) => {
       .invoke("house.getSlots", undefined, WireInt)
       .pipe(Effect.map(Option.getOrElse(() => 0)));
 
-  const getUsedSlots = () => getAll().pipe(Effect.map((items) => items.length));
+  const getUsedSlots = () =>
+    host
+      .read({ kind: "items", container: "house" })
+      .pipe(Effect.map((items) => items.length));
 
   const get = (selector: ItemQuery) => readItem(host, "house", selector);
 

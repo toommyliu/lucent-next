@@ -16,8 +16,6 @@ import * as ScriptDialogs from "../scripting/ScriptDialogs";
 import { apiLayer } from "./apiLayer";
 import * as DiagnosticSink from "./bridge/DiagnosticSink";
 
-export { apiLayer } from "./apiLayer";
-
 const rendererLogLevels: Partial<
   Record<LogLevel.LogLevel, RendererLogRecord["level"]>
 > = {

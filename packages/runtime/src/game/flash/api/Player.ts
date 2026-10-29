@@ -2,7 +2,6 @@ import {
   EntityState,
   LiveFaction,
   LiveOutfit,
-  toLiveAura,
   toLivePlayer,
 } from "@lucent/game";
 import type { BoostType, ItemQuery, LiveItem, Position } from "@lucent/game";
@@ -156,16 +155,10 @@ export const makePlayer = (
           );
   const getAuras = (options?: { kind?: "active" | "passive" }) =>
     get().pipe(
-      Effect.flatMap((player) =>
-        player === null
-          ? Effect.succeed([])
-          : host
-              .read({
-                kind: "playerAuras",
-                entityId: player.entityId,
-                auraKind: options?.kind ?? null,
-              })
-              .pipe(Effect.map((auras) => auras.map(toLiveAura))),
+      Effect.map((player) =>
+        (player?.auras ?? []).filter(
+          (aura) => options?.kind === undefined || aura.kind === options.kind,
+        ),
       ),
     );
 
