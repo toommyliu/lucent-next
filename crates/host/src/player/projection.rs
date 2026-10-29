@@ -587,6 +587,65 @@ mod tests {
     }
 
     #[test]
+    fn a_reconnect_ends_a_login_whose_connection_loss_was_lost_to_overflow() {
+        for status in ["OnConnection", "OnConnectionFailed"] {
+            let (mut running, bridge, events) = running(32, 64);
+            running.projection.write().auth.username = "player-a".into();
+            let mut sessions = vec![];
+            let mut drain = |sessions: &mut Vec<ProjectionEvent>| {
+                while let Some(event) = events.try_recv().unwrap() {
+                    if let ScriptEvent::Loader { projected, .. } = event {
+                        sessions.extend(projected.into_iter().filter(|event| {
+                            matches!(event, ProjectionEvent::Login | ProjectionEvent::Logout)
+                        }));
+                    }
+                }
+            };
+            area(&mut running, &bridge);
+            extension(
+                &mut running,
+                &bridge,
+                json!({"cmd":"loadInventoryBig", "items":[], "hitems":[]}),
+            );
+            read(&mut running, |_| ());
+            drain(&mut sessions);
+
+            for _ in 0..31 {
+                queue(&mut running, &bridge, "onDebug", "burst".into());
+            }
+            queue(
+                &mut running,
+                &bridge,
+                "onConnection",
+                "OnConnectionLost".into(),
+            );
+            queue(&mut running, &bridge, "onDebug", "overflow".into());
+            read(&mut running, |_| ());
+            drain(&mut sessions);
+            assert_eq!(sessions, vec![ProjectionEvent::Login]);
+
+            queue(&mut running, &bridge, "onConnection", status.into());
+            area(&mut running, &bridge);
+            extension(
+                &mut running,
+                &bridge,
+                json!({"cmd":"loadInventoryBig", "items":[], "hitems":[]}),
+            );
+            read(&mut running, |_| ());
+            drain(&mut sessions);
+            assert_eq!(
+                sessions,
+                vec![
+                    ProjectionEvent::Login,
+                    ProjectionEvent::Logout,
+                    ProjectionEvent::Login
+                ],
+                "{status}"
+            );
+        }
+    }
+
+    #[test]
     fn login_and_logout_follow_readiness_and_connection_loss_once_per_session() {
         for inventory_first in [false, true] {
             let (mut running, bridge, events) = running(32, 32);
