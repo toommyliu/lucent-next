@@ -4,6 +4,8 @@
   "type": "module",
   "packageManager": "pnpm@11.1.1",
   "scripts": {
+    "dev": "cargo run -p lucent-app --bin lucent",
+    "start": "cargo run -p lucent-app --bin lucent --release",
     "generate:protocol": "cargo run -p lucent-protocol --bin export-types",
     "check:protocol": "cargo run -p lucent-protocol --bin export-types -- --check",
     "check:scripting-api": "pnpm --filter @lucent/scripting-api check",
