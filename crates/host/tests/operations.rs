@@ -31,6 +31,10 @@ fn drop_item(link: &ScriptLink, category: &str, house: bool) {
     );
 }
 fn next(link: &ScriptLink) -> ScriptEvent {
+    next_for(link, WAIT)
+}
+
+fn next_for(link: &ScriptLink, timeout: Duration) -> ScriptEvent {
     struct Wake(std::thread::Thread);
     impl std::task::Wake for Wake {
         fn wake(self: std::sync::Arc<Self>) {
@@ -40,13 +44,13 @@ fn next(link: &ScriptLink) -> ScriptEvent {
     link.set_waker(std::task::Waker::from(std::sync::Arc::new(Wake(
         std::thread::current(),
     ))));
-    let deadline = Instant::now() + WAIT;
+    let deadline = Instant::now() + timeout;
     loop {
         match link.try_event().unwrap() {
             Some(event) => return event,
             None => {
                 let remaining = deadline.saturating_duration_since(Instant::now());
-                assert!(!remaining.is_zero(), "no event within {WAIT:?}");
+                assert!(!remaining.is_zero(), "no event within {timeout:?}");
                 std::thread::park_timeout(remaining);
             }
         }
@@ -261,7 +265,21 @@ fn a_player_restart_ends_its_accept_and_the_session_worker_accepts_on_the_new_pl
     ));
     while !matches!(next(&current),ScriptEvent::Loader{event,..} if event.name=="onLoaded") {}
     drop_item(&current, "Item", false);
+    let deadline = Instant::now() + Duration::from_secs(2);
     let id = accept(&current);
+    loop {
+        let event = next_for(&current, deadline.saturating_duration_since(Instant::now()));
+        if let ScriptEvent::Loader { event, .. } = event
+            && event.name == "onProbeAccept"
+        {
+            assert_eq!(event.args, vec![Value::Number(70.0)]);
+            assert!(
+                Instant::now() < deadline,
+                "new player accept waited for the old packet timeout"
+            );
+            break;
+        }
+    }
     assert!(answer(&current, id));
 }
 
