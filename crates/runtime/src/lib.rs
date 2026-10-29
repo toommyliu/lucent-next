@@ -1,5 +1,7 @@
+mod alarm;
 mod engine;
 mod host;
+mod interrupt;
 
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{
@@ -15,6 +17,17 @@ use lucent_host::bridge::Error as EventError;
 use serde::de::DeserializeOwned;
 
 use engine::Engine;
+use interrupt::{Interrupt, Stop};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum Kill {
+    #[error("a turn ran for more than 200 ms")]
+    Watchdog,
+    #[error("it reached the 64 MiB heap limit")]
+    HeapLimit,
+    #[error("it was stopped")]
+    Requested,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
@@ -26,6 +39,8 @@ pub enum RuntimeError {
     Timeout,
     #[error("script events overflowed and were lost")]
     EventsLost,
+    #[error("the script was killed: {0}")]
+    Killed(Kill),
     #[error("{0}")]
     JavaScript(String),
     #[error("couldn't decode the script result: {0}")]
@@ -34,15 +49,18 @@ pub enum RuntimeError {
 
 pub struct Runtime {
     commands: mpsc::Sender<Command>,
+    interrupt: Arc<Interrupt>,
     thread: Option<thread::JoinHandle<()>>,
 }
 
 enum Command {
     Wake,
     Stop,
+    Kill,
     Eval {
         name: String,
         source: String,
+        kills: u64,
         reply: mpsc::Sender<Result<String, RuntimeError>>,
     },
 }
@@ -78,6 +96,8 @@ impl PendingEval {
 
 impl Runtime {
     pub fn start(link: ScriptLink) -> Result<Self, RuntimeError> {
+        let interrupt = Arc::new(Interrupt::new()?);
+        let thread_interrupt = interrupt.clone();
         let (commands, incoming) = mpsc::channel();
         let (ready, boot) = mpsc::sync_channel(1);
         let wake = Arc::new(EventWake {
@@ -87,23 +107,33 @@ impl Runtime {
         let thread = thread::Builder::new()
             .name(format!("lucent-js-{}", link.id()))
             .spawn(move || {
-                link.set_waker(Waker::from(wake.clone()));
-                match Engine::new(link) {
-                    Ok(mut engine) => {
-                        let Some(items) = take_events(&mut engine) else {
-                            return;
-                        };
-                        engine.turn(&serde_json::to_string(&items).unwrap());
-                        let _ = ready.send(Ok(()));
-                        run(engine, &incoming, &wake);
-                    }
+                let interrupt = thread_interrupt;
+                let watchdog_interrupt = interrupt.clone();
+                let watchdog = thread::Builder::new()
+                    .name(format!("lucent-js-watchdog-{}", link.id()))
+                    .spawn(move || watchdog_interrupt.watch());
+                let watchdog = match watchdog {
+                    Ok(watchdog) => watchdog,
                     Err(error) => {
-                        let _ = ready.send(Err(error));
+                        interrupt.shut_down();
+                        let _ = ready.send(Err(error.into()));
+                        return;
                     }
+                };
+                let result = (|| {
+                    link.set_waker(Waker::from(wake.clone()));
+                    let engine = Engine::new(link, interrupt.clone())?;
+                    run(engine, &incoming, &wake, &interrupt, &ready)
+                })();
+                if let Err(error) = result {
+                    let _ = ready.send(Err(error));
                 }
+                interrupt.shut_down();
+                let _ = watchdog.join();
             })?;
         let runtime = Self {
             commands,
+            interrupt,
             thread: Some(thread),
         };
         boot.recv().map_err(|_| RuntimeError::Stopped)??;
@@ -115,14 +145,21 @@ impl Runtime {
         let _ = self.commands.send(Command::Eval {
             name: name.into(),
             source: source.into(),
+            kills: self.interrupt.kills(),
             reply,
         });
         PendingEval(pending)
+    }
+
+    pub fn kill(&self) {
+        self.interrupt.kill(Kill::Requested);
+        let _ = self.commands.send(Command::Kill);
     }
 }
 
 impl Drop for Runtime {
     fn drop(&mut self) {
+        self.interrupt.shut_down();
         let _ = self.commands.send(Command::Stop);
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
@@ -130,34 +167,64 @@ impl Drop for Runtime {
     }
 }
 
-fn run(mut engine: Engine, incoming: &mpsc::Receiver<Command>, wake: &EventWake) {
+fn run(
+    mut engine: Engine,
+    incoming: &mpsc::Receiver<Command>,
+    wake: &EventWake,
+    interrupt: &Arc<Interrupt>,
+    ready: &mpsc::SyncSender<Result<(), RuntimeError>>,
+) -> Result<(), RuntimeError> {
+    let mut command = Ok(Command::Wake);
+    let mut ready = Some(ready);
     loop {
-        let command = match engine.wake() {
-            Some(deadline) => {
-                incoming.recv_timeout(deadline.saturating_duration_since(Instant::now()))
-            }
-            None => incoming.recv().map_err(|_| RecvTimeoutError::Disconnected),
-        };
+        interrupt.begin_turn();
         let items = match command {
             Ok(Command::Eval {
                 name,
                 source,
+                kills,
                 reply,
             }) => {
-                engine.eval(&name, &source, reply);
+                match interrupt.killed_since(kills) {
+                    Some(kill) => {
+                        let _ = reply.send(Err(RuntimeError::Killed(kill)));
+                    }
+                    None => engine.eval(&name, &source, reply),
+                }
                 Vec::new()
             }
             Ok(Command::Wake) => {
                 wake.queued.store(false, Ordering::Release);
                 let Some(items) = take_events(&mut engine) else {
-                    return;
+                    return Ok(());
                 };
                 items
             }
-            Err(RecvTimeoutError::Timeout) => Vec::new(),
-            Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => return,
+            Ok(Command::Kill) | Err(RecvTimeoutError::Timeout) => Vec::new(),
+            Ok(Command::Stop) | Err(RecvTimeoutError::Disconnected) => return Ok(()),
         };
-        engine.turn(&serde_json::to_string(&items).unwrap());
+        let mut deadline = engine.turn(&serde_json::to_string(&items).unwrap());
+        match interrupt.end_turn() {
+            None => {}
+            Some(Stop::Kill(kill)) => {
+                tracing::warn!(%kill, "script runtime killed");
+                engine = Engine::new(engine.kill(kill), interrupt.clone()).map_err(|error| {
+                    tracing::error!(%error, "couldn't rebuild the script runtime");
+                    error
+                })?;
+                deadline = None;
+            }
+            Some(Stop::Shutdown) => return Ok(()),
+        }
+        if let Some(ready) = ready.take() {
+            let _ = ready.send(Ok(()));
+        }
+        command = match deadline {
+            Some(deadline) => {
+                incoming.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            }
+            None => incoming.recv().map_err(|_| RecvTimeoutError::Disconnected),
+        };
     }
 }
 
