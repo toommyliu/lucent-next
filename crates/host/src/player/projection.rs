@@ -503,6 +503,90 @@ mod tests {
     }
 
     #[test]
+    fn input_overflow_preserves_login_until_real_connection_loss() {
+        for recover_before_loss in [false, true] {
+            let (mut running, bridge, events) = running(32, 32);
+            running.projection.write().auth.username = "player-a".into();
+            area(&mut running, &bridge);
+            extension(
+                &mut running,
+                &bridge,
+                json!({"cmd":"loadInventoryBig", "items":[], "hitems":[]}),
+            );
+            read(&mut running, |_| ());
+            let mut seen = vec![];
+            while let Some(ScriptEvent::Loader { projected, .. }) = events.try_recv().unwrap() {
+                seen.extend(projected.into_iter().filter(|event| {
+                    matches!(event, ProjectionEvent::Login | ProjectionEvent::Logout)
+                }));
+            }
+            assert_eq!(seen, vec![ProjectionEvent::Login]);
+
+            for _ in 0..33 {
+                queue(&mut running, &bridge, "onDebug", "overflow".into());
+            }
+            assert_eq!(
+                read(&mut running, |state| (
+                    state.receipts.epoch(),
+                    state.current_readiness().missing
+                )),
+                (1, ReadinessKey::ALL.to_vec())
+            );
+            assert_eq!(events.try_recv().unwrap(), Some(ScriptEvent::Invalidated));
+            assert_eq!(events.try_recv().unwrap(), None);
+
+            if recover_before_loss {
+                area(&mut running, &bridge);
+                extension(
+                    &mut running,
+                    &bridge,
+                    json!({"cmd":"loadInventoryBig", "items":[], "hitems":[]}),
+                );
+                assert!(read(&mut running, |state| state
+                    .current_readiness()
+                    .missing
+                    .is_empty()));
+                while let Some(ScriptEvent::Loader { projected, .. }) = events.try_recv().unwrap() {
+                    seen.extend(projected.into_iter().filter(|event| {
+                        matches!(event, ProjectionEvent::Login | ProjectionEvent::Logout)
+                    }));
+                }
+                assert_eq!(seen, vec![ProjectionEvent::Login]);
+            }
+
+            queue(
+                &mut running,
+                &bridge,
+                "onConnection",
+                "OnConnectionLost".into(),
+            );
+            read(&mut running, |_| ());
+            assert!(matches!(
+                events.try_recv().unwrap(),
+                Some(ScriptEvent::Loader { projected, .. }) if projected == vec![ProjectionEvent::Logout]
+            ));
+            assert_eq!(events.try_recv().unwrap(), Some(ScriptEvent::Invalidated));
+            assert_eq!(events.try_recv().unwrap(), None);
+
+            area(&mut running, &bridge);
+            extension(
+                &mut running,
+                &bridge,
+                json!({"cmd":"loadInventoryBig", "items":[], "hitems":[]}),
+            );
+            read(&mut running, |_| ());
+            let mut logins = 0;
+            while let Some(ScriptEvent::Loader { projected, .. }) = events.try_recv().unwrap() {
+                logins += projected
+                    .iter()
+                    .filter(|event| **event == ProjectionEvent::Login)
+                    .count();
+            }
+            assert_eq!(logins, 1);
+        }
+    }
+
+    #[test]
     fn login_and_logout_follow_readiness_and_connection_loss_once_per_session() {
         for inventory_first in [false, true] {
             let (mut running, bridge, events) = running(32, 32);
