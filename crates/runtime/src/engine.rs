@@ -29,6 +29,7 @@ struct Active {
 }
 
 pub(crate) struct Engine {
+    bundle: Bundle,
     active: Vec<Active>,
     context: v8::Global<v8::Context>,
     isolate: v8::OwnedIsolate,
@@ -90,6 +91,7 @@ impl Engine {
             v8::Global::new(scope, context)
         };
         let mut engine = Self {
+            bundle,
             active: Vec::new(),
             context,
             isolate,
@@ -335,7 +337,12 @@ impl Engine {
             checkpoint(tc)?;
             Ok((result, take_rejections(tc)))
         })?;
-        result?;
+        if let Err(error) = result {
+            if matches!(self.bundle, Bundle::Bot) {
+                return Err(error);
+            }
+            tracing::error!(%error, "script turn failed");
+        }
         for error in rejections {
             tracing::error!(%error, "unhandled script rejection");
         }
