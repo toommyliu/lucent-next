@@ -282,6 +282,84 @@ fn only_scripts_react_to_counter_attacks() {
     run.wait(TIMEOUT).unwrap();
 }
 
+fn assert_only_scripts_request_monster_drops(local_move: bool) {
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        common::ready_movie()
+            .recording("world.requestMonsterDrops")
+            .recording("settings.setWalkSpeed"),
+    );
+    become_ready(&observer);
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    next_call(&observer, "settings.setWalkSpeed");
+    drain(&observer);
+    let emit = |packet| {
+        observer
+            .call_loader(
+                "probe.emit",
+                vec![
+                    Value::String("onExtensionResponse".into()),
+                    Value::String(json!({"type":"json","dataObj":packet}).to_string()),
+                ],
+            )
+            .recv_timeout(TIMEOUT)
+            .unwrap();
+    };
+    let area = json!({
+        "cmd":"moveToArea","areaId":5,"areaName":"testroom-1",
+        "uoBranch":[{"entID":7,"uoName":"player-a","strFrame":"Enter",
+            "intHP":100,"intHPMax":100}],
+        "mondef":[{"MonID":1,"strMonName":"Frogzard","sRace":"Amphibian","iLvl":3}],
+        "monBranch":[{"MonID":1,"MonMapID":2,"intHP":50,"intHPMax":50}],
+        "monmap":[{"MonMapID":2,"strFrame":if local_move { "r2" } else { "Enter" }}]
+    });
+    let location = json!({"cmd":"uotls","unm":"player-a","o":{"strFrame":"r2"}});
+    emit(area.clone());
+    if local_move {
+        emit(location.clone());
+    }
+    let until = Instant::now() + Duration::from_millis(1200);
+    while Instant::now() < until {
+        let call = common::await_event(&observer, "onProbeCall", None);
+        assert_ne!(
+            call.args.first(),
+            Some(&Value::String("world.requestMonsterDrops".into())),
+            "bot requested monster drops, local_move={local_move}"
+        );
+    }
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
+    let run = common::yielding(&mut session);
+    if local_move {
+        emit(location);
+    } else {
+        emit(area);
+    }
+    assert_eq!(
+        next_call(&observer, "world.requestMonsterDrops"),
+        vec![
+            Value::String("world.requestMonsterDrops".into()),
+            Value::Number(2.0)
+        ],
+        "script did not request the current monster, local_move={local_move}"
+    );
+    run.stop_script();
+    run.wait(TIMEOUT).unwrap();
+}
+
+#[test]
+fn only_scripts_request_monster_drops_on_join_map() {
+    assert_only_scripts_request_monster_drops(false);
+}
+
+#[test]
+fn only_scripts_request_monster_drops_on_player_location() {
+    assert_only_scripts_request_monster_drops(true);
+}
+
 #[cfg(feature = "testing")]
 #[test]
 fn failed_settings_ticks_warn_and_retry() {
