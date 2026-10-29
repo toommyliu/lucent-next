@@ -1,3 +1,4 @@
+import { toLiveAura, type LiveAura } from "./aura";
 import {
   LiveEntity,
   type Entity,
@@ -114,6 +115,15 @@ export type MonsterSnapshot = Readonly<MonsterData> &
 export class LiveMonster extends LiveEntity<MonsterData> implements Monster {
   readonly #drops = new Map<number, MonsterDrop>();
 
+  constructor(
+    data: MonsterData,
+    auras: readonly LiveAura[] = [],
+    drops: readonly MonsterDrop[] = [],
+  ) {
+    super(data, auras);
+    this.replaceDrops(drops);
+  }
+
   get aggressive(): boolean {
     return this.modelData.aggressive;
   }
@@ -192,3 +202,18 @@ export class LiveMonster extends LiveEntity<MonsterData> implements Monster {
     };
   }
 }
+
+export const toLiveMonster = (snapshot: MonsterSnapshot): LiveMonster => {
+  const {
+    alive,
+    auras,
+    dead,
+    drops,
+    hpPercent,
+    idle,
+    inCombat,
+    mpPercent,
+    ...data
+  } = snapshot;
+  return new LiveMonster(data, auras.map(toLiveAura), drops);
+};

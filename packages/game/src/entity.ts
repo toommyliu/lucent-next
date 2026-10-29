@@ -66,6 +66,13 @@ export abstract class LiveEntity<State extends EntityData>
   readonly #auras = new Map<string, LiveAura>();
   #acceptsActiveSync = true;
 
+  constructor(data: State, auras: readonly LiveAura[] = []) {
+    super(data);
+    for (const aura of auras) {
+      this.#auras.set(this.auraKey(aura.kind, aura.name), aura);
+    }
+  }
+
   get alive(): boolean {
     return this.hp > 0 && this.state !== EntityState.Dead;
   }

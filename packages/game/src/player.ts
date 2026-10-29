@@ -1,3 +1,4 @@
+import { toLiveAura } from "./aura";
 import {
   LiveEntity,
   type Entity,
@@ -82,3 +83,21 @@ export class LivePlayer extends LiveEntity<PlayerData> implements Player {
     };
   }
 }
+
+export const toLivePlayer = (snapshot: PlayerSnapshot): LivePlayer => {
+  const {
+    alive,
+    auras,
+    dead,
+    hpPercent,
+    idle,
+    inCombat,
+    mpPercent,
+    position,
+    ...data
+  } = snapshot;
+  return new LivePlayer(
+    { ...data, position: { ...position } },
+    auras.map(toLiveAura),
+  );
+};

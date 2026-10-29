@@ -68,6 +68,9 @@ export class LiveAura extends LiveModel<AuraData> implements Aura {
   }
 }
 
+export const toLiveAura = (snapshot: AuraSnapshot): LiveAura =>
+  new LiveAura({ ...snapshot });
+
 /** @internal */
 export type AuraTiming =
   | { readonly type: "untimed" }

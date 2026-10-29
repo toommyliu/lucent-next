@@ -384,3 +384,22 @@ export class LiveItem extends LiveModel<ItemData> implements Item {
     };
   }
 }
+
+export const toLiveItem = (snapshot: ItemSnapshot): LiveItem => {
+  const {
+    armor,
+    banked,
+    cape,
+    classItem,
+    classRank,
+    enhancement,
+    helm,
+    pet,
+    pool,
+    weapon,
+    ...data
+  } = snapshot;
+  if (enhancement === undefined) return new LiveItem(data);
+  const { name, special, ...enhancementData } = enhancement;
+  return new LiveItem({ ...data, enhancement: enhancementData });
+};
