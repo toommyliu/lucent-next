@@ -314,3 +314,135 @@ fn accepted_integer_values_preserve_signed_zero_in_live_numeric_fields() {
             .unwrap();
     assert!(servers[0]["count"].as_f64().unwrap().is_sign_negative());
 }
+
+#[test]
+fn house_equipment_packets_switch_houses_without_unequipping_furniture() {
+    use lucent_protocol::{Packet, PacketEncoding};
+    let mut state = Projection::default();
+    apply(
+        &mut state,
+        "loadInventoryBig",
+        json!({"hitems": [], "items": []}),
+    );
+    assert!(state.items.all(ItemContainer::House).is_empty());
+    apply(
+        &mut state,
+        "loadInventoryBig",
+        json!({"hitems": [
+        {"CharItemID": 1001, "ItemID": 101, "bEquip": 1, "bHouse": 1, "sES": "ho", "sName": "First House", "sType": "House"},
+        {"CharItemID": 1002, "ItemID": 102, "bEquip": 0, "bHouse": 1, "sES": "ho", "sName": "Second House", "sType": "House"},
+        {"CharItemID": 1003, "ItemID": 103, "bEquip": 1, "bHouse": 1, "sES": "hi", "sName": "Placed Chair", "sType": "Floor Item"}
+    ], "items": []}),
+    );
+    let equip = |state: &mut Projection, id: &str| {
+        let packet = Packet::Client {
+            command: "equipItem".into(),
+            params: ["xt", "zm", "equipItem", "1", id]
+                .map(str::to_owned)
+                .to_vec(),
+            raw: String::new(),
+            encoding: PacketEncoding::String,
+        };
+        state.packet(&packet, 1000.0, false);
+    };
+    equip(&mut state, "102");
+    assert!(
+        !state
+            .items
+            .get(ItemContainer::House, 101)
+            .unwrap()
+            .data()
+            .equipped
+    );
+    assert!(
+        state
+            .items
+            .get(ItemContainer::House, 102)
+            .unwrap()
+            .data()
+            .equipped
+    );
+    assert!(
+        state
+            .items
+            .get(ItemContainer::House, 103)
+            .unwrap()
+            .data()
+            .equipped
+    );
+    apply(
+        &mut state,
+        "equipItem",
+        json!({"ItemID": 101, "strES": "ho"}),
+    );
+    assert!(
+        state
+            .items
+            .get(ItemContainer::House, 101)
+            .unwrap()
+            .data()
+            .equipped
+    );
+    assert!(
+        !state
+            .items
+            .get(ItemContainer::House, 102)
+            .unwrap()
+            .data()
+            .equipped
+    );
+    equip(&mut state, "103");
+    assert!(
+        state
+            .items
+            .get(ItemContainer::House, 101)
+            .unwrap()
+            .data()
+            .equipped
+    );
+    assert!(
+        state
+            .items
+            .get(ItemContainer::House, 103)
+            .unwrap()
+            .data()
+            .equipped
+    );
+}
+
+#[test]
+fn replacing_a_monster_snapshot_retains_its_drop_metadata() {
+    use lucent_host::projection::monster_drops::decode_monster_drop;
+    let mut state = Projection::default();
+    let mut data = json!({
+        "bRed": false, "strFrame": "r1", "intHP": 100, "iLvl": 5, "intHPMax": 100,
+        "intMPMax": 0, "MonID": 8, "MonMapID": 9, "intMP": 0,
+        "strMonName": "Undead Warrior", "sRace": "Undead", "intState": 1
+    });
+    apply(
+        &mut state,
+        "moveToArea",
+        json!({"areaName": "testroom-1", "uoBranch": [], "monBranch": [data.clone()]}),
+    );
+    let monster = state.world.get_monster(9).unwrap();
+    let drop = decode_monster_drop(&json!({
+        "ItemID": 10, "sName": "Bone", "sType": "Item", "sDesc": "A test drop", "sLink": "None", "iQty": 1,
+        "bEventDrop": true, "sIcon": "iibag", "iRty": 1, "iRate": 25, "sReqQuests": "2972", "iStk": 100
+    })).unwrap();
+    monster.replace_drops(&[drop]);
+    data["intHP"] = json!(50);
+    let mut incoming = Projection::default();
+    apply(
+        &mut incoming,
+        "moveToArea",
+        json!({"areaName": "testroom-1", "uoBranch": [], "monBranch": [data]}),
+    );
+    state
+        .world
+        .put_monster(incoming.world.get_monster(9).unwrap());
+    let snapshot = state.world.get_monster(9).unwrap().snapshot();
+    assert_eq!(snapshot["hp"], 50.0);
+    assert_eq!(snapshot["drops"][0]["item"]["name"], "Bone");
+    assert_eq!(snapshot["drops"][0]["ratePercent"], 25.0);
+    assert_eq!(snapshot["drops"][0]["requiredQuestIds"], json!([2972]));
+}

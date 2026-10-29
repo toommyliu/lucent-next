@@ -513,4 +513,549 @@ mod tests {
         state.project(AuraMutation::Apply(vec![application("Accepted", 1.0)]), 1.0);
         assert_eq!(state.all().len(), 2);
     }
+
+    fn focus_application() -> AuraApplication {
+        AuraApplication {
+            name: "Focus".into(),
+            stack: 5.0,
+            timing: AuraTiming::Seconds(8.0),
+            persistent: true,
+            restart_duration: true,
+            icon: Some("iwd1,ied1".into()),
+            category: Some("buff".into()),
+            value: Some(AuraValue::Text("Ravenous".into())),
+        }
+    }
+
+    fn focus_state(timed: bool) -> AuraState {
+        let mut state = AuraState::new();
+        let entry = if timed {
+            focus_application()
+        } else {
+            AuraApplication {
+                stack: 5.0,
+                timing: AuraTiming::Untimed,
+                ..application("Focus", 0.0)
+            }
+        };
+        state.project(AuraMutation::Apply(vec![entry]), 1_000_000.0);
+        state
+    }
+
+    fn assert_focus_timer(state: &AuraState, duration: f64, expires_at: Option<f64>, stack: f64) {
+        let aura = state.get("Focus", None).unwrap().data();
+        assert_eq!(aura.name, "Focus");
+        assert_eq!(aura.kind, AuraKind::Active);
+        assert_eq!(aura.duration, duration);
+        assert_eq!(aura.expires_at, expires_at);
+        assert_eq!(aura.stack, stack);
+        let snapshot = serde_json::to_value(aura).unwrap();
+        if expires_at.is_none() {
+            assert!(snapshot.get("expiresAt").is_none());
+        }
+    }
+
+    #[test]
+    fn restarting_an_aura_replaces_its_full_duration() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::Apply(vec![AuraApplication {
+                timing: AuraTiming::Seconds(3.0),
+                ..focus_application()
+            }]),
+            1_002_000.0,
+        );
+        assert_focus_timer(&state, 3.0, Some(1_005_000.0), 5.0);
+    }
+
+    #[test]
+    fn untimed_application_erases_expiry() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::Apply(vec![AuraApplication {
+                timing: AuraTiming::Untimed,
+                stack: 0.0,
+                ..focus_application()
+            }]),
+            1_002_000.0,
+        );
+        assert_focus_timer(&state, 0.0, None, 0.0);
+    }
+
+    #[test]
+    fn decay_retains_full_duration() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::Withdraw(vec![AuraWithdrawal::Decay {
+                name: "Focus".into(),
+                stack: 2.0,
+                refresh_seconds: Some(2.0),
+            }]),
+            1_003_000.0,
+        );
+        assert_focus_timer(&state, 8.0, Some(1_005_000.0), 2.0);
+    }
+
+    #[test]
+    fn decay_extends_full_duration() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::Withdraw(vec![AuraWithdrawal::Decay {
+                name: "Focus".into(),
+                stack: 2.0,
+                refresh_seconds: Some(12.0),
+            }]),
+            1_003_000.0,
+        );
+        assert_focus_timer(&state, 12.0, Some(1_015_000.0), 2.0);
+    }
+
+    #[test]
+    fn decay_does_not_time_an_untimed_aura() {
+        let mut state = focus_state(false);
+        state.project(
+            AuraMutation::Withdraw(vec![AuraWithdrawal::Decay {
+                name: "Focus".into(),
+                stack: 2.0,
+                refresh_seconds: Some(12.0),
+            }]),
+            1_003_000.0,
+        );
+        assert_focus_timer(&state, 0.0, None, 2.0);
+    }
+
+    #[test]
+    fn missing_decay_time_preserves_deadline() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::Withdraw(vec![AuraWithdrawal::Decay {
+                name: "Focus".into(),
+                stack: 2.0,
+                refresh_seconds: None,
+            }]),
+            1_003_000.0,
+        );
+        assert_focus_timer(&state, 8.0, Some(1_008_000.0), 2.0);
+    }
+
+    #[test]
+    fn negative_decay_refreshes_deadline() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::Withdraw(vec![AuraWithdrawal::Decay {
+                name: "Focus".into(),
+                stack: 2.0,
+                refresh_seconds: Some(-2.0),
+            }]),
+            1_003_000.0,
+        );
+        assert_focus_timer(&state, 8.0, Some(1_001_000.0), 2.0);
+    }
+
+    #[test]
+    fn zero_decay_retains_timed_state() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::Withdraw(vec![AuraWithdrawal::Decay {
+                name: "Focus".into(),
+                stack: 2.0,
+                refresh_seconds: Some(0.0),
+            }]),
+            1_003_000.0,
+        );
+        assert_focus_timer(&state, 8.0, Some(1_003_000.0), 2.0);
+    }
+
+    #[test]
+    fn stack_assignment_preserves_timer() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::SetStack(vec![("Focus".into(), 1.0)]),
+            1_003_000.0,
+        );
+        assert_focus_timer(&state, 8.0, Some(1_008_000.0), 1.0);
+    }
+
+    #[test]
+    fn seed_and_assignment_clamp_zero_stacks_but_application_does_not() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::SetStack(vec![("Focus".into(), 0.0)]),
+            1_000_000.0,
+        );
+        assert_eq!(state.get("Focus", None).unwrap().data().stack, 1.0);
+        let mut seeded = AuraState::new();
+        seeded.project(
+            AuraMutation::Seed(vec![AuraSeed {
+                name: "Focus".into(),
+                icon: "ice".into(),
+                stack: 0.0,
+                persistent: false,
+                timer: SeedTimer::Untimed,
+            }]),
+            1_000_000.0,
+        );
+        assert_eq!(seeded.get("Focus", None).unwrap().data().stack, 1.0);
+        let mut applied = AuraState::new();
+        applied.project(
+            AuraMutation::Apply(vec![AuraApplication {
+                stack: 0.0,
+                ..focus_application()
+            }]),
+            1_000_000.0,
+        );
+        assert_eq!(applied.get("Focus", None).unwrap().data().stack, 0.0);
+    }
+
+    #[test]
+    fn seed_and_assignment_clamp_negative_stacks_but_application_does_not() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::SetStack(vec![("Focus".into(), -2.0)]),
+            1_000_000.0,
+        );
+        assert_eq!(state.get("Focus", None).unwrap().data().stack, 1.0);
+        let mut seeded = AuraState::new();
+        seeded.project(
+            AuraMutation::Seed(vec![AuraSeed {
+                name: "Focus".into(),
+                icon: "ice".into(),
+                stack: -2.0,
+                persistent: false,
+                timer: SeedTimer::Untimed,
+            }]),
+            1_000_000.0,
+        );
+        assert_eq!(seeded.get("Focus", None).unwrap().data().stack, 1.0);
+        let mut applied = AuraState::new();
+        applied.project(
+            AuraMutation::Apply(vec![AuraApplication {
+                stack: -2.0,
+                ..focus_application()
+            }]),
+            1_000_000.0,
+        );
+        assert_eq!(applied.get("Focus", None).unwrap().data().stack, -2.0);
+    }
+
+    #[test]
+    fn application_retains_omitted_metadata_and_replaces_persistence() {
+        let mut state = focus_state(true);
+        state.project(
+            AuraMutation::Apply(vec![AuraApplication {
+                timing: AuraTiming::Untimed,
+                ..application("Focus", 0.0)
+            }]),
+            1_002_000.0,
+        );
+        assert_eq!(
+            serde_json::to_value(state.get("Focus", None).unwrap().data()).unwrap(),
+            serde_json::json!({
+                "name": "Focus", "kind": "active", "stack": 1.0, "duration": 0.0,
+                "persistent": false, "icon": "iwd1,ied1", "category": "buff", "value": "Ravenous"
+            })
+        );
+    }
+
+    #[test]
+    fn clear_preserves_persistent_active_auras_and_passive_membership() {
+        let mut state = AuraState::new();
+        state.project(
+            AuraMutation::Apply(vec![
+                AuraApplication {
+                    stack: 5.0,
+                    icon: Some("iwd1,ied1".into()),
+                    ..application("Focus", 8.0)
+                },
+                AuraApplication {
+                    stack: 5.0,
+                    icon: Some("iwd1,ied1".into()),
+                    persistent: true,
+                    ..application("Potent Battle Elixir", 8.0)
+                },
+            ]),
+            1_000_000.0,
+        );
+        state.project(
+            AuraMutation::Passives {
+                mode: PassiveMode::Merge,
+                entries: vec![
+                    PassiveAuraInput {
+                        name: "Focus".into(),
+                        category: None,
+                        icon: None,
+                        value: None,
+                        duration: 0.0,
+                    },
+                    PassiveAuraInput {
+                        name: "Brand of Chaos".into(),
+                        category: None,
+                        icon: None,
+                        value: None,
+                        duration: 0.0,
+                    },
+                ],
+            },
+            1_000_000.0,
+        );
+        let changes = state.project(
+            AuraMutation::Clear {
+                keep_persistent: true,
+            },
+            1_001_000.0,
+        );
+        assert!(
+            matches!(changes.as_slice(), [AuraDelta::Removed { before }] if before.name == "Focus" && before.kind == AuraKind::Active)
+        );
+        assert_eq!(
+            state
+                .all()
+                .iter()
+                .map(|aura| aura.data().name)
+                .collect::<Vec<_>>(),
+            vec!["Potent Battle Elixir", "Focus", "Brand of Chaos"]
+        );
+        assert!(
+            state
+                .project(
+                    AuraMutation::Clear {
+                        keep_persistent: true
+                    },
+                    1_001_000.0
+                )
+                .is_empty()
+        );
+        let held = state.get("Focus", None).unwrap();
+        state.project(
+            AuraMutation::Passives {
+                mode: PassiveMode::Replace,
+                entries: vec![
+                    PassiveAuraInput {
+                        name: "Focus".into(),
+                        category: None,
+                        icon: None,
+                        value: None,
+                        duration: 2.0,
+                    },
+                    PassiveAuraInput {
+                        name: "New Class".into(),
+                        category: None,
+                        icon: None,
+                        value: None,
+                        duration: 0.0,
+                    },
+                ],
+            },
+            1_002_000.0,
+        );
+        assert!(held.same_instance(&state.get("Focus", None).unwrap()));
+        assert_eq!(
+            state
+                .all()
+                .iter()
+                .map(|aura| aura.data().name)
+                .collect::<Vec<_>>(),
+            vec!["Potent Battle Elixir", "Focus", "New Class"]
+        );
+        assert_eq!(state.get("Focus", None).unwrap().data().duration, 2.0);
+    }
+
+    #[test]
+    fn exact_name_removal_keeps_other_spellings_and_cross_kind_lookup_order() {
+        let mut state = AuraState::new();
+        state.project(
+            AuraMutation::Passives {
+                mode: PassiveMode::Merge,
+                entries: vec![PassiveAuraInput {
+                    name: "Focus".into(),
+                    category: None,
+                    icon: None,
+                    value: None,
+                    duration: 0.0,
+                }],
+            },
+            1_000_000.0,
+        );
+        state.project(
+            AuraMutation::Apply(vec![
+                AuraApplication {
+                    stack: 5.0,
+                    icon: Some("iwd1,ied1".into()),
+                    ..application("Focus", 8.0)
+                },
+                AuraApplication {
+                    stack: 5.0,
+                    icon: Some("iwd1,ied1".into()),
+                    ..application("focus", 8.0)
+                },
+                AuraApplication {
+                    stack: 5.0,
+                    icon: Some("iwd1,ied1".into()),
+                    ..application(" Focus ", 8.0)
+                },
+            ]),
+            1_000_000.0,
+        );
+        let names = |state: &AuraState| {
+            state
+                .all()
+                .iter()
+                .map(|aura| {
+                    let aura = aura.data();
+                    (aura.kind, aura.name)
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(&state),
+            vec![
+                (AuraKind::Passive, "Focus".into()),
+                (AuraKind::Active, "Focus".into()),
+                (AuraKind::Active, "focus".into()),
+                (AuraKind::Active, " Focus ".into())
+            ]
+        );
+        let auras = state.all();
+        assert!(state.get(" FOCUS ", None).unwrap().same_instance(&auras[0]));
+        assert!(
+            state
+                .get(" FOCUS ", Some(AuraKind::Active))
+                .unwrap()
+                .same_instance(&auras[1])
+        );
+        assert!(state.get(" FoCuS ", None).is_some());
+        state.project(
+            AuraMutation::Withdraw(vec![AuraWithdrawal::Remove {
+                name: "focus".into(),
+            }]),
+            1_000_000.0,
+        );
+        assert_eq!(
+            names(&state),
+            vec![
+                (AuraKind::Passive, "Focus".into()),
+                (AuraKind::Active, "Focus".into()),
+                (AuraKind::Active, " Focus ".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn detached_aura_deltas_fold_into_the_complete_next_snapshot() {
+        let focus = focus_application();
+        let passive = |name: &str, duration| PassiveAuraInput {
+            name: name.into(),
+            duration,
+            category: None,
+            icon: None,
+            value: None,
+        };
+        let mutations = vec![
+            AuraMutation::Apply(vec![
+                focus.clone(),
+                AuraApplication {
+                    name: "focus".into(),
+                    stack: 4.0,
+                    ..focus.clone()
+                },
+            ]),
+            AuraMutation::Passives {
+                mode: PassiveMode::Merge,
+                entries: vec![passive("Focus", 0.0), passive("Brand of Chaos", 0.0)],
+            },
+            AuraMutation::Apply(vec![
+                AuraApplication {
+                    stack: 2.0,
+                    ..focus.clone()
+                },
+                AuraApplication {
+                    stack: 3.0,
+                    ..focus.clone()
+                },
+            ]),
+            AuraMutation::Withdraw(vec![AuraWithdrawal::Decay {
+                name: "Focus".into(),
+                stack: 2.0,
+                refresh_seconds: Some(2.0),
+            }]),
+            AuraMutation::SetStack(vec![("focus".into(), 1.0), ("Missing".into(), 1.0)]),
+            AuraMutation::Seed(vec![
+                AuraSeed {
+                    name: "Focus".into(),
+                    icon: "ice".into(),
+                    stack: 5.0,
+                    persistent: false,
+                    timer: SeedTimer::Untimed,
+                },
+                AuraSeed {
+                    name: "Focus".into(),
+                    icon: "ice".into(),
+                    stack: 4.0,
+                    persistent: true,
+                    timer: SeedTimer::Untimed,
+                },
+            ]),
+            AuraMutation::Passives {
+                mode: PassiveMode::Replace,
+                entries: vec![passive("Focus", 0.0), passive("Focus", 2.0)],
+            },
+            AuraMutation::Clear {
+                keep_persistent: true,
+            },
+            AuraMutation::Withdraw(vec![AuraWithdrawal::Remove {
+                name: "Focus".into(),
+            }]),
+            AuraMutation::Passives {
+                mode: PassiveMode::Replace,
+                entries: vec![],
+            },
+            AuraMutation::Apply(vec![focus.clone()]),
+        ];
+        let mut state = AuraState::new();
+        let mut saved = Vec::new();
+        for (index, mutation) in mutations.into_iter().enumerate() {
+            let key = |aura: &AuraData| format!("{:?}:{}", aura.kind, aura.name);
+            let mut folded: IndexMap<_, _> = state
+                .all()
+                .iter()
+                .map(|aura| {
+                    let data = aura.data();
+                    (key(&data), data)
+                })
+                .collect();
+            let changes = state.project(mutation, 1_000_000.0 + index as f64 * 1000.0);
+            let snapshot = format!("{changes:?}");
+            for change in &changes {
+                match change {
+                    AuraDelta::Removed { before } => {
+                        folded.shift_remove(&key(before));
+                    }
+                    AuraDelta::Added { after } | AuraDelta::Updated { after, .. } => {
+                        folded.insert(key(after), after.clone());
+                    }
+                }
+            }
+            assert_eq!(
+                folded.into_values().collect::<Vec<_>>(),
+                state.all().iter().map(LiveAura::data).collect::<Vec<_>>()
+            );
+            saved.push((changes, snapshot));
+        }
+        assert_eq!(
+            state
+                .get("Focus", Some(AuraKind::Active))
+                .unwrap()
+                .data()
+                .stack,
+            5.0
+        );
+        for (changes, snapshot) in saved {
+            assert_eq!(format!("{changes:?}"), snapshot);
+        }
+        assert!(
+            state
+                .project(AuraMutation::Apply(vec![focus]), 1_010_000.0)
+                .is_empty()
+        );
+    }
 }
