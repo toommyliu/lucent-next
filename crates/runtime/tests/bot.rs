@@ -124,11 +124,11 @@ fn the_settings_policy_reapplies_through_the_host() {
             Value::Undefined
         ]
     );
-    assert!(began.elapsed() < Duration::from_millis(1500));
     assert_eq!(
         next_call(&observer, "settings.setWalkSpeed")[1],
         Value::Number(45.0)
     );
+    assert!(began.elapsed() < Duration::from_millis(1500));
     update(&observer, json!({"enemyMagnetEnabled":false}));
     drain(&observer);
     let until = Instant::now() + Duration::from_millis(1200);
@@ -227,4 +227,197 @@ fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
             Value::Number(30.0)
         );
     }
+}
+
+#[test]
+fn only_scripts_react_to_counter_attacks() {
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        common::ready_movie()
+            .constant(
+                "combat.getTarget",
+                json!({
+                    "type":"monster","monsterMapId":1,"monsterId":1,"name":"Boss",
+                    "cell":"Enter","hp":100,"maxHp":100,"level":1,"race":"None","state":1
+                }),
+            )
+            .recording("combat.cancelAutoAttack")
+            .recording("combat.cancelTarget")
+            .recording("world.requestMonsterDrops")
+            .recording("settings.setWalkSpeed"),
+    );
+    become_ready(&observer);
+    update(&observer, json!({"antiCounterEnabled":true}));
+    let _bot = Bot::start(session.attach().unwrap()).unwrap();
+    drain(&observer);
+    let counter = || {
+        observer.call_loader("probe.emit", vec![
+            Value::String("onExtensionResponse".into()),
+            Value::String(json!({"type":"json","dataObj":{
+                "cmd":"cb","anims":[{"msg":"Boss prepares a counter attack","animStr":"cast","cInf":"p:7","tInf":"m:1"}]
+            }}).to_string()),
+        ]).recv_timeout(TIMEOUT).unwrap();
+    };
+    counter();
+    let until = Instant::now() + Duration::from_millis(1200);
+    while Instant::now() < until {
+        let call = common::await_event(&observer, "onProbeCall", None);
+        let Some(Value::String(method)) = call.args.first() else {
+            panic!("missing method")
+        };
+        assert!(!method.starts_with("combat."), "bot called {method}");
+    }
+    let run = common::yielding(&mut session);
+    counter();
+    assert_eq!(
+        next_call(&observer, "combat.cancelAutoAttack")[0],
+        Value::String("combat.cancelAutoAttack".into())
+    );
+    assert_eq!(
+        next_call(&observer, "combat.cancelTarget")[0],
+        Value::String("combat.cancelTarget".into())
+    );
+    run.stop_script();
+    run.wait(TIMEOUT).unwrap();
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn failed_settings_ticks_warn_and_retry() {
+    for boundary in ["command", "read"] {
+        let logs = common::logs::Logs::default();
+        let dispatch = logs.dispatch();
+        let _guard = tracing::dispatcher::set_default(&dispatch);
+        let (_host, mut session, observer) = start();
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        next_call(&observer, "settings.setWalkSpeed");
+        bot.eval(
+            "fail-host.js",
+            format!(
+                r#"
+            globalThis.attempts = [];
+            const original = __host.{boundary};
+            let failures = 2;
+            __host.{boundary} = function (json) {{
+                const input = JSON.parse(json);
+                if (input.kind === "readiness" || input.kind === "reapplySettings") {{
+                    attempts.push(input);
+                    if (failures-- > 0) throw new Error("temporary host failure");
+                }}
+                return original(json);
+            }};
+            new Promise(resolve => setTimeout(() => resolve(null), 2300));
+        "#
+            ),
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+        let warnings = logs.messages(tracing::Level::WARN);
+        assert!(
+            warnings
+                .iter()
+                .any(|text| text.contains("settings") && text.contains("temporary host failure")),
+            "{boundary}: {warnings:?}"
+        );
+        assert_eq!(
+            next_call(&observer, "settings.setWalkSpeed")[1],
+            Value::Number(30.0)
+        );
+        let attempts: usize = bot
+            .eval("attempts.js", "attempts.length")
+            .wait(TIMEOUT)
+            .unwrap();
+        assert!(attempts > 2, "{boundary}: only {attempts} attempts");
+        assert!(matches!(
+            bot.wait(Duration::ZERO),
+            Err(RuntimeError::Timeout)
+        ));
+    }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn a_throwing_bot_turn_is_terminal() {
+    let (_host, mut session, _observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    bot.eval(
+        "break-turn.js",
+        r#"
+        Array.prototype.filter = () => { throw new Error("broken bot intrinsic"); };
+        null;
+    "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    assert!(
+        matches!(bot.wait(TIMEOUT), Err(RuntimeError::JavaScript(error)) if error.contains("broken bot intrinsic"))
+    );
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn overflow_logs_identify_the_runtime() {
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let (_host, mut session, _observer) = start();
+    let flood = r#"
+        for (let i = 0; i < 1100; i++) window.swf["probe.emit"]("onDebug", String(i));
+        new Promise(resolve => setTimeout(() => resolve(null), 10));
+    "#;
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    assert!(matches!(
+        bot.eval("flood.js", flood).wait::<()>(TIMEOUT),
+        Err(RuntimeError::EventsLost)
+    ));
+    assert!(
+        logs.messages(tracing::Level::ERROR)
+            .iter()
+            .any(|text| text == "bot events overflowed and were lost")
+    );
+    let runtime = lucent_runtime::Runtime::start(session.attach().unwrap()).unwrap();
+    assert!(matches!(
+        runtime.eval("flood.js", flood).wait::<()>(TIMEOUT),
+        Err(RuntimeError::EventsLost)
+    ));
+    assert!(
+        logs.messages(tracing::Level::ERROR)
+            .iter()
+            .any(|text| text == "script events overflowed and were lost")
+    );
+}
+
+#[test]
+fn walk_speed_resends_never_go_backwards() {
+    let (_host, mut session, observer) = start();
+    update(&observer, json!({"enemyMagnetEnabled":false}));
+    drain(&observer);
+    let _bot = Bot::start(session.attach().unwrap()).unwrap();
+    next_call(&observer, "settings.setWalkSpeed");
+    let writer = session.attach().unwrap();
+    std::thread::scope(|scope| {
+        scope.spawn(move || {
+            for speed in 31..=530 {
+                update(&writer, json!({"walkSpeed":speed}));
+                drain(&writer);
+                std::thread::sleep(Duration::from_millis(4));
+            }
+        });
+        let mut previous = 30.0;
+        let mut resends = 0;
+        while previous < 530.0 || resends == 0 {
+            let call = next_call(&observer, "settings.setWalkSpeed");
+            let Value::Number(speed) = call[1] else {
+                panic!("missing walk speed")
+            };
+            assert!(
+                speed >= previous,
+                "walk speed went backwards from {previous} to {speed}"
+            );
+            resends += usize::from(speed == previous);
+            previous = speed;
+        }
+        assert_eq!(previous, 530.0);
+    });
 }

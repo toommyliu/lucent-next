@@ -629,3 +629,32 @@ fn a_fresh_run_can_import_the_api_after_each_kill() {
         );
     }
 }
+
+#[test]
+fn a_throwing_turn_does_not_stop_a_script_timer() {
+    let (_host, mut session, runtime) = ready_runtime();
+    drop(runtime);
+    let run = start(
+        &mut session,
+        loose(&[(
+            "throwing-turn.js",
+            r#"
+            import * as script from "lucent/script";
+            export default function* () {
+                yield* script.sleep("20 millis");
+                const filter = Array.prototype.filter;
+                Array.prototype.filter = function (...args) {
+                    Array.prototype.filter = filter;
+                    throw new Error("one broken filter");
+                };
+                yield* script.sleep("40 millis");
+            }
+        "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        run.wait(Duration::from_secs(3)).unwrap(),
+        ScriptOutcome::Completed
+    );
+}
