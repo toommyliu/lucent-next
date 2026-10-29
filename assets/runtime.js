@@ -10914,9 +10914,6 @@ ${prefix}}`;
         }
       })
     );
-    const publishEvent = /* @__PURE__ */ __name((event) => sync2(
-      () => enqueue("publishEvent", { type: "projection", event })
-    ), "publishEvent");
     const dispatch = /* @__PURE__ */ __name((delivery, handle) => gen2(function* () {
       const event = delivery.type === "projection" ? delivery.event : runtimeEvent(delivery);
       if (event !== void 0) {
@@ -10971,7 +10968,6 @@ ${prefix}}`;
       events: fromPubSub(events),
       packets: fromPubSub(packets),
       rawPackets: fromPubSub(rawPackets),
-      publishEvent,
       sendToClient,
       sendToServer,
       start: start2,

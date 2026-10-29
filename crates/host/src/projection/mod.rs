@@ -67,12 +67,7 @@ impl Projection {
         }
         let logout = status == "OnConnectionLost" && self.session_logged_in;
         self.session_logged_in = false;
-        self.world.clear_area();
-        self.world.clear_self();
-        self.quests.clear();
-        self.shops.clear();
-        self.items.clear();
-        self.receipts.reset();
+        self.reset();
         ProjectionOutput {
             events: if logout {
                 vec![ProjectionEvent::Logout]
@@ -80,6 +75,15 @@ impl Projection {
                 vec![]
             },
         }
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.world.clear_area();
+        self.world.clear_self();
+        self.quests.clear();
+        self.shops.clear();
+        self.items.clear();
+        self.receipts.reset();
     }
 
     pub(crate) fn login_if_ready(&mut self) -> Option<ProjectionEvent> {

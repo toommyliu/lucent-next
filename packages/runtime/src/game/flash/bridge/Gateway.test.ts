@@ -75,33 +75,6 @@ describe("Gateway", () => {
   );
 
   it.effect(
-    "publishes an event raised while handling another one after it",
-    () => {
-      const target = {} as Window;
-
-      return Effect.scoped(
-        Effect.gen(function* () {
-          const gateway = yield* makeGateway(target);
-          const events = yield* gateway.subscribeEvents;
-          yield* gateway.start((event) =>
-            event.type === "connection"
-              ? gateway.publishEvent({ type: "login" })
-              : Effect.void,
-          );
-
-          target.onConnection?.("OnConnection");
-
-          expect(yield* PubSub.take(events)).toEqual({
-            status: "OnConnection",
-            type: "connection",
-          });
-          expect(yield* PubSub.take(events)).toEqual({ type: "login" });
-        }),
-      ).pipe(Effect.provide(Layer.effect(Bridge, makeBridge(swfTarget))));
-    },
-  );
-
-  it.effect(
     "publishes raw packets even when their envelope is unsupported",
     () => {
       const target = {} as Window;

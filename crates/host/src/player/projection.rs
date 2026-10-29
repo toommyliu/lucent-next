@@ -57,7 +57,7 @@ impl Running {
     }
 
     fn invalidate_projection(&self, projection: &mut Projection) {
-        projection.connection("OnConnectionLost");
+        projection.reset();
         tracing::debug!(
             epoch = projection.receipts.epoch(),
             "projection invalidated after event overflow"
