@@ -128,6 +128,56 @@ fn accepts_run_one_at_a_time() {
 }
 
 #[test]
+fn operation_answers_do_not_overflow_another_links_full_queue() {
+    let host = testing::headless_host();
+    let (mut session, first) = testing::start_probe(
+        &host,
+        ProbeMovie::new()
+            .constant("auth.isLoggedIn", json!(true))
+            .accepting_drop(
+                Duration::ZERO,
+                packet(json!({"cmd":"getDrop","ItemID":70,"bSuccess":true,"iQtyNow":2})),
+            ),
+    );
+    drop_item(&first, "Item", false);
+    while first.try_event().unwrap().is_some() {}
+    let second = session.attach().unwrap();
+    for index in 0..1022 {
+        emit(&first, "onDebug", index.to_string());
+        assert!(matches!(
+            next(&first),
+            ScriptEvent::Loader { event, .. } if event.name == "onDebug"
+        ));
+    }
+    let id = accept(&first);
+    assert!(answer(&first, id));
+    session.read_projection(|_| ()).recv_timeout(WAIT).unwrap();
+    assert!(
+        !second.overflowed(),
+        "a foreign answer overflowed the queue"
+    );
+    for index in 0..1022 {
+        assert!(matches!(
+            second.try_event().unwrap(),
+            Some(ScriptEvent::Loader { event, .. })
+                if event.name == "onDebug" && event.args == [Value::String(index.to_string())]
+        ));
+    }
+    assert!(matches!(
+        second.try_event().unwrap(),
+        Some(ScriptEvent::Loader { event, .. }) if event.name == "onProbeAccept"
+    ));
+    assert!(matches!(
+        second.try_event().unwrap(),
+        Some(ScriptEvent::Loader { event, .. })
+            if event.name == "onExtensionResponse" && event.args == [Value::String(packet(
+                json!({"cmd":"getDrop","ItemID":70,"bSuccess":true,"iQtyNow":2})
+            ))]
+    ));
+    assert_eq!(second.try_event(), Ok(None));
+}
+
+#[test]
 fn a_missing_packet_times_out_and_frees_the_resource() {
     let host = testing::headless_host();
     let (_session, link) = testing::start_probe(

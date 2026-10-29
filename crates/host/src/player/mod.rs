@@ -527,8 +527,46 @@ mod tests {
         )))
         .unwrap();
         let _attachment = first_viewport(&rx, false, &Default::default()).unwrap();
-        assert_eq!(events.try_recv(), Ok(Some(answer.clone())));
-        assert_eq!(second_events.try_recv(), Ok(Some(answer)));
+        assert_eq!(events.try_recv(), Ok(Some(answer)));
+        assert_eq!(second_events.try_recv(), Ok(None));
+    }
+
+    #[test]
+    fn operation_answers_for_detached_links_are_discarded() {
+        for before_viewport in [true, false] {
+            let (producer, events) = crate::bridge::script_events(16);
+            let (second, second_events) = crate::bridge::script_events(16);
+            let messages = [
+                Msg::Attach(AttachmentId(0), producer),
+                Msg::Attach(AttachmentId(1), second),
+                Msg::Detach(AttachmentId(0)),
+                Msg::OperationAnswer(crate::bridge::ScriptEvent::Operation {
+                    id: 42,
+                    answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
+                        false,
+                    )),
+                }),
+            ];
+            if before_viewport {
+                let (tx, rx) = mpsc::channel();
+                for message in messages {
+                    tx.send(message).unwrap();
+                }
+                tx.send(Msg::View(ViewEvent::Resized(
+                    Viewport::new(100.0, 100.0, 1.0).unwrap(),
+                )))
+                .unwrap();
+                let _attachments = first_viewport(&rx, false, &Default::default()).unwrap();
+                assert_eq!(second_events.try_recv(), Ok(None));
+            } else {
+                let mut running = running();
+                for message in messages {
+                    assert!(running.handle(message).is_continue());
+                }
+                assert_eq!(second_events.try_recv(), Ok(None));
+            }
+            assert_eq!(events.try_recv(), Err(BridgeError::Stopped));
+        }
     }
 
     #[test]
