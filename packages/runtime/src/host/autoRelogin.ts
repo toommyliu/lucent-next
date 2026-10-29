@@ -2,6 +2,7 @@ import type { AutoReloginRecords } from "@lucent/game/protocol";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
+import { normalizeAutoReloginDelay } from "../game/automation/AutoRelogin";
 import type { AutoReloginState } from "../game/automation/AutoRelogin";
 import { ask } from "./asks";
 
@@ -25,7 +26,7 @@ export const makeAutoReloginService = (host: Pick<typeof __host, "read" | "ask" 
     getServer: () => getState().pipe(Effect.map((state) => state.server)),
     isEnabled: () => getState().pipe(Effect.map((state) => state.enabled)),
     setEnabled: (enabled: boolean) => set({ kind: "autoRelogin.setEnabled", enabled }),
-    setDelay: (delay: Duration.Input) => set({ kind: "autoRelogin.setDelay", delayMs: Duration.toMillis(delay) }),
+    setDelay: (delay: Duration.Input) => set({ kind: "autoRelogin.setDelay", delayMs: normalizeAutoReloginDelay(Duration.toMillis(delay)) }),
     setServer: (server: string | undefined) => set({ kind: "autoRelogin.setServer", server: server ?? null }),
   };
 };
