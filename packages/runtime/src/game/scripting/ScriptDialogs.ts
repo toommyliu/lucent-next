@@ -59,7 +59,10 @@ interface PendingDialog {
   readonly response: Deferred.Deferred<ScriptDialogResponse>;
 }
 
+import { playBeep } from "../audio/beep";
+
 export interface ScriptDialogsShape {
+  readonly beep: (times: number) => Effect.Effect<void>;
   readonly alert: (
     source: ScriptDialogSource,
     message: string,
@@ -224,6 +227,7 @@ export const makeScriptDialogs = Effect.fnUntraced(function* () {
     );
 
   return ScriptDialogs.of({
+    beep: (times) => Effect.sync(() => playBeep(times)),
     alert,
     confirm,
     getCurrent: () =>

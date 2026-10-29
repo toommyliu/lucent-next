@@ -263,8 +263,6 @@ export interface DesktopGameConsoleObservabilityBridge {
 }
 
 export interface DesktopGameRendererBridge {
-  readonly beginScriptExecution: () => Promise<void>;
-  readonly finishScriptExecution: () => Promise<void>;
   /** Reads the generation assigned to this game document. */
   readonly getGeneration: () => Promise<number>;
   readonly ready: () => Promise<void>;

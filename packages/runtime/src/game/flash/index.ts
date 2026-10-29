@@ -27,4 +27,3 @@ export type * from "./contract/Event";
 export * from "./contract/GameAction";
 export type * from "./contract/Packet";
 export type * from "./contract/Settings";
-export * from "./runtime";

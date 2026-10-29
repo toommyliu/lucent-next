@@ -2,11 +2,11 @@ import type * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
 import type { ArmyApiRuntimeShape } from "../../army/Army";
-import {
-  ArmyLoopTauntError,
-  type ArmyLoopTauntAssignment,
-  type ArmyLoopTauntRuntimeAssignment,
-  type ArmyLoopTauntRuntimePlan,
+import { ArmyLoopTauntError } from "../../army/ArmyErrors";
+import type {
+  ArmyLoopTauntAssignment,
+  ArmyLoopTauntRuntimeAssignment,
+  ArmyLoopTauntRuntimePlan,
 } from "../../army/ArmyLoopTaunt";
 import { ScriptExecutionError } from "../ScriptRunnerErrors";
 import type { ScriptArmyApi } from "../ScriptApi";

@@ -1,6 +1,5 @@
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
-import * as Data from "effect/Data";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -12,16 +11,7 @@ import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
 import type { ScriptFile } from "../../shared/ipc/scripting";
-import { selectDesktopBridge } from "../../shared/desktopBridge";
-import {
-  type AccountScriptSettingsPatch,
-  type AccountSettings,
-  type RoomPolicy,
-} from "@lucent/schemas/accountSettings";
 import type { ScriptInputValues } from "@lucent/schemas/scriptInputs";
-import { ArmyApi } from "../army/Army";
-import { Automation } from "../automation/Automation";
-import { Environment } from "../environment/Environment";
 import { Api } from "../flash/api/Api";
 import { ProjectionReadiness } from "../flash/api/ProjectionReadiness";
 import { Bridge } from "../flash/bridge/Bridge";
@@ -39,15 +29,14 @@ import {
 import {
   DEFAULT_SCRIPT_RUNTIME_OPTIONS,
   makeScriptRuntimeApi,
-  runScriptExitActions,
   snapshotRoomPolicy,
   snapshotScriptRuntimeOptions,
   type ScriptRuntimeOptionsUpdate,
 } from "./ScriptRuntime";
 import { makeScriptBuiltinModules } from "./ScriptBuiltinModules";
 import { makeScriptFileSystemApi } from "./ScriptFileSystem";
-import { makeScriptHttpApi } from "./ScriptHttp";
 import { ScriptDialogs } from "./ScriptDialogs";
+import { ScriptServices } from "./ScriptServices";
 import { makeScriptRuntimeServices } from "./api/Services";
 import {
   makeMoveToSafeDestination,
@@ -55,13 +44,11 @@ import {
 } from "./safeStartStop";
 import {
   getScriptExitRequest,
-  type ScriptExecutionError,
   ScriptNotReadyError,
   ScriptStopSignal,
   type ScriptExitRequest,
 } from "./ScriptRunnerErrors";
 import { makeScriptStartReadiness } from "./ScriptStartReadiness";
-import { protectScriptExecutionUntil } from "./ScriptExecutionProtection";
 
 export type ScriptRunnerStatus =
   | { readonly state: "idle" }
@@ -134,6 +121,7 @@ export type ScriptRunTerminalOutcome =
     }
   | {
       readonly kind: "script-exited";
+      readonly closeClient: boolean;
       readonly status: Extract<
         ScriptRunnerStatus,
         { readonly state: "stopped" }
@@ -153,11 +141,6 @@ export interface ScriptRunHandle {
   readonly terminal: Effect.Effect<ScriptRunTerminalOutcome>;
 }
 
-export interface ScriptOptionsUpdateResult {
-  readonly options: ScriptRuntimeOptions;
-  readonly persisted: boolean;
-}
-
 interface ScriptFinalization {
   readonly outcome?: ScriptRunTerminalOutcome;
   readonly status: ScriptRunnerStatus;
@@ -166,42 +149,6 @@ interface ScriptFinalization {
 const terminalFinalization = (
   outcome: ScriptRunTerminalOutcome,
 ): ScriptFinalization => ({ outcome, status: outcome.status });
-
-const runtimeOptionsFrom = (settings: AccountSettings): ScriptRuntimeOptions =>
-  snapshotScriptRuntimeOptions(settings.scripts);
-
-const roomPoliciesEqual = (left: RoomPolicy, right: RoomPolicy): boolean =>
-  left.kind === right.kind &&
-  (left.kind !== "specific" ||
-    (right.kind === "specific" && left.roomNumber === right.roomNumber));
-
-const accountSettingsPatch = (
-  current: ScriptRuntimeOptions,
-  next: ScriptRuntimeOptions,
-): AccountScriptSettingsPatch => ({
-  ...(current.restartAfterReconnect === next.restartAfterReconnect
-    ? {}
-    : { restartAfterReconnect: next.restartAfterReconnect }),
-  ...(roomPoliciesEqual(current.roomPolicy, next.roomPolicy)
-    ? {}
-    : { roomPolicy: snapshotRoomPolicy(next.roomPolicy) }),
-  ...(current.safeStartStop === next.safeStartStop
-    ? {}
-    : { safeStartStop: next.safeStartStop }),
-});
-
-export const planScriptOptionsUpdate = (
-  persisted: ScriptRuntimeOptions,
-  current: ScriptRuntimeOptions,
-  update: ScriptRuntimeOptionsUpdate,
-) => {
-  const next = snapshotScriptRuntimeOptions(update(current));
-  return { next, patch: accountSettingsPatch(persisted, next) };
-};
-
-class ScriptAccountSettingsBridgeError extends Data.TaggedError(
-  "ScriptAccountSettingsBridgeError",
-)<{ readonly cause: unknown }> {}
 
 export interface ScriptRunnerShape {
   readonly bindAccount: (
@@ -216,24 +163,13 @@ export interface ScriptRunnerShape {
   readonly onOptions: (
     listener: (options: ScriptRuntimeOptions) => void,
   ) => Effect.Effect<StateDisposer>;
-  readonly persistOptions: () => Effect.Effect<ScriptOptionsUpdateResult>;
-  readonly resetOptions: () => Effect.Effect<ScriptRuntimeOptions>;
   readonly setOptions: (
     update: ScriptRuntimeOptionsUpdate,
-  ) => Effect.Effect<ScriptOptionsUpdateResult>;
-  readonly setRestartAfterReconnect: (
-    enabled: boolean,
-  ) => Effect.Effect<ScriptOptionsUpdateResult>;
-  readonly setRoomPolicy: (
-    policy: RoomPolicy,
-  ) => Effect.Effect<ScriptOptionsUpdateResult>;
-  readonly setSafeStartStop: (
-    enabled: boolean,
-  ) => Effect.Effect<ScriptOptionsUpdateResult>;
+  ) => Effect.Effect<ScriptRuntimeOptions>;
   readonly start: (
     file: ScriptFile,
     inputs: ScriptInputValues,
-  ) => Effect.Effect<ScriptRunHandle, ScriptExecutionError>;
+  ) => Effect.Effect<ScriptRunHandle>;
   readonly stop: (reason?: string) => Effect.Effect<ScriptRunnerStatus>;
 }
 
@@ -459,6 +395,35 @@ const isConnectionLoss = (event: FlashEvent): boolean =>
   (event.status === "OnConnectionLost" ||
     event.status === "OnConnectionFailed");
 
+export const makeScriptOptions = Effect.fnUntraced(function* () {
+  const optionsRef = yield* SubscriptionRef.make<ScriptRuntimeOptions>(
+    snapshotScriptRuntimeOptions(DEFAULT_SCRIPT_RUNTIME_OPTIONS),
+  );
+  const accountUsernameRef = yield* Ref.make("");
+  const getOptions = () =>
+    SubscriptionRef.get(optionsRef).pipe(
+      Effect.map(snapshotScriptRuntimeOptions),
+    );
+
+  const bindAccount: ScriptRunnerShape["bindAccount"] = (username) =>
+    Effect.gen(function* () {
+      const normalized = normalizeUsername(username);
+      if ((yield* Ref.getAndSet(accountUsernameRef, normalized)) !== normalized)
+        yield* SubscriptionRef.set(
+          optionsRef,
+          snapshotScriptRuntimeOptions(DEFAULT_SCRIPT_RUNTIME_OPTIONS),
+        );
+      return yield* getOptions();
+    });
+
+  const setOptions: ScriptRunnerShape["setOptions"] = (update) =>
+    SubscriptionRef.updateAndGet(optionsRef, (current) =>
+      snapshotScriptRuntimeOptions(update(snapshotScriptRuntimeOptions(current))),
+    ).pipe(Effect.map(snapshotScriptRuntimeOptions));
+
+  return { optionsRef, bindAccount, getOptions, setOptions };
+});
+
 export const layer = Layer.effect(
   ScriptRunner,
   Effect.gen(function* () {
@@ -466,19 +431,17 @@ export const layer = Layer.effect(
     const runFork = Effect.runForkWith(yield* Effect.context<never>());
     const api = yield* Api;
     const projectionReadiness = yield* ProjectionReadiness;
-    const army = yield* ArmyApi;
-    const automation = yield* Automation;
-    const environment = yield* Environment;
     const bridge = yield* Bridge;
     const dialogs = yield* ScriptDialogs;
     const {
-      accountSettings,
+      army,
+      environment,
+      autoRelogin,
+      autoZone,
       fileSystem: fileSystemBridge,
-      http: httpBridge,
-      gameView,
-    } = selectDesktopBridge(window.desktop, "game");
+      http: makeHttpApi,
+    } = yield* ScriptServices;
     const { auth, combat, events, house, map, packet, player, wait } = api;
-    const { autoRelogin, autoZone } = automation;
     const scriptStartReadiness = makeScriptStartReadiness({
       auth,
       player,
@@ -497,14 +460,8 @@ export const layer = Layer.effect(
     );
     const pendingRestartRef = yield* Ref.make<PendingRestart | null>(null);
     const startingRef = yield* Ref.make<StartingScript | null>(null);
-    const optionsRef = yield* SubscriptionRef.make<ScriptRuntimeOptions>(
-      DEFAULT_SCRIPT_RUNTIME_OPTIONS,
-    );
-    const persistedOptionsRef = yield* Ref.make<ScriptRuntimeOptions>(
-      DEFAULT_SCRIPT_RUNTIME_OPTIONS,
-    );
-    const accountUsernameRef = yield* Ref.make<string | null>(null);
-    const accountSettingsGate = yield* Semaphore.make(1);
+    const { optionsRef, bindAccount, getOptions, setOptions } =
+      yield* makeScriptOptions();
     const statusRef = yield* SubscriptionRef.make<ScriptRunnerStatus>({
       state: "idle",
     });
@@ -514,116 +471,6 @@ export const layer = Layer.effect(
 
     const setStatus = (status: ScriptRunnerStatus) =>
       SubscriptionRef.set(statusRef, snapshotStatus(status));
-
-    const getOptions = () =>
-      SubscriptionRef.get(optionsRef).pipe(
-        Effect.map(snapshotScriptRuntimeOptions),
-      );
-
-    const loadPersistedOptions = Effect.fn("ScriptRunner.loadPersistedOptions")(
-      function* (username: string) {
-        return yield* Effect.tryPromise({
-          try: () => accountSettings.get(username),
-          catch: (cause) => new ScriptAccountSettingsBridgeError({ cause }),
-        }).pipe(
-          Effect.map(runtimeOptionsFrom),
-          Effect.catch((cause) =>
-            Effect.logWarning(
-              "Failed to load account script settings; using defaults.",
-              Cause.fail(cause),
-            ).pipe(
-              Effect.annotateLogs({
-                component: "scripting",
-                data: { username },
-              }),
-              Effect.as(DEFAULT_SCRIPT_RUNTIME_OPTIONS),
-            ),
-          ),
-        );
-      },
-    );
-
-    const bindAccount: ScriptRunnerShape["bindAccount"] = (username) =>
-      accountSettingsGate.withPermits(1)(
-        Effect.gen(function* () {
-          const normalized = normalizeUsername(username);
-          const boundUsername = yield* Ref.get(accountUsernameRef);
-          if (normalized !== "" && boundUsername === normalized) {
-            return yield* getOptions();
-          }
-
-          const options =
-            normalized === ""
-              ? DEFAULT_SCRIPT_RUNTIME_OPTIONS
-              : yield* loadPersistedOptions(normalized);
-          yield* Ref.set(
-            accountUsernameRef,
-            normalized === "" ? null : normalized,
-          );
-          yield* Ref.set(
-            persistedOptionsRef,
-            snapshotScriptRuntimeOptions(options),
-          );
-          return yield* SubscriptionRef.updateAndGet(optionsRef, () =>
-            snapshotScriptRuntimeOptions(options),
-          ).pipe(Effect.map(snapshotScriptRuntimeOptions));
-        }),
-      );
-
-    const setOptions = (
-      update: ScriptRuntimeOptionsUpdate,
-    ): Effect.Effect<ScriptOptionsUpdateResult> =>
-      accountSettingsGate.withPermits(1)(
-        Effect.gen(function* () {
-          const current = yield* getOptions();
-          const persistedOptions = yield* Ref.get(persistedOptionsRef);
-          const { next, patch } = planScriptOptionsUpdate(
-            persistedOptions,
-            current,
-            update,
-          );
-          const username = yield* Ref.get(accountUsernameRef);
-          // Reverting a failed save still changes the session, even when disk already matches.
-          if (username === null || Object.keys(patch).length === 0) {
-            const options = yield* SubscriptionRef.updateAndGet(
-              optionsRef,
-              () => next,
-            ).pipe(Effect.map(snapshotScriptRuntimeOptions));
-            return { options, persisted: true };
-          }
-
-          const persisted = yield* Effect.tryPromise({
-            try: () => accountSettings.update(username, { scripts: patch }),
-            catch: (cause) => new ScriptAccountSettingsBridgeError({ cause }),
-          }).pipe(
-            Effect.map(runtimeOptionsFrom),
-            Effect.catch((cause) =>
-              Effect.logWarning(
-                "Failed to persist account script settings; keeping the session value.",
-                Cause.fail(cause),
-              ).pipe(
-                Effect.annotateLogs({
-                  component: "scripting",
-                  data: { username },
-                }),
-                Effect.as(null),
-              ),
-            ),
-          );
-
-          const options = yield* SubscriptionRef.updateAndGet(
-            optionsRef,
-            () => persisted ?? next,
-          ).pipe(Effect.map(snapshotScriptRuntimeOptions));
-          if (persisted === null) return { options, persisted: false };
-
-          yield* Ref.set(
-            persistedOptionsRef,
-            snapshotScriptRuntimeOptions(persisted),
-          );
-          return { options, persisted: true };
-        }),
-      );
 
     const observe = <A>(
       changes: Stream.Stream<A>,
@@ -937,10 +784,8 @@ export const layer = Layer.effect(
                   ? termination.exitRequest
                   : undefined;
               return finishIfActive(id, {
-                beforeComplete: runScriptExitActions(exitRequest, {
-                  closeClient: gameView.close,
-                  logout: auth.logout,
-                }),
+                beforeComplete:
+                  exitRequest?.logout === true ? auth.logout() : Effect.void,
                 result: () => {
                   const status = {
                     ...(reason === undefined ? {} : { reason }),
@@ -949,7 +794,11 @@ export const layer = Layer.effect(
                   } as const;
                   const outcome: ScriptRunTerminalOutcome =
                     termination.kind === "script-exited"
-                      ? { kind: "script-exited", status }
+                      ? {
+                          kind: "script-exited",
+                          closeClient: termination.exitRequest.closeClient,
+                          status,
+                        }
                       : termination.kind === "script-stopped"
                         ? { kind: "script-stopped", status }
                         : { kind: "externally-stopped", status };
@@ -1073,11 +922,10 @@ export const layer = Layer.effect(
           inputValues: inputs,
           log: (...values) => console.log("[script]", ...values),
           scope: scriptScope,
-          setOptions: (update) =>
-            setOptions(update).pipe(Effect.map((result) => result.options)),
+          setOptions,
           source: { sourceName: statusName(file) },
         });
-        const http = yield* makeScriptHttpApi(httpBridge, scriptScope);
+        const http = yield* makeHttpApi(scriptScope);
         const modules = makeScriptBuiltinModules({
           autoRelogin,
           autoZone,
@@ -1522,7 +1370,6 @@ export const layer = Layer.effect(
           id: yield* Ref.updateAndGet(nextIdRef, (value) => value + 1),
           terminal: yield* Deferred.make<ScriptRunTerminalOutcome>(),
         };
-        yield* protectScriptExecutionUntil(Deferred.await(identity.terminal));
         while (true) {
           const result = yield* lifecycleGate.withPermit(
             Effect.gen(function* () {
@@ -1619,31 +1466,6 @@ export const layer = Layer.effect(
     };
 
     const stop: ScriptRunnerShape["stop"] = (reason) => stopActive(reason);
-    const setRestartAfterReconnect: ScriptRunnerShape["setRestartAfterReconnect"] =
-      (enabled) =>
-        lifecycleGate.withPermit(
-          Effect.gen(function* () {
-            const result = yield* setOptions((current) => ({
-              ...current,
-              restartAfterReconnect: enabled,
-            }));
-            if (!enabled) {
-              yield* cancelPendingRestart();
-            }
-            return result;
-          }),
-        );
-    const resetOptions = () =>
-      lifecycleGate.withPermit(
-        Effect.gen(function* () {
-          const result = yield* setOptions(() =>
-            snapshotScriptRuntimeOptions(DEFAULT_SCRIPT_RUNTIME_OPTIONS),
-          );
-          yield* cancelPendingRestart();
-          return result.options;
-        }),
-      );
-
     yield* Effect.addFinalizer(() => stop("shutdown").pipe(Effect.asVoid));
 
     return ScriptRunner.of({
@@ -1668,17 +1490,7 @@ export const layer = Layer.effect(
         ),
       onStatus: (listener) =>
         observe(SubscriptionRef.changes(statusRef), snapshotStatus, listener),
-      persistOptions: () => setOptions((options) => options),
-      resetOptions,
       setOptions,
-      setRoomPolicy: (roomPolicy) =>
-        setOptions((options) => ({
-          ...options,
-          roomPolicy: snapshotRoomPolicy(roomPolicy),
-        })),
-      setRestartAfterReconnect,
-      setSafeStartStop: (enabled) =>
-        setOptions((options) => ({ ...options, safeStartStop: enabled })),
       start,
       stop,
     });

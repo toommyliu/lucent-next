@@ -16,14 +16,12 @@ import type {
   ScriptRuntimeOptions,
   ScriptRuntimeOptionsPatch,
 } from "./ScriptApi";
-import { playBeep } from "../audio/beep";
 import type { ScriptAsyncScope } from "./scriptAsyncScope";
 import type { ScriptDialogSource, ScriptDialogsShape } from "./ScriptDialogs";
 import {
   makeScriptExitSignal,
   ScriptExecutionError,
   ScriptStopSignal,
-  type ScriptExitRequest,
 } from "./ScriptRunnerErrors";
 
 export const DEFAULT_SCRIPT_RUNTIME_OPTIONS: ScriptRuntimeOptions = {
@@ -66,7 +64,10 @@ export type ScriptRuntimeOptionsUpdate = (
 ) => ScriptRuntimeOptions;
 
 export interface ScriptRuntimeApiOptions {
-  readonly dialogs: Pick<ScriptDialogsShape, "alert" | "confirm" | "prompt">;
+  readonly dialogs: Pick<
+    ScriptDialogsShape,
+    "alert" | "beep" | "confirm" | "prompt"
+  >;
   readonly getOptions: () => Effect.Effect<ScriptRuntimeOptions>;
   readonly inputValues: ScriptInputValues;
   readonly log: (...values: unknown[]) => void;
@@ -77,28 +78,6 @@ export interface ScriptRuntimeApiOptions {
   readonly source: ScriptDialogSource;
 }
 
-export interface ScriptExitActions {
-  readonly closeClient: () => void;
-  readonly logout: () => Effect.Effect<void>;
-}
-
-export const runScriptExitActions = Effect.fn(
-  "ScriptRuntime.runScriptExitActions",
-)(function* (
-  request: ScriptExitRequest | undefined,
-  actions: ScriptExitActions,
-) {
-  if (request?.logout === true) {
-    yield* actions.logout();
-  }
-  if (request?.logout === true && request.closeClient === true) {
-    yield* Effect.sleep("1 second");
-  }
-  if (request?.closeClient === true) {
-    yield* Effect.sync(actions.closeClient);
-  }
-});
-
 export const makeScriptRuntimeApi = (
   options: ScriptRuntimeApiOptions,
 ): ScriptRuntimeApi => {
@@ -108,7 +87,7 @@ export const makeScriptRuntimeApi = (
     alert: (message) => options.dialogs.alert(source, message),
     beep: (times = 1) =>
       Number.isFinite(times)
-        ? Effect.sync(() => playBeep(Math.max(1, Math.floor(times))))
+        ? options.dialogs.beep(Math.max(1, Math.floor(times)))
         : Effect.fail(
             new ScriptExecutionError({
               detail: "script.beep requires a finite number of repetitions.",

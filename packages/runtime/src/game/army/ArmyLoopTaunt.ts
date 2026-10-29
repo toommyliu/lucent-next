@@ -24,6 +24,7 @@ import {
   ConsumableCastDispatchDeadline,
 } from "../flash/api/Combat";
 import type { Event } from "../flash/contract/Event";
+import { ArmyLoopTauntError } from "./ArmyErrors";
 
 const LOOP_TAUNT_SCROLL_ITEM_ID = 12_917; // Scroll of Enrage
 const LOOP_TAUNT_SCROLL_SKILL = 5;
@@ -117,23 +118,6 @@ export type ArmyLoopTauntRuntimePlan =
 export interface ArmyLoopTauntHandle {
   /** Stops this run. Repeated calls are safe. */
   stop(): Effect.Effect<void>;
-}
-
-export class ArmyLoopTauntError extends Error {
-  readonly _tag = "ArmyLoopTauntError";
-
-  constructor(message: string, cause?: unknown) {
-    super(message);
-    this.name = "ArmyLoopTauntError";
-    if (cause !== undefined) {
-      Object.defineProperty(this, "cause", {
-        configurable: true,
-        enumerable: false,
-        value: cause,
-        writable: true,
-      });
-    }
-  }
 }
 
 interface LoopTauntSession {

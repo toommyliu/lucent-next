@@ -20,6 +20,7 @@ const makeRuntime = () => {
   const dialogCalls: string[] = [];
   const script = makeScriptRuntimeApi({
     dialogs: {
+      beep: () => Effect.void,
       alert: (_source, message) =>
         Effect.sync(() => {
           dialogCalls.push(`alert:${message}`);

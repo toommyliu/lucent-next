@@ -1,49 +1,37 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
 
 import {
   classifyScriptTermination,
-  planScriptOptionsUpdate,
+  makeScriptOptions,
   statusFromStartingCancellation,
 } from "./ScriptRunner";
 import { makeScriptExitSignal, ScriptStopSignal } from "./ScriptRunnerErrors";
 
 describe("ScriptRunner", () => {
-  it("includes an earlier unsaved option in the next persistence patch", () => {
-    const persisted = {
-      restartAfterReconnect: false,
-      roomPolicy: { kind: "public" as const },
-      safeStartStop: true,
-    };
-    const current = { ...persisted, safeStartStop: false };
-
-    expect(
-      planScriptOptionsUpdate(persisted, current, (options) => ({
-        ...options,
-        restartAfterReconnect: true,
-      })).patch,
-    ).toEqual({
-      restartAfterReconnect: true,
-      safeStartStop: false,
-    });
-  });
-
-  it("plans a session reversal without a disk write after a failed save", () => {
-    const persisted = {
-      restartAfterReconnect: false,
-      roomPolicy: { kind: "public" as const },
-      safeStartStop: true,
-    };
-    const current = { ...persisted, safeStartStop: false };
-
-    expect(
-      planScriptOptionsUpdate(persisted, current, (options) => ({
-        ...options,
-        safeStartStop: true,
-      })),
-    ).toEqual({ next: persisted, patch: {} });
-  });
-
+  it.effect(
+    "keeps local options for the same account and resets them for another account",
+    () =>
+      Effect.gen(function* () {
+        const options = yield* makeScriptOptions();
+        yield* options.bindAccount(" Artix ");
+        yield* options.setOptions((current) => ({
+          ...current,
+          safeStartStop: false,
+        }));
+        expect(yield* options.bindAccount("artix")).toEqual({
+          restartAfterReconnect: false,
+          roomPolicy: { kind: "random-private" },
+          safeStartStop: false,
+        });
+        expect(yield* options.bindAccount("gravelyn")).toEqual({
+          restartAfterReconnect: false,
+          roomPolicy: { kind: "random-private" },
+          safeStartStop: true,
+        });
+      }),
+  );
   it("returns a disconnected restart attempt to waiting after cancellation", () => {
     const status = statusFromStartingCancellation(
       {

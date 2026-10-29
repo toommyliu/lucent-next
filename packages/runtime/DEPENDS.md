@@ -1,11 +1,11 @@
 # What the host must provide
 
-One line per shim in `src/shims/`, then the globals the code reads from the DOM lib. Everything else in `src/` is copied from lucent `main` with import paths changed only.
+One line per shim in `src/shims/`, then the globals the code reads from the DOM lib. The runtime bundle uses host operations; the remaining desktop adapters stay outside its entry.
 
 ## Shims
 
 - `shims/bridge.d.ts`: `Window.swf`, the 147 loader ExternalInterface methods (`auth.login`, `player.walkTo`, `world.loadSwf`, ...), plus the callbacks the runtime assigns on `window` (`onConnection`, `onDebug`, `onExtensionResponse`, `onLoaded`, `onProgress`, `packetFromClient`, `packetFromServer`). Needed by `game/flash/bridge/Bridge.ts` (calls), `game/flash/bridge/Gateway.ts` (callbacks), and the `game/flash/api/*` services that name methods by `keyof Window["swf"]` (Auth, Bank, Combat, Drops, House, Inventory, Map, Monsters, Player, Quests, Settings, Shops, Wait). Verbatim copy of lucent's generated `bridge.d.ts`.
-- `shims/desktop.d.ts`: `Window.desktop: DesktopBridge`, the Electron preload IPC client (type in `shared/desktopBridge.ts`). Needed by `game/flash/runtime.ts` (`desktop.debug`, `desktop.log.write`), `game/flash/api/Api.ts` (`desktop.debug`), `game/army/Army.ts` and `game/army/ArmyLoopTaunt.ts` (`army`), `game/environment/Environment.ts` (`environment`), `game/automation/Follower.ts` (`gameFollower`, `combatProfiles.getState`), `game/consoleForwarder.ts` (game console observability bridge), `game/scripting/ScriptRunner.ts` and `ScriptEvaluator.ts` (`accountSettings`, `fileSystem`, `http`, `gameView`), `game/scripting/ScriptFileSystem.ts` (`fileSystem`), `game/scripting/ScriptExecutionProtection.ts` (`gameRenderer.beginScriptExecution`, `finishScriptExecution`).
+- `shims/desktop.d.ts`: `Window.desktop: DesktopBridge`, the Electron preload IPC client (type in `shared/desktopBridge.ts`). Needed by `game/army/Army.ts` and `game/army/ArmyLoopTaunt.ts` (`army`), `game/environment/Environment.ts` (`environment`), `game/automation/Follower.ts` (`gameFollower`, `combatProfiles.getState`), `game/consoleForwarder.ts` (game console observability bridge), and other desktop-only adapters. `ScriptRunner` takes army, environment, auto relogin, auto zone, filesystem and HTTP through `ScriptServices`, and dialogs and beep through `ScriptDialogs`. Its options live in memory and reset when the account changes. Client closure is reported in its terminal outcome.
 - `shims/tupleInference.ts`: typecheck only, nothing for the host. It works around a TypeScript 6.0.3 check-order quirk: `game/scripting/http/response.ts` (`new Headers(entries.map(([n, v]) => [n, v]))`) fails to infer a tuple unless a `[string, string]` array type is checked first. `tsconfig.json` lists `src/shims/**/*` first for this reason.
 
 ## DOM globals without a shim file
@@ -23,3 +23,5 @@ The tsconfig uses `lib: dom`. These are typed by the DOM lib and resolved at run
 - `game/scripting/ScriptHttp.test.ts` needs `app/src/main/http/DesktopHttpClient`, `ipc/DesktopIpcInvoke`, `preloadIpcClient`, `scripting/ScriptHttp`.
 
 The Rust host owns both sides of those tests.
+
+The host service implementations in `host/services.ts` fail explicitly until their host operations are available. They do not build desktop automation or return fabricated state.
