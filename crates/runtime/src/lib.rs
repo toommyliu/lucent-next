@@ -135,12 +135,12 @@ impl Bot {
             })?
     }
 
-    #[cfg(all(test, feature = "testing"))]
+    #[cfg(feature = "testing")]
     pub fn eval(&self, name: impl Into<String>, source: impl Into<String>) -> PendingEval {
         self.0.eval(name, source)
     }
 
-    #[cfg(all(test, feature = "testing"))]
+    #[cfg(feature = "testing")]
     pub fn kill(&self) {
         self.0.kill();
     }
@@ -398,9 +398,3 @@ fn take_events(engine: &mut Engine) -> Option<Vec<host::Item>> {
         }
     }
 }
-
-#[cfg(test)]
-extern crate self as lucent_runtime;
-
-#[cfg(test)]
-mod bot_tests;
