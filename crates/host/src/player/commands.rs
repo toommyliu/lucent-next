@@ -44,7 +44,9 @@ impl Running {
                     .map(|id| Value::Number(id as f64))
                     .collect();
                 let answer = self.command_answer("shops.isOpen", args)?;
-                self.commit_command(|projection| commands::confirm_shop_closed(projection, answer))
+                self.commit_command(|projection| {
+                    commands::confirm_shop_closed(projection, shop_id, answer)
+                })
             }
             Command::RejectDrop { selector } => {
                 let id = self

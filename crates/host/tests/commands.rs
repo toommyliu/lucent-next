@@ -260,6 +260,21 @@ fn confirm_shop_closed_keeps_a_shop_the_loader_reports_open() {
 }
 
 #[test]
+fn confirm_shop_closed_for_another_shop_keeps_the_open_shop() {
+    let (_host, _session, link) = start(ProbeMovie::new().constant("shops.isOpen", json!(false)));
+    load_shop(&link);
+    assert_eq!(
+        command(&link, json!({"kind": "confirmShopClosed", "shopId": 4})),
+        Ok(json!(true))
+    );
+    assert_eq!(query(&link, json!({"kind": "shop"}))["id"], json!(3));
+    assert_eq!(
+        container_items(&link, "shop"),
+        json!([{"itemId": 1, "name": "Sword"}])
+    );
+}
+
+#[test]
 fn reject_drop_removes_the_drop_when_the_loader_accepts() {
     let (_host, _session, link) = start(ProbeMovie::new().constant("drops.reject", json!(true)));
     drop_frog_leg(&link);

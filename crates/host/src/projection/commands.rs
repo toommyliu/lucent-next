@@ -63,10 +63,12 @@ pub(crate) fn refresh_container(
 
 pub(crate) fn confirm_shop_closed(
     projection: &mut Projection,
+    shop_id: Option<i64>,
     answer: Value,
 ) -> Result<bool, Error> {
     let open: bool = decode("shops.isOpen", answer)?;
-    if !open {
+    let stored = projection.shops.get().map(|shop| shop.data().id);
+    if !open && (shop_id.is_none() || stored == shop_id) {
         projection.shops.clear();
         projection.items.replace(ItemContainer::Shop, vec![]);
     }
