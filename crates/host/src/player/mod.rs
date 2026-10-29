@@ -301,8 +301,13 @@ fn first_viewport(
                 };
                 let _ = reply.send(result);
             }
+            Msg::OperationAnswer(answer) => {
+                for (_, stream) in &script_events {
+                    stream.send(answer.clone());
+                }
+            }
             Msg::Stop => return None,
-            Msg::View(_) | Msg::Poll(_) | Msg::Wake | Msg::OperationAnswer(_) => {}
+            Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
         }
     }
 }
@@ -507,6 +512,7 @@ mod tests {
     fn operation_answers_arrive_before_the_first_viewport() {
         let (tx, rx) = mpsc::channel();
         let (producer, events) = crate::bridge::script_events(16);
+        let (second, second_events) = crate::bridge::script_events(16);
         let answer = crate::bridge::ScriptEvent::Operation {
             id: 42,
             answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
@@ -514,13 +520,15 @@ mod tests {
             )),
         };
         tx.send(Msg::Attach(AttachmentId(0), producer)).unwrap();
+        tx.send(Msg::Attach(AttachmentId(1), second)).unwrap();
         tx.send(Msg::OperationAnswer(answer.clone())).unwrap();
         tx.send(Msg::View(ViewEvent::Resized(
             Viewport::new(100.0, 100.0, 1.0).unwrap(),
         )))
         .unwrap();
         let _attachment = first_viewport(&rx, false, &Default::default()).unwrap();
-        assert_eq!(events.try_recv(), Ok(Some(answer)));
+        assert_eq!(events.try_recv(), Ok(Some(answer.clone())));
+        assert_eq!(second_events.try_recv(), Ok(Some(answer)));
     }
 
     #[test]

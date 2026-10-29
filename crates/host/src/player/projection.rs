@@ -45,7 +45,6 @@ impl Running {
                 self.reapply_settings(false);
             }
             if invalidated {
-                self.operation_packets.invalidate();
                 self.publish(ScriptEvent::Invalidated);
             }
         }
@@ -74,6 +73,12 @@ impl Running {
         };
         let direction = match event.name.as_str() {
             "onConnection" => {
+                if matches!(
+                    raw.as_str(),
+                    "OnConnection" | "OnConnectionLost" | "OnConnectionFailed"
+                ) {
+                    self.operation_packets.invalidate();
+                }
                 let output = projection.connection(raw);
                 tracing::debug!(
                     status = raw,

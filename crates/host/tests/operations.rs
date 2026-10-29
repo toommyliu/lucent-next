@@ -255,7 +255,7 @@ fn a_player_restart_ends_its_accept_and_the_session_worker_accepts_on_the_new_pl
         Err(lucent_host::bridge::Error::Stopped)
     );
     assert!(stopped.elapsed() < Duration::from_secs(1));
-    let current = session.take_script_link().unwrap();
+    let current = session.attach().unwrap();
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));

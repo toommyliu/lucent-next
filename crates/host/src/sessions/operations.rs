@@ -7,7 +7,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::{
-    bridge::{Error, ScriptEvent, Value},
+    bridge::{Error, Pending, ScriptEvent, Value},
     player::{Inbox, Msg},
     projection::{
         Projection,
@@ -22,6 +22,7 @@ use lucent_protocol::{
 use parking_lot::{Mutex, RwLock};
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(5);
+const STOP_CHECK_INTERVAL: Duration = Duration::from_millis(20);
 const PACKET_TIMEOUT: Duration = Duration::from_secs(10);
 
 type Reply = mpsc::Sender<Result<AcceptResponse, Error>>;
@@ -123,14 +124,37 @@ pub(crate) struct Endpoint {
 
 impl Endpoint {
     fn read<R>(&self, read: impl FnOnce(&Projection) -> R) -> Result<R, Error> {
-        self.check()?;
-        let projection = self
-            .projection
-            .try_read_for(CALL_TIMEOUT)
-            .ok_or(Error::Timeout)?;
+        let deadline = Instant::now() + CALL_TIMEOUT;
+        let projection = loop {
+            self.check()?;
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(Error::Timeout);
+            }
+            if let Some(projection) = self
+                .projection
+                .try_read_for(remaining.min(STOP_CHECK_INTERVAL))
+            {
+                break projection;
+            }
+        };
         self.check()?;
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read(&projection)))
             .map_err(|_| Error::ReadPanicked)
+    }
+    fn wait<T>(&self, pending: Pending<T>) -> Result<T, Error> {
+        let deadline = Instant::now() + CALL_TIMEOUT;
+        loop {
+            self.check()?;
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(Error::Timeout);
+            }
+            match pending.recv_timeout(remaining.min(STOP_CHECK_INTERVAL)) {
+                Err(Error::Timeout) => {}
+                result => return result,
+            }
+        }
     }
     fn check(&self) -> Result<(), Error> {
         if self.stopped.load(Ordering::Acquire) {
@@ -146,7 +170,7 @@ impl Endpoint {
             lucent_protocol::command::Command::RefreshLoggedIn {},
             reply,
         ));
-        let logged_in = match logged_in.recv_timeout(CALL_TIMEOUT) {
+        let logged_in = match self.wait(logged_in) {
             Ok(value) => serde_json::from_str::<bool>(&value).unwrap_or(false),
             Err(Error::Stopped) => return Err(Error::Stopped),
             Err(_) => self.read(|projection| projection.auth.logged_in)?,
@@ -189,24 +213,22 @@ impl Endpoint {
         before: [f64; 3],
         response: mpsc::Receiver<Result<AcceptResponse, Error>>,
     ) -> Result<bool, Error> {
-        let deadline = Instant::now() + PACKET_TIMEOUT;
-        let call = self
-            .inbox
-            .call_loader("drops.accept", vec![Value::Number(drop.item_id as f64)])
-            .recv_timeout(CALL_TIMEOUT);
+        let call = self.wait(
+            self.inbox
+                .call_loader("drops.accept", vec![Value::Number(drop.item_id as f64)]),
+        );
         self.check()?;
         if !matches!(call, Ok(Value::Bool(true))) {
             return Ok(false);
         }
-        let response =
-            match response.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-                Ok(Ok(response)) => response,
-                Ok(Err(Error::Stopped)) => return Err(Error::Stopped),
-                _ => {
-                    self.check()?;
-                    return Ok(false);
-                }
-            };
+        let response = match response.recv_timeout(PACKET_TIMEOUT) {
+            Ok(Ok(response)) => response,
+            Ok(Err(Error::Stopped)) => return Err(Error::Stopped),
+            _ => {
+                self.check()?;
+                return Ok(false);
+            }
+        };
         if !response.success {
             return Ok(false);
         }
