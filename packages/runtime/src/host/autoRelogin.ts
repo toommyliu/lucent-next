@@ -2,7 +2,7 @@ import type { AutoReloginRecords } from "@lucent/game/protocol";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
-import { normalizeAutoReloginDelay } from "../game/automation/AutoRelogin";
+import { normalizeAutoReloginDelay } from "../game/automation/autoReloginConfig";
 import type { AutoReloginState } from "../game/automation/AutoRelogin";
 import { ask } from "./asks";
 

@@ -170,7 +170,7 @@
     }
   }, "format");
   var host = typeof __host === "undefined" ? void 0 : __host;
-  var log = /* @__PURE__ */ __name((level) => (...values2) => host?.log(level, values2.map(format).join(" ")), "log");
+  var log = /* @__PURE__ */ __name((level) => (...values) => host?.log(level, values.map(format).join(" ")), "log");
   var runtimeConsole = Object.freeze({
     log: log("info"),
     info: log("info"),
@@ -314,9 +314,9 @@
     return (a) => {
       const cached2 = cache2.get(a);
       if (cached2 !== void 0) return cached2;
-      const result3 = f(a);
-      cache2.set(a, result3);
-      return result3;
+      const result2 = f(a);
+      cache2.set(a, result2);
+      return result2;
     };
   }
   __name(memoize, "memoize");
@@ -325,12 +325,12 @@
     return (a) => {
       const cached2 = cache2.get(a);
       if (cached2 !== void 0) return cached2;
-      const result3 = f(a);
-      cache2.set(a, result3);
-      if (result3 !== a) {
-        cache2.set(result3, result3);
+      const result2 = f(a);
+      cache2.set(a, result2);
+      if (result2 !== a) {
+        cache2.set(result2, result2);
       }
-      return result3;
+      return result2;
     };
   }
   __name(memoizeIdempotent, "memoizeIdempotent");
@@ -585,9 +585,9 @@
     if (depth) return compareOnPath(self, that);
     let known = results.get(self);
     if (!known) results.set(self, known = /* @__PURE__ */ new WeakMap());
-    let result3 = known.get(that);
-    if (result3 === void 0) known.set(that, result3 = compareOnPath(self, that));
-    return result3;
+    let result2 = known.get(that);
+    if (result2 === void 0) known.set(that, result2 = compareOnPath(self, that));
+    return result2;
   }
   __name(compareObjects, "compareObjects");
   function compareOnPath(self, that) {
@@ -1304,17 +1304,17 @@ ${ind(d)}}`;
     [contAll]: options[contAll]
   }), "makePrimitiveProto");
   var makePrimitive = /* @__PURE__ */ __name((options) => {
-    const Proto4 = makePrimitiveProto(options);
+    const Proto3 = makePrimitiveProto(options);
     const PrimitiveImpl = /* @__PURE__ */ __name(function(value) {
       this[args] = value;
     }, "PrimitiveImpl");
-    PrimitiveImpl.prototype = Proto4;
+    PrimitiveImpl.prototype = Proto3;
     return function(value) {
       return new PrimitiveImpl(value);
     };
   }, "makePrimitive");
   var makeExit = /* @__PURE__ */ __name((options) => {
-    const Proto4 = {
+    const Proto3 = {
       [ExitTypeId]: ExitTypeId,
       _tag: options.op,
       get [options.prop]() {
@@ -1341,7 +1341,7 @@ ${ind(d)}}`;
     const ExitPrimitive = /* @__PURE__ */ __name(function(value) {
       this[args] = value;
     }, "ExitPrimitive");
-    ExitPrimitive.prototype = Proto4;
+    ExitPrimitive.prototype = Proto3;
     return function(value) {
       return new ExitPrimitive(value);
     };
@@ -1617,8 +1617,8 @@ ${ind(d)}}`;
     }
   });
   var isResult = /* @__PURE__ */ __name((input) => hasProperty(input, TypeId2), "isResult");
-  var isFailure = /* @__PURE__ */ __name((result3) => result3._tag === "Failure", "isFailure");
-  var isSuccess = /* @__PURE__ */ __name((result3) => result3._tag === "Success", "isSuccess");
+  var isFailure = /* @__PURE__ */ __name((result2) => result2._tag === "Failure", "isFailure");
+  var isSuccess = /* @__PURE__ */ __name((result2) => result2._tag === "Success", "isSuccess");
   var FailureImpl = /* @__PURE__ */ __name(function(failure2) {
     this.failure = failure2;
   }, "FailureImpl");
@@ -1741,22 +1741,22 @@ ${ind(d)}}`;
     self.baseHits = 0;
     return self;
   }, "makeImpl");
-  var applyOverlays = /* @__PURE__ */ __name((map9, overlay) => {
+  var applyOverlays = /* @__PURE__ */ __name((map8, overlay) => {
     if (!overlay) return;
-    applyOverlays(map9, overlay.parent);
-    map9.set(overlay.key, overlay.value);
+    applyOverlays(map8, overlay.parent);
+    map8.set(overlay.key, overlay.value);
   }, "applyOverlays");
   var flatten2 = /* @__PURE__ */ __name((self) => {
     if (self._flat) return self._flat;
     if (!self.overlay) return self._flat = self.base;
-    const map9 = new Map(self.base);
-    applyOverlays(map9, self.overlay);
-    return self._flat = map9;
+    const map8 = new Map(self.base);
+    applyOverlays(map8, self.overlay);
+    return self._flat = map8;
   }, "flatten");
   var withFlat = /* @__PURE__ */ __name((self, f) => {
-    const map9 = new Map(self.mapUnsafe);
-    f(map9);
-    return makeUnsafe(map9);
+    const map8 = new Map(self.mapUnsafe);
+    f(map8);
+    return makeUnsafe(map8);
   }, "withFlat");
   var notFound = /* @__PURE__ */ Symbol();
   var lookup = /* @__PURE__ */ __name((self, key) => {
@@ -1816,10 +1816,10 @@ ${ind(d)}}`;
     const impl = self;
     const cacheRoot = cacheKeys.has(key) ? void 0 : impl.cacheRoot;
     if (impl.depth >= MaxDepth) {
-      const map9 = new Map(impl._flat ?? impl.base);
-      if (!impl._flat) applyOverlays(map9, impl.overlay);
-      map9.set(key, service3);
-      return makeImpl(cacheRoot, map9, void 0, 0);
+      const map8 = new Map(impl._flat ?? impl.base);
+      if (!impl._flat) applyOverlays(map8, impl.overlay);
+      map8.set(key, service3);
+      return makeImpl(cacheRoot, map8, void 0, 0);
     }
     return makeImpl(cacheRoot, impl.base, {
       key,
@@ -1860,16 +1860,16 @@ ${ind(d)}}`;
   var merge = /* @__PURE__ */ dual(2, (self, that) => {
     if (self.mapUnsafe.size === 0) return that;
     if (that.mapUnsafe.size === 0) return self;
-    return withFlat(self, (map9) => that.mapUnsafe.forEach((value, key) => map9.set(key, value)));
+    return withFlat(self, (map8) => that.mapUnsafe.forEach((value, key) => map8.set(key, value)));
   });
   var mergeAll = /* @__PURE__ */ __name((...ctxs) => {
-    const map9 = /* @__PURE__ */ new Map();
+    const map8 = /* @__PURE__ */ new Map();
     for (let i = 0; i < ctxs.length; i++) {
       ctxs[i].mapUnsafe.forEach((value, key) => {
-        map9.set(key, value);
+        map8.set(key, value);
       });
     }
-    return makeUnsafe(map9);
+    return makeUnsafe(map8);
   }, "mergeAll");
   var Reference = Service;
 
@@ -2164,22 +2164,6 @@ ${ind(d)}}`;
     onSuccess
   }) => isFailure2(self) ? onFailure(self.failure) : onSuccess(self.success));
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Iterable.js
-  var constEmpty = {
-    [Symbol.iterator]() {
-      return constEmptyIterator;
-    }
-  };
-  var constEmptyIterator = {
-    next() {
-      return {
-        done: true,
-        value: void 0
-      };
-    }
-  };
-  var empty2 = /* @__PURE__ */ __name(() => constEmpty, "empty");
-
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Array.js
   var Array2 = globalThis.Array;
   var fromIterable = /* @__PURE__ */ __name((collection) => Array2.isArray(collection) ? collection : Array2.from(collection), "fromIterable");
@@ -2242,7 +2226,7 @@ ${ind(d)}}`;
     bucket.push(value);
     return true;
   }, "hashBucketsAdd");
-  var empty3 = /* @__PURE__ */ __name(() => [], "empty");
+  var empty2 = /* @__PURE__ */ __name(() => [], "empty");
   var of = /* @__PURE__ */ __name((a) => [a], "of");
   var map2 = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
   var dedupe = /* @__PURE__ */ __name((self) => {
@@ -2259,15 +2243,6 @@ ${ind(d)}}`;
     }
     return out;
   }, "dedupe");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Filter.js
-  var toPredicate = /* @__PURE__ */ __name((self) => (input) => !isFailure2(self(input)), "toPredicate");
-  var has = /* @__PURE__ */ __name((key) => (input) => input.has(key) ? succeed2(input) : fail2(input), "has");
-  var compose = /* @__PURE__ */ dual(2, (left, right) => (input) => {
-    const leftOut = left(input);
-    if (isFailure2(leftOut)) return leftOut;
-    return right(leftOut.success);
-  });
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Scheduler.js
   var Scheduler = /* @__PURE__ */ Reference("effect/Scheduler", {
@@ -2451,11 +2426,11 @@ ${ind(d)}}`;
       case 32:
         return random32();
       default: {
-        let result3 = "";
+        let result2 = "";
         for (let i = length >>> 3; i > 0; i--) {
-          result3 += random8();
+          result2 += random8();
         }
-        return result3;
+        return result2;
       }
     }
   }, "random");
@@ -3109,14 +3084,14 @@ ${prefix}}`;
     const exits = [];
     let cancel = void 0;
     function loop() {
-      let result3 = iter.next();
-      while (!result3.done) {
-        if (result3.value._exit) {
-          exits.push(result3.value._exit);
-          result3 = iter.next();
+      let result2 = iter.next();
+      while (!result2.done) {
+        if (result2.value._exit) {
+          exits.push(result2.value._exit);
+          result2 = iter.next();
           continue;
         }
-        cancel = result3.value.addObserver((exit3) => {
+        cancel = result2.value.addObserver((exit3) => {
           exits.push(exit3);
           loop();
         });
@@ -3145,7 +3120,7 @@ ${prefix}}`;
   }));
   var fiberInterruptAll = /* @__PURE__ */ __name((fibers) => withFiber((parent) => {
     const annotations = fiberStackAnnotations(parent);
-    let fiberArr = empty3();
+    let fiberArr = empty2();
     for (const fiber2 of fibers) {
       fiber2.interruptUnsafe(parent.id, annotations);
       fiberArr.push(fiber2);
@@ -3228,7 +3203,7 @@ ${prefix}}`;
   var withFiberId = /* @__PURE__ */ __name((f) => withFiber((fiber2) => f(fiber2.id)), "withFiberId");
   var fiberId = /* @__PURE__ */ withFiberId(succeed3);
   var callbackOptions = /* @__PURE__ */ (function() {
-    const Proto4 = /* @__PURE__ */ makePrimitiveProto({
+    const Proto3 = /* @__PURE__ */ makePrimitiveProto({
       op: "Async",
       [evaluate](fiber2) {
         let resumed = false;
@@ -3263,7 +3238,7 @@ ${prefix}}`;
       this.register = register2;
       this.withSignal = withSignal;
     }, "AsyncImpl");
-    AsyncImpl.prototype = Proto4;
+    AsyncImpl.prototype = Proto3;
     return function(register2, withSignal) {
       return new AsyncImpl(register2, withSignal);
     };
@@ -3328,15 +3303,15 @@ ${prefix}}`;
     const definitionName = `${name} (definition)`;
     const definitionStack = defError ? fnStackCleaner(() => defError.stack) : constUndefined;
     return defineFunctionLength(body.length, function(...args2) {
-      let result3 = suspend(() => {
+      let result2 = suspend(() => {
         const iter = body.apply(this, arguments);
         return isEffect(iter) ? iter : fromIteratorUnsafe(iter);
       });
       for (let i = 0; i < pipeables.length; i++) {
-        result3 = pipeables[i](result3, ...args2);
+        result2 = pipeables[i](result2, ...args2);
       }
-      if (!isEffect(result3)) {
-        return result3;
+      if (!isEffect(result2)) {
+        return result2;
       }
       const prevLimit = getStackTraceLimit();
       let callError;
@@ -3345,7 +3320,7 @@ ${prefix}}`;
         callError = new globalThis.Error();
         setStackTraceLimit(prevLimit);
       }
-      return updateService(addSpan ? useSpan(name, spanOptions, (span) => provideParentSpan(result3, span)) : result3, CurrentStackFrame, (prev) => ({
+      return updateService(addSpan ? useSpan(name, spanOptions, (span) => provideParentSpan(result2, span)) : result2, CurrentStackFrame, (prev) => ({
         name,
         stack: callError ? fnStackCleaner(() => callError.stack) : constUndefined,
         parent: {
@@ -3397,7 +3372,7 @@ ${prefix}}`;
     }
   }, "fromIteratorEagerUnsafe");
   var fromIteratorUnsafe = /* @__PURE__ */ (function() {
-    const Proto4 = /* @__PURE__ */ makePrimitiveProto({
+    const Proto3 = /* @__PURE__ */ makePrimitiveProto({
       op: "Iterator",
       [contA](value, fiber2) {
         const iter = this.iterator;
@@ -3421,7 +3396,7 @@ ${prefix}}`;
       this.iterator = iterator;
       this.initial = initial;
     }, "IteratorImpl");
-    IteratorImpl.prototype = Proto4;
+    IteratorImpl.prototype = Proto3;
     return function(iterator, initial) {
       return new IteratorImpl(iterator, initial);
     };
@@ -3476,46 +3451,6 @@ ${prefix}}`;
   var andThen = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? returnPayload : andThenCont, f));
   var tap = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? tapEffectCont : tapCont, f));
   var asVoid = /* @__PURE__ */ __name((self) => new ContImpl(self, returnPayload, exitVoid), "asVoid");
-  var raceAll = /* @__PURE__ */ __name((all3, options) => withFiber((parent) => {
-    const fibers = /* @__PURE__ */ new Set();
-    onExitUnsafe(parent, () => fibers.size === 0 ? void 0 : fiberInterruptAll(fibers));
-    return callback((resume) => {
-      const effects = fromIterable(all3);
-      const len = effects.length;
-      let doneCount = 0;
-      let done4 = false;
-      const failures = [];
-      const onExit4 = /* @__PURE__ */ __name((exit3, fiber2, i) => {
-        doneCount++;
-        if (exit3._tag === "Failure") {
-          failures.push(...exit3.cause.reasons);
-          if (doneCount >= len) {
-            resume(failCause(causeFromReasons(failures)));
-          }
-          return;
-        }
-        const isWinner = !done4;
-        done4 = true;
-        resume(exit3);
-        if (isWinner && options?.onWinner) {
-          options.onWinner({
-            fiber: fiber2,
-            index: i,
-            parentFiber: parent
-          });
-        }
-      }, "onExit");
-      for (let i = 0; i < len; i++) {
-        const fiber2 = forkUnsafe(parent, effects[i], true, true, false);
-        fibers.add(fiber2);
-        fiber2.addObserver((exit3) => {
-          fibers.delete(fiber2);
-          onExit4(exit3, fiber2, i);
-        });
-        if (done4) break;
-      }
-    });
-  }), "raceAll");
   var raceAllFirst = /* @__PURE__ */ __name((all3, options) => withFiber((parent) => {
     const fibers = /* @__PURE__ */ new Set();
     onExitUnsafe(parent, () => fibers.size === 0 ? void 0 : fiberInterruptAll(fibers));
@@ -3543,7 +3478,6 @@ ${prefix}}`;
       }
     });
   }), "raceAllFirst");
-  var race = /* @__PURE__ */ dual((args2) => isEffect(args2[1]), (self, that, options) => raceAll([self, that], options));
   var raceFirst = /* @__PURE__ */ dual((args2) => isEffect(args2[1]), (self, that, options) => raceAllFirst([self, that], options));
   var flatMap2 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, andThenCont, f));
   var effectIsExit = /* @__PURE__ */ __name((effect2) => effect2[ExitTypeId] !== void 0, "effectIsExit");
@@ -3556,10 +3490,9 @@ ${prefix}}`;
   var flatten3 = /* @__PURE__ */ __name((self) => flatMap2(self, identity), "flatten");
   var map3 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
   var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map3(self, f));
-  var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError2(self, f));
+  var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError(self, f));
   var exitInterrupt = /* @__PURE__ */ __name((fiberId3) => exitFailCause(causeInterrupt(fiberId3)), "exitInterrupt");
   var exitIsSuccess = /* @__PURE__ */ __name((self) => self._tag === "Success", "exitIsSuccess");
-  var exitIsFailure = /* @__PURE__ */ __name((self) => self._tag === "Failure", "exitIsFailure");
   var exitFilterCause = /* @__PURE__ */ __name((self) => self._tag === "Failure" ? succeed2(self.cause) : fail2(self), "exitFilterCause");
   var exitVoid = /* @__PURE__ */ exitSucceed(void 0);
   var exitMap = /* @__PURE__ */ dual(2, (self, f) => self._tag === "Success" ? exitSucceed(f(self.value)) : self);
@@ -3634,14 +3567,6 @@ ${prefix}}`;
     return isFailure2(eb) ? failCause(eb.failure) : f(eb.success, cause);
   }));
   var catch_ = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
-  var tapCauseFilter = /* @__PURE__ */ dual(3, (self, filter7, f) => catchCause(self, (cause) => {
-    const result3 = filter7(cause);
-    if (isFailure2(result3)) {
-      return failCause(cause);
-    }
-    return andThen(f(result3.success, cause), failCause(cause));
-  }));
-  var tapError = /* @__PURE__ */ dual(2, (self, f) => tapCauseFilter(self, findError, (e) => f(e)));
   var catchIf = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self, predicate, f, orElse) => catchCause(self, (cause) => {
     const error = findError(cause);
     if (isFailure2(error)) return failCause(error.failure);
@@ -3654,7 +3579,7 @@ ${prefix}}`;
     const pred = Array.isArray(k) ? (e) => hasProperty(e, "_tag") && k.includes(e._tag) : isTagged(k);
     return catchIf(self, pred, f, orElse);
   });
-  var mapError2 = /* @__PURE__ */ dual(2, (self, f) => catch_(self, (error) => failSync(() => f(error))));
+  var mapError = /* @__PURE__ */ dual(2, (self, f) => catch_(self, (error) => failSync(() => f(error))));
   var orDie = /* @__PURE__ */ __name((self) => catch_(self, die), "orDie");
   var result = /* @__PURE__ */ __name((self) => matchEager(self, {
     onFailure: fail2,
@@ -3676,7 +3601,7 @@ ${prefix}}`;
     return fiber2.succeedWith(continuationMarksStack ? handlers.onSuccess(value) : internalCall(() => handlers.onSuccess(value)));
   }, "matchSuccess");
   var makeMatch = /* @__PURE__ */ __name((op, onFailure) => {
-    const Proto4 = makePrimitiveProto({
+    const Proto3 = makePrimitiveProto({
       op,
       [evaluate]: evaluateCont,
       [contA]: matchSuccess,
@@ -3686,7 +3611,7 @@ ${prefix}}`;
       this[args] = self;
       this.payload = handlers;
     }, "MatchImpl");
-    MatchImpl2.prototype = Proto4;
+    MatchImpl2.prototype = Proto3;
     return MatchImpl2;
   }, "makeMatch");
   var MatchImpl = /* @__PURE__ */ makeMatch("Match", function(cause, fiber2) {
@@ -3850,7 +3775,7 @@ ${prefix}}`;
   var acquireRelease = /* @__PURE__ */ __name((acquire, release, options) => contextWith((context3) => uninterruptibleMask((restore) => flatMap2(scope, (scope3) => tap(options?.interruptible ? restore(acquire) : acquire, (a) => scopeAddFinalizerExit(scope3, (exit3) => provideContext(release(a, exit3), context3)))))), "acquireRelease");
   var addFinalizer = /* @__PURE__ */ __name((finalizer) => flatMap2(scope, (scope3) => contextWith((context3) => scopeAddFinalizerExit(scope3, (exit3) => provideContext(finalizer(exit3), context3)))), "addFinalizer");
   var OnExitImpl = /* @__PURE__ */ (function() {
-    const Proto4 = /* @__PURE__ */ makePrimitiveProto({
+    const Proto3 = /* @__PURE__ */ makePrimitiveProto({
       op: "OnExit",
       [evaluate](fiber2) {
         fiber2._stack.push(this);
@@ -3888,7 +3813,7 @@ ${prefix}}`;
       this.onExit = onExit4;
       this.interruptible = interruptible2;
     }, "OnExitImpl");
-    OnExitImpl2.prototype = Proto4;
+    OnExitImpl2.prototype = Proto3;
     return OnExitImpl2;
   })();
   var onExitPrimitive = /* @__PURE__ */ __name((effect2, onExit4, interruptible2) => new OnExitImpl(effect2, onExit4, interruptible2), "onExitPrimitive");
@@ -3907,8 +3832,8 @@ ${prefix}}`;
     if (exit3._tag !== "Failure") {
       return void_;
     }
-    const result3 = filter7(exit3.cause);
-    return isFailure2(result3) ? void_ : f(result3.success, exit3.cause);
+    const result2 = filter7(exit3.cause);
+    return isFailure2(result2) ? void_ : f(result2.success, exit3.cause);
   }));
   var onInterrupt = /* @__PURE__ */ dual(2, (self, finalizer) => onErrorFilter(causeFilterInterruptors, finalizer)(self));
   var acquireUseRelease = /* @__PURE__ */ __name((acquire, use, release) => uninterruptibleMask((restore) => flatMap2(acquire, (a) => onExitPrimitive(suspend(() => restore(use(a))), (exit3) => release(a, exit3), true))), "acquireUseRelease");
@@ -4069,13 +3994,13 @@ ${prefix}}`;
               fibers = /* @__PURE__ */ new Set();
               effect2 = eff;
               resume = cb;
-              let result3;
+              let result2;
               try {
-                result3 = go();
+                result2 = go();
               } catch (error) {
                 return cb(failDefect(error));
               }
-              if (result3) return cb(result3);
+              if (result2) return cb(result2);
               return suspend(() => {
                 terminal ??= exitVoid;
                 return flatMap2(fibers ? fiberInterruptAll(fibers) : void_, () => terminal?._tag === "Failure" ? terminal : void_);
@@ -4103,9 +4028,9 @@ ${prefix}}`;
                     }
                   }
                 } else {
-                  const result3 = step(state, item, exit3, currentIndex);
-                  if (result3) {
-                    terminal = result3;
+                  const result2 = step(state, item, exit3, currentIndex);
+                  if (result2) {
+                    terminal = result2;
                     go();
                   }
                 }
@@ -4161,12 +4086,12 @@ ${prefix}}`;
   var filter = /* @__PURE__ */ dual((args2) => isIterable(args2[0]) && !isEffect(args2[0]), (elements, predicate, options) => suspend(() => {
     const out = [];
     return as(forEach(elements, (a, i) => {
-      const result3 = predicate(a, i);
-      if (typeof result3 === "boolean") {
-        if (result3) out.push(a);
+      const result2 = predicate(a, i);
+      if (typeof result2 === "boolean") {
+        if (result2) out.push(a);
         return void_;
       }
-      return map3(result3, (keep) => {
+      return map3(result2, (keep) => {
         if (keep) {
           out.push(a);
         }
@@ -4766,7 +4691,6 @@ ${prefix}}`;
   var interrupt2 = exitInterrupt;
   var void_2 = exitVoid;
   var isSuccess3 = exitIsSuccess;
-  var isFailure3 = exitIsFailure;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Deferred.js
   var TypeId5 = "~effect/Deferred";
@@ -4959,7 +4883,6 @@ ${prefix}}`;
   var map4 = causeMap;
   var squash = causeSquash;
   var hasDies2 = hasDies;
-  var filterInterruptors = causeFilterInterruptors;
   var pretty = causePretty;
   var isDone3 = isDone;
   var done3 = done;
@@ -5137,7 +5060,7 @@ ${prefix}}`;
     return millis(millis2 * 0.8 * (1 - random3) + millis2 * 1.2 * random3);
   })), "jittered");
   var passthrough = /* @__PURE__ */ __name((self) => fromStep(map3(toStep(self), (step) => (now, input) => matchEffect(step(now, input), {
-    onSuccess: /* @__PURE__ */ __name((result3) => succeed3([input, result3[1]]), "onSuccess"),
+    onSuccess: /* @__PURE__ */ __name((result2) => succeed3([input, result2[1]]), "onSuccess"),
     onFailure: failCause,
     onDone: /* @__PURE__ */ __name(() => done3(input), "onDone")
   }))), "passthrough");
@@ -5145,14 +5068,6 @@ ${prefix}}`;
     const decoded = fromInputUnsafe(duration);
     return fromStepWithMetadata(succeed3((meta) => succeed3([meta.attempt - 1, decoded])));
   }, "spaced");
-  var tap2 = /* @__PURE__ */ dual(2, (self, f) => fromStep(map3(toStep(self), (step) => {
-    const meta = metadataFn();
-    return (now, input) => tap(step(now, input), ([output, duration]) => f({
-      ...meta(now, input),
-      output,
-      duration
-    }));
-  })));
   var upTo = /* @__PURE__ */ dual(2, (self, options) => {
     const duration = options.duration === void 0 ? void 0 : fromInputUnsafe(options.duration);
     return while_(self, ({
@@ -5162,18 +5077,17 @@ ${prefix}}`;
   });
   var while_ = /* @__PURE__ */ dual(2, (self, predicate) => fromStep(map3(toStep(self), (step) => {
     const meta = metadataFn();
-    return (now, input) => flatMap2(step(now, input), (result3) => {
-      const [output, duration] = result3;
+    return (now, input) => flatMap2(step(now, input), (result2) => {
+      const [output, duration] = result2;
       const eff = predicate({
         ...meta(now, input),
         output,
         duration
       });
-      return flatMap2(isEffect(eff) ? eff : succeed3(eff), (check) => check ? succeed3(result3) : done3(output));
+      return flatMap2(isEffect(eff) ? eff : succeed3(eff), (check) => check ? succeed3(result2) : done3(output));
     });
   })));
   var forever2 = /* @__PURE__ */ spaced(zero);
-  var setInputType = /* @__PURE__ */ __name(() => (self) => self, "setInputType");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/schedule.js
   var findErrorOnly = /* @__PURE__ */ __name((cause) => cause.reasons.every(isFailReason) ? findError(cause) : fail2(cause), "findErrorOnly");
@@ -5256,24 +5170,20 @@ ${prefix}}`;
   var flatMap3 = flatMap2;
   var flatten4 = flatten3;
   var andThen2 = andThen;
-  var tap3 = tap;
-  var result2 = result;
+  var tap2 = tap;
   var exit2 = exit;
   var map5 = map3;
   var as2 = as;
-  var asSome2 = asSome;
   var asVoid2 = asVoid;
   var zipWith2 = zipWith;
   var catch_2 = catch_;
   var catchTag2 = catchTag;
   var catchCause2 = catchCause;
-  var mapError3 = mapError2;
+  var mapError2 = mapError;
   var orDie2 = orDie;
-  var tapError2 = tapError;
   var retry2 = retry;
   var timeoutOption2 = timeoutOption;
   var sleep2 = sleep;
-  var race2 = race;
   var raceFirst2 = raceFirst;
   var filter2 = filter;
   var when2 = when;
@@ -5487,7 +5397,6 @@ ${prefix}}`;
   var await_ = fiberAwait;
   var join = fiberJoin;
   var interrupt4 = fiberInterrupt;
-  var interruptAs = fiberInterruptAs;
   var runIn = fiberRunIn;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/ManagedRuntime.js
@@ -5510,7 +5419,7 @@ ${prefix}}`;
     let buildFiber;
     const contextEffect = withFiber2((fiber2) => {
       if (!buildFiber) {
-        buildFiber = runFork2(tap3(buildWithMemoMap(layer8, memoMap, layerScope), (context3) => sync2(() => {
+        buildFiber = runFork2(tap2(buildWithMemoMap(layer8, memoMap, layerScope), (context3) => sync2(() => {
           self.cachedContext = context3;
         })), {
           ...defaultRunOptions,
@@ -5593,14 +5502,14 @@ ${prefix}}`;
     }
     try {
       const missingOctets = stripped.endsWith("==") ? 2 : stripped.endsWith("=") ? 1 : 0;
-      const result3 = new Uint8Array(3 * (length / 4) - missingOctets);
+      const result2 = new Uint8Array(3 * (length / 4) - missingOctets);
       for (let i = 0, j = 0; i < length; i += 4, j += 3) {
         const buffer2 = getCode(stripped.charCodeAt(i)) << 18 | getCode(stripped.charCodeAt(i + 1)) << 12 | getCode(stripped.charCodeAt(i + 2)) << 6 | getCode(stripped.charCodeAt(i + 3));
-        result3[j] = buffer2 >> 16;
-        result3[j + 1] = buffer2 >> 8 & 255;
-        result3[j + 2] = buffer2 & 255;
+        result2[j] = buffer2 >> 16;
+        result2[j + 1] = buffer2 >> 8 & 255;
+        result2[j + 2] = buffer2 & 255;
       }
-      return succeed2(result3);
+      return succeed2(result2);
     } catch (cause) {
       return fail2(new EncodingError({
         kind: "Decode",
@@ -5612,26 +5521,26 @@ ${prefix}}`;
   }, "decode");
   var encodeBytes = /* @__PURE__ */ __name((bytes) => {
     const length = bytes.length;
-    let result3 = "";
+    let result2 = "";
     let i;
     for (i = 2; i < length; i += 3) {
-      result3 += alphabet[bytes[i - 2] >> 2];
-      result3 += alphabet[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
-      result3 += alphabet[(bytes[i - 1] & 15) << 2 | bytes[i] >> 6];
-      result3 += alphabet[bytes[i] & 63];
+      result2 += alphabet[bytes[i - 2] >> 2];
+      result2 += alphabet[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
+      result2 += alphabet[(bytes[i - 1] & 15) << 2 | bytes[i] >> 6];
+      result2 += alphabet[bytes[i] & 63];
     }
     if (i === length + 1) {
-      result3 += alphabet[bytes[i - 2] >> 2];
-      result3 += alphabet[(bytes[i - 2] & 3) << 4];
-      result3 += "==";
+      result2 += alphabet[bytes[i - 2] >> 2];
+      result2 += alphabet[(bytes[i - 2] & 3) << 4];
+      result2 += "==";
     }
     if (i === length) {
-      result3 += alphabet[bytes[i - 2] >> 2];
-      result3 += alphabet[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
-      result3 += alphabet[(bytes[i - 1] & 15) << 2];
-      result3 += "=";
+      result2 += alphabet[bytes[i - 2] >> 2];
+      result2 += alphabet[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
+      result2 += alphabet[(bytes[i - 1] & 15) << 2];
+      result2 += "=";
     }
-    return result3;
+    return result2;
   }, "encodeBytes");
   var encoder = /* @__PURE__ */ new TextEncoder();
   var stripCrlf = /* @__PURE__ */ __name((str) => str.replace(/[\n\r]/g, ""), "stripCrlf");
@@ -6242,24 +6151,24 @@ ${prefix}}`;
      * differently when encoding. `undefined` reuses `run`.
      */
     encodingRun;
-    constructor(typeParameters, run3, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
+    constructor(typeParameters, run2, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
       super(annotations, checks, encoding, context3);
       this.typeParameters = typeParameters;
-      this.run = run3;
+      this.run = run2;
       this.encodingChecks = encodingChecks;
       this.encodingRun = encodingRun;
     }
     /** @internal */
     getParser() {
-      let run3;
+      let run2;
       return (input, options) => {
         if (input === missing) return missingExit;
-        return (run3 ??= this.run(this.typeParameters))(input, this, options);
+        return (run2 ??= this.run(this.typeParameters))(input, this, options);
       };
     }
-    _rebuild(recur, checks, encodingChecks, run3, encodingRun) {
+    _rebuild(recur, checks, encodingChecks, run2, encodingRun) {
       const tps = mapOrSame(this.typeParameters, recur);
-      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run3 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run3, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
+      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run2 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run2, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
     }
     /** @internal */
     recur(recur) {
@@ -6814,13 +6723,13 @@ ${prefix}}`;
           }
           const k2 = exitKey === sameExit ? key : exitKey[args];
           const inputValue = s.input[key];
-          const result3 = index.parserValue(inputValue, s.options);
-          return effectIsExit(result3) ? finishIndex(s, key, k2, inputValue, result3) : flatMap3(exit2(result3), (exit3) => finishIndex(s, key, k2, inputValue, exit3));
+          const result2 = index.parserValue(inputValue, s.options);
+          return effectIsExit(result2) ? finishIndex(s, key, k2, inputValue, result2) : flatMap3(exit2(result2), (exit3) => finishIndex(s, key, k2, inputValue, exit3));
         }, "parseIndex");
         const parseStringIndex = /* @__PURE__ */ __name((s, key, index) => {
           const inputValue = s.input[key];
-          const result3 = index.parserValue(inputValue, s.options);
-          return effectIsExit(result3) ? finishIndex(s, key, key, inputValue, result3) : flatMap3(exit2(result3), (exit3) => finishIndex(s, key, key, inputValue, exit3));
+          const result2 = index.parserValue(inputValue, s.options);
+          return effectIsExit(result2) ? finishIndex(s, key, key, inputValue, result2) : flatMap3(exit2(result2), (exit3) => finishIndex(s, key, key, inputValue, exit3));
         }, "parseStringIndex");
         const parseIndexes = indexCount ? iterateConcurrent()({
           onItem: /* @__PURE__ */ __name((s, [key, index]) => index.is.parameter === string2 ? parseStringIndex(s, key, index) : parseIndex(s, key, index), "onItem"),
@@ -6891,7 +6800,7 @@ ${prefix}}`;
               }
             }
           } else if (parseIndexes) {
-            const keyPairs = empty3();
+            const keyPairs = empty2();
             for (let i = 0; i < indexCount; i++) {
               const index = indexes[i];
               const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record3) : getIndexSignatureKeys(record3, index.is.parameter, options));
@@ -7308,9 +7217,9 @@ ${prefix}}`;
           return fail5(new AnyOf(ast, [], input, options));
         }
         if (candidates.length === 1) {
-          const result3 = parser(candidates[0])(input, options);
-          if (result3._tag === "Success") return result3;
-          return effectIsExit(result3) ? failSingleUnionCandidate(ast, result3.cause, input, options) : catchSingleUnionCandidate(ast, result3, input, options);
+          const result2 = parser(candidates[0])(input, options);
+          if (result2._tag === "Success") return result2;
+          return effectIsExit(result2) ? failSingleUnionCandidate(ast, result2.cause, input, options) : catchSingleUnionCandidate(ast, result2, input, options);
         }
         return parseUnionCandidates(ast, parser, candidates, input, options);
       };
@@ -7369,8 +7278,8 @@ ${prefix}}`;
     return fail4(new AnyOf(ast, [issue2], input, options));
   }
   __name(failSingleUnionCandidate, "failSingleUnionCandidate");
-  function catchSingleUnionCandidate(ast, result3, input, options) {
-    return catchCause2(result3, (cause) => failSingleUnionCandidate(ast, cause, input, options));
+  function catchSingleUnionCandidate(ast, result2, input, options) {
+    return catchCause2(result2, (cause) => failSingleUnionCandidate(ast, cause, input, options));
   }
   __name(catchSingleUnionCandidate, "catchSingleUnionCandidate");
   function parseUnionCandidates(ast, parser, candidates, input, options) {
@@ -7451,9 +7360,9 @@ ${prefix}}`;
      * Whether the parsing process should be aborted after this check has failed.
      */
     aborted;
-    constructor(run3, annotations = void 0, aborted = false) {
+    constructor(run2, annotations = void 0, aborted = false) {
       super();
-      this.run = run3;
+      this.run = run2;
       this.annotations = annotations;
       this.aborted = aborted;
     }
@@ -7977,30 +7886,30 @@ ${prefix}}`;
   var unknownToStringTree = /* @__PURE__ */ new Link(StringTree, /* @__PURE__ */ passthrough3());
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/schema/interpreter.js
-  var flatMapTransformation = /* @__PURE__ */ __name((result3, current, f) => result3 === sameExit ? f(current) : flatMapEager2(result3, f), "flatMapTransformation");
+  var flatMapTransformation = /* @__PURE__ */ __name((result2, current, f) => result2 === sameExit ? f(current) : flatMapEager2(result2, f), "flatMapTransformation");
   function compileTransformation(transformation) {
     if (transformation._tag === "Middleware") {
-      return (result3, current, options) => {
-        const transformed = result3 === sameExit ? transformation.decode(succeed8(toOption(current)), options) : transformation.decode(mapEager2(result3, toOption), options);
+      return (result2, current, options) => {
+        const transformed = result2 === sameExit ? transformation.decode(succeed8(toOption(current)), options) : transformation.decode(mapEager2(result2, toOption), options);
         return fromOptionalEffect(transformed);
       };
     }
     const getter = transformation.decode;
     switch (getter._tag) {
       case "Passthrough":
-        return (result3, current) => result3 === sameExit ? succeed8(current) : result3;
+        return (result2, current) => result2 === sameExit ? succeed8(current) : result2;
       case "Transform": {
         const transform3 = /* @__PURE__ */ __name((value) => value === missing ? missingExit : succeed8(getter.transform(value)), "transform");
-        return (result3, current) => flatMapTransformation(result3, current, transform3);
+        return (result2, current) => flatMapTransformation(result2, current, transform3);
       }
       case "TransformOptional": {
         const transform3 = /* @__PURE__ */ __name((value) => fromOptionExit(getter.transform(toOption(value))), "transform");
-        return (result3, current) => flatMapTransformation(result3, current, transform3);
+        return (result2, current) => flatMapTransformation(result2, current, transform3);
       }
       case "TransformEffect":
-        return (result3, current, options) => flatMapTransformation(result3, current, (value) => value === missing ? missingExit : getter.transform(value, options));
+        return (result2, current, options) => flatMapTransformation(result2, current, (value) => value === missing ? missingExit : getter.transform(value, options));
       case "TransformOptionalEffect":
-        return (result3, current, options) => flatMapTransformation(result3, current, (value) => fromOptionalEffect(getter.transform(toOption(value), options)));
+        return (result2, current, options) => flatMapTransformation(result2, current, (value) => fromOptionalEffect(getter.transform(toOption(value), options)));
     }
   }
   __name(compileTransformation, "compileTransformation");
@@ -8012,8 +7921,8 @@ ${prefix}}`;
     return (input, options) => {
       if (input === missing) return missingExit;
       if (descriptor.isConstructed(input)) return sameExit;
-      const result3 = (sourceParser ??= compile2(descriptor.link.to))(input, options);
-      return transform3(result3, input, options);
+      const result2 = (sourceParser ??= compile2(descriptor.link.to))(input, options);
+      return transform3(result2, input, options);
     };
   }
   __name(makeConstructorParser, "makeConstructorParser");
@@ -8021,12 +7930,12 @@ ${prefix}}`;
     const defaultValue = ast.context.constructorDefault;
     return (input, options) => {
       if (input !== missing && input !== void 0) return parser(input, options);
-      const result3 = defaultValue;
-      if (effectIsExit(result3) && result3._tag === "Success") {
-        const local = parser(result3[args], options);
-        return local === sameExit ? result3 : local;
+      const result2 = defaultValue;
+      if (effectIsExit(result2) && result2._tag === "Success") {
+        const local = parser(result2[args], options);
+        return local === sameExit ? result2 : local;
       }
-      return flatMapEager2(wrapEncoding(ast, input, options, result3), (value) => {
+      return flatMapEager2(wrapEncoding(ast, input, options, result2), (value) => {
         const local = parser(value, options);
         return local === sameExit ? succeed8(value) : local;
       });
@@ -8053,20 +7962,20 @@ ${prefix}}`;
     }
     let encodingParsers;
     const parseChecks = /* @__PURE__ */ __name((input, options) => {
-      let result3 = parser(input, options);
+      let result2 = parser(input, options);
       if (encodingChecks && !options.disableChecks) {
-        if (effectIsExit(result3)) {
-          if (result3._tag === "Success") {
-            const output = result3 === sameExit ? input : result3[args];
+        if (effectIsExit(result2)) {
+          if (result2._tag === "Success") {
+            const output = result2 === sameExit ? input : result2[args];
             if (input !== missing && output !== missing) {
               const issues = collectIssues(encodingChecks, input, void 0, ast, options);
               if (issues) {
-                result3 = fail5(new Composite(ast, issues, input, options));
+                result2 = fail5(new Composite(ast, issues, input, options));
               }
             }
           }
         } else {
-          result3 = flatMap3(result3, (value) => {
+          result2 = flatMap3(result2, (value) => {
             if (input !== missing && value !== missing) {
               const issues = collectIssues(encodingChecks, input, void 0, ast, options);
               if (issues) {
@@ -8078,17 +7987,17 @@ ${prefix}}`;
         }
       }
       if (checks && !options.disableChecks) {
-        if (effectIsExit(result3)) {
-          if (result3._tag === "Success") {
-            const value = result3 === sameExit ? input : result3[args];
-            if (value === missing) return result3;
+        if (effectIsExit(result2)) {
+          if (result2._tag === "Success") {
+            const value = result2 === sameExit ? input : result2[args];
+            if (value === missing) return result2;
             const issues = collectIssues(checks, value, void 0, ast, options);
             if (issues) {
-              result3 = fail5(new Composite(ast, issues, value, options));
+              result2 = fail5(new Composite(ast, issues, value, options));
             }
           }
         } else {
-          result3 = flatMap3(result3, (value) => {
+          result2 = flatMap3(result2, (value) => {
             if (value !== missing) {
               const issues = collectIssues(checks, value, void 0, ast, options);
               if (issues) {
@@ -8099,7 +8008,7 @@ ${prefix}}`;
           });
         }
       }
-      return result3;
+      return result2;
     }, "parseChecks");
     const parseLocal = specialize === void 0 ? parseChecks : specialize(parseChecks);
     if (!links) {
@@ -8108,29 +8017,29 @@ ${prefix}}`;
     return (input, options) => {
       const parsers2 = encodingParsers ??= links.map((link2) => compile2(link2.to));
       let current = input;
-      let result3 = parsers2[parsers2.length - 1](input, options);
+      let result2 = parsers2[parsers2.length - 1](input, options);
       for (let i = links.length - 1; i >= 0; i--) {
-        result3 = transformations[i](result3, current, options);
+        result2 = transformations[i](result2, current, options);
         if (i !== 0) {
           const next = parsers2[i - 1];
-          if (result3._tag === "Success") {
-            current = result3[args];
-            result3 = next(current, options);
+          if (result2._tag === "Success") {
+            current = result2[args];
+            result2 = next(current, options);
           } else {
-            result3 = flatMapEager2(result3, (value) => {
+            result2 = flatMapEager2(result2, (value) => {
               const nextResult = next(value, options);
               return nextResult === sameExit ? succeed8(value) : nextResult;
             });
           }
         }
       }
-      if (result3._tag === "Success") {
-        const value = result3[args];
+      if (result2._tag === "Success") {
+        const value = result2[args];
         const local = parseLocal(value, options);
-        return local === sameExit ? result3 : local;
+        return local === sameExit ? result2 : local;
       }
-      result3 = wrapEncoding(ast, input, options, result3);
-      return flatMapEager2(result3, (value) => {
+      result2 = wrapEncoding(ast, input, options, result2);
+      return flatMapEager2(result2, (value) => {
         const local = parseLocal(value, options);
         return local === sameExit ? succeed8(value) : local;
       });
@@ -8344,27 +8253,27 @@ ${prefix}}`;
     return runWithCompiler(normalCompiler, ast);
   }
   __name(run, "run");
-  function parserResult(result3, input) {
-    if (result3 === sameExit) {
+  function parserResult(result2, input) {
+    if (result2 === sameExit) {
       return succeed7(input);
     }
-    if (!effectIsExit(result3)) {
-      return flatMapEager2(result3, getValue);
+    if (!effectIsExit(result2)) {
+      return flatMapEager2(result2, getValue);
     }
-    return result3[args] === missing ? getValue(missing) : result3;
+    return result2[args] === missing ? getValue(missing) : result2;
   }
   __name(parserResult, "parserResult");
   function runWithCompiler(compiler2, ast) {
     let parser;
     return (input, options) => {
-      const result3 = (parser ??= compiler2(ast))(input, options ?? defaultParseOptions);
-      if (result3 === sameExit) {
+      const result2 = (parser ??= compiler2(ast))(input, options ?? defaultParseOptions);
+      if (result2 === sameExit) {
         return succeed7(input);
       }
-      if (!effectIsExit(result3)) {
-        return flatMapEager2(result3, getValue);
+      if (!effectIsExit(result2)) {
+        return flatMapEager2(result2, getValue);
       }
-      return result3[args] === missing ? getValue(missing) : result3;
+      return result2[args] === missing ? getValue(missing) : result2;
     };
   }
   __name(runWithCompiler, "runWithCompiler");
@@ -8428,8 +8337,8 @@ ${prefix}}`;
         }
         if (output !== invalid2 && output !== missing) return output;
       }
-      const result3 = (parser ??= entry.makeEffect)(input, parseOptions);
-      return runSync3(parserResult(result3, input), "Constructor adapter can only throw schema issues");
+      const result2 = (parser ??= entry.makeEffect)(input, parseOptions);
+      return runSync3(parserResult(result2, input), "Constructor adapter can only throw schema issues");
     };
   }
   __name(makeConstructorSync, "makeConstructorSync");
@@ -8508,8 +8417,8 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Schema.js
   var TypeId13 = TypeId12;
   function declareConstructor() {
-    return (typeParameters, run3, annotations) => {
-      return make9(new Declaration(typeParameters.map(getAST), (typeParameters2) => run3(typeParameters2.map((ast) => make9(ast))), annotations));
+    return (typeParameters, run2, annotations) => {
+      return make9(new Declaration(typeParameters.map(getAST), (typeParameters2) => run2(typeParameters2.map((ast) => make9(ast))), annotations));
     };
   }
   __name(declareConstructor, "declareConstructor");
@@ -9586,7 +9495,7 @@ ${prefix}}`;
     return forEach2(takeAll(self.pollers), (d) => interruptWith(d, state.id), {
       discard: true,
       concurrency: "unbounded"
-    }).pipe(tap3(() => sync2(() => {
+    }).pipe(tap2(() => sync2(() => {
       self.subscribers.delete(self.subscription);
       self.subscription.unsubscribe();
       self.replayWindow.close();
@@ -9636,12 +9545,12 @@ ${prefix}}`;
       return resume(succeed7(self.ended.current.value));
     }
     const deferred = makeUnsafe2();
-    let set5 = self.subscribers.get(self.subscription);
-    if (!set5) {
-      set5 = /* @__PURE__ */ new Set();
-      self.subscribers.set(self.subscription, set5);
+    let set4 = self.subscribers.get(self.subscription);
+    if (!set4) {
+      set4 = /* @__PURE__ */ new Set();
+      self.subscribers.set(self.subscription, set4);
     }
-    set5.add(self.pollers);
+    set4.add(self.pollers);
     append2(self.pollers, deferred);
     self.strategy.completePollersUnsafe(self.pubsub, self.subscribers, self.subscription, self.pollers);
     if (deferred.effect) return resume(deferred.effect);
@@ -9653,16 +9562,16 @@ ${prefix}}`;
     if (!subscribers.has(subscription)) {
       subscribers.set(subscription, /* @__PURE__ */ new Set());
     }
-    const set5 = subscribers.get(subscription);
-    set5.add(pollers);
+    const set4 = subscribers.get(subscription);
+    set4.add(pollers);
   }, "addSubscribers");
   var removeSubscribers = /* @__PURE__ */ __name((subscribers, subscription, pollers) => {
     if (!subscribers.has(subscription)) {
       return;
     }
-    const set5 = subscribers.get(subscription);
-    set5.delete(pollers);
-    if (set5.size === 0) {
+    const set4 = subscribers.get(subscription);
+    set4.delete(pollers);
+    if (set4.size === 0) {
       subscribers.delete(subscription);
     }
   }, "removeSubscribers");
@@ -9756,14 +9665,14 @@ ${prefix}}`;
       if (this.unsubscribed) {
         return true;
       }
-      let empty6 = true;
+      let empty4 = true;
       let loop = true;
       while (loop) {
         if (this.subscriberHead === this.self.publisherTail) {
           loop = false;
         } else {
           if (this.subscriberHead.next.value !== AbsentValue) {
-            empty6 = false;
+            empty4 = false;
             loop = false;
           } else {
             this.subscriberHead = this.subscriberHead.next;
@@ -9771,7 +9680,7 @@ ${prefix}}`;
           }
         }
       }
-      return empty6;
+      return empty4;
     }
     size() {
       if (this.unsubscribed) {
@@ -10459,7 +10368,6 @@ ${prefix}}`;
     return onError2(pull, onCause);
   })), "fromTransformBracket");
   var toTransform = /* @__PURE__ */ __name((channel) => channel.transform, "toTransform");
-  var suspend3 = /* @__PURE__ */ __name((evaluate2) => fromTransform((upstream, scope3) => suspend2(() => toTransform(evaluate2())(upstream, scope3))), "suspend");
   var fromQueueArray = /* @__PURE__ */ __name((queue) => fromPull(succeed7(takeAll3(queue))), "fromQueueArray");
   var fromSubscriptionArray = /* @__PURE__ */ __name((subscription) => fromPull(succeed7(onInterrupt2(takeAll2(subscription), () => done3()))), "fromSubscriptionArray");
   var fromPubSubArray = /* @__PURE__ */ __name((pubsub) => unwrap(map5(subscribe(pubsub), fromSubscriptionArray)), "fromPubSubArray");
@@ -10548,7 +10456,7 @@ ${prefix}}`;
     return succeed7(pump);
   }), "flattenArray");
   var schedule2 = /* @__PURE__ */ dual(2, (self, schedule4) => transformPull(self, (pull, _scope) => map5(toStepWithSleep(schedule4), (step) => {
-    const pullWithStep = tap3(pull, step);
+    const pullWithStep = tap2(pull, step);
     return pullWithStep;
   })));
   var filterArray = /* @__PURE__ */ dual(2, (self, predicate) => transformPull(self, (pull) => succeed7(flatMap3(pull, /* @__PURE__ */ __name(function loop(arr) {
@@ -10578,13 +10486,6 @@ ${prefix}}`;
   var runForEach = /* @__PURE__ */ dual(2, (self, f) => runWith(self, (pull) => forever3(flatMap3(pull, f), {
     disableYield: true
   })));
-  var runHead = /* @__PURE__ */ __name((self) => suspend2(() => {
-    let head2 = none2();
-    return runWith(self, (pull) => pull.pipe(asSome2, flatMap3((head_) => {
-      head2 = head_;
-      return done3();
-    })), () => succeed7(head2));
-  }), "runHead");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/stream.js
   var TypeId18 = "~effect/Stream";
@@ -10604,120 +10505,16 @@ ${prefix}}`;
   };
   var fromChannel = /* @__PURE__ */ __name((channel) => new Stream(channel), "fromChannel");
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableHashMap.js
-  var TypeId19 = "~effect/MutableHashMap";
-  var MutableHashMapProto = {
-    [TypeId19]: TypeId19,
-    [Symbol.iterator]() {
-      return this.backing[Symbol.iterator]();
-    },
-    toString() {
-      return `MutableHashMap(${format2(Array.from(this))})`;
-    },
-    toJSON() {
-      return {
-        _id: "MutableHashMap",
-        values: toJson(Array.from(this))
-      };
-    },
-    [NodeInspectSymbol]() {
-      return this.toJSON();
-    },
-    pipe() {
-      return pipeArguments(this, arguments);
-    }
-  };
-  var get3 = /* @__PURE__ */ dual(2, (self, key) => {
-    if (self.backing.has(key)) {
-      return some2(self.backing.get(key));
-    } else if (isSimpleKey(key)) {
-      return none2();
-    }
-    const hash2 = hash(key);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      return none2();
-    }
-    return getFromBucket(self, bucket, key);
-  });
-  var isSimpleKey = /* @__PURE__ */ __name((u) => typeof u !== "object" && typeof u !== "function", "isSimpleKey");
-  var getFromBucket = /* @__PURE__ */ __name((self, bucket, key) => {
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      if (equals(key, bucket[i])) {
-        const refKey = bucket[i];
-        return some2(self.backing.get(refKey));
-      }
-    }
-    return none2();
-  }, "getFromBucket");
-  var has2 = /* @__PURE__ */ dual(2, (self, key) => isSome2(get3(self, key)));
-  var set2 = /* @__PURE__ */ dual(3, (self, key, value) => {
-    if (self.backing.has(key) || isSimpleKey(key)) {
-      self.backing.set(key, value);
-      return self;
-    }
-    const hash2 = hash(key);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      self.buckets.set(hash2, [key]);
-      self.backing.set(key, value);
-      return self;
-    }
-    let refKey = getRefKey(bucket, key);
-    if (refKey === void 0) {
-      bucket.push(key);
-      refKey = key;
-    }
-    self.backing.set(refKey, value);
-    return self;
-  });
-  var getRefKey = /* @__PURE__ */ __name((bucket, key) => {
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      if (equals(key, bucket[i])) {
-        return bucket[i];
-      }
-    }
-  }, "getRefKey");
-  var remove2 = /* @__PURE__ */ dual(2, (self, key_) => {
-    if (isSimpleKey(key_)) {
-      self.backing.delete(key_);
-      return self;
-    }
-    const hash2 = hash(key_);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      return self;
-    }
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      const bkey = bucket[i];
-      if (bkey === key_ || equals(key_, bkey)) {
-        self.backing.delete(bkey);
-        bucket.splice(i, 1);
-        break;
-      }
-    }
-    if (bucket.length === 0) {
-      self.buckets.delete(hash2);
-    }
-    return self;
-  });
-
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Stream.js
-  var TypeId20 = "~effect/Stream";
-  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId20), "isStream");
+  var TypeId19 = "~effect/Stream";
+  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId19), "isStream");
   var fromChannel2 = fromChannel;
   var toChannel = /* @__PURE__ */ __name((stream) => stream.channel, "toChannel");
-  var suspend4 = /* @__PURE__ */ __name((stream) => fromChannel2(suspend3(() => stream().channel)), "suspend");
   var fromQueue = /* @__PURE__ */ __name((queue) => fromChannel2(fromQueueArray(queue)), "fromQueue");
   var fromPubSub = /* @__PURE__ */ __name((pubsub) => fromChannel2(fromPubSubArray(pubsub)), "fromPubSub");
-  var map8 = /* @__PURE__ */ dual(2, (self, f) => suspend4(() => {
-    let i = 0;
-    return fromChannel2(map7(self.channel, map2((o) => f(o, i++))));
-  }));
   var mapEffect2 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, f, options) => self.channel.pipe(flattenArray, mapEffect(f, options), map7(of), fromChannel2));
   var schedule3 = /* @__PURE__ */ dual(2, (self, schedule4) => self.channel.pipe(flattenArray, schedule2(schedule4), map7(of), fromChannel2));
   var filter6 = /* @__PURE__ */ dual(2, (self, predicate) => fromChannel2(filterArray(toChannel(self), predicate)));
-  var runHead2 = /* @__PURE__ */ __name((self) => map5(runHead(self.channel), map(getUnsafe2(0))), "runHead");
   var runForEach2 = /* @__PURE__ */ dual(2, (self, f) => runForEach(self.channel, (arr) => {
     let i = 0;
     return whileLoop2({
@@ -12400,16 +12197,16 @@ ${prefix}}`;
               serverName: requested,
               status: "not-ready"
             }), "onNone"),
-            onSome: /* @__PURE__ */ __name((result3) => result3.ok ? {
-              message: result3.message,
+            onSome: /* @__PURE__ */ __name((result2) => result2.ok ? {
+              message: result2.message,
               retryable: false,
-              serverName: result3.serverName ?? requested,
+              serverName: result2.serverName ?? requested,
               status: "connected"
             } : {
-              message: result3.message,
-              retryable: result3.status === "not-ready" || result3.reason === "full",
-              serverName: result3.serverName ?? requested,
-              status: result3.reason === "full" ? "full" : result3.status
+              message: result2.message,
+              retryable: result2.status === "not-ready" || result2.reason === "full",
+              serverName: result2.serverName ?? requested,
+              status: result2.reason === "full" ? "full" : result2.status
             }, "onSome")
           })
         )
@@ -12626,7 +12423,7 @@ ${prefix}}`;
         (hydrated) => hydrated ? readItems(host3, "bank") : succeed7([])
       )
     ), "getAll");
-    const get6 = /* @__PURE__ */ __name((selector) => isHydrated(host3, "bank").pipe(
+    const get5 = /* @__PURE__ */ __name((selector) => isHydrated(host3, "bank").pipe(
       flatMap3(
         (hydrated) => hydrated ? readItem(host3, "bank", selector) : succeed7(null)
       )
@@ -12674,7 +12471,7 @@ ${prefix}}`;
         return yield* wait.until(isOpen(), { timeout: "3 seconds" });
       })
     ), "open");
-    const contains = /* @__PURE__ */ __name((selector, quantity) => get6(selector).pipe(
+    const contains = /* @__PURE__ */ __name((selector, quantity) => get5(selector).pipe(
       map5(
         (item) => item !== null && item.quantity >= normalizeItemQuantity(quantity)
       )
@@ -12718,7 +12515,7 @@ ${prefix}}`;
     const withdraw = /* @__PURE__ */ __name((selector) => {
       return gen2(function* () {
         if (!(yield* load())) return false;
-        const bankItem = yield* get6(selector);
+        const bankItem = yield* get5(selector);
         if (bankItem === null) return false;
         if (!(yield* open())) return false;
         const canAccept = bankItem.houseItem ? houseCanAccept(bankItem.itemId, house) : inventory.canAccept(bankItem);
@@ -12758,7 +12555,7 @@ ${prefix}}`;
       return gen2(function* () {
         if (!(yield* open())) return false;
         const inventoryItem = yield* inventory.get(inventorySelector);
-        const bankItem = yield* get6(bankSelector);
+        const bankItem = yield* get5(bankSelector);
         if (inventoryItem === null || bankItem === null || inventoryItem.category === "Class" || inventoryItem.equipped) {
           return false;
         }
@@ -12808,7 +12605,7 @@ ${prefix}}`;
       contains,
       deposit,
       depositBatch,
-      get: get6,
+      get: get5,
       getAll,
       getAvailableSlots,
       getSlots,
@@ -13103,9 +12900,9 @@ ${prefix}}`;
   var normalizeCombatProfile = /* @__PURE__ */ __name((value) => normalizeProfile(value, DEFAULT_COMBAT_PROFILE_ID) ?? genericProfile(), "normalizeCombatProfile");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Ref.js
-  var TypeId21 = "~effect/Ref";
+  var TypeId20 = "~effect/Ref";
   var RefProto = {
-    [TypeId21]: {
+    [TypeId20]: {
       _A: identity
     },
     ...PipeInspectableProto,
@@ -13122,8 +12919,8 @@ ${prefix}}`;
     return self;
   }, "makeUnsafe");
   var make15 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe6(value)), "make");
-  var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
-  var set3 = /* @__PURE__ */ dual(2, (self, value) => sync2(() => set(self.ref, value)));
+  var get3 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
+  var set2 = /* @__PURE__ */ dual(2, (self, value) => sync2(() => set(self.ref, value)));
   var getAndSet = /* @__PURE__ */ dual(2, (self, value) => sync2(() => {
     const current = self.ref.current;
     self.ref.current = value;
@@ -13308,7 +13105,7 @@ ${prefix}}`;
           castTarget
         );
       }
-      const startState = yield* get4(cursor.state);
+      const startState = yield* get3(cursor.state);
       for (let offset = 0; offset < steps.length; offset += 1) {
         const stepIndex = (startState.index + offset) % steps.length;
         const step = steps[stepIndex];
@@ -13324,7 +13121,7 @@ ${prefix}}`;
         if (prepared === null) {
           continue;
         }
-        const resetVersionBeforeCast = (yield* get4(cursor.state)).resetVersion;
+        const resetVersionBeforeCast = (yield* get3(cursor.state)).resetVersion;
         const cast = yield* castPreparedCombatProfileStep(
           deps,
           step,
@@ -13353,7 +13150,7 @@ ${prefix}}`;
   var castCombatProfileMessageTrigger = /* @__PURE__ */ __name((deps, trigger, triggerIndex, event, state, now = Date.now()) => state.semaphore.withPermits(1)(
     gen2(function* () {
       const cooldownMs = trigger.cooldownMs ?? 0;
-      const lastCast = (yield* get4(state.state)).get(triggerIndex);
+      const lastCast = (yield* get3(state.state)).get(triggerIndex);
       if (lastCast !== void 0 && now - lastCast < cooldownMs) {
         return false;
       }
@@ -13470,7 +13267,7 @@ ${prefix}}`;
       });
       const prepared = yield* acquireRelease2(
         dependencies.prepare(options.profile),
-        (result3) => result3.release
+        (result2) => result2.release
       );
       const handleMonsterDeath = fn2(
         "CombatProfileSession.handleMonsterDeath"
@@ -13512,11 +13309,11 @@ ${prefix}}`;
               )) {
                 return;
               }
-              const observed = yield* get4(state);
+              const observed = yield* get3(state);
               if (observed.resetPending) return;
               yield* actionGate.withPermits(1)(
                 gen2(function* () {
-                  const current = yield* get4(state);
+                  const current = yield* get3(state);
                   if (current.resetPending || current.generation !== observed.generation) {
                     return;
                   }
@@ -13541,7 +13338,7 @@ ${prefix}}`;
                       return;
                     }
                   }
-                  const beforeCast = yield* get4(state);
+                  const beforeCast = yield* get3(state);
                   if (beforeCast.resetPending || beforeCast.generation !== observed.generation) {
                     return;
                   }
@@ -13567,7 +13364,7 @@ ${prefix}}`;
       }
       const resolveTarget = fn2("CombatProfileSession.resolveTarget")(
         function* (monsters) {
-          const initial = yield* get4(state);
+          const initial = yield* get3(state);
           if (initial.resetPending) return void 0;
           const allowFallback = options.allowTargetFallback ?? true;
           const active = initial.target;
@@ -13659,7 +13456,7 @@ ${prefix}}`;
           );
         }
       );
-      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get4(state).pipe(
+      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get3(state).pipe(
         map5(
           (current) => !current.resetPending && current.generation === lease.generation && current.target?.monsterMapId === lease.monster.monsterMapId
         )
@@ -13811,17 +13608,17 @@ ${prefix}}`;
   var singleActionAcknowledgement = /* @__PURE__ */ __name((value) => {
     const decoded = decodeSingleActionAcknowledgement(value);
     if (isNone2(decoded)) return void 0;
-    const result3 = decoded.value.actionResult;
+    const result2 = decoded.value.actionResult;
     const acknowledgedOutcome = outcome(decoded.value.iRes);
-    if (result3 == null || acknowledgedOutcome === void 0) return void 0;
-    const actionId = acknowledgedOutcome === 1 ? result3.actID : decoded.value.actID;
-    const source = parseCombatEntityReferences(result3.cInf ?? "")[0];
+    if (result2 == null || acknowledgedOutcome === void 0) return void 0;
+    const actionId = acknowledgedOutcome === 1 ? result2.actID : decoded.value.actID;
+    const source = parseCombatEntityReferences(result2.cInf ?? "")[0];
     if (actionId === void 0 || source === void 0) return void 0;
     return {
       actionId,
       outcome: acknowledgedOutcome,
       source,
-      targets: acknowledgedOutcome === 1 && result3.tInf !== void 0 ? parseCombatEntityReferences(result3.tInf) : []
+      targets: acknowledgedOutcome === 1 && result2.tInf !== void 0 ? parseCombatEntityReferences(result2.tInf) : []
     };
   }, "singleActionAcknowledgement");
   var multiActionAcknowledgement = /* @__PURE__ */ __name((value) => {
@@ -13846,9 +13643,9 @@ ${prefix}}`;
     const decoded = decodeActionAcknowledgementsPayload(value);
     if (isNone2(decoded)) return [];
     const acknowledgements = [];
-    const append3 = /* @__PURE__ */ __name((values2, decode3) => {
-      if (!Array.isArray(values2)) return;
-      for (const entry of values2) {
+    const append3 = /* @__PURE__ */ __name((values, decode3) => {
+      if (!Array.isArray(values)) return;
+      for (const entry of values) {
         const acknowledgement = decode3(entry);
         if (acknowledgement !== void 0) acknowledgements.push(acknowledgement);
       }
@@ -14330,32 +14127,32 @@ ${prefix}}`;
     }
   }, "normalizeValue");
   var normalizeScriptInputValues = /* @__PURE__ */ __name((definition, rawValues = {}) => {
-    const values2 = {};
+    const values = {};
     for (const field2 of definition.fields) {
       const normalized = normalizeValue(field2, rawValues[field2.key]);
       if (normalized !== void 0) {
-        values2[field2.key] = normalized;
+        values[field2.key] = normalized;
         continue;
       }
       const fallback = defaultScriptInputValue(field2);
       if (fallback !== void 0) {
         const normalizedFallback = normalizeValue(field2, fallback);
         if (normalizedFallback !== void 0) {
-          values2[field2.key] = normalizedFallback;
+          values[field2.key] = normalizedFallback;
         }
       }
     }
-    return values2;
+    return values;
   }, "normalizeScriptInputValues");
-  var findMissingRequiredScriptInputs = /* @__PURE__ */ __name((definition, values2) => definition.fields.flatMap((field2) => {
-    if (field2.required !== true || !Object.hasOwn(values2, field2.key)) {
+  var findMissingRequiredScriptInputs = /* @__PURE__ */ __name((definition, values) => definition.fields.flatMap((field2) => {
+    if (field2.required !== true || !Object.hasOwn(values, field2.key)) {
       return field2.required === true ? [field2.key] : [];
     }
-    const value = values2[field2.key];
+    const value = values[field2.key];
     return field2.type === "multi-select" && (!Array.isArray(value) || value.length === 0) ? [field2.key] : [];
   }), "findMissingRequiredScriptInputs");
-  var validateScriptInputValues = /* @__PURE__ */ __name((definition, values2) => {
-    const normalized = normalizeScriptInputValues(definition, values2);
+  var validateScriptInputValues = /* @__PURE__ */ __name((definition, values) => {
+    const normalized = normalizeScriptInputValues(definition, values);
     const fieldKeys = findMissingRequiredScriptInputs(definition, normalized);
     return fieldKeys.length === 0 ? { status: "ok", values: normalized } : { fieldKeys, status: "missing-required", values: normalized };
   }, "validateScriptInputValues");
@@ -14609,7 +14406,7 @@ ${prefix}}`;
   var makeInventory = /* @__PURE__ */ __name((bridge, host3, house, wait) => {
     const consumableEquipment = makeUnsafe5(1);
     const getAll = /* @__PURE__ */ __name(() => readItems(host3, "inventory"), "getAll");
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host3, "inventory", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host3, "inventory", selector), "get");
     const getSlots = fn2("Inventory.getSlots")(function* (pool = "bag") {
       if (!(yield* isHydrated(host3, "inventory"))) return 0;
       return yield* bridge.invoke(slotMethods[pool], void 0, WireInt).pipe(map5(getOrElse(() => 0)));
@@ -14626,14 +14423,14 @@ ${prefix}}`;
         return true;
       }
       if (pool === "house") return (yield* house.getAvailableSlots()) > 0;
-      const current = yield* get6(item.itemId);
+      const current = yield* get5(item.itemId);
       if (replacing === void 0 && current !== null && current.quantity < (current.maxStack ?? 1)) {
         return true;
       }
       if (pool === "misc" && current !== null) return true;
       return (yield* getAvailableSlots(pool)) > 0;
     });
-    const contains = /* @__PURE__ */ __name((selector, quantity) => get6(selector).pipe(
+    const contains = /* @__PURE__ */ __name((selector, quantity) => get5(selector).pipe(
       map5(
         (item) => item !== null && item.quantity >= normalizeItemQuantity(quantity)
       )
@@ -14673,7 +14470,7 @@ ${prefix}}`;
       return wearPacket !== null && response?.success === true;
     });
     const wearEffect = fn2("Inventory.wear")(function* (selector) {
-      const item = yield* get6(selector);
+      const item = yield* get5(selector);
       if (item === null || !item.wearable) return false;
       if (item.worn) return true;
       if (!(yield* canUseMemberItem(item.memberOnly))) return false;
@@ -14715,7 +14512,7 @@ ${prefix}}`;
       map5(getOrElse(() => false))
     );
     const equipEffect = fn2("Inventory.equip")(function* (selector, options) {
-      const item = yield* get6(selector);
+      const item = yield* get5(selector);
       if (item === null) return false;
       if (item.category === "Item" && isDirectInventoryConsumable(item.link)) {
         return false;
@@ -14760,7 +14557,7 @@ ${prefix}}`;
     });
     const equip = /* @__PURE__ */ __name((selector, options) => equipEffect(selector, options), "equip");
     const use = fn2("Inventory.use")(function* (selector) {
-      const item = yield* get6(selector);
+      const item = yield* get5(selector);
       if (item === null || !isDirectInventoryUseItem(item.category, item.link)) {
         return false;
       }
@@ -14769,7 +14566,7 @@ ${prefix}}`;
       const sent = yield* bridge.invoke("inventory.use", [{ itemId: item.itemId }], Boolean3).pipe(map5(getOrElse(() => false)));
       if (!sent) return false;
       return yield* wait.until(
-        get6(item.itemId).pipe(
+        get5(item.itemId).pipe(
           map5(
             (current) => current === null || current.quantity < startingQuantity
           )
@@ -14814,7 +14611,7 @@ ${prefix}}`;
     ), "getAvailableSlots");
     const unequipConsumable = fn2("Inventory.unequipConsumable")(
       function* (selector) {
-        const item = yield* get6(selector);
+        const item = yield* get5(selector);
         if (item === null || item.category !== "Item") return false;
         const sent = yield* bridge.invoke(
           "inventory.unequipConsumable",
@@ -14823,7 +14620,7 @@ ${prefix}}`;
         ).pipe(map5(getOrElse(() => false)));
         if (!sent) return false;
         yield* host3.command({ kind: "refreshEquippedConsumable" });
-        const current = yield* get6(item.itemId);
+        const current = yield* get5(item.itemId);
         return current?.equipped !== true;
       },
       consumableEquipment.withPermit,
@@ -14835,7 +14632,7 @@ ${prefix}}`;
       contains,
       equip,
       equipByEnhancement,
-      get: get6,
+      get: get5,
       getAll,
       getAvailableSlots,
       getSlots,
@@ -14959,7 +14756,7 @@ ${prefix}}`;
       }, "onSome")
     });
   }, "normalizeSkillInterval");
-  var makeCombat = /* @__PURE__ */ __name((bridge, antiCounter, host3, drops, events, inventory, map9, monsters, player, players, settings, temporary, wait) => {
+  var makeCombat = /* @__PURE__ */ __name((bridge, antiCounter, host3, drops, events, inventory, map8, monsters, player, players, settings, temporary, wait) => {
     const consumableCasts = makeUnsafe5(1);
     const targetValue = readCombatTarget(bridge);
     const targetAuras = /* @__PURE__ */ __name((options) => targetValue.pipe(
@@ -15055,15 +14852,15 @@ ${prefix}}`;
               if (dispatchDeadline !== void 0 && (yield* currentTimeMillis2) > dispatchDeadline) {
                 return false;
               }
-              const result3 = yield* bridge.invoke(
+              const result2 = yield* bridge.invoke(
                 "combat.castConsumableOnMonster",
                 [toMonsterSelector(selector), expectedItemId],
                 ConsumableCastDispatch
               ).pipe(map5(getOrNull));
-              if (result3 === null || result3.itemId !== expectedItemId) {
+              if (result2 === null || result2.itemId !== expectedItemId) {
                 return false;
               }
-              dispatch = result3;
+              dispatch = result2;
               return true;
             })
           }
@@ -15252,11 +15049,11 @@ ${prefix}}`;
       return forever3(
         gen2(function* () {
           if (runtime2 !== null) {
-            const result3 = yield* runtime2.runCycle().pipe(orDie2);
-            if (result3.kind === "no-target") {
+            const result2 = yield* runtime2.runCycle().pipe(orDie2);
+            if (result2.kind === "no-target") {
               yield* stopCombat2;
             }
-            yield* sleep2(result3.delayMs);
+            yield* sleep2(result2.delayMs);
             return;
           }
           if (!(yield* player.isAlive())) {
@@ -15287,7 +15084,7 @@ ${prefix}}`;
         (candidate) => candidate.matches(selector)
       );
       if (monster === void 0) return false;
-      yield* map9.setSpawnPoint();
+      yield* map8.setSpawnPoint();
       const death = wait.forEvent(
         {
           monsterMapId: monster.monsterMapId,
@@ -15391,11 +15188,11 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/api/Drops.ts
   var makeDrops = fnUntraced2(function* (bridge, host3, auth) {
     const operationHost = globalThis.__host;
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host3, "drop", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host3, "drop", selector), "get");
     const accept = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? promise2(
       () => operate({ kind: "acceptDrop", selector }, operationHost).then((answer) => answer.value).catch(() => false)
     ) : succeed7(false), "accept");
-    const contains = /* @__PURE__ */ __name((selector) => get6(selector).pipe(map5((drop) => drop !== null)), "contains");
+    const contains = /* @__PURE__ */ __name((selector) => get5(selector).pipe(map5((drop) => drop !== null)), "contains");
     const getAll = /* @__PURE__ */ __name(() => readItems(host3, "drop"), "getAll");
     const isCustomUiEnabled = /* @__PURE__ */ __name(() => bridge.invoke("drops.isUsingCustomDrops", void 0, Boolean3).pipe(map5(getOrElse(() => false))), "isCustomUiEnabled");
     const reject2 = /* @__PURE__ */ __name((selector) => gen2(function* () {
@@ -15408,7 +15205,7 @@ ${prefix}}`;
     return {
       accept,
       contains,
-      get: get6,
+      get: get5,
       getAll,
       isCustomUiEnabled,
       reject: reject2,
@@ -15471,7 +15268,7 @@ ${prefix}}`;
     const getAll = /* @__PURE__ */ __name(() => readItems(host3, "house"), "getAll");
     const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("house.getSlots", void 0, WireInt).pipe(map5(getOrElse(() => 0))), "getSlots");
     const getUsedSlots = /* @__PURE__ */ __name(() => host3.read({ kind: "items", container: "house" }).pipe(map5((items) => items.length)), "getUsedSlots");
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host3, "house", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host3, "house", selector), "get");
     const getAvailableSlots = /* @__PURE__ */ __name(() => zipWith2(
       getSlots(),
       getUsedSlots(),
@@ -15479,7 +15276,7 @@ ${prefix}}`;
     ), "getAvailableSlots");
     return {
       contains,
-      get: get6,
+      get: get5,
       getAll,
       getAvailableSlots,
       getSlots,
@@ -15507,7 +15304,7 @@ ${prefix}}`;
       )
     ), "getCells");
     const getMap = /* @__PURE__ */ __name(() => host3.read({ kind: "map" }), "getMap");
-    const getId = /* @__PURE__ */ __name(() => getMap().pipe(map5((map9) => map9.id)), "getId");
+    const getId = /* @__PURE__ */ __name(() => getMap().pipe(map5((map8) => map8.id)), "getId");
     const getMapItem = /* @__PURE__ */ __name((itemId) => {
       if (!Number.isSafeInteger(itemId) || itemId <= 0) return void_3;
       return wait.forGameAction("getMapItem").pipe(
@@ -15517,8 +15314,8 @@ ${prefix}}`;
         asVoid2
       );
     }, "getMapItem");
-    const getName = /* @__PURE__ */ __name(() => getMap().pipe(map5((map9) => map9.name)), "getName");
-    const getRoomNumber = /* @__PURE__ */ __name(() => getMap().pipe(map5((map9) => map9.roomNumber)), "getRoomNumber");
+    const getName = /* @__PURE__ */ __name(() => getMap().pipe(map5((map8) => map8.name)), "getName");
+    const getRoomNumber = /* @__PURE__ */ __name(() => getMap().pipe(map5((map8) => map8.roomNumber)), "getRoomNumber");
     const loadSwf = /* @__PURE__ */ __name((swf) => bridge.invoke("world.loadSwf", [swf], Void2).pipe(asVoid2), "loadSwf");
     const reload = /* @__PURE__ */ __name(() => bridge.invoke("world.reload", void 0, Void2).pipe(asVoid2), "reload");
     const setSpawnPoint = /* @__PURE__ */ __name((options) => bridge.invoke("world.setSpawnPoint", [options?.cell, options?.pad], Void2).pipe(asVoid2), "setSpawnPoint");
@@ -15559,8 +15356,8 @@ ${prefix}}`;
     const inFlight = /* @__PURE__ */ new Map();
     yield* addFinalizer3(() => shutdown2(requests));
     const requestKey = fn2("Monsters.requestKey")(function* (monsterMapId) {
-      const map9 = yield* host3.read({ kind: "map" });
-      return `${map9.id}:${map9.name}:${map9.roomNumber}:${monsterMapId}`;
+      const map8 = yield* host3.read({ kind: "map" });
+      return `${map8.id}:${map8.name}:${map8.roomNumber}:${monsterMapId}`;
     });
     const isInCurrentCell = fn2("Monsters.isInCurrentCell")(function* (monster) {
       const player = yield* host3.read({ kind: "me" });
@@ -15680,7 +15477,7 @@ ${prefix}}`;
         )
       );
     }, "reread");
-    const get6 = /* @__PURE__ */ __name((selector) => getProjected(selector).pipe(
+    const get5 = /* @__PURE__ */ __name((selector) => getProjected(selector).pipe(
       flatMap3(
         (monster) => monster === null ? succeed7(null) : ensureDrops(monster).pipe(
           andThen2(readMonster(monster.monsterMapId))
@@ -15692,7 +15489,7 @@ ${prefix}}`;
       andThen2(readMonsters())
     ), "getAll");
     const getAvailable = /* @__PURE__ */ __name(() => getAvailableProjected().pipe(
-      tap3(ensureAllDrops),
+      tap2(ensureAllDrops),
       flatMap3(reread)
     ), "getAvailable");
     const isAvailable = /* @__PURE__ */ __name((selector) => getProjected(selector).pipe(
@@ -15707,7 +15504,7 @@ ${prefix}}`;
     return {
       ensureCurrentCell,
       api: {
-        get: get6,
+        get: get5,
         getAll,
         getAvailable,
         isAvailable
@@ -15739,9 +15536,9 @@ ${prefix}}`;
       if (!placeholders.some((token) => packet.includes(`{${token}}`))) {
         return packet;
       }
-      const map9 = yield* host3.read({ kind: "map" });
+      const map8 = yield* host3.read({ kind: "map" });
       const player = yield* host3.read({ kind: "me" });
-      return packet.replaceAll("{MAP_ID}", String(map9.id)).replaceAll("{ROOM_NUMBER}", String(map9.roomNumber)).replaceAll("{MAP_NAME}", map9.name).replaceAll("{PLAYER_NAME}", player?.username ?? "");
+      return packet.replaceAll("{MAP_ID}", String(map8.id)).replaceAll("{ROOM_NUMBER}", String(map8.roomNumber)).replaceAll("{MAP_NAME}", map8.name).replaceAll("{PLAYER_NAME}", player?.username ?? "");
     }), "resolve");
     const on = /* @__PURE__ */ __name(((selector, handler) => stream(selector).pipe(
       runForEach2(handler),
@@ -15807,8 +15604,8 @@ ${prefix}}`;
   var minimumPrivateRoom = MINIMUM_PRIVATE_ROOM;
   var minimumRandomPrivateRoom = MINIMUM_RANDOM_PRIVATE_ROOM;
   var maximumRoom = MAXIMUM_ROOM_NUMBER;
-  var splitRoom = /* @__PURE__ */ __name((map9) => {
-    const trimmed = map9.trim();
+  var splitRoom = /* @__PURE__ */ __name((map8) => {
+    const trimmed = map8.trim();
     const separator = trimmed.indexOf("-");
     if (separator <= 0 || separator === trimmed.length - 1) {
       return { map: trimmed, name: trimmed };
@@ -15829,22 +15626,22 @@ ${prefix}}`;
     maximumRoom
   );
   var isPrivateRoom = /* @__PURE__ */ __name((room) => Number.isSafeInteger(room) && room >= minimumPrivateRoom && room <= maximumRoom, "isPrivateRoom");
-  var withRoomNumber = /* @__PURE__ */ __name((map9, room) => {
-    const target = splitRoom(map9);
+  var withRoomNumber = /* @__PURE__ */ __name((map8, room) => {
+    const target = splitRoom(map8);
     if (target.roomToken !== void 0 && parseRoom(target.roomToken) !== void 0) {
       return target.map;
     }
     return `${target.name}-${Math.max(1, Math.trunc(room))}`;
   }, "withRoomNumber");
-  var applyRoomPolicy = fn2("applyRoomPolicy")(function* (map9, policy) {
-    const trimmed = map9.trim();
-    if (trimmed === "" || policy.kind === "public") return map9;
+  var applyRoomPolicy = fn2("applyRoomPolicy")(function* (map8, policy) {
+    const trimmed = map8.trim();
+    if (trimmed === "" || policy.kind === "public") return map8;
     const room = policy.kind === "specific" ? policy.roomNumber : yield* randomPrivateRoom;
     return withRoomNumber(trimmed, room);
   });
   var roomPolicyAcceptsRoom = /* @__PURE__ */ __name((policy, roomNumber) => policy.kind === "public" || (policy.kind === "random-private" ? isPrivateRoom(roomNumber) : roomNumber === policy.roomNumber), "roomPolicyAcceptsRoom");
-  var parseMapTarget = /* @__PURE__ */ __name((map9) => gen2(function* () {
-    const target = splitRoom(map9);
+  var parseMapTarget = /* @__PURE__ */ __name((map8) => gen2(function* () {
+    const target = splitRoom(map8);
     if (target.roomToken === void 0) {
       return {
         map: target.map,
@@ -15926,17 +15723,17 @@ ${prefix}}`;
     },
     name: payload.name
   }), "toOutfit");
-  var makePlayer = /* @__PURE__ */ __name((bridge, host3, auth, inventory, map9, wait) => {
+  var makePlayer = /* @__PURE__ */ __name((bridge, host3, auth, inventory, map8, wait) => {
     const read = /* @__PURE__ */ __name((method, schema, fallback) => bridge.invoke(method, void 0, schema).pipe(map5(getOrElse(() => fallback))), "read");
-    const get6 = /* @__PURE__ */ __name(() => host3.read({ kind: "me" }).pipe(
+    const get5 = /* @__PURE__ */ __name(() => host3.read({ kind: "me" }).pipe(
       map5((player) => player === null ? null : toLivePlayer(player))
     ), "get");
-    const readLocation = /* @__PURE__ */ __name((projected, method) => projected !== "" ? succeed7(projected) : map9.isLoaded().pipe(
+    const readLocation = /* @__PURE__ */ __name((projected, method) => projected !== "" ? succeed7(projected) : map8.isLoaded().pipe(
       flatMap3(
         (loaded) => loaded ? read(method, String4, "") : succeed7("")
       )
     ), "readLocation");
-    const getAuras = /* @__PURE__ */ __name((options) => get6().pipe(
+    const getAuras = /* @__PURE__ */ __name((options) => get5().pipe(
       map5(
         (player) => (player?.auras ?? []).filter(
           (aura) => options?.kind === void 0 || aura.kind === options.kind
@@ -16024,7 +15821,7 @@ ${prefix}}`;
       getAll: getOutfits,
       wear: wearOutfit
     };
-    const getCell = /* @__PURE__ */ __name(() => get6().pipe(
+    const getCell = /* @__PURE__ */ __name(() => get5().pipe(
       flatMap3(
         (current) => readLocation(current?.cell ?? "", "player.getCell")
       )
@@ -16041,18 +15838,18 @@ ${prefix}}`;
     });
     const getGender = /* @__PURE__ */ __name(() => read("player.getGender", String4, ""), "getGender");
     const getGold = /* @__PURE__ */ __name(() => read("player.getGold", WireInt, 0), "getGold");
-    const getHp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.hp ?? 0)), "getHp");
-    const getLevel = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.level ?? 0)), "getLevel");
-    const getMaxHp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.maxHp ?? 0)), "getMaxHp");
-    const getMaxMp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.maxMp ?? 0)), "getMaxMp");
-    const getMp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.mp ?? 0)), "getMp");
-    const getPad = /* @__PURE__ */ __name(() => get6().pipe(
+    const getHp = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.hp ?? 0)), "getHp");
+    const getLevel = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.level ?? 0)), "getLevel");
+    const getMaxHp = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.maxHp ?? 0)), "getMaxHp");
+    const getMaxMp = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.maxMp ?? 0)), "getMaxMp");
+    const getMp = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.mp ?? 0)), "getMp");
+    const getPad = /* @__PURE__ */ __name(() => get5().pipe(
       flatMap3(
         (current) => readLocation(current?.pad ?? "", "player.getPad")
       )
     ), "getPad");
-    const getState = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.state ?? EntityState.Idle)), "getState");
-    const getPosition = /* @__PURE__ */ __name(() => get6().pipe(
+    const getState = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.state ?? EntityState.Idle)), "getState");
+    const getPosition = /* @__PURE__ */ __name(() => get5().pipe(
       map5((current) => ({
         ...current?.position ?? { x: 0, y: 0 }
       }))
@@ -16062,8 +15859,8 @@ ${prefix}}`;
       return username === "" ? void_3 : bridge.invoke("player.goToPlayer", [username], Void2).pipe(asVoid2);
     }, "goToPlayer");
     const hasActiveBoost = /* @__PURE__ */ __name((boostType) => bridge.invoke("player.hasActiveBoost", [boostType], Boolean3).pipe(map5(getOrElse(() => false))), "hasActiveBoost");
-    const isAfk = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.afk ?? false)), "isAfk");
-    const isAlive = /* @__PURE__ */ __name(() => get6().pipe(
+    const isAfk = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.afk ?? false)), "isAfk");
+    const isAlive = /* @__PURE__ */ __name(() => get5().pipe(
       flatMap3(
         (current) => current !== null ? succeed7(current.alive) : all2([
           read("player.getHp", WireInt, 0),
@@ -16078,7 +15875,7 @@ ${prefix}}`;
       flatMap3(
         (readiness) => readiness.missing.length === 0 ? all2([
           auth.isLoggedIn(),
-          map9.isLoaded(),
+          map8.isLoaded(),
           read("player.isLoaded", Boolean3, false)
         ]).pipe(
           map5(
@@ -16138,7 +15935,7 @@ ${prefix}}`;
       const currentCell = yield* getCell();
       const currentPad = yield* getPad();
       const cells = combatExitCells(
-        yield* map9.getCells(),
+        yield* map8.getCells(),
         yield* host3.read({ kind: "monsters" }),
         currentCell
       );
@@ -16158,7 +15955,7 @@ ${prefix}}`;
       if (destination.map === "") return false;
       const targetCell = cell ?? (pad === void 0 ? void 0 : "Enter");
       const currentMap = yield* host3.read({ kind: "map" });
-      const alreadyLoaded = (yield* map9.isLoaded()) && sameText(currentMap.name, destination.name) && (!destination.requireExactRoom || currentMap.roomNumber === destination.roomNumber);
+      const alreadyLoaded = (yield* map8.isLoaded()) && sameText(currentMap.name, destination.name) && (!destination.requireExactRoom || currentMap.roomNumber === destination.roomNumber);
       if (alreadyLoaded) {
         if (!(yield* wait.until(isReady(), { timeout: "10 seconds" })))
           return false;
@@ -16177,7 +15974,7 @@ ${prefix}}`;
       const loaded = yield* wait.until(
         host3.read({ kind: "map" }).pipe(
           flatMap3(
-            (current) => map9.isLoaded().pipe(
+            (current) => map8.isLoaded().pipe(
               map5(
                 (ready) => ready && sameText(current.name, destination.name) && (!destination.requireExactRoom || current.roomNumber === destination.roomNumber)
               )
@@ -16193,7 +15990,7 @@ ${prefix}}`;
       return yield* jumpToCell(targetCell, pad);
     }), "joinMap");
     const rest = /* @__PURE__ */ __name((options) => gen2(function* () {
-      const current = yield* get6();
+      const current = yield* get5();
       if (current !== null && current.hp >= current.maxHp && current.mp >= current.maxMp)
         return true;
       if (!(yield* wait.forGameAction("rest"))) return false;
@@ -16203,7 +16000,7 @@ ${prefix}}`;
         return false;
       if (options?.waitUntilFull !== true) return true;
       return yield* wait.until(
-        get6().pipe(
+        get5().pipe(
           map5(
             (player) => player !== null && player.hp >= player.maxHp && player.mp >= player.maxMp
           )
@@ -16220,7 +16017,7 @@ ${prefix}}`;
       const started = yield* bridge.invoke("player.walkTo", args2, Boolean3).pipe(map5(getOrElse(() => false)));
       if (!started) return false;
       return yield* wait.until(
-        get6().pipe(
+        get5().pipe(
           map5(
             (current) => current?.position.x === targetX && current.position.y === targetY
           )
@@ -16232,7 +16029,7 @@ ${prefix}}`;
       auras,
       exitCombat,
       factions,
-      get: get6,
+      get: get5,
       getCell,
       getClassName,
       getClassRank,
@@ -16262,7 +16059,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/Players.ts
   var makePlayers = /* @__PURE__ */ __name((host3) => {
-    const get6 = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host3.read({ kind: "player", selector }).pipe(
+    const get5 = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host3.read({ kind: "player", selector }).pipe(
       map5(
         (player) => player === null ? null : toLivePlayer(player)
       )
@@ -16272,7 +16069,7 @@ ${prefix}}`;
       map5((player) => player === null ? null : toLivePlayer(player))
     ), "getMe");
     return {
-      get: get6,
+      get: get5,
       getAll,
       getMe
     };
@@ -16421,7 +16218,7 @@ ${prefix}}`;
         return event !== null;
       });
     }, "complete");
-    const get6 = /* @__PURE__ */ __name((questId) => {
+    const get5 = /* @__PURE__ */ __name((questId) => {
       if (!isQuestId(questId)) return succeed7(null);
       return read(questId).pipe(
         flatMap3(
@@ -16449,7 +16246,7 @@ ${prefix}}`;
       acceptBatch,
       canComplete,
       complete,
-      get: get6,
+      get: get5,
       getAccepted,
       getAll,
       getMaxTurnIns,
@@ -16491,7 +16288,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/Settings.ts
   var makeSettings = /* @__PURE__ */ __name((host3) => {
-    const get6 = /* @__PURE__ */ __name(() => host3.read({ kind: "settings" }), "get");
+    const get5 = /* @__PURE__ */ __name(() => host3.read({ kind: "settings" }), "get");
     return {
       apply: /* @__PURE__ */ __name((patch) => gen2(function* () {
         for (const field2 of ["frameRate", "walkSpeed"]) {
@@ -16499,13 +16296,13 @@ ${prefix}}`;
             return yield* die3(new Error(`${field2} must be a finite number`));
           }
         }
-        const result3 = yield* host3.command({ kind: "updateSettings", patch });
-        if (isNone2(result3)) {
+        const result2 = yield* host3.command({ kind: "updateSettings", patch });
+        if (isNone2(result2)) {
           return yield* die3(new Error("host rejected settings patch"));
         }
       }), "apply"),
-      get: get6,
-      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get6().pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled")
+      get: get5,
+      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get5().pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled")
     };
   }, "makeSettings");
 
@@ -16525,7 +16322,7 @@ ${prefix}}`;
   var isShopId = /* @__PURE__ */ __name((shopId) => Number.isSafeInteger(shopId) && shopId > 0, "isShopId");
   var selectorFor = /* @__PURE__ */ __name((item) => item.shopItemId === void 0 ? { itemId: item.itemId } : { shopItemId: item.shopItemId }, "selectorFor");
   var makeShops = /* @__PURE__ */ __name((bridge, host3, inventory, wait) => {
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host3, "shop", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host3, "shop", selector), "get");
     const getCurrent = /* @__PURE__ */ __name(() => host3.read({ kind: "shop" }).pipe(map5((shop) => shop === null ? null : toLiveShop(shop))), "getCurrent");
     const isOpen = /* @__PURE__ */ __name((shopId) => {
       if (shopId !== void 0 && !isShopId(shopId)) {
@@ -16620,7 +16417,7 @@ ${prefix}}`;
         return shop?.id === shopId && open;
       });
     }, "load");
-    const canBuy = /* @__PURE__ */ __name((selector, options) => get6(selector).pipe(
+    const canBuy = /* @__PURE__ */ __name((selector, options) => get5(selector).pipe(
       flatMap3(
         (item) => item === null ? succeed7(false) : bridge.invoke(
           "shops.canBuyItem",
@@ -16629,7 +16426,7 @@ ${prefix}}`;
         ).pipe(map5(getOrElse(() => false)))
       )
     ), "canBuy");
-    const buy = /* @__PURE__ */ __name((selector, options) => get6(selector).pipe(
+    const buy = /* @__PURE__ */ __name((selector, options) => get5(selector).pipe(
       flatMap3((item) => {
         if (item === null) return succeed7(false);
         const requested = normalizeItemQuantity(options?.quantity);
@@ -16700,7 +16497,7 @@ ${prefix}}`;
       );
     }, "sell");
     const getAll = /* @__PURE__ */ __name(() => readItems(host3, "shop"), "getAll");
-    const getMaxBuyQuantity = /* @__PURE__ */ __name((selector) => get6(selector).pipe(
+    const getMaxBuyQuantity = /* @__PURE__ */ __name((selector) => get5(selector).pipe(
       flatMap3(
         (item) => item === null ? succeed7(0) : bridge.invoke("shops.getMaxBuyQuantity", [selectorFor(item)], WireInt).pipe(map5(getOrElse(() => 0)))
       )
@@ -16727,7 +16524,7 @@ ${prefix}}`;
       buy,
       canBuy,
       close: close2,
-      get: get6,
+      get: get5,
       getAll,
       getCurrent,
       getMaxBuyQuantity,
@@ -16745,11 +16542,11 @@ ${prefix}}`;
     const contains = /* @__PURE__ */ __name((selector, quantity) => itemQuantity(host3, "temporary", selector).pipe(
       map5((owned) => owned >= normalizeItemQuantity(quantity))
     ), "contains");
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host3, "temporary", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host3, "temporary", selector), "get");
     const getAll = /* @__PURE__ */ __name(() => readItems(host3, "temporary"), "getAll");
     return {
       contains,
-      get: get6,
+      get: get5,
       getAll
     };
   }, "makeTempInventory");
@@ -16866,11 +16663,11 @@ ${prefix}}`;
     const inventory = makeInventory(bridge, host3, house, wait);
     const bank = yield* makeBank(bridge, host3, auth, inventory, house, wait);
     const drops = yield* makeDrops(bridge, host3, auth);
-    const map9 = makeMap(bridge, host3, wait);
+    const map8 = makeMap(bridge, host3, wait);
     const monsterServices = yield* makeMonsters(bridge, host3, wait);
     const monsters = monsterServices.api;
     const players = makePlayers(host3);
-    const player = makePlayer(bridge, host3, auth, inventory, map9, wait);
+    const player = makePlayer(bridge, host3, auth, inventory, map8, wait);
     const projectionReadiness = makeProjectionReadiness(host3);
     const quests = makeQuests(bridge, host3, wait);
     const settings = makeSettings(host3);
@@ -16884,7 +16681,7 @@ ${prefix}}`;
       drops,
       events,
       inventory,
-      map9,
+      map8,
       monsterServices.lookup,
       player,
       players,
@@ -16901,7 +16698,7 @@ ${prefix}}`;
         events,
         house,
         inventory,
-        map: map9,
+        map: map8,
         monsterLookup: monsterServices.lookup,
         monsters,
         packet,
@@ -16924,7 +16721,7 @@ ${prefix}}`;
     };
   });
   var makeApi = makeApiServices.pipe(
-    tap3(({ scriptReactions }) => start(scriptReactions)),
+    tap2(({ scriptReactions }) => start(scriptReactions)),
     map5(({ api: api2 }) => api2)
   );
   var Api = class extends Service()(
@@ -16954,10 +16751,10 @@ ${prefix}}`;
   );
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
-  var TypeId22 = "~effect/SubscriptionRef";
+  var TypeId21 = "~effect/SubscriptionRef";
   var Proto2 = {
     ...PipeInspectableProto,
-    [TypeId22]: {
+    [TypeId21]: {
       _A: identity
     },
     toJSON() {
@@ -16978,20 +16775,14 @@ ${prefix}}`;
     return self;
   }), "make");
   var changes = /* @__PURE__ */ __name((self) => fromPubSub(self.pubsub), "changes");
-  var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
+  var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
   var setUnsafe = /* @__PURE__ */ __name((self, value) => {
     self.value = value;
     publishUnsafe(self.pubsub, value);
   }, "setUnsafe");
-  var modify2 = /* @__PURE__ */ dual(2, (self, modify3) => self.semaphore.withPermit(sync2(() => {
-    const [b, newValue] = modify3(self.value);
-    setUnsafe(self, newValue);
-    return b;
-  })));
-  var set4 = /* @__PURE__ */ dual(2, (self, value) => self.semaphore.withPermit(sync2(() => setUnsafe(self, value))));
-  var update2 = /* @__PURE__ */ dual(2, (self, update3) => self.semaphore.withPermit(sync2(() => setUnsafe(self, update3(self.value)))));
-  var updateAndGet2 = /* @__PURE__ */ dual(2, (self, update3) => self.semaphore.withPermit(sync2(() => {
-    const newValue = update3(self.value);
+  var set3 = /* @__PURE__ */ dual(2, (self, value) => self.semaphore.withPermit(sync2(() => setUnsafe(self, value))));
+  var updateAndGet2 = /* @__PURE__ */ dual(2, (self, update2) => self.semaphore.withPermit(sync2(() => {
+    const newValue = update2(self.value);
     setUnsafe(self, newValue);
     return newValue;
   })));
@@ -17122,16 +16913,16 @@ ${prefix}}`;
     );
     const nextIdRef = yield* make15(0);
     const clearActive = /* @__PURE__ */ __name((pending2) => gen2(function* () {
-      const active = yield* get4(activeRef);
+      const active = yield* get3(activeRef);
       if (active !== pending2) return;
-      yield* set3(activeRef, null);
-      yield* set4(currentRef, null);
+      yield* set2(activeRef, null);
+      yield* set3(currentRef, null);
     }), "clearActive");
     const processNext = fn2("ScriptDialogs.processNext")(function* () {
       const pending2 = yield* take3(queue);
       if (yield* isDone2(pending2.canceled)) return;
-      yield* set3(activeRef, pending2);
-      yield* set4(currentRef, snapshotRequest(pending2.request));
+      yield* set2(activeRef, pending2);
+      yield* set3(currentRef, snapshotRequest(pending2.request));
       yield* raceFirst2(
         _await(pending2.response).pipe(asVoid2),
         _await(pending2.canceled)
@@ -17179,7 +16970,7 @@ ${prefix}}`;
       return response.value;
     }), "prompt");
     const respond = /* @__PURE__ */ __name((response) => gen2(function* () {
-      const active = yield* get4(activeRef);
+      const active = yield* get3(activeRef);
       if (active === null || !responseMatchesRequest(active.request, response)) {
         return false;
       }
@@ -17198,7 +16989,7 @@ ${prefix}}`;
       beep: /* @__PURE__ */ __name((times) => sync2(() => playBeep(times)), "beep"),
       alert,
       confirm,
-      getCurrent: /* @__PURE__ */ __name(() => get5(currentRef).pipe(map5(snapshotCurrent)), "getCurrent"),
+      getCurrent: /* @__PURE__ */ __name(() => get4(currentRef).pipe(map5(snapshotCurrent)), "getCurrent"),
       onCurrent,
       prompt,
       respond
@@ -17208,8 +16999,8 @@ ${prefix}}`;
 
   // packages/runtime/src/game/scripting/scriptAsyncScope.ts
   var runCleanup = /* @__PURE__ */ __name((cleanup) => suspend2(() => {
-    const result3 = cleanup();
-    return isEffect2(result3) ? result3.pipe(asVoid2) : void_3;
+    const result2 = cleanup();
+    return isEffect2(result2) ? result2.pipe(asVoid2) : void_3;
   }).pipe(
     catchCause2(
       (cause) => logWarning("script cleanup failed", cause).pipe(
@@ -17329,7 +17120,7 @@ ${prefix}}`;
     const definition = yield* decodeUnknownEffect2(
       ScriptInputsDefinitionSchema
     )(inputs).pipe(
-      mapError3(
+      mapError2(
         (cause) => new ScriptLoadError({
           detail: `${name} has an invalid inputs export.`,
           cause
@@ -17407,9 +17198,9 @@ ${prefix}}`;
     safeStartStop: options.safeStartStop
   }), "snapshotScriptRuntimeOptions");
   var snapshotScriptInputValue = /* @__PURE__ */ __name((value) => Array.isArray(value) ? [...value] : value, "snapshotScriptInputValue");
-  var snapshotScriptInputValues = /* @__PURE__ */ __name((values2) => {
+  var snapshotScriptInputValues = /* @__PURE__ */ __name((values) => {
     const snapshot = {};
-    for (const [key, value] of Object.entries(values2)) {
+    for (const [key, value] of Object.entries(values)) {
       snapshot[key] = snapshotScriptInputValue(value);
     }
     return snapshot;
@@ -17432,13 +17223,13 @@ ${prefix}}`;
         }), "get"),
         getAll: /* @__PURE__ */ __name(() => sync2(() => snapshotScriptInputValues(options.getInputValues())), "getAll")
       }),
-      log: /* @__PURE__ */ __name((...values2) => sync2(() => options.log(...values2)), "log"),
+      log: /* @__PURE__ */ __name((...values) => sync2(() => options.log(...values)), "log"),
       options: Object.freeze({
         get: options.getOptions,
         reset: /* @__PURE__ */ __name(() => options.setOptions(() => DEFAULT_SCRIPT_RUNTIME_OPTIONS).pipe(asVoid2), "reset"),
         update: fn2("ScriptRuntime.options.update")(function* (patch) {
           const decoded = yield* decodeOptionsPatch(patch).pipe(
-            mapError3(
+            mapError2(
               (cause) => new ScriptExecutionError({
                 cause,
                 detail: "script.options.update requires valid runtime options."
@@ -17514,13 +17305,13 @@ ${prefix}}`;
 
   // packages/runtime/src/game/scripting/api/Callbacks.ts
   var isGenerator = /* @__PURE__ */ __name((value) => typeof value === "object" && value !== null && typeof value.next === "function" && typeof value.throw === "function", "isGenerator");
-  var normalizeScriptCallbackResult = /* @__PURE__ */ __name((result3) => {
-    if (isEffect2(result3)) {
-      return result3;
+  var normalizeScriptCallbackResult = /* @__PURE__ */ __name((result2) => {
+    if (isEffect2(result2)) {
+      return result2;
     }
-    if (isGenerator(result3)) {
+    if (isGenerator(result2)) {
       return gen2(function* () {
-        const iterator = result3;
+        const iterator = result2;
         return yield* iterator;
       });
     }
@@ -17552,10 +17343,10 @@ ${prefix}}`;
     }), "catch")
   }).pipe(
     flatMap3(
-      (result3) => typeof result3 === "boolean" ? succeed7(result3) : normalizeScriptCallbackResult(result3)
+      (result2) => typeof result2 === "boolean" ? succeed7(result2) : normalizeScriptCallbackResult(result2)
     ),
     flatMap3(
-      (result3) => typeof result3 === "boolean" ? succeed7(result3) : fail5(
+      (result2) => typeof result2 === "boolean" ? succeed7(result2) : fail5(
         new ScriptExecutionError({
           detail: "Loop Taunt skipWhen must return a boolean, an Effect<boolean>, or a generator that returns a boolean."
         })
@@ -17608,7 +17399,7 @@ ${prefix}}`;
         flatMap3((normalized) => army.loopTaunt(normalized, failCause7)),
         // addCleanup runs immediately after cancellation, closing the race
         // between handle acquisition and an already-closed script scope.
-        tap3((handle) => scope3.addCleanup(handle.stop))
+        tap2((handle) => scope3.addCleanup(handle.stop))
       ), "loopTaunt"),
       runStep: army.runStep,
       start: army.start,
@@ -17648,7 +17439,7 @@ ${prefix}}`;
   // packages/runtime/src/game/scripting/api/Events.ts
   var makeScriptEventsApi = /* @__PURE__ */ __name((events, scope3, failCause7) => {
     const on = /* @__PURE__ */ __name(((selector, handler) => {
-      return events.onProjection(selector, notifyScriptCallbackFailure(handler, failCause7)).pipe(tap3((dispose) => scope3.addCleanup(dispose)));
+      return events.onProjection(selector, notifyScriptCallbackFailure(handler, failCause7)).pipe(tap2((dispose) => scope3.addCleanup(dispose)));
     }), "on");
     const once = events.onceProjection;
     return Object.freeze({
@@ -17686,7 +17477,7 @@ ${prefix}}`;
   }), "toEnvironmentSnapshot");
   var exposeMutation = /* @__PURE__ */ __name((operation, effect2) => effect2.pipe(
     map5(toEnvironmentSnapshot),
-    mapError3(
+    mapError2(
       (cause) => new ScriptEnvironmentError({ cause, operation })
     )
   ), "exposeMutation");
@@ -17740,7 +17531,7 @@ ${prefix}}`;
   // packages/runtime/src/game/scripting/api/Packet.ts
   var makeScriptPacketApi = /* @__PURE__ */ __name((packet, scope3, failCause7) => {
     const on = /* @__PURE__ */ __name(((selector, handler) => packet.on(selector, notifyScriptCallbackFailure(handler, failCause7)).pipe(
-      tap3((dispose) => scope3.addCleanup(dispose))
+      tap2((dispose) => scope3.addCleanup(dispose))
     )), "on");
     return Object.freeze({
       on,
@@ -17757,16 +17548,16 @@ ${prefix}}`;
   }), "makeScriptPlayersApi");
 
   // packages/runtime/src/game/scripting/api/Player.ts
-  var makeScriptPlayerJoinMap = /* @__PURE__ */ __name((joinMap, script) => fn2("ScriptPlayer.joinMap")(function* (map9, options) {
+  var makeScriptPlayerJoinMap = /* @__PURE__ */ __name((joinMap, script) => fn2("ScriptPlayer.joinMap")(function* (map8, options) {
     const policy = yield* script.policy;
     if (policy.kind === "random-private" && (yield* script.map.isLoaded())) {
       const currentName = yield* script.map.getName();
       const currentRoom = yield* script.map.getRoomNumber();
-      if (map9.trim().toLowerCase() === currentName.trim().toLowerCase() && roomPolicyAcceptsRoom(policy, currentRoom)) {
-        return yield* joinMap(withRoomNumber(map9.trim(), currentRoom), options);
+      if (map8.trim().toLowerCase() === currentName.trim().toLowerCase() && roomPolicyAcceptsRoom(policy, currentRoom)) {
+        return yield* joinMap(withRoomNumber(map8.trim(), currentRoom), options);
       }
     }
-    return yield* joinMap(yield* applyRoomPolicy(map9, policy), options);
+    return yield* joinMap(yield* applyRoomPolicy(map8, policy), options);
   }), "makeScriptPlayerJoinMap");
   var makeScriptPlayerApis = /* @__PURE__ */ __name((player, players, script) => {
     const auras = Object.freeze({
@@ -17808,7 +17599,7 @@ ${prefix}}`;
       isMember: player.isMember,
       isReady: player.isReady,
       joinMap: makeScriptPlayerJoinMap(
-        (map9, options) => player.joinMap(map9, options),
+        (map8, options) => player.joinMap(map8, options),
         script
       ),
       jumpToCell: player.jumpToCell,
@@ -18121,15 +17912,15 @@ ${prefix}}`;
     catch: catch_2,
     fail: fail5,
     flatMap: flatMap3,
-    forEach: /* @__PURE__ */ __name((values2, transform3) => forEach2(values2, transform3), "forEach"),
+    forEach: /* @__PURE__ */ __name((values, transform3) => forEach2(values, transform3), "forEach"),
     gen: gen2,
     map: map5,
-    mapError: mapError3,
+    mapError: mapError2,
     raceFirst: raceFirst2,
     sleep: sleep2,
     succeed: succeed7,
     sync: sync2,
-    tap: tap3,
+    tap: tap2,
     timeoutOption: timeoutOption2,
     try: try_2,
     tryPromise: tryPromise2,
@@ -18170,11 +17961,11 @@ ${prefix}}`;
     return value;
   }, "assertSync");
   var formatPath2 = /* @__PURE__ */ __name((path) => {
-    let result3 = "$";
+    let result2 = "$";
     for (const part of path) {
-      result3 += typeof part === "number" ? `[${part}]` : /^[A-Za-z_$][\w$]*$/.test(part) ? `.${part}` : `[${JSON.stringify(part)}]`;
+      result2 += typeof part === "number" ? `[${part}]` : /^[A-Za-z_$][\w$]*$/.test(part) ? `.${part}` : `[${JSON.stringify(part)}]`;
     }
-    return result3;
+    return result2;
   }, "formatPath");
   var formatIssues = /* @__PURE__ */ __name((issues) => issues.map((issue2) => `${formatPath2(issue2.path)}: ${issue2.message}`).join("\n"), "formatIssues");
   var ValidationError = class extends Error {
@@ -18192,11 +17983,11 @@ ${prefix}}`;
   var nativeFormatter = makeFormatterDefault();
   var issue = /* @__PURE__ */ __name((code, message2, path = []) => fromIssues([{ code, message: message2, path }]), "issue");
   var fromIssues = /* @__PURE__ */ __name((issues) => {
-    const result3 = new InvalidValue({
+    const result2 = new InvalidValue({
       message: issues[0]?.message ?? "Invalid value."
     });
-    diagnostics.set(result3, issues);
-    return result3;
+    diagnostics.set(result2, issues);
+    return result2;
   }, "fromIssues");
   var atPath = /* @__PURE__ */ __name((path, cause) => new Pointer(path, cause), "atPath");
   var flatten6 = /* @__PURE__ */ __name((cause, options = {}, prefix = []) => {
@@ -18333,9 +18124,9 @@ ${prefix}}`;
     }
     return parser(input, options);
   }, "decode");
-  var declare2 = /* @__PURE__ */ __name((run3) => declareConstructor()([], () => (input, _ast, options) => {
-    const result3 = run3(input, options);
-    return isSuccess2(result3) ? succeed7(result3.success) : fail5(result3.failure);
+  var declare2 = /* @__PURE__ */ __name((run2) => declareConstructor()([], () => (input, _ast, options) => {
+    const result2 = run2(input, options);
+    return isSuccess2(result2) ? succeed7(result2.success) : fail5(result2.failure);
   }), "declare");
   var field = /* @__PURE__ */ __name((definition, input, options) => {
     if (input === MISSING) {
@@ -18350,13 +18141,13 @@ ${prefix}}`;
     const state = stateOf(options);
     state.path.push(key);
     try {
-      const result3 = field(definition, input, options);
-      return isFailure2(result3) ? fail2(atPath([key], result3.failure)) : result3;
+      const result2 = field(definition, input, options);
+      return isFailure2(result2) ? fail2(atPath([key], result2.failure)) : result2;
     } finally {
       state.path.pop();
     }
   }, "child");
-  var container = /* @__PURE__ */ __name((input, options, run3) => {
+  var container = /* @__PURE__ */ __name((input, options, run2) => {
     const state = stateOf(options);
     if (state.depth >= state.maxDepth)
       return fail2(
@@ -18369,7 +18160,7 @@ ${prefix}}`;
     state.depth += 1;
     state.ancestors.add(input);
     try {
-      return run3();
+      return run2();
     } finally {
       state.depth -= 1;
       state.ancestors.delete(input);
@@ -18445,16 +18236,16 @@ ${prefix}}`;
       return definitionOf(this).metadata;
     }
     parse(input, options) {
-      const result3 = this.safeParse(input, options);
-      if (!result3.success) throw new ValidationError(result3.issues);
-      return result3.data;
+      const result2 = this.safeParse(input, options);
+      if (!result2.success) throw new ValidationError(result2.issues);
+      return result2.data;
     }
     safeParse(input, options) {
       const engineOptions = makeOptions(options);
-      const result3 = decode2(definitionOf(this).backend, input, engineOptions);
-      return isSuccess2(result3) ? { success: true, data: result3.success } : {
+      const result2 = decode2(definitionOf(this).backend, input, engineOptions);
+      return isSuccess2(result2) ? { success: true, data: result2.success } : {
         success: false,
-        issues: flatten6(result3.failure, {
+        issues: flatten6(result2.failure, {
           ...options,
           maxIssues: engineOptions.errors === "first" ? 1 : stateOf(engineOptions).maxIssues
         })
@@ -18510,8 +18301,8 @@ ${prefix}}`;
         backend: declare2((value, options) => {
           if (value === rejected2)
             return fail2(issue("invalid_value", text));
-          const result3 = decode2(previous.backend, value, options);
-          return isSuccess2(result3) && result3.success === rejected2 ? fail2(issue("invalid_value", text)) : result3;
+          const result2 = decode2(previous.backend, value, options);
+          return isSuccess2(result2) && result2.success === rejected2 ? fail2(issue("invalid_value", text)) : result2;
         })
       });
     }
@@ -18535,13 +18326,13 @@ ${prefix}}`;
         literals: void 0,
         missing: "parse",
         backend: declare2((value, options) => {
-          let result3 = field(previous, value, options);
-          if (isSuccess2(result3) && result3.success === MISSING)
-            result3 = decode2(previous.backend, void 0, options);
-          if (isSuccess2(result3)) return result3;
+          let result2 = field(previous, value, options);
+          if (isSuccess2(result2) && result2.success === MISSING)
+            result2 = decode2(previous.backend, void 0, options);
+          if (isSuccess2(result2)) return result2;
           const context3 = {
             input: value === MISSING ? void 0 : value,
-            issues: flatten6(result3.failure, {}, stateOf(options).path)
+            issues: flatten6(result2.failure, {}, stateOf(options).path)
           };
           const replacement = isFunction(fallback) ? assertSync(fallback(context3)) : fallback;
           return decode2(previous.backend, replacement, options);
@@ -18573,8 +18364,8 @@ ${prefix}}`;
       return create({
         ...definitionOf(this),
         backend: this.checkedBackend((value, context3) => {
-          const result3 = assertSync(callback3(value, context3));
-          if (result3 !== void 0)
+          const result2 = assertSync(callback3(value, context3));
+          if (result2 !== void 0)
             throw new SchemaUsageError(
               "A check callback must report issues and return undefined."
             );
@@ -18597,12 +18388,12 @@ ${prefix}}`;
       }).transform(callback3);
       const preprocessingBackend = definitionOf(preprocessing).backend;
       const backend = declare2((input, options) => {
-        const result3 = decode2(
+        const result2 = decode2(
           preprocessingBackend,
           input === MISSING ? void 0 : input,
           options
         );
-        return isFailure2(result3) ? result3 : decode2(previous.backend, result3.success, options);
+        return isFailure2(result2) ? result2 : decode2(previous.backend, result2.success, options);
       });
       return create({
         ...previous,
@@ -18618,8 +18409,8 @@ ${prefix}}`;
         ...previous,
         missing: /* @__PURE__ */ __name(() => missingOf(previous) === "reject" ? "reject" : "parse", "missing"),
         backend: declare2((value, options) => {
-          const result3 = field(previous, value, options);
-          return isFailure2(result3) ? result3 : field(target, result3.success, options);
+          const result2 = field(previous, value, options);
+          return isFailure2(result2) ? result2 : field(target, result2.success, options);
         })
       });
     }
@@ -18697,19 +18488,19 @@ ${prefix}}`;
                 });
               }, "addIssue")
             });
-            let result3;
+            let result2;
             try {
-              result3 = assertSync(callback3(value, context3));
+              result2 = assertSync(callback3(value, context3));
             } finally {
               active = false;
             }
-            if (result3 === INVALID && issues.length === 0)
+            if (result2 === INVALID && issues.length === 0)
               issues.push({
                 code: "custom",
                 message: "The value could not be transformed.",
                 path: []
               });
-            return issues.length > 0 ? fail5(fromIssues(issues)) : succeed7(result3);
+            return issues.length > 0 ? fail5(fromIssues(issues)) : succeed7(result2);
           }),
           encode: passthrough2()
         })
@@ -18729,8 +18520,8 @@ ${prefix}}`;
     const text = options.message;
     return baseDefinition(
       declare2((input, parseOptions) => {
-        const result3 = decode2(backend, input, parseOptions);
-        return isSuccess2(result3) ? result3 : fail2(issue("invalid_type", text));
+        const result2 = decode2(backend, input, parseOptions);
+        return isSuccess2(result2) ? result2 : fail2(issue("invalid_type", text));
       })
     );
   }, "primitive");
@@ -18989,15 +18780,15 @@ ${prefix}}`;
       __name(this, "EnumImpl");
     }
     values;
-    constructor(values2, options) {
-      if (!Array.isArray(values2) || values2.length === 0 || !values2.every(
+    constructor(values, options) {
+      if (!Array.isArray(values) || values.length === 0 || !values.every(
         (value) => typeof value === "string" || typeof value === "number"
       )) {
         throw new SchemaUsageError(
           "An enum needs a nonempty array of strings or numbers."
         );
       }
-      const copy3 = Object.freeze([...new Set(values2)]);
+      const copy3 = Object.freeze([...new Set(values)]);
       super({ ...primitive(Literals(copy3), options), literals: copy3 });
       this.values = copy3;
       Object.freeze(this);
@@ -19149,11 +18940,11 @@ ${prefix}}`;
               const issues = [];
               for (const [key, definition] of entries) {
                 const value = Object.hasOwn(source, key) ? source[key] : MISSING;
-                const result3 = child(definition, value, key, parseOptions);
-                if (isFailure2(result3))
-                  collect(issues, result3.failure, parseOptions);
-                else if (result3.success !== MISSING)
-                  writeProperty(output, key, result3.success);
+                const result2 = child(definition, value, key, parseOptions);
+                if (isFailure2(result2))
+                  collect(issues, result2.failure, parseOptions);
+                else if (result2.success !== MISSING)
+                  writeProperty(output, key, result2.success);
                 if (!canContinue(issues, parseOptions)) break;
               }
               if (policy !== "strip" && canContinue(issues, parseOptions)) {
@@ -19168,10 +18959,10 @@ ${prefix}}`;
                   } else if (policy === "passthrough") {
                     writeProperty(output, key, source[key]);
                   } else {
-                    const result3 = child(policy, source[key], key, parseOptions);
-                    if (isFailure2(result3))
-                      collect(issues, result3.failure, parseOptions);
-                    else writeProperty(output, key, result3.success);
+                    const result2 = child(policy, source[key], key, parseOptions);
+                    if (isFailure2(result2))
+                      collect(issues, result2.failure, parseOptions);
+                    else writeProperty(output, key, result2.success);
                   }
                   if (!canContinue(issues, parseOptions)) break;
                 }
@@ -19282,15 +19073,15 @@ ${prefix}}`;
               const output = [];
               const issues = [];
               for (let index = 0; index < source.length; index += 1) {
-                const result3 = child(
+                const result2 = child(
                   childDefinition,
                   source[index],
                   index,
                   parseOptions
                 );
-                if (isFailure2(result3))
-                  collect(issues, result3.failure, parseOptions);
-                else output.push(result3.success);
+                if (isFailure2(result2))
+                  collect(issues, result2.failure, parseOptions);
+                else output.push(result2.success);
                 if (!canContinue(issues, parseOptions)) break;
               }
               return issues.length > 0 ? fail2(fromIssues(issues)) : succeed2(output);
@@ -19344,9 +19135,9 @@ ${prefix}}`;
         this.element,
         void 0,
         this.constraint(
-          (values2) => {
+          (values) => {
             const keys = /* @__PURE__ */ new Set();
-            for (const value of values2) {
+            for (const value of values) {
               const key = selector === void 0 ? value : assertSync(selector(value));
               if (keys.has(key)) return false;
               keys.add(key);
@@ -19410,11 +19201,11 @@ ${prefix}}`;
                   });
                 } else {
                   const value = Object.hasOwn(source, index) ? source[index] : MISSING;
-                  const result3 = child(definition, value, index, parseOptions);
-                  if (isFailure2(result3))
-                    collect(issues, result3.failure, parseOptions);
-                  else if (result3.success !== MISSING)
-                    output[index] = result3.success;
+                  const result2 = child(definition, value, index, parseOptions);
+                  if (isFailure2(result2))
+                    collect(issues, result2.failure, parseOptions);
+                  else if (result2.success !== MISSING)
+                    output[index] = result2.success;
                 }
                 if (!canContinue(issues, parseOptions)) break;
               }
@@ -19472,15 +19263,15 @@ ${prefix}}`;
                     message: "This key duplicates another decoded key."
                   });
                 } else {
-                  const result3 = child(
+                  const result2 = child(
                     valueDefinition,
                     source[key2],
                     key2,
                     parseOptions
                   );
-                  if (isFailure2(result3))
-                    collect(issues, result3.failure, parseOptions);
-                  else writeProperty(output, parsedKey.success, result3.success);
+                  if (isFailure2(result2))
+                    collect(issues, result2.failure, parseOptions);
+                  else writeProperty(output, parsedKey.success, result2.success);
                 }
                 if (!canContinue(issues, parseOptions)) break;
               }
@@ -19554,9 +19345,9 @@ ${prefix}}`;
         declare2((input, parseOptions) => {
           const failures = [];
           for (const definition of definitions2) {
-            const result3 = decode2(definition.backend, input, parseOptions);
-            if (isSuccess2(result3)) return result3;
-            failures.push(result3.failure);
+            const result2 = decode2(definition.backend, input, parseOptions);
+            if (isSuccess2(result2)) return result2;
+            failures.push(result2.failure);
           }
           return fail2(
             fromIssues([
@@ -19745,7 +19536,7 @@ ${prefix}}`;
     undefined: /* @__PURE__ */ __name((options) => create(primitive(Undefined2, options)), "undefined"),
     unknown: /* @__PURE__ */ __name(() => create(baseDefinition(Unknown2)), "unknown"),
     never: /* @__PURE__ */ __name((options) => create(primitive(Never2, options)), "never"),
-    enum: /* @__PURE__ */ __name((values2, options) => new EnumImpl(values2, options), "enum"),
+    enum: /* @__PURE__ */ __name((values, options) => new EnumImpl(values, options), "enum"),
     object: /* @__PURE__ */ __name((fields, options) => new ObjectImpl(fields, "strip", options), "object"),
     array: /* @__PURE__ */ __name((element, options) => new ArrayImpl(element, options), "array"),
     tuple: /* @__PURE__ */ __name((elements, options) => new TupleImpl(elements, void 0, options), "tuple"),
@@ -19869,11 +19660,11 @@ ${prefix}}`;
         catch: /* @__PURE__ */ __name(() => makeError(operation, "unavailable", path), "catch")
       }).pipe(
         flatMap3(
-          (result3) => result3.ok ? succeed7(result3.value) : fail5(
+          (result2) => result2.ok ? succeed7(result2.value) : fail5(
             makeError(
-              result3.error.operation,
-              result3.error.reason,
-              result3.error.path
+              result2.error.operation,
+              result2.error.reason,
+              result2.error.path
             )
           )
         )
@@ -19956,7 +19747,7 @@ ${prefix}}`;
   ), "logMoveFailure");
   var retrySafeMove = /* @__PURE__ */ __name((attempt) => attempt.pipe(
     flatMap3(
-      (result3) => result3 === "retry" ? fail5(new SafeMoveTimeout()) : succeed7(result3)
+      (result2) => result2 === "retry" ? fail5(new SafeMoveTimeout()) : succeed7(result2)
     ),
     retry2(safeMoveRetrySchedule),
     catchTag2(
@@ -19976,7 +19767,7 @@ ${prefix}}`;
     }).pipe(ensuring2(moveIfEnabled("after")));
   }, "runWithSafeStartStop");
   var makeMoveToSafeDestination = /* @__PURE__ */ __name((services) => {
-    const { auth, bridge, combat, house, map: map9, packet, player, roomPolicy, wait } = services;
+    const { auth, bridge, combat, house, map: map8, packet, player, roomPolicy, wait } = services;
     const isInOwnHouse = bridge.invokeJson("flash.callGameFunction0", ["world.isMyHouse"], Boolean3).pipe(map5(getOrElse(() => false)));
     const setReturnInfo = /* @__PURE__ */ __name((value) => bridge.invoke("flash.setGameObject", [returnInfoPath, value], Void2).pipe(map5(isSome2)), "setReturnInfo");
     const moveToSafeDestination = fn2("ScriptRunner.moveToSafeDestination")(
@@ -20002,8 +19793,8 @@ ${prefix}}`;
         } else {
           const policy = yield* roomPolicy;
           const [mapName, currentRoomNumber] = yield* all2([
-            map9.getName(),
-            map9.getRoomNumber()
+            map8.getName(),
+            map8.getRoomNumber()
           ]);
           const inBuyhouse = mapName.localeCompare("buyhouse", void 0, {
             sensitivity: "accent"
@@ -20121,7 +19912,7 @@ ${prefix}}`;
     return failure2 === void 0 ? labels[key] : `${labels[key]} (${failure2})`;
   }).join(", "), "missingDetail");
   var makeScriptStartReadiness = /* @__PURE__ */ __name((services) => {
-    const get6 = fn2("ScriptStartReadiness.get")(
+    const get5 = fn2("ScriptStartReadiness.get")(
       function* () {
         const projections = yield* services.projectionReadiness.inspect().pipe(catchCause2(() => succeed7(null)));
         const resolvedProjections = projections ?? {
@@ -20176,7 +19967,7 @@ ${prefix}}`;
     );
     const awaitReady = fn2("ScriptStartReadiness.awaitReady")(function* (options = {}) {
       const ready = yield* services.wait.untilSome(
-        get6().pipe(
+        get5().pipe(
           map5(
             (snapshot2) => snapshot2.ready ? some2(snapshot2) : none2()
           )
@@ -20187,14 +19978,14 @@ ${prefix}}`;
         }
       );
       if (ready !== null) return ready;
-      const snapshot = yield* get6();
+      const snapshot = yield* get5();
       const detail = snapshot.missing.length === 0 ? "Scripts can only start after game readiness is stable." : `Scripts can only start after game readiness is complete. Missing: ${missingDetail(snapshot)}.`;
       return yield* new ScriptNotReadyError({
         detail,
         missing: [...snapshot.missing]
       });
     });
-    return { awaitReady, get: get6 };
+    return { awaitReady, get: get5 };
   }, "makeScriptStartReadiness");
 
   // packages/runtime/src/game/scripting/ScriptRunner.ts
@@ -20296,21 +20087,21 @@ ${prefix}}`;
       snapshotScriptRuntimeOptions(DEFAULT_SCRIPT_RUNTIME_OPTIONS)
     );
     const accountUsernameRef = yield* make15("");
-    const getOptions = /* @__PURE__ */ __name(() => get5(optionsRef).pipe(
+    const getOptions = /* @__PURE__ */ __name(() => get4(optionsRef).pipe(
       map5(snapshotScriptRuntimeOptions)
     ), "getOptions");
     const bindAccount = /* @__PURE__ */ __name((username) => gen2(function* () {
       const normalized = normalizeUsername(username);
       if ((yield* getAndSet(accountUsernameRef, normalized)) !== normalized)
-        yield* set4(
+        yield* set3(
           optionsRef,
           snapshotScriptRuntimeOptions(DEFAULT_SCRIPT_RUNTIME_OPTIONS)
         );
       return yield* getOptions();
     }), "bindAccount");
-    const setOptions = /* @__PURE__ */ __name((update3) => updateAndGet2(
+    const setOptions = /* @__PURE__ */ __name((update2) => updateAndGet2(
       optionsRef,
-      (current) => snapshotScriptRuntimeOptions(update3(snapshotScriptRuntimeOptions(current)))
+      (current) => snapshotScriptRuntimeOptions(update2(snapshotScriptRuntimeOptions(current)))
     ).pipe(map5(snapshotScriptRuntimeOptions)), "setOptions");
     return { optionsRef, bindAccount, getOptions, setOptions };
   });
@@ -20331,7 +20122,7 @@ ${prefix}}`;
         fileSystem: fileSystemBridge,
         http: makeHttpApi
       } = yield* ScriptServices;
-      const { auth, combat, events, house, map: map9, packet, player, wait } = api2;
+      const { auth, combat, events, house, map: map8, packet, player, wait } = api2;
       const scriptStartReadiness = makeScriptStartReadiness({
         auth,
         player,
@@ -20352,8 +20143,8 @@ ${prefix}}`;
       const statusRef = yield* make16({
         state: "idle"
       });
-      const getStatus = /* @__PURE__ */ __name(() => get5(statusRef).pipe(map5(snapshotStatus)), "getStatus");
-      const setStatus = /* @__PURE__ */ __name((status) => set4(statusRef, snapshotStatus(status)), "setStatus");
+      const getStatus = /* @__PURE__ */ __name(() => get4(statusRef).pipe(map5(snapshotStatus)), "getStatus");
+      const setStatus = /* @__PURE__ */ __name((status) => set3(statusRef, snapshotStatus(status)), "setStatus");
       const observe = /* @__PURE__ */ __name((changes2, snapshot, listener) => changes2.pipe(
         runForEach2(
           (value) => sync2(() => listener(snapshot(value)))
@@ -20376,12 +20167,12 @@ ${prefix}}`;
         function* (id, done4, terminal, finalization) {
           yield* lifecycleGate.withPermit(
             gen2(function* () {
-              const pending2 = yield* get4(pendingFinalizationRef);
+              const pending2 = yield* get3(pendingFinalizationRef);
               if (pending2?.id !== id || pending2.done !== done4) {
                 yield* succeed5(done4, yield* getStatus());
                 return;
               }
-              yield* set3(pendingFinalizationRef, null);
+              yield* set2(pendingFinalizationRef, null);
               yield* setStatus(finalization.status);
               yield* succeed5(done4, snapshotStatus(finalization.status));
               if (finalization.outcome !== void 0) {
@@ -20402,12 +20193,12 @@ ${prefix}}`;
         if (options.beforeComplete !== void 0) {
           yield* options.beforeComplete;
         }
-        const result3 = options.result();
+        const result2 = options.result();
         yield* completeFinalization(
           options.active.id,
           options.done,
           options.active.terminal,
-          result3
+          result2
         );
       });
       const beginFinalization = fn2("ScriptRunner.beginFinalization")(
@@ -20415,8 +20206,8 @@ ${prefix}}`;
           return yield* uninterruptible2(
             gen2(function* () {
               const done4 = yield* make5();
-              yield* set3(activeRef, null);
-              yield* set3(pendingFinalizationRef, { done: done4, id: active.id });
+              yield* set2(activeRef, null);
+              yield* set2(pendingFinalizationRef, { done: done4, id: active.id });
               if (options.intermediateStatus !== void 0) {
                 yield* setStatus(options.intermediateStatus);
               }
@@ -20439,7 +20230,7 @@ ${prefix}}`;
       );
       const cancelPendingRestart = fn2("ScriptRunner.cancelPendingRestart")(
         function* (reason) {
-          const pending2 = yield* get4(pendingRestartRef);
+          const pending2 = yield* get3(pendingRestartRef);
           if (pending2 !== null) {
             yield* succeed5(
               pending2.cancel,
@@ -20451,10 +20242,10 @@ ${prefix}}`;
       );
       const stopActive = fn2("ScriptRunner.stopActive")(function* (reason) {
         yield* update(latestCommandIdRef, (value) => value + 1);
-        const result3 = yield* lifecycleGate.withPermit(
+        const result2 = yield* lifecycleGate.withPermit(
           gen2(function* () {
             const restart = yield* cancelPendingRestart(reason);
-            const starting = yield* get4(startingRef);
+            const starting = yield* get3(startingRef);
             if (starting !== null) {
               yield* succeed5(
                 starting.cancel,
@@ -20465,14 +20256,14 @@ ${prefix}}`;
                 kind: "waiting"
               };
             }
-            const pending2 = yield* get4(pendingFinalizationRef);
+            const pending2 = yield* get3(pendingFinalizationRef);
             if (pending2 !== null) {
               return {
                 done: restart?.done ?? pending2.done,
                 kind: "waiting"
               };
             }
-            const active = yield* get4(activeRef);
+            const active = yield* get3(activeRef);
             if (active === null) {
               if (restart !== null) {
                 return { done: restart.done, kind: "waiting" };
@@ -20498,15 +20289,15 @@ ${prefix}}`;
             return { done: done4, kind: "waiting" };
           })
         );
-        return result3.kind === "status" ? result3.status : yield* awaitStatus(result3.done);
+        return result2.kind === "status" ? result2.status : yield* awaitStatus(result2.done);
       });
       const finishIfActive = fn2("ScriptRunner.finishIfActive")(function* (id, options) {
         const done4 = yield* lifecycleGate.withPermit(
           gen2(function* () {
-            if ((yield* get4(pendingFinalizationRef)) !== null) {
+            if ((yield* get3(pendingFinalizationRef)) !== null) {
               return null;
             }
-            const active = yield* get4(activeRef);
+            const active = yield* get3(activeRef);
             return active?.id === id ? yield* beginFinalization(active, {
               awaitFiber: false,
               ...options.beforeComplete === void 0 ? {} : { beforeComplete: options.beforeComplete },
@@ -20526,10 +20317,10 @@ ${prefix}}`;
           const detailsText = causeDetailsText(cause);
           const done4 = yield* lifecycleGate.withPermit(
             gen2(function* () {
-              if ((yield* get4(pendingFinalizationRef)) !== null) {
+              if ((yield* get3(pendingFinalizationRef)) !== null) {
                 return null;
               }
-              const active = yield* get4(activeRef);
+              const active = yield* get3(activeRef);
               if (active?.id !== id) return null;
               return yield* beginFinalization(active, {
                 awaitFiber: true,
@@ -20558,10 +20349,10 @@ ${prefix}}`;
         bridge,
         combat,
         house,
-        map: map9,
+        map: map8,
         packet,
         player,
-        roomPolicy: get5(optionsRef).pipe(
+        roomPolicy: get4(optionsRef).pipe(
           map5((options) => snapshotRoomPolicy(options.roomPolicy))
         ),
         wait
@@ -20571,7 +20362,7 @@ ${prefix}}`;
           const iterator = main();
           return yield* iterator;
         }).pipe(asVoid2),
-        get5(optionsRef).pipe(
+        get4(optionsRef).pipe(
           map5((options) => options.safeStartStop)
         ),
         moveToSafeMap
@@ -20635,10 +20426,10 @@ ${prefix}}`;
           return yield* lifecycleGate.withPermit(
             uninterruptible2(
               gen2(function* () {
-                const current = yield* get4(startingRef);
+                const current = yield* get3(startingRef);
                 const authoritative = current?.id === starting.id && current.done === starting.done ? status : yield* getStatus();
                 if (current?.id === starting.id && current.done === starting.done) {
-                  yield* set3(startingRef, null);
+                  yield* set2(startingRef, null);
                   yield* setStatus(status);
                 }
                 yield* succeed5(starting.done, snapshotStatus(status));
@@ -20693,7 +20484,7 @@ ${prefix}}`;
             dialogs,
             getOptions,
             getInputValues: /* @__PURE__ */ __name(() => inputValues, "getInputValues"),
-            log: /* @__PURE__ */ __name((...values2) => console.log("[script]", ...values2), "log"),
+            log: /* @__PURE__ */ __name((...values) => console.log("[script]", ...values), "log"),
             scope: scriptScope,
             setOptions,
             source: { sourceName: statusName(source) }
@@ -20706,7 +20497,7 @@ ${prefix}}`;
             failCause: /* @__PURE__ */ __name((cause) => failActiveCause(starting.id, cause), "failCause"),
             fileSystem: makeScriptFileSystemApi(fileSystemBridge, scriptScope),
             http,
-            roomPolicy: get5(optionsRef).pipe(
+            roomPolicy: get4(optionsRef).pipe(
               map5((options) => snapshotRoomPolicy(options.roomPolicy))
             ),
             scope: scriptScope,
@@ -20747,23 +20538,23 @@ ${prefix}}`;
           const committed = yield* lifecycleGate.withPermit(
             uninterruptible2(
               gen2(function* () {
-                const current = yield* get4(startingRef);
-                const latestCommandId = yield* get4(latestCommandIdRef);
+                const current = yield* get3(startingRef);
+                const latestCommandId = yield* get3(latestCommandIdRef);
                 const cancelled = yield* isDone2(starting.cancel);
                 const restartCancelled = starting.restart !== void 0 && (yield* isDone2(starting.restart.cancel));
-                const currentRestart = yield* get4(pendingRestartRef);
+                const currentRestart = yield* get3(pendingRestartRef);
                 if (current?.id !== starting.id || current.done !== starting.done || latestCommandId !== starting.commandId || cancelled || restartCancelled || starting.restart !== void 0 && currentRestart !== starting.restart) {
                   return false;
                 }
                 yield* sync2(() => {
                   activated = true;
                 });
-                yield* set3(startingRef, null);
-                yield* set3(activeRef, active);
+                yield* set2(startingRef, null);
+                yield* set2(activeRef, active);
                 yield* setStatus(status2);
                 yield* succeed5(release, void 0);
                 if (starting.restart !== void 0) {
-                  yield* set3(pendingRestartRef, null);
+                  yield* set2(pendingRestartRef, null);
                   yield* succeed5(
                     starting.restart.done,
                     snapshotStatus(status2)
@@ -20837,7 +20628,7 @@ ${prefix}}`;
               ...restart === void 0 ? {} : { restart },
               terminal
             };
-            yield* set3(startingRef, starting);
+            yield* set2(startingRef, starting);
             yield* setStatus({
               name: starting.name,
               startedAt: nowIso(),
@@ -20853,10 +20644,10 @@ ${prefix}}`;
       )(function* (pending2, status) {
         yield* lifecycleGate.withPermit(
           gen2(function* () {
-            const current = yield* get4(pendingRestartRef);
+            const current = yield* get3(pendingRestartRef);
             const authoritative = current === pending2 ? status : yield* getStatus();
             if (current === pending2) {
-              yield* set3(pendingRestartRef, null);
+              yield* set2(pendingRestartRef, null);
               yield* setStatus(status);
             }
             yield* succeed5(pending2.done, snapshotStatus(authoritative));
@@ -20879,7 +20670,7 @@ ${prefix}}`;
       )(function* (pending2) {
         return (yield* wait.untilSome(
           gen2(function* () {
-            const options = yield* get5(optionsRef);
+            const options = yield* get4(optionsRef);
             if (!options.restartAfterReconnect) {
               return some2({ kind: "disabled" });
             }
@@ -20894,11 +20685,11 @@ ${prefix}}`;
       });
       const resumePendingRestart = fn2("ScriptRunner.resumePendingRestart")(
         function* (pending2) {
-          const result3 = yield* lifecycleGate.withPermit(
+          const result2 = yield* lifecycleGate.withPermit(
             gen2(function* () {
-              const current = yield* get4(pendingRestartRef);
-              const latestCommandId = yield* get4(latestCommandIdRef);
-              const options = yield* get5(optionsRef);
+              const current = yield* get3(pendingRestartRef);
+              const latestCommandId = yield* get3(latestCommandIdRef);
+              const options = yield* get4(optionsRef);
               if (current !== pending2 || latestCommandId !== pending2.commandId || !options.restartAfterReconnect) {
                 const status2 = yield* getStatus();
                 if (current === pending2) {
@@ -20906,7 +20697,7 @@ ${prefix}}`;
                     state: "stopped",
                     stoppedAt: nowIso()
                   };
-                  yield* set3(pendingRestartRef, null);
+                  yield* set2(pendingRestartRef, null);
                   yield* setStatus(stopped);
                   return { kind: "settled", status: stopped };
                 }
@@ -20924,7 +20715,7 @@ ${prefix}}`;
               };
             })
           );
-          const status = result3.kind === "starting" ? yield* awaitStatus(result3.done) : result3.status;
+          const status = result2.kind === "starting" ? yield* awaitStatus(result2.done) : result2.status;
           if (status.state === "waiting-to-restart") {
             return true;
           }
@@ -20966,9 +20757,9 @@ ${prefix}}`;
         function* (id) {
           return yield* uninterruptible2(
             gen2(function* () {
-              const result3 = yield* lifecycleGate.withPermit(
+              const result2 = yield* lifecycleGate.withPermit(
                 gen2(function* () {
-                  const starting = yield* get4(startingRef);
+                  const starting = yield* get3(startingRef);
                   if (starting?.id === id) {
                     yield* succeed5(starting.cancel, {
                       reason: "Connection lost",
@@ -20976,12 +20767,12 @@ ${prefix}}`;
                     });
                     return null;
                   }
-                  if ((yield* get4(pendingFinalizationRef)) !== null) {
+                  if ((yield* get3(pendingFinalizationRef)) !== null) {
                     return null;
                   }
-                  const active = yield* get4(activeRef);
+                  const active = yield* get3(activeRef);
                   if (active?.id !== id) return null;
-                  const options = yield* get5(optionsRef);
+                  const options = yield* get4(optionsRef);
                   const shouldRestart = options.restartAfterReconnect && active.username !== "";
                   const disconnectedAt = nowIso();
                   const restart = shouldRestart ? {
@@ -20997,7 +20788,7 @@ ${prefix}}`;
                     username: active.username
                   } : null;
                   if (restart !== null) {
-                    yield* set3(pendingRestartRef, restart);
+                    yield* set2(pendingRestartRef, restart);
                   }
                   const finalized = yield* beginFinalization(active, {
                     awaitFiber: true,
@@ -21026,8 +20817,8 @@ ${prefix}}`;
                   return restart === null ? null : { finalized, restart };
                 })
               );
-              if (result3 !== null) {
-                yield* runPendingRestart(result3.restart, result3.finalized).pipe(
+              if (result2 !== null) {
+                yield* runPendingRestart(result2.restart, result2.finalized).pipe(
                   forkDetach2
                 );
               }
@@ -21038,7 +20829,7 @@ ${prefix}}`;
       const installReadinessWatcher = /* @__PURE__ */ __name((id, scope4) => events.on(
         { type: "connection" },
         (event) => isConnectionLoss(event) ? handleConnectionLoss(id) : void_3
-      ).pipe(tap3((dispose) => scope4.addCleanup(dispose))), "installReadinessWatcher");
+      ).pipe(tap2((dispose) => scope4.addCleanup(dispose))), "installReadinessWatcher");
       const start3 = /* @__PURE__ */ __name((source, inputs) => {
         const sourceSnapshot = { ...source };
         const inputSnapshot = { ...inputs };
@@ -21052,9 +20843,9 @@ ${prefix}}`;
             terminal: yield* make5()
           };
           while (true) {
-            const result3 = yield* lifecycleGate.withPermit(
+            const result2 = yield* lifecycleGate.withPermit(
               gen2(function* () {
-                if ((yield* get4(latestCommandIdRef)) !== commandId) {
+                if ((yield* get3(latestCommandIdRef)) !== commandId) {
                   const status2 = {
                     reason: "Replaced by another script",
                     state: "stopped",
@@ -21072,7 +20863,7 @@ ${prefix}}`;
                 const restart = yield* cancelPendingRestart(
                   "Replaced by another script"
                 );
-                const starting = yield* get4(startingRef);
+                const starting = yield* get3(startingRef);
                 if (starting !== null) {
                   yield* succeed5(starting.cancel, {
                     reason: "Replaced by another script"
@@ -21082,14 +20873,14 @@ ${prefix}}`;
                     kind: "waiting"
                   };
                 }
-                const pending2 = yield* get4(pendingFinalizationRef);
+                const pending2 = yield* get3(pendingFinalizationRef);
                 if (pending2 !== null) {
                   return {
                     done: restart?.done ?? pending2.done,
                     kind: "waiting"
                   };
                 }
-                const active = yield* get4(activeRef);
+                const active = yield* get3(activeRef);
                 if (active !== null) {
                   const done4 = yield* beginFinalization(active, {
                     awaitFiber: true,
@@ -21125,14 +20916,14 @@ ${prefix}}`;
                 };
               })
             );
-            if (result3.kind === "superseded") {
-              return result3.handle;
+            if (result2.kind === "superseded") {
+              return result2.handle;
             }
             const status = yield* awaitStatus(
-              result3.kind === "starting" ? result3.started.done : result3.done
+              result2.kind === "starting" ? result2.started.done : result2.done
             );
-            if (result3.kind === "starting") {
-              return makeRunHandle(status, result3.started.terminal);
+            if (result2.kind === "starting") {
+              return makeRunHandle(status, result2.started.terminal);
             }
           }
         });
@@ -21161,756 +20952,9 @@ ${prefix}}`;
     })
   );
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/FiberMap.js
-  var TypeId23 = "~effect/FiberMap";
-  var isFiberMap = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId23), "isFiberMap");
-  var Proto3 = {
-    [TypeId23]: TypeId23,
-    [Symbol.iterator]() {
-      if (this.state._tag === "Closed") {
-        return empty2();
-      }
-      return this.state.backing[Symbol.iterator]();
-    },
-    ...PipeInspectableProto,
-    toJSON() {
-      return {
-        _id: "FiberMap",
-        state: this.state
-      };
-    }
-  };
-  var internalFiberId = -1;
-  var isInternalInterruption = /* @__PURE__ */ toPredicate(/* @__PURE__ */ compose(filterInterruptors, /* @__PURE__ */ has(internalFiberId)));
-  var setUnsafe2 = /* @__PURE__ */ dual((args2) => isFiberMap(args2[0]), (self, key, fiber2, options) => {
-    if (self.state._tag === "Closed") {
-      fiber2.interruptUnsafe(internalFiberId);
-      return;
-    }
-    const previous = get3(self.state.backing, key);
-    if (previous._tag === "Some") {
-      if (previous.value === fiber2) {
-        return;
-      } else if (options?.onlyIfMissing === true) {
-        fiber2.interruptUnsafe(internalFiberId);
-        return;
-      }
-    }
-    set2(self.state.backing, key, fiber2);
-    if (previous._tag === "Some") {
-      previous.value.interruptUnsafe(internalFiberId);
-    }
-    fiber2.addObserver((exit3) => {
-      if (self.state._tag === "Closed") {
-        return;
-      }
-      const current = get3(self.state.backing, key);
-      if (isSome2(current) && fiber2 === current.value) {
-        remove2(self.state.backing, key);
-      }
-      if (isFailure3(exit3) && (options?.propagateInterruption === true ? !isInternalInterruption(exit3.cause) : !hasInterruptsOnly2(exit3.cause))) {
-        doneUnsafe(self.deferred, exit3);
-      }
-    });
-  });
-  var hasUnsafe = /* @__PURE__ */ dual(2, (self, key) => self.state._tag === "Closed" ? false : has2(self.state.backing, key));
-  var has3 = /* @__PURE__ */ dual(2, (self, key) => sync2(() => hasUnsafe(self, key)));
-  var remove3 = /* @__PURE__ */ dual(2, (self, key) => suspend2(() => {
-    if (self.state._tag === "Closed") {
-      return void_3;
-    }
-    const fiber2 = get3(self.state.backing, key);
-    if (fiber2._tag === "None") {
-      return void_3;
-    }
-    return interruptAs(fiber2.value, internalFiberId);
-  }));
-  var constInterruptedFiber = /* @__PURE__ */ (function() {
-    let fiber2 = void 0;
-    return () => {
-      if (fiber2 === void 0) {
-        fiber2 = runFork2(interrupt3);
-      }
-      return fiber2;
-    };
-  })();
-  var run2 = /* @__PURE__ */ __name(function() {
-    const self = arguments[0];
-    if (isEffect2(arguments[2])) {
-      return runImpl(self, arguments[1], arguments[2], arguments[3]);
-    }
-    const key = arguments[1];
-    const options = arguments[2];
-    return (effect2) => runImpl(self, key, effect2, options);
-  }, "run");
-  var runImpl = /* @__PURE__ */ __name((self, key, effect2, options) => withFiber2((parent) => {
-    if (self.state._tag === "Closed") {
-      return interrupt3;
-    } else if (options?.onlyIfMissing === true && hasUnsafe(self, key)) {
-      return sync2(constInterruptedFiber);
-    }
-    const fiber2 = forkUnsafe(parent, effect2, options?.startImmediately ?? true, true);
-    setUnsafe2(self, key, fiber2, options);
-    return succeed7(fiber2);
-  }), "runImpl");
-
-  // packages/runtime/src/game/automation/AutoRelogin.ts
-  var AutoReloginLoginError = class extends TaggedError2(
-    "AutoReloginLoginError"
-  ) {
-    static {
-      __name(this, "AutoReloginLoginError");
-    }
-    get message() {
-      return this.detail;
-    }
-  };
-  var AutoReloginAttemptError = class extends TaggedError2(
-    "AutoReloginAttemptError"
-  ) {
-    static {
-      __name(this, "AutoReloginAttemptError");
-    }
-  };
-  var backgroundKey = "auto-relogin";
-  var captureWatcherKey = "auto-relogin-capture";
-  var readyWatcherKey = "auto-relogin-ready";
-  var captureInterval = "5 seconds";
-  var maximumRetries = 3;
-  var defaultDelay = 3e3;
-  var readinessPollInterval = "500 millis";
-  var playerReadyTimeout = "10 seconds";
-  var serverSelectTimeout = "15 seconds";
-  var noopObserver = {
-    attemptStarted: /* @__PURE__ */ __name(() => void_3, "attemptStarted"),
-    backoff: /* @__PURE__ */ __name(() => void_3, "backoff"),
-    failure: /* @__PURE__ */ __name(() => void_3, "failure"),
-    phase: /* @__PURE__ */ __name(() => void_3, "phase")
-  };
-  var normalizeAutoReloginDelay = /* @__PURE__ */ __name((delayMs) => Number.isFinite(delayMs) ? clamp2({ minimum: 0, maximum: 3e5 })(delayMs) : defaultDelay, "normalizeAutoReloginDelay");
-  var normalizeAutoReloginServer = /* @__PURE__ */ __name((server, servers) => {
-    if (server === void 0) return void 0;
-    const requested = server.trim();
-    if (requested === "") return "";
-    return servers.find(
-      ({ name }) => name.localeCompare(requested, void 0, { sensitivity: "accent" }) === 0
-    )?.name ?? requested;
-  }, "normalizeAutoReloginServer");
-  var attemptingPhases = /* @__PURE__ */ new Set([
-    "awaiting-player-ready",
-    "awaiting-server-select",
-    "backoff",
-    "logging-in",
-    "selecting-server"
-  ]);
-  var publicState = /* @__PURE__ */ __name((state) => ({
-    attempting: attemptingPhases.has(state.phase.tag),
-    captured: state.username !== void 0 && state.password !== void 0,
-    delayMs: state.delayMs,
-    enabled: state.enabled,
-    waitingDelay: state.phase.tag === "waiting-delay" || state.phase.tag === "waiting-kick",
-    ...state.attemptsRemaining === void 0 ? {} : { attemptsRemaining: state.attemptsRemaining },
-    ...state.lastError === void 0 ? {} : { lastError: state.lastError },
-    ...state.server === void 0 ? {} : { server: state.server },
-    ...state.username === void 0 ? {} : { username: state.username }
-  }), "publicState");
-  var formatErrorDetail = /* @__PURE__ */ __name((detail) => {
-    const trimmed = detail.trim();
-    if (trimmed === "") return "Auto relogin failed.";
-    const sentence = `${trimmed[0].toLocaleUpperCase()}${trimmed.slice(1)}`;
-    return /[.!?]$/u.test(sentence) ? sentence : `${sentence}.`;
-  }, "formatErrorDetail");
-  var lifecycle = /* @__PURE__ */ __name((request, step, attemptsRemaining, message2) => request.onLifecycle?.({
-    attemptsRemaining,
-    step,
-    ...message2 === void 0 ? {} : { message: message2 }
-  }).pipe(catchCause2(() => void_3)) ?? void_3, "lifecycle");
-  var makeAutoRelogin = fnUntraced2(function* (api2, fibers, config) {
-    const state = yield* make16({
-      attemptsRemaining: void 0,
-      delayMs: config?.delayMs ?? defaultDelay,
-      enabled: config?.enabled ?? false,
-      generation: 0,
-      lastError: void 0,
-      password: void 0,
-      phase: { tag: "armed" },
-      server: config?.server ?? void 0,
-      username: void 0
-    });
-    const loginPermit = yield* make14(1);
-    const explicitRuns = yield* make15(0);
-    const getState = /* @__PURE__ */ __name(() => get5(state).pipe(map5(publicState)), "getState");
-    const changes2 = changes(state).pipe(map8(publicState));
-    const records = /* @__PURE__ */ __name((current) => ({
-      config: { enabled: current.enabled, delayMs: current.delayMs, server: current.server ?? null },
-      status: { phase: current.phase, attemptsRemaining: current.attemptsRemaining ?? null, lastError: current.lastError ?? null, captured: current.username !== void 0 && current.password !== void 0 }
-    }), "records");
-    const getRecords = /* @__PURE__ */ __name(() => get5(state).pipe(map5(records)), "getRecords");
-    const recordChanges = changes(state).pipe(map8(records));
-    const isPlayerReady = /* @__PURE__ */ __name(() => api2.player.isReady().pipe(catchCause2(() => succeed7(false))), "isPlayerReady");
-    const waitUntilPlayerReady = /* @__PURE__ */ __name(() => repeat2(isPlayerReady(), {
-      schedule: spaced(readinessPollInterval),
-      until: Boolean
-    }).pipe(asVoid2), "waitUntilPlayerReady");
-    const waitForPlayerReady = /* @__PURE__ */ __name(() => waitUntilPlayerReady().pipe(
-      timeoutOption2(playerReadyTimeout),
-      map5(isSome2)
-    ), "waitForPlayerReady");
-    const racePlayerReady = /* @__PURE__ */ __name((effect2) => race2(
-      effect2.pipe(
-        map5((value) => ({ tag: "completed", value }))
-      ),
-      waitUntilPlayerReady().pipe(as2({ tag: "ready" }))
-    ), "racePlayerReady");
-    const updateCurrentGeneration = /* @__PURE__ */ __name((generation, update3) => update2(
-      state,
-      (current) => current.enabled && current.generation === generation ? update3(current) : current
-    ), "updateCurrentGeneration");
-    const captureIfMissing = gen2(function* () {
-      const current = yield* get5(state);
-      if (!current.enabled) return true;
-      if (current.username !== void 0 && current.password !== void 0) {
-        return true;
-      }
-      const markAwaitingSession = update2(
-        state,
-        (latest) => latest.enabled && (latest.username === void 0 || latest.password === void 0) && (latest.phase.tag !== "awaiting-session" || latest.attemptsRemaining !== void 0 || latest.lastError !== void 0) ? {
-          ...latest,
-          attemptsRemaining: void 0,
-          lastError: void 0,
-          phase: { tag: "awaiting-session" }
-        } : latest
-      );
-      const username = (yield* api2.auth.getUsername()).trim();
-      if (username === "") {
-        yield* markAwaitingSession;
-        return false;
-      }
-      const password = yield* api2.auth.getPassword();
-      if (password === "") {
-        yield* markAwaitingSession;
-        return false;
-      }
-      yield* update2(
-        state,
-        (latest) => latest.enabled && (latest.username === void 0 || latest.password === void 0) ? {
-          ...latest,
-          attemptsRemaining: void 0,
-          lastError: void 0,
-          password,
-          phase: { tag: "armed" },
-          username
-        } : latest
-      );
-      return true;
-    });
-    const watchForCapturableSession = /* @__PURE__ */ __name(() => run2(
-      fibers,
-      captureWatcherKey,
-      sleep2(captureInterval).pipe(
-        andThen2(
-          repeat2(captureIfMissing, {
-            schedule: spaced(captureInterval),
-            until: /* @__PURE__ */ __name((captured) => captured, "until")
-          })
-        ),
-        asVoid2
-      )
-    ).pipe(asVoid2), "watchForCapturableSession");
-    const markReadySuccess = gen2(function* () {
-      if (!(yield* isPlayerReady())) return false;
-      yield* captureIfMissing;
-      yield* update2(
-        state,
-        (current) => current.enabled ? {
-          ...current,
-          attemptsRemaining: void 0,
-          generation: current.generation + 1,
-          lastError: void 0,
-          phase: { tag: "armed" }
-        } : current
-      );
-      return true;
-    });
-    const failAttempt = /* @__PURE__ */ __name((detail, retryable, step, attemptsRemaining) => fail5(
-      new AutoReloginAttemptError({
-        attemptsRemaining,
-        detail: formatErrorDetail(detail),
-        retryable,
-        step
-      })
-    ), "failAttempt");
-    const waitForLoginOutcome = /* @__PURE__ */ __name(() => {
-      const readOutcome = gen2(function* () {
-        if (yield* isPlayerReady()) return some2("ready");
-        if (yield* api2.auth.isLoggedIn()) {
-          return some2("connected");
-        }
-        if (yield* api2.auth.isServerSelectReady()) {
-          return some2("server-select");
-        }
-        return none2();
-      });
-      return repeat2(readOutcome, {
-        schedule: spaced(readinessPollInterval),
-        until: isSome2
-      }).pipe(
-        timeoutOption2(serverSelectTimeout),
-        map5(flatten),
-        map5(getOrNull)
-      );
-    }, "waitForLoginOutcome");
-    const orchestrateLogin = /* @__PURE__ */ __name((request, observer = noopObserver, resolveServer = succeed7(
-      request.server?.trim() || void 0
-    ), resumeAtServerSelect = false) => {
-      let requiresFreshServerList = false;
-      const completePlayerConnection = /* @__PURE__ */ __name((attemptsRemaining) => gen2(function* () {
-        yield* observer.phase({ tag: "awaiting-player-ready" });
-        yield* lifecycle(request, "ready", attemptsRemaining);
-        if (yield* waitForPlayerReady()) {
-          return { status: "ready" };
-        }
-        if (yield* isPlayerReady()) return { status: "ready" };
-        yield* api2.auth.logout();
-        return yield* failAttempt(
-          "Player did not become ready",
-          true,
-          "ready",
-          attemptsRemaining
-        );
-      }), "completePlayerConnection");
-      const attempt = gen2(function* () {
-        const metadata = yield* CurrentMetadata;
-        const attemptIndex = Math.min(maximumRetries, metadata.attempt);
-        const attemptsRemaining = Math.max(0, maximumRetries - attemptIndex);
-        yield* observer.attemptStarted(attemptIndex, attemptsRemaining);
-        if (yield* isPlayerReady()) return { status: "ready" };
-        if (request.username.trim() === "" || request.password === "") {
-          return yield* failAttempt(
-            "Username and password are required",
-            false,
-            "login",
-            attemptsRemaining
-          );
-        }
-        let loginOutcome;
-        if (!requiresFreshServerList && (attemptIndex > 0 || resumeAtServerSelect) && (yield* api2.auth.isServerSelectReady())) {
-          loginOutcome = "server-select";
-        } else {
-          const temporarilyKicked = yield* api2.auth.isTemporarilyKicked();
-          if (temporarilyKicked) {
-            yield* observer.phase({ tag: "waiting-kick" });
-            yield* lifecycle(
-              request,
-              "login",
-              attemptsRemaining,
-              "Waiting for the temporary login restriction to clear"
-            );
-          } else {
-            yield* observer.phase({ tag: "logging-in" });
-            yield* lifecycle(request, "login", attemptsRemaining);
-          }
-          if (yield* isPlayerReady()) return { status: "ready" };
-          const login = yield* racePlayerReady(
-            api2.auth.login(request.username, request.password)
-          );
-          if (login.tag === "ready") return { status: "ready" };
-          const submitted = login.value;
-          if (temporarilyKicked) {
-            yield* observer.phase({ tag: "logging-in" });
-            yield* lifecycle(request, "login", attemptsRemaining);
-          }
-          if (yield* isPlayerReady()) return { status: "ready" };
-          if (!submitted) {
-            return yield* failAttempt(
-              "Login could not be submitted",
-              true,
-              "login",
-              attemptsRemaining
-            );
-          }
-          yield* observer.phase({ tag: "awaiting-server-select" });
-          loginOutcome = yield* waitForLoginOutcome();
-          if (loginOutcome === "server-select") requiresFreshServerList = false;
-        }
-        if (loginOutcome === "ready") return { status: "ready" };
-        if (loginOutcome === "connected") {
-          return yield* completePlayerConnection(attemptsRemaining);
-        }
-        if (loginOutcome === null) {
-          return yield* failAttempt(
-            "Login did not reach server selection",
-            true,
-            "login",
-            attemptsRemaining
-          );
-        }
-        let server = yield* resolveServer;
-        if (server === void 0) return { status: "server-select" };
-        if (yield* isPlayerReady()) return { status: "ready" };
-        if (yield* api2.auth.isLoggedIn()) {
-          return yield* completePlayerConnection(attemptsRemaining);
-        }
-        const manualConnection = yield* api2.events.once(
-          { type: "connection" },
-          { timeout: "250 millis" }
-        );
-        if (manualConnection?.type === "connection" && manualConnection.status === "OnConnection") {
-          return yield* completePlayerConnection(attemptsRemaining);
-        }
-        if (yield* isPlayerReady()) return { status: "ready" };
-        if (yield* api2.auth.isLoggedIn()) {
-          return yield* completePlayerConnection(attemptsRemaining);
-        }
-        server = yield* resolveServer;
-        if (server === void 0) return { status: "server-select" };
-        yield* observer.phase({ tag: "selecting-server" });
-        yield* lifecycle(request, "connect", attemptsRemaining);
-        const selection = yield* racePlayerReady(api2.auth.connectTo(server));
-        if (selection.tag === "ready") return { status: "ready" };
-        const selected = selection.value;
-        if (selected.status !== "connected") {
-          if (yield* isPlayerReady()) return { status: "ready" };
-          if (yield* api2.auth.isLoggedIn()) {
-            return yield* completePlayerConnection(attemptsRemaining);
-          }
-          if (selected.status === "full") {
-            requiresFreshServerList = true;
-            yield* api2.auth.logout();
-          }
-          return yield* failAttempt(
-            selected.message,
-            selected.retryable,
-            "connect",
-            attemptsRemaining
-          );
-        }
-        return yield* completePlayerConnection(attemptsRemaining);
-      });
-      const reportRetryableFailure = /* @__PURE__ */ __name((error) => error.retryable ? observer.failure(error).pipe(
-        andThen2(
-          lifecycle(
-            request,
-            error.step,
-            error.attemptsRemaining,
-            error.detail
-          )
-        )
-      ) : void_3, "reportRetryableFailure");
-      const retrySchedule = exponential("5 seconds").pipe(
-        upTo({ times: maximumRetries }),
-        setInputType(),
-        tap2(
-          ({ output: delay3 }) => observer.backoff(toMillis(delay3))
-        )
-      );
-      return attempt.pipe(
-        tapError2(reportRetryableFailure),
-        retry2({
-          schedule: retrySchedule,
-          while: /* @__PURE__ */ __name((error) => error.retryable, "while")
-        })
-      );
-    }, "orchestrateLogin");
-    const backgroundObserver = /* @__PURE__ */ __name((generation) => ({
-      attemptStarted: /* @__PURE__ */ __name((_attemptIndex, attemptsRemaining) => updateCurrentGeneration(generation, (current) => ({
-        ...current,
-        attemptsRemaining,
-        lastError: void 0
-      })), "attemptStarted"),
-      backoff: /* @__PURE__ */ __name((delayMs) => updateCurrentGeneration(generation, (current) => ({
-        ...current,
-        phase: { delayMs, tag: "backoff" }
-      })), "backoff"),
-      failure: /* @__PURE__ */ __name((error) => updateCurrentGeneration(generation, (current) => ({
-        ...current,
-        attemptsRemaining: error.attemptsRemaining,
-        lastError: error.detail
-      })), "failure"),
-      phase: /* @__PURE__ */ __name((phase) => updateCurrentGeneration(generation, (current) => ({
-        ...current,
-        phase
-      })), "phase")
-    }), "backgroundObserver");
-    const resolveBackgroundServer = /* @__PURE__ */ __name((generation) => get5(state).pipe(
-      map5(
-        (current) => current.enabled && current.generation === generation ? current.server : void 0
-      )
-    ), "resolveBackgroundServer");
-    const waitForRecoveryDelay = /* @__PURE__ */ __name((generation, startedAt) => gen2(function* () {
-      while (true) {
-        const current = yield* get5(state);
-        if (!current.enabled || current.generation !== generation) return false;
-        const elapsed = (yield* currentTimeMillis2) - startedAt;
-        const remaining = Math.max(0, current.delayMs - elapsed);
-        if (remaining === 0) return true;
-        const observedDelay = current.delayMs;
-        const outcome2 = yield* race2(
-          sleep2(`${remaining} millis`).pipe(
-            as2("elapsed")
-          ),
-          changes(state).pipe(
-            filter6(
-              (next) => !next.enabled || next.generation !== generation || next.delayMs !== observedDelay
-            ),
-            runHead2,
-            as2("changed")
-          )
-        );
-        if (outcome2 === "elapsed") return true;
-      }
-    }), "waitForRecoveryDelay");
-    const runBackground = /* @__PURE__ */ __name((generation, startedAt, skipDelay, resumeAtServerSelect) => gen2(function* () {
-      const current = yield* get5(state);
-      if (!current.enabled || current.generation !== generation || current.username === void 0 || current.password === void 0) {
-        return;
-      }
-      yield* updateCurrentGeneration(generation, (latest2) => ({
-        ...latest2,
-        attemptsRemaining: void 0,
-        lastError: void 0,
-        phase: { tag: "waiting-delay" }
-      }));
-      if (!skipDelay && !(yield* waitForRecoveryDelay(generation, startedAt))) {
-        return;
-      }
-      if (yield* isPlayerReady()) {
-        yield* markReadySuccess;
-        return;
-      }
-      const latest = yield* get5(state);
-      if (!latest.enabled || latest.generation !== generation) return;
-      const result3 = yield* result2(
-        loginPermit.withPermits(1)(
-          orchestrateLogin(
-            {
-              password: current.password,
-              username: current.username
-            },
-            backgroundObserver(generation),
-            resolveBackgroundServer(generation),
-            resumeAtServerSelect
-          )
-        )
-      );
-      if (isSuccess2(result3)) {
-        yield* updateCurrentGeneration(generation, (value) => ({
-          ...value,
-          attemptsRemaining: void 0,
-          lastError: void 0,
-          phase: { tag: "armed" }
-        }));
-        return;
-      }
-      const failure2 = result3.failure;
-      yield* updateCurrentGeneration(generation, (value) => ({
-        ...value,
-        attemptsRemaining: failure2.retryable ? 0 : void 0,
-        lastError: failure2.detail,
-        phase: { tag: "failed" }
-      }));
-    }).pipe(
-      catchCause2(
-        (cause) => hasInterruptsOnly2(cause) ? void_3 : logError("Unexpected auto relogin failure", cause).pipe(
-          annotateLogs({ component: "auto-relogin" }),
-          andThen2(
-            updateCurrentGeneration(generation, (current) => ({
-              ...current,
-              attemptsRemaining: void 0,
-              lastError: "Auto relogin failed unexpectedly.",
-              phase: { tag: "failed" }
-            }))
-          )
-        )
-      )
-    ), "runBackground");
-    const startRecovery = /* @__PURE__ */ __name((skipDelay = false, resumeAtServerSelect = false) => gen2(function* () {
-      if ((yield* get4(explicitRuns)) > 0) return;
-      const startedAt = yield* currentTimeMillis2;
-      const generation = yield* modify2(state, (current) => {
-        if (!current.enabled || current.username === void 0 || current.password === void 0 || current.phase.tag === "failed") {
-          return [void 0, current];
-        }
-        const nextGeneration = current.generation + 1;
-        return [
-          nextGeneration,
-          {
-            ...current,
-            generation: nextGeneration,
-            phase: { tag: "waiting-delay" }
-          }
-        ];
-      });
-      if (generation === void 0) return;
-      yield* run2(
-        fibers,
-        backgroundKey,
-        runBackground(generation, startedAt, skipDelay, resumeAtServerSelect)
-      );
-    }), "startRecovery");
-    const watchForReady = /* @__PURE__ */ __name(() => run2(
-      fibers,
-      readyWatcherKey,
-      waitForPlayerReady().pipe(
-        flatMap3(
-          (ready) => ready ? remove3(fibers, backgroundKey).pipe(
-            andThen2(markReadySuccess)
-          ) : void_3
-        ),
-        asVoid2
-      )
-    ).pipe(asVoid2), "watchForReady");
-    const runLogin = /* @__PURE__ */ __name((request) => acquireUseRelease2(
-      update(explicitRuns, (count) => count + 1),
-      () => gen2(function* () {
-        yield* remove3(fibers, backgroundKey);
-        yield* update2(
-          state,
-          (current) => current.enabled ? {
-            ...current,
-            attemptsRemaining: void 0,
-            generation: current.generation + 1,
-            lastError: void 0,
-            phase: { tag: "armed" }
-          } : current
-        );
-        return yield* loginPermit.withPermits(1)(orchestrateLogin(request));
-      }),
-      () => update(explicitRuns, (count) => count - 1)
-    ).pipe(
-      mapError3(
-        (error) => new AutoReloginLoginError({
-          detail: error.detail
-        })
-      )
-    ), "runLogin");
-    const stop2 = /* @__PURE__ */ __name(() => gen2(function* () {
-      yield* remove3(fibers, backgroundKey);
-      yield* remove3(fibers, captureWatcherKey);
-      yield* remove3(fibers, readyWatcherKey);
-      yield* update2(
-        state,
-        (current) => ({
-          ...current,
-          attemptsRemaining: void 0,
-          enabled: false,
-          generation: current.generation + 1,
-          lastError: void 0,
-          password: void 0,
-          phase: { tag: "armed" },
-          username: void 0
-        })
-      );
-      return yield* getState();
-    }), "stop");
-    const start3 = /* @__PURE__ */ __name(() => gen2(function* () {
-      const current = yield* get5(state);
-      if (!current.enabled) {
-        yield* update2(
-          state,
-          (value) => ({
-            ...value,
-            attemptsRemaining: void 0,
-            enabled: true,
-            generation: value.generation + 1,
-            lastError: void 0,
-            phase: { tag: "armed" }
-          })
-        );
-      }
-      yield* captureIfMissing;
-      if (yield* isPlayerReady()) {
-        yield* markReadySuccess;
-      } else {
-        const latest = yield* get5(state);
-        if (latest.username === void 0 || latest.password === void 0) {
-          yield* watchForCapturableSession();
-        }
-      }
-      return yield* getState();
-    }), "start");
-    const getDelayMs = /* @__PURE__ */ __name(() => get5(state).pipe(map5((current) => current.delayMs)), "getDelayMs");
-    const getServer = /* @__PURE__ */ __name(() => get5(state).pipe(map5((current) => current.server)), "getServer");
-    const isEnabled = /* @__PURE__ */ __name(() => get5(state).pipe(map5((current) => current.enabled)), "isEnabled");
-    const reconfigure = /* @__PURE__ */ __name((update3) => gen2(function* () {
-      yield* update2(state, update3);
-      const current = yield* get5(state);
-      if (current.enabled && (current.username === void 0 || current.password === void 0)) {
-        yield* watchForCapturableSession();
-      }
-      return yield* getState();
-    }), "reconfigure");
-    const setDelay = /* @__PURE__ */ __name((delay3) => reconfigure((current) => ({
-      ...current,
-      delayMs: normalizeAutoReloginDelay(toMillis(delay3))
-    })), "setDelay");
-    const setEnabled = /* @__PURE__ */ __name((enabled) => enabled ? start3() : stop2(), "setEnabled");
-    const setServer = /* @__PURE__ */ __name((server) => gen2(function* () {
-      const servers = server === void 0 || server.trim() === "" ? [] : yield* api2.auth.getServers();
-      const nextServer = normalizeAutoReloginServer(server, servers);
-      const shouldRetry = yield* modify2(state, (current2) => {
-        const changed = current2.server !== nextServer;
-        const retry4 = changed && current2.enabled && current2.phase.tag === "failed" && current2.username !== void 0 && current2.password !== void 0;
-        return [
-          retry4,
-          {
-            ...current2,
-            ...retry4 ? {
-              attemptsRemaining: void 0,
-              lastError: void 0,
-              phase: { tag: "armed" }
-            } : changed ? { lastError: void 0 } : {},
-            server: nextServer
-          }
-        ];
-      });
-      if (shouldRetry && !(yield* isPlayerReady())) {
-        yield* startRecovery(true, true);
-      }
-      const current = yield* get5(state);
-      if (current.enabled && (current.username === void 0 || current.password === void 0)) {
-        yield* watchForCapturableSession();
-      }
-      return yield* getState();
-    }), "setServer");
-    const disposeConnection = yield* api2.events.on(
-      { type: "connection" },
-      (event) => {
-        if (event.type !== "connection") return void_3;
-        if (event.status === "OnConnectionLost" || event.status === "OnConnectionFailed") {
-          return gen2(function* () {
-            yield* remove3(fibers, readyWatcherKey);
-            if ((yield* get4(explicitRuns)) > 0 || (yield* has3(fibers, backgroundKey))) {
-              return;
-            }
-            yield* startRecovery();
-          });
-        }
-        if (event.status === "OnConnection") {
-          return captureIfMissing.pipe(andThen2(watchForReady()));
-        }
-        return void_3;
-      }
-    );
-    yield* addFinalizer3(
-      () => sync2(() => {
-        disposeConnection();
-      })
-    );
-    return {
-      changes: changes2,
-      getRecords,
-      recordChanges,
-      getDelayMs,
-      getServer,
-      getState,
-      isEnabled,
-      runLogin,
-      setDelay,
-      setEnabled,
-      setServer
-    };
-  });
+  // packages/runtime/src/game/automation/autoReloginConfig.ts
+  var defaultAutoReloginDelay = 3e3;
+  var normalizeAutoReloginDelay = /* @__PURE__ */ __name((delayMs) => Number.isFinite(delayMs) ? clamp2({ minimum: 0, maximum: 3e5 })(delayMs) : defaultAutoReloginDelay, "normalizeAutoReloginDelay");
 
   // packages/runtime/src/host/autoRelogin.ts
   var publicReloginState = /* @__PURE__ */ __name(({ config, status }) => ({
@@ -21925,15 +20969,15 @@ ${prefix}}`;
   }), "publicReloginState");
   var makeAutoReloginService = /* @__PURE__ */ __name((host3) => {
     const getState = /* @__PURE__ */ __name(() => sync2(() => publicReloginState(JSON.parse(host3.read('{"kind":"autoRelogin"}')))), "getState");
-    const set5 = /* @__PURE__ */ __name((payload) => ask(payload, host3).pipe(map5((answer) => answer)), "set");
+    const set4 = /* @__PURE__ */ __name((payload) => ask(payload, host3).pipe(map5((answer) => answer)), "set");
     return {
       getState,
       getDelayMs: /* @__PURE__ */ __name(() => getState().pipe(map5((state) => state.delayMs)), "getDelayMs"),
       getServer: /* @__PURE__ */ __name(() => getState().pipe(map5((state) => state.server)), "getServer"),
       isEnabled: /* @__PURE__ */ __name(() => getState().pipe(map5((state) => state.enabled)), "isEnabled"),
-      setEnabled: /* @__PURE__ */ __name((enabled) => set5({ kind: "autoRelogin.setEnabled", enabled }), "setEnabled"),
-      setDelay: /* @__PURE__ */ __name((delay3) => set5({ kind: "autoRelogin.setDelay", delayMs: normalizeAutoReloginDelay(toMillis(delay3)) }), "setDelay"),
-      setServer: /* @__PURE__ */ __name((server) => set5({ kind: "autoRelogin.setServer", server: server ?? null }), "setServer")
+      setEnabled: /* @__PURE__ */ __name((enabled) => set4({ kind: "autoRelogin.setEnabled", enabled }), "setEnabled"),
+      setDelay: /* @__PURE__ */ __name((delay3) => set4({ kind: "autoRelogin.setDelay", delayMs: normalizeAutoReloginDelay(toMillis(delay3)) }), "setDelay"),
+      setServer: /* @__PURE__ */ __name((server) => set4({ kind: "autoRelogin.setServer", server: server ?? null }), "setServer")
     };
   }, "makeAutoReloginService");
 
@@ -21954,7 +20998,7 @@ ${prefix}}`;
       getMap: /* @__PURE__ */ __name(() => getState().pipe(map5((state2) => state2.map)), "getMap"),
       isEnabled: /* @__PURE__ */ __name(() => getState().pipe(map5((state2) => state2.enabled)), "isEnabled"),
       setEnabled: /* @__PURE__ */ __name((enabled) => patch({ enabled }), "setEnabled"),
-      setMap: /* @__PURE__ */ __name((map9) => patch({ map: map9 ?? null }), "setMap")
+      setMap: /* @__PURE__ */ __name((map8) => patch({ map: map8 ?? null }), "setMap")
     };
   }, "makeAutoZoneService");
 

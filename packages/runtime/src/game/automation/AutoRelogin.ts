@@ -5,7 +5,6 @@ import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberMap from "effect/FiberMap";
-import * as EffectNumber from "effect/Number";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
@@ -14,6 +13,9 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import type * as FiberMapType from "effect/FiberMap";
+
+import { defaultAutoReloginDelay as defaultDelay, normalizeAutoReloginDelay } from "./autoReloginConfig";
+export { normalizeAutoReloginDelay } from "./autoReloginConfig";
 
 import type { ApiService } from "../flash/api/Api";
 
@@ -120,7 +122,6 @@ const captureWatcherKey = "auto-relogin-capture";
 const readyWatcherKey = "auto-relogin-ready";
 const captureInterval = "5 seconds";
 const maximumRetries = 3;
-const defaultDelay = 3_000;
 const readinessPollInterval = "500 millis";
 const playerReadyTimeout = "10 seconds";
 const serverSelectTimeout = "15 seconds";
@@ -131,11 +132,6 @@ const noopObserver: LoginObserver = {
   failure: () => Effect.void,
   phase: () => Effect.void,
 };
-
-export const normalizeAutoReloginDelay = (delayMs: number): number =>
-  Number.isFinite(delayMs)
-    ? EffectNumber.clamp({ minimum: 0, maximum: 300_000 })(delayMs)
-    : defaultDelay;
 
 const normalizeAutoReloginServer = (
   server: string | undefined,

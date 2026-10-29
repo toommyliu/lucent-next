@@ -16146,6 +16146,10 @@ ${prefix}}`;
     );
   });
 
+  // packages/runtime/src/game/automation/autoReloginConfig.ts
+  var defaultAutoReloginDelay = 3e3;
+  var normalizeAutoReloginDelay = /* @__PURE__ */ __name((delayMs) => Number.isFinite(delayMs) ? clamp2({ minimum: 0, maximum: 3e5 })(delayMs) : defaultAutoReloginDelay, "normalizeAutoReloginDelay");
+
   // packages/runtime/src/game/automation/AutoRelogin.ts
   var AutoReloginLoginError = class extends TaggedError2(
     "AutoReloginLoginError"
@@ -16169,7 +16173,6 @@ ${prefix}}`;
   var readyWatcherKey = "auto-relogin-ready";
   var captureInterval = "5 seconds";
   var maximumRetries = 3;
-  var defaultDelay = 3e3;
   var readinessPollInterval = "500 millis";
   var playerReadyTimeout = "10 seconds";
   var serverSelectTimeout = "15 seconds";
@@ -16179,7 +16182,6 @@ ${prefix}}`;
     failure: /* @__PURE__ */ __name(() => void_3, "failure"),
     phase: /* @__PURE__ */ __name(() => void_3, "phase")
   };
-  var normalizeAutoReloginDelay = /* @__PURE__ */ __name((delayMs) => Number.isFinite(delayMs) ? clamp2({ minimum: 0, maximum: 3e5 })(delayMs) : defaultDelay, "normalizeAutoReloginDelay");
   var normalizeAutoReloginServer = /* @__PURE__ */ __name((server, servers) => {
     if (server === void 0) return void 0;
     const requested = server.trim();
@@ -16220,7 +16222,7 @@ ${prefix}}`;
   var makeAutoRelogin = fnUntraced2(function* (api, fibers, config) {
     const state = yield* make15({
       attemptsRemaining: void 0,
-      delayMs: config?.delayMs ?? defaultDelay,
+      delayMs: config?.delayMs ?? defaultAutoReloginDelay,
       enabled: config?.enabled ?? false,
       generation: 0,
       lastError: void 0,
