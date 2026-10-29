@@ -343,6 +343,9 @@ impl Engine {
             }
             tracing::error!(%error, "script turn failed");
         }
+        if matches!(self.bundle, Bundle::Bot) && !rejections.is_empty() {
+            return Err(RuntimeError::JavaScript(rejections.join("\n")));
+        }
         for error in rejections {
             tracing::error!(%error, "unhandled script rejection");
         }
