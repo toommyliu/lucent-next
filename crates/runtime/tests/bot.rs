@@ -269,6 +269,28 @@ fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
     }
 }
 
+fn packet(link: &ScriptLink, data: serde_json::Value) {
+    link.call_loader(
+        "probe.emit",
+        vec![
+            Value::String("onExtensionResponse".into()),
+            Value::String(json!({"type":"json","dataObj":data}).to_string()),
+        ],
+    )
+    .recv_timeout(TIMEOUT)
+    .unwrap();
+}
+
+fn enter_map(link: &ScriptLink, map: &str) {
+    packet(
+        link,
+        json!({
+            "cmd":"moveToArea","areaName":format!("{map}-1"),
+            "uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}],
+        }),
+    );
+}
+
 #[test]
 fn only_scripts_react_to_counter_attacks() {
     let host = testing::headless_host();
@@ -936,22 +958,7 @@ fn auto_zone_follows_a_script_toggle_through_kills() {
     let (mut session, observer) =
         testing::start_probe(&host, common::ready_movie().recording("player.walkTo"));
     become_ready(&observer);
-    observer
-        .call_loader(
-            "probe.emit",
-            vec![
-                Value::String("onExtensionResponse".into()),
-                Value::String(
-                    json!({"type":"json","dataObj":{
-                        "cmd":"moveToArea","areaName":"ledgermayne-1",
-                        "uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}]
-                    }})
-                    .to_string(),
-                ),
-            ],
-        )
-        .recv_timeout(TIMEOUT)
-        .unwrap();
+    enter_map(&observer, "ledgermayne");
     let bot = Bot::start(session.attach().unwrap()).unwrap();
     let run = common::started_run(
         &mut session,
@@ -991,19 +998,7 @@ fn auto_zone_follows_a_script_toggle_through_kills() {
     })
     .unwrap();
     drain(&observer);
-    observer
-        .call_loader(
-            "probe.emit",
-            vec![
-                Value::String("onExtensionResponse".into()),
-                Value::String(
-                    json!({"type":"json","dataObj":{"cmd":"event","args":{"zoneSet":"A"}}})
-                        .to_string(),
-                ),
-            ],
-        )
-        .recv_timeout(TIMEOUT)
-        .unwrap();
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":"A"}}));
     let call = next_call(&observer, "player.walkTo");
     assert!(matches!(call.get(1), Some(Value::Number(x)) if (147.0..=276.0).contains(x)));
     assert!(matches!(
@@ -1039,23 +1034,9 @@ fn a_new_bot_reads_the_auto_zone_config_and_scripts_can_clear_it() {
         lucent_protocol::script::ScriptOutcome::Completed
     );
     let bot = Bot::start(session.attach().unwrap()).unwrap();
-    observer.call_loader("probe.emit", vec![Value::String("onExtensionResponse".into()), Value::String(json!({"type":"json","dataObj":{
-        "cmd":"moveToArea","areaName":"ledgermayne-1","uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}]
-    }}).to_string())]).recv_timeout(TIMEOUT).unwrap();
+    enter_map(&observer, "ledgermayne");
     drain(&observer);
-    observer
-        .call_loader(
-            "probe.emit",
-            vec![
-                Value::String("onExtensionResponse".into()),
-                Value::String(
-                    json!({"type":"json","dataObj":{"cmd":"event","args":{"zoneSet":"B"}}})
-                        .to_string(),
-                ),
-            ],
-        )
-        .recv_timeout(TIMEOUT)
-        .unwrap();
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":"B"}}));
     let call = next_call(&observer, "player.walkTo");
     assert!(matches!(call.get(1), Some(Value::Number(x)) if (727.0..=852.0).contains(x)));
     assert!(matches!(
@@ -1122,23 +1103,9 @@ fn auto_zone_rereads_the_host_record_after_the_bot_link_overflows() {
         Err(lucent_host::bridge::Error::Overflow)
     );
     bot.eval("barrier.js", "null").wait::<()>(TIMEOUT).unwrap();
-    observer.call_loader("probe.emit", vec![Value::String("onExtensionResponse".into()), Value::String(json!({"type":"json","dataObj":{
-        "cmd":"moveToArea","areaName":"moreskulls-1","uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}]
-    }}).to_string())]).recv_timeout(TIMEOUT).unwrap();
+    enter_map(&observer, "moreskulls");
     drain(&observer);
-    observer
-        .call_loader(
-            "probe.emit",
-            vec![
-                Value::String("onExtensionResponse".into()),
-                Value::String(
-                    json!({"type":"json","dataObj":{"cmd":"event","args":{"zoneSet":"A"}}})
-                        .to_string(),
-                ),
-            ],
-        )
-        .recv_timeout(TIMEOUT)
-        .unwrap();
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":"A"}}));
     let call = next_call(&observer, "player.walkTo");
     assert!(matches!(call.get(1), Some(Value::Number(x)) if (696.0..=802.0).contains(x)));
 }
