@@ -24,6 +24,7 @@ pub struct ProbeMovie {
     constants: Vec<(String, serde_json::Value)>,
     raises: Vec<(String, String, String)>,
     records: Vec<String>,
+    guarded_records: Vec<String>,
 }
 
 impl ProbeMovie {
@@ -33,6 +34,13 @@ impl ProbeMovie {
 
     pub fn recording(mut self, name: impl Into<String>) -> Self {
         self.records.push(name.into());
+        self
+    }
+
+    pub fn recording_when_ready(mut self, name: impl Into<String>) -> Self {
+        let name = name.into();
+        self.guarded_records.push(name.clone());
+        self.records.push(name);
         self
     }
 
@@ -58,14 +66,19 @@ pub fn headless_surface() -> Surface {
 }
 
 pub fn start_probe(host: &Host, movie: ProbeMovie) -> (Session, ScriptLink) {
-    let mut session = host
-        .start_movie(headless_surface(), Movie(Arc::from(fixture_swf(&movie))))
-        .expect("couldn't start the probe player");
-    let link = session.take_script_link().unwrap();
+    let (session, link) = start_probe_without_viewport(host, movie);
     session.send(ViewEvent::Resized(
         Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));
     wait_loaded(&link);
+    (session, link)
+}
+
+pub fn start_probe_without_viewport(host: &Host, movie: ProbeMovie) -> (Session, ScriptLink) {
+    let mut session = host
+        .start_movie(headless_surface(), Movie(Arc::from(fixture_swf(&movie))))
+        .expect("couldn't start the probe player");
+    let link = session.take_script_link().unwrap();
     (session, link)
 }
 
@@ -179,6 +192,12 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
         Action::Return,
     ]);
     let emit_body = actions(&emit);
+    let ready_body = actions(&[
+        push(vec![Value::Str(string("_root.probeReady")), Value::Bool(true)]),
+        Action::SetVariable,
+        push(vec![Value::Bool(true)]),
+        Action::Return,
+    ]);
     let user_id_body = actions(&[push(vec![Value::Int(7)]), Action::Return]);
     let constant_bodies: Vec<(&str, Vec<u8>)> = constants
         .iter()
@@ -226,10 +245,35 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
                 Action::CallMethod,
                 Action::Pop,
             ]);
+            if movie.guarded_records.contains(name) {
+                let mut rejected = vec![push(vec![
+                    Value::Str(string(name)),
+                    Value::Str(string("onProbeNotReady")),
+                    Value::Int(2),
+                ])];
+                rejected.extend(external_interface());
+                rejected.extend([
+                    push(vec![Value::Str(string("call"))]),
+                    Action::CallMethod,
+                    Action::Pop,
+                    push(vec![Value::Str(string("settings called before readiness"))]),
+                    Action::Throw,
+                ]);
+                let offset = actions(&rejected).len() as i16;
+                let mut guarded = vec![
+                    push(vec![Value::Str(string("_root.probeReady"))]),
+                    Action::GetVariable,
+                    Action::If(swf::avm1::types::If { offset }),
+                ];
+                guarded.extend(rejected);
+                guarded.extend(body);
+                body = guarded;
+            }
             (name.as_str(), actions(&body))
         })
         .collect();
     let mut callbacks = vec![
+        ("probe.ready", vec![], ready_body.as_slice()),
         ("probe.echo", vec![string("x")], echo_body.as_slice()),
         (
             "probe.emit",

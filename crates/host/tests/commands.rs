@@ -847,11 +847,21 @@ fn settings_movie() -> ProbeMovie {
         "settings.skipCutscenes",
     ]
     .into_iter()
-    .fold(ProbeMovie::new(), |movie, name| movie.recording(name))
+    .fold(ProbeMovie::new(), |movie, name| {
+        movie.recording_when_ready(name)
+    })
 }
 
 fn start_settings() -> (lucent_host::Host, lucent_host::Session, ScriptLink) {
     let (host, session, link) = start(settings_movie());
+    link.call_loader("probe.echo", vec![])
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    assert_eq!(loader_calls(&link), Vec::<Value>::new());
+    link.call_loader("probe.ready", vec![])
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    become_ready(&link);
     link.call_loader("probe.echo", vec![])
         .recv_timeout(Duration::from_secs(5))
         .unwrap();
@@ -863,6 +873,11 @@ fn loader_calls(link: &ScriptLink) -> Vec<Value> {
     let mut calls = vec![];
     while let Some(event) = link.try_event().unwrap() {
         if let lucent_host::bridge::ScriptEvent::Loader { event, .. } = event {
+            assert_ne!(
+                event.name, "onProbeNotReady",
+                "setter ran before readiness: {:?}",
+                event.args
+            );
             if event.name == "onProbeCall" {
                 calls.push(json!(
                     event
@@ -1084,6 +1099,23 @@ fn a_restarted_player_gets_the_stored_settings() {
         .call_loader("probe.echo", vec![])
         .recv_timeout(Duration::from_secs(5))
         .unwrap();
+    assert_eq!(loader_calls(&current), Vec::<Value>::new());
+    current
+        .call_loader("probe.ready", vec![])
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    enter_area(&current, "testroom-1");
+    packet(&current, json!({"cmd": "initInventory", "items": []}));
+    assert_eq!(
+        query(&current, json!({"kind": "readiness"}))["missing"],
+        json!(["houseInventory"])
+    );
+    assert_eq!(loader_calls(&current), Vec::<Value>::new());
+    packet(&current, json!({"cmd": "loadHouseInventory", "items": []}));
+    current
+        .call_loader("probe.echo", vec![])
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
     let calls = loader_calls(&current);
     assert!(calls.contains(&json!(["settings.setWalkSpeed", 20.0])));
     assert!(calls.contains(&json!(["settings.setCustomGuild", "Lucent"])));
@@ -1095,4 +1127,44 @@ fn a_restarted_player_gets_the_stored_settings() {
         query(&current, json!({"kind": "settings"}))["customGuild"],
         "Lucent"
     );
+}
+
+#[test]
+fn settings_updated_before_the_first_viewport_are_stored_and_applied_when_ready() {
+    let host = testing::headless_host();
+    let (session, link) = testing::start_probe_without_viewport(&host, settings_movie());
+    let updated = command(
+        &link,
+        json!({"kind": "updateSettings", "patch": {
+            "walkSpeed": 20, "frameRate": 99, "customName": "Tommy", "antiCounterEnabled": false
+        }}),
+    )
+    .unwrap();
+    assert_eq!(updated["walkSpeed"], 20.0);
+    assert_eq!(updated["frameRate"], 60.0);
+    assert_eq!(updated["customName"], "Tommy");
+    assert_eq!(updated["customNameConfigured"], true);
+    assert_eq!(updated["antiCounterEnabled"], false);
+    assert_eq!(query(&link, json!({"kind": "settings"})), updated);
+    session.send(lucent_host::ViewEvent::Resized(
+        lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
+    ));
+    link.call_loader("probe.echo", vec![])
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    assert_eq!(loader_calls(&link), Vec::<Value>::new());
+    link.call_loader("probe.ready", vec![])
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    become_ready(&link);
+    link.call_loader("probe.echo", vec![])
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    let calls = loader_calls(&link);
+    assert!(calls.contains(&json!(["settings.setWalkSpeed", 20.0])));
+    assert!(calls.contains(&json!(["settings.setCustomName", "Tommy"])));
+    assert!(calls.contains(&json!(["settings.setFrameRate", 60.0])));
+    emit(&link, "onLoaded", String::new());
+    become_ready(&link);
+    assert_eq!(loader_calls(&link), Vec::<Value>::new());
 }
