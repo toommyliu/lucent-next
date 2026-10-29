@@ -300,3 +300,31 @@ fn malformed_and_unrelated_responses_do_not_end_an_accept() {
         Some(4.0)
     );
 }
+
+#[test]
+fn dropping_a_session_does_not_add_an_operation_timeout_to_the_player_stop() {
+    let host = testing::headless_host();
+    let (session, link) = testing::start_probe(
+        &host,
+        ProbeMovie::new().constant("auth.isLoggedIn", json!(true)),
+    );
+    drop_item(&link, "Item", false);
+    let (entered, waiting) = std::sync::mpsc::channel();
+    let (release, blocked) = std::sync::mpsc::channel();
+    let player = session.read_projection(move |_| {
+        entered.send(()).unwrap();
+        blocked.recv_timeout(Duration::from_secs(10)).unwrap();
+    });
+    waiting.recv_timeout(WAIT).unwrap();
+    accept(&link);
+    std::thread::sleep(Duration::from_millis(100));
+    let at = Instant::now();
+    drop(session);
+    let elapsed = at.elapsed();
+    release.send(()).unwrap();
+    player.recv_timeout(WAIT).unwrap();
+    assert!(
+        elapsed < Duration::from_millis(2500),
+        "session drop took {elapsed:?}"
+    );
+}
