@@ -392,7 +392,6 @@ fn take_events(engine: &mut Engine) -> Option<Vec<host::Item>> {
             Ok(Some(event)) => items.push(host::Item::from(event)),
             Ok(None) => return Some(items),
             Err(EventError::Overflow) => {
-                tracing::error!("script events overflowed and were lost");
                 engine.events_lost();
             }
             Err(_) => return None,

@@ -127,6 +127,11 @@ impl Engine {
     }
 
     pub(crate) fn events_lost(&mut self) {
+        let runtime = match self.bundle {
+            Bundle::Bot => "bot",
+            Bundle::Script => "script",
+        };
+        tracing::error!("{runtime} events overflowed and were lost");
         let mut running = false;
         self.active.retain_mut(|active| {
             if active.run.is_some() {
