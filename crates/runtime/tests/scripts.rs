@@ -2,6 +2,7 @@ mod common;
 use common::*;
 use lucent_protocol::script::ScriptOutcome;
 use lucent_runtime::{Kill, RuntimeError};
+use std::time::Duration;
 
 #[test]
 fn the_daily_package_runs_and_reports_its_maxed_reward() {
@@ -303,6 +304,21 @@ fn cooperative_stop_settles_a_yielding_script_and_allows_another_run() {
         ScriptOutcome::Stopped { reason: None }
     );
     completed(&runtime);
+}
+
+#[test]
+fn a_timed_out_wait_leaves_the_script_run_usable() {
+    let (_host, _session, runtime) = ready_runtime();
+    let run = yielding(&runtime);
+    assert!(matches!(
+        run.wait(Duration::from_millis(1)),
+        Err(RuntimeError::Timeout)
+    ));
+    runtime.stop_script();
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        ScriptOutcome::Stopped { reason: None }
+    );
 }
 
 #[test]

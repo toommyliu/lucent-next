@@ -94,7 +94,7 @@ impl Wake for EventWake {
 pub struct PendingEval(mpsc::Receiver<Result<String, RuntimeError>>);
 
 impl PendingEval {
-    pub fn wait<T: DeserializeOwned>(self, timeout: Duration) -> Result<T, RuntimeError> {
+    pub fn wait<T: DeserializeOwned>(&self, timeout: Duration) -> Result<T, RuntimeError> {
         let json = self.0.recv_timeout(timeout).map_err(|error| match error {
             RecvTimeoutError::Timeout => RuntimeError::Timeout,
             RecvTimeoutError::Disconnected => RuntimeError::Stopped,
@@ -106,7 +106,7 @@ impl PendingEval {
 pub struct ScriptRun(PendingEval);
 
 impl ScriptRun {
-    pub fn wait(self, timeout: Duration) -> Result<ScriptOutcome, RuntimeError> {
+    pub fn wait(&self, timeout: Duration) -> Result<ScriptOutcome, RuntimeError> {
         self.0.wait(timeout)
     }
 }
