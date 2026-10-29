@@ -21,6 +21,7 @@ struct State {
 }
 
 enum Clock {
+    StartingScript,
     Idle,
     Running(Instant),
     Blocked(Duration),
@@ -71,8 +72,24 @@ impl Interrupt {
         self.alarm.ring();
     }
 
+    pub(crate) fn prepare_script(&self) {
+        self.state.lock().unwrap().clock = Clock::StartingScript;
+    }
+
+    pub(crate) fn start_script(&self) {
+        let mut state = self.state.lock().unwrap();
+        if matches!(state.clock, Clock::StartingScript) {
+            let deadline = Instant::now() + TURN_LIMIT;
+            state.clock = Clock::Running(deadline);
+            self.rouse(&state, deadline);
+        }
+    }
+
     pub(crate) fn begin_turn(&self) {
         let mut state = self.state.lock().unwrap();
+        if matches!(state.clock, Clock::StartingScript) {
+            return;
+        }
         let deadline = Instant::now() + TURN_LIMIT;
         state.clock = Clock::Running(deadline);
         self.rouse(&state, deadline);
@@ -96,7 +113,9 @@ impl Interrupt {
 
     pub(crate) fn end_turn(&self) -> Option<Stop> {
         let mut state = self.state.lock().unwrap();
-        state.clock = Clock::Idle;
+        if !matches!(state.clock, Clock::StartingScript) {
+            state.clock = Clock::Idle;
+        }
         state.stop
     }
 
@@ -123,7 +142,7 @@ impl Interrupt {
                     continue;
                 }
                 Clock::Running(deadline) => Some(deadline),
-                Clock::Idle | Clock::Blocked(_) => None,
+                Clock::StartingScript | Clock::Idle | Clock::Blocked(_) => None,
             };
             state.armed = until;
             state = self.alarm.wait(&self.state, state, until);

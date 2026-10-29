@@ -240,6 +240,9 @@ fn run(
     interrupt: &Arc<Interrupt>,
     ready: &mpsc::SyncSender<Result<(), RuntimeError>>,
 ) -> Result<(), RuntimeError> {
+    if matches!(execution, Execution::StartScript { .. }) {
+        interrupt.prepare_script();
+    }
     let mut command = Ok(Command::Wake);
     let mut ready = Some(ready);
     loop {

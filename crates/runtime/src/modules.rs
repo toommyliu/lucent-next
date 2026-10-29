@@ -1,9 +1,11 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use lucent_protocol::script::{ModulePath, Script};
 
 use crate::engine::{origin, throw};
+use crate::interrupt::Interrupt;
 
 #[derive(Default)]
 pub(crate) struct Scripts {
@@ -45,6 +47,7 @@ pub(crate) fn load(
     let Ok(builtins) = v8::Local::<v8::Object>::try_from(args.get(0)) else {
         return throw(scope, "Loading a script needs its built-in modules.");
     };
+    scope.get_slot::<Arc<Interrupt>>().unwrap().start_script();
     v8::tc_scope!(let tc, scope);
     let result = graph(tc, &script, builtins);
     match result {

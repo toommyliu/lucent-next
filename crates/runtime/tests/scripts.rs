@@ -340,15 +340,24 @@ fn a_timed_out_wait_leaves_the_script_run_usable() {
 #[test]
 fn the_watchdog_kills_a_script_and_a_fresh_run_completes() {
     let (_host, mut session, _runtime) = ready_runtime();
-    let error = start(
-        &mut session,
-        loose(&[("loop.js", "export default function* () { while (true) {} }")]),
-        Default::default(),
-    )
-    .wait(TIMEOUT)
-    .unwrap_err();
-    assert!(matches!(error, RuntimeError::Killed(Kill::Watchdog)));
-    completed(&mut session);
+    for source in [
+        "while (true) {} export default function* () {}",
+        "export const inputs = { get id() { while (true) {} } }; export default function* () {}",
+        "export default function* () { while (true) {} }",
+    ] {
+        let error = start(
+            &mut session,
+            loose(&[("loop.js", source)]),
+            Default::default(),
+        )
+        .wait(TIMEOUT)
+        .unwrap_err();
+        assert!(
+            matches!(error, RuntimeError::Killed(Kill::Watchdog)),
+            "{error:?}"
+        );
+        completed(&mut session);
+    }
 }
 
 #[test]
