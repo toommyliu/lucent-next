@@ -16598,28 +16598,17 @@ ${prefix}}`;
     provokeCellEnabled: state.provokeCellEnabled,
     skipCutscenesEnabled: state.skipCutscenesEnabled
   }), "recurringActionsPatch");
-  var effectiveFrameRate = /* @__PURE__ */ __name((state, frameRateLimit) => {
-    if (state.renderingMode === "minimal") {
-      return MINIMAL_RENDERING_FRAME_RATE;
-    }
-    return frameRateLimit === null ? state.frameRate : Math.min(state.frameRate, frameRateLimit);
-  }, "effectiveFrameRate");
-  var isNonMinimalRenderingMode = /* @__PURE__ */ __name((mode) => mode !== "minimal", "isNonMinimalRenderingMode");
+  var effectiveFrameRate = /* @__PURE__ */ __name((state) => state.renderingMode === "minimal" ? MINIMAL_RENDERING_FRAME_RATE : state.frameRate, "effectiveFrameRate");
   var makeSettings = fnUntraced2(function* (bridge) {
     const stateRef = yield* make17(makeSettingsState());
     const stored = {
-      changes: changes(stateRef),
       get: get5(stateRef),
       patch: /* @__PURE__ */ __name((patch) => updateAndGet2(stateRef, (state) => ({
         ...state,
         ...patch
       })), "patch")
     };
-    const scope3 = yield* scope2;
     const updates = yield* make14(1);
-    const frameRateLimit = yield* make16(null);
-    const resumeRenderingMode = yield* make16("full");
-    const runFork3 = runForkWith2(yield* context2());
     const command = /* @__PURE__ */ __name((method, value) => bridge.invoke(method, value === void 0 ? void 0 : [value], Void2).pipe(asVoid2), "command");
     const execute = fnUntraced2(function* (patch, state) {
       const effects = [];
@@ -16645,9 +16634,8 @@ ${prefix}}`;
         );
       }
       if (patch.frameRate !== void 0 || patch.renderingMode !== void 0) {
-        const limit = yield* get4(frameRateLimit);
         effects.push(
-          command("settings.setFrameRate", effectiveFrameRate(state, limit))
+          command("settings.setFrameRate", effectiveFrameRate(state))
         );
       }
       if (patch.enemyMagnetEnabled === true) {
@@ -16682,13 +16670,6 @@ ${prefix}}`;
       const next = { ...current, ...statePatch };
       yield* execute(patch, next);
       yield* stored.patch(statePatch);
-      if (patch.renderingMode === "minimal") {
-        if (isNonMinimalRenderingMode(current.renderingMode)) {
-          yield* set3(resumeRenderingMode, current.renderingMode);
-        }
-      } else if (patch.renderingMode !== void 0) {
-        yield* set3(resumeRenderingMode, patch.renderingMode);
-      }
     });
     const apply = /* @__PURE__ */ __name((input) => updates.withPermits(1)(applyUnlocked(input)), "apply");
     const action = /* @__PURE__ */ __name((key, method) => updates.withPermits(1)(
@@ -16710,101 +16691,21 @@ ${prefix}}`;
         yield* execute(recurringActionsPatch(state), state);
       })
     ), "reapplyActions");
-    const set5 = /* @__PURE__ */ __name((key) => (value) => apply({ [key]: value }), "set");
-    const changes2 = stored.changes;
     const get6 = /* @__PURE__ */ __name(() => stored.get, "get");
     const enemyMagnet = /* @__PURE__ */ __name(() => action("enemyMagnetEnabled", "settings.enemyMagnet"), "enemyMagnet");
     const infiniteRange = /* @__PURE__ */ __name(() => action("infiniteRangeEnabled", "settings.infiniteRange"), "infiniteRange");
     const provokeCell = /* @__PURE__ */ __name(() => action("provokeCellEnabled", "settings.provokeCell"), "provokeCell");
     const skipCutscenes = /* @__PURE__ */ __name(() => action("skipCutscenesEnabled", "settings.skipCutscenes"), "skipCutscenes");
     const isAntiCounterEnabled = /* @__PURE__ */ __name(() => stored.get.pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled");
-    const getRenderingMode = /* @__PURE__ */ __name(() => stored.get.pipe(map5((state) => state.renderingMode)), "getRenderingMode");
-    const onState = /* @__PURE__ */ __name((listener) => stored.changes.pipe(
-      runForEach2((state) => sync2(() => listener(state))),
-      forkIn2(scope3),
-      map5((fiber2) => () => {
-        runFork3(interrupt4(fiber2));
-      })
-    ), "onState");
-    const setAnimationsEnabled = set5("animationsEnabled");
-    const setAntiCounterEnabled = set5("antiCounterEnabled");
-    const setCollisionsEnabled = set5("collisionsEnabled");
-    const setCustomGuild = set5("customGuild");
-    const setCustomName = set5("customName");
-    const resetCustomGuild = updates.withPermits(1)(
-      gen2(function* () {
-        yield* command("settings.resetCustomGuild");
-        yield* stored.patch({
-          customGuild: "",
-          customGuildConfigured: false
-        });
-      })
-    );
-    const resetCustomName = updates.withPermits(1)(
-      gen2(function* () {
-        yield* command("settings.resetCustomName");
-        yield* stored.patch({
-          customName: "",
-          customNameConfigured: false
-        });
-      })
-    );
-    const setDeathAdsVisible = set5("deathAdsVisible");
-    const setEnemyMagnetEnabled = set5("enemyMagnetEnabled");
-    const setFrameRate = set5("frameRate");
-    const setFrameRateLimit = /* @__PURE__ */ __name((limit) => updates.withPermits(1)(
-      gen2(function* () {
-        const normalized = limit === null ? null : normalizeFrameRate(limit);
-        yield* set3(frameRateLimit, normalized);
-        const state = yield* stored.get;
-        yield* command(
-          "settings.setFrameRate",
-          effectiveFrameRate(state, normalized)
-        );
-      })
-    ), "setFrameRateLimit");
-    const setInfiniteRangeEnabled = set5("infiniteRangeEnabled");
-    const setOtherPlayersVisible = set5("otherPlayersVisible");
-    const setProvokeCellEnabled = set5("provokeCellEnabled");
-    const setRenderingMode = set5("renderingMode");
-    const setSkipCutscenesEnabled = set5("skipCutscenesEnabled");
-    const setWalkSpeed = set5("walkSpeed");
-    const restoreRenderingMode = /* @__PURE__ */ __name(() => updates.withPermits(1)(
-      gen2(function* () {
-        const mode = yield* get4(resumeRenderingMode);
-        yield* applyUnlocked({ renderingMode: mode });
-      })
-    ), "restoreRenderingMode");
     return {
       apply,
-      changes: changes2,
       enemyMagnet,
       get: get6,
-      getRenderingMode,
       infiniteRange,
       isAntiCounterEnabled,
-      onState,
       provokeCell,
       reapply,
       reapplyActions,
-      restoreRenderingMode,
-      resetCustomGuild,
-      resetCustomName,
-      setAnimationsEnabled,
-      setAntiCounterEnabled,
-      setCollisionsEnabled,
-      setCustomGuild,
-      setCustomName,
-      setDeathAdsVisible,
-      setEnemyMagnetEnabled,
-      setFrameRate,
-      setFrameRateLimit,
-      setInfiniteRangeEnabled,
-      setOtherPlayersVisible,
-      setProvokeCellEnabled,
-      setRenderingMode,
-      setSkipCutscenesEnabled,
-      setWalkSpeed,
       skipCutscenes
     };
   });

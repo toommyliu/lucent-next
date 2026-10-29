@@ -44,7 +44,7 @@ describe("Settings", () => {
       const reapply = yield* settings.reapply().pipe(Effect.forkScoped);
       yield* Deferred.await(applying);
       const update = yield* settings
-        .setAnimationsEnabled(false)
+        .apply({ animationsEnabled: false })
         .pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
       expect(update.pollUnsafe()).toBeUndefined();

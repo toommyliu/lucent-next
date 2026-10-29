@@ -1,21 +1,13 @@
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
 import type { BridgeService } from "../bridge/Bridge";
-import type {
-  RenderingMode,
-  SettingsPatch as SettingsPatchValue,
-} from "../contract/Settings";
+import type { SettingsPatch as SettingsPatchValue } from "../contract/Settings";
 import { makeSettingsState, type SettingsState } from "../state/Settings";
 
 export const MINIMAL_RENDERING_FRAME_RATE = 2;
-
-type NonMinimalRenderingMode = Exclude<RenderingMode, "minimal">;
 
 const normalizeFrameRate = (frameRate: number): number =>
   Math.max(1, Math.min(60, frameRate));
@@ -53,28 +45,16 @@ const recurringActionsPatch = (state: SettingsState): SettingsPatchValue => ({
   skipCutscenesEnabled: state.skipCutscenesEnabled,
 });
 
-const effectiveFrameRate = (
-  state: SettingsState,
-  frameRateLimit: number | null,
-): number => {
-  if (state.renderingMode === "minimal") {
-    return MINIMAL_RENDERING_FRAME_RATE;
-  }
-  return frameRateLimit === null
-    ? state.frameRate
-    : Math.min(state.frameRate, frameRateLimit);
-};
-
-const isNonMinimalRenderingMode = (
-  mode: RenderingMode,
-): mode is NonMinimalRenderingMode => mode !== "minimal";
+const effectiveFrameRate = (state: SettingsState): number =>
+  state.renderingMode === "minimal"
+    ? MINIMAL_RENDERING_FRAME_RATE
+    : state.frameRate;
 
 export const makeSettings = Effect.fnUntraced(function* (
   bridge: BridgeService,
 ) {
   const stateRef = yield* SubscriptionRef.make(makeSettingsState());
   const stored = {
-    changes: SubscriptionRef.changes(stateRef),
     get: SubscriptionRef.get(stateRef),
     patch: (patch: Partial<SettingsState>) =>
       SubscriptionRef.updateAndGet(stateRef, (state) => ({
@@ -82,11 +62,7 @@ export const makeSettings = Effect.fnUntraced(function* (
         ...patch,
       })),
   };
-  const scope = yield* Effect.scope;
   const updates = yield* Semaphore.make(1);
-  const frameRateLimit = yield* Ref.make<number | null>(null);
-  const resumeRenderingMode = yield* Ref.make<NonMinimalRenderingMode>("full");
-  const runFork = Effect.runForkWith(yield* Effect.context<never>());
   const command = (
     method: keyof Window["swf"],
     value?: boolean | number | string,
@@ -125,9 +101,8 @@ export const makeSettings = Effect.fnUntraced(function* (
       );
     }
     if (patch.frameRate !== undefined || patch.renderingMode !== undefined) {
-      const limit = yield* Ref.get(frameRateLimit);
       effects.push(
-        command("settings.setFrameRate", effectiveFrameRate(state, limit)),
+        command("settings.setFrameRate", effectiveFrameRate(state)),
       );
     }
     if (patch.enemyMagnetEnabled === true) {
@@ -170,14 +145,6 @@ export const makeSettings = Effect.fnUntraced(function* (
 
     yield* execute(patch, next);
     yield* stored.patch(statePatch);
-
-    if (patch.renderingMode === "minimal") {
-      if (isNonMinimalRenderingMode(current.renderingMode)) {
-        yield* Ref.set(resumeRenderingMode, current.renderingMode);
-      }
-    } else if (patch.renderingMode !== undefined) {
-      yield* Ref.set(resumeRenderingMode, patch.renderingMode);
-    }
   });
 
   const apply = (input: SettingsPatchValue) =>
@@ -215,12 +182,6 @@ export const makeSettings = Effect.fnUntraced(function* (
       }),
     );
 
-  const set =
-    <K extends keyof SettingsPatchValue>(key: K) =>
-    (value: SettingsPatchValue[K]) =>
-      apply({ [key]: value });
-
-  const changes = stored.changes;
   const get = () => stored.get;
   const enemyMagnet = () =>
     action("enemyMagnetEnabled", "settings.enemyMagnet");
@@ -232,98 +193,15 @@ export const makeSettings = Effect.fnUntraced(function* (
     action("skipCutscenesEnabled", "settings.skipCutscenes");
   const isAntiCounterEnabled = () =>
     stored.get.pipe(Effect.map((state) => state.antiCounterEnabled));
-  const getRenderingMode = () =>
-    stored.get.pipe(Effect.map((state) => state.renderingMode));
-  const onState = (listener: (state: SettingsState) => void) =>
-    stored.changes.pipe(
-      Stream.runForEach((state) => Effect.sync(() => listener(state))),
-      Effect.forkIn(scope),
-      Effect.map((fiber) => () => {
-        runFork(Fiber.interrupt(fiber));
-      }),
-    );
-  const setAnimationsEnabled = set("animationsEnabled");
-  const setAntiCounterEnabled = set("antiCounterEnabled");
-  const setCollisionsEnabled = set("collisionsEnabled");
-  const setCustomGuild = set("customGuild");
-  const setCustomName = set("customName");
-  const resetCustomGuild = updates.withPermits(1)(
-    Effect.gen(function* () {
-      yield* command("settings.resetCustomGuild");
-      yield* stored.patch({
-        customGuild: "",
-        customGuildConfigured: false,
-      });
-    }),
-  );
-  const resetCustomName = updates.withPermits(1)(
-    Effect.gen(function* () {
-      yield* command("settings.resetCustomName");
-      yield* stored.patch({
-        customName: "",
-        customNameConfigured: false,
-      });
-    }),
-  );
-  const setDeathAdsVisible = set("deathAdsVisible");
-  const setEnemyMagnetEnabled = set("enemyMagnetEnabled");
-  const setFrameRate = set("frameRate");
-  const setFrameRateLimit = (limit: number | null) =>
-    updates.withPermits(1)(
-      Effect.gen(function* () {
-        const normalized = limit === null ? null : normalizeFrameRate(limit);
-        yield* Ref.set(frameRateLimit, normalized);
-        const state = yield* stored.get;
-        yield* command(
-          "settings.setFrameRate",
-          effectiveFrameRate(state, normalized),
-        );
-      }),
-    );
-  const setInfiniteRangeEnabled = set("infiniteRangeEnabled");
-  const setOtherPlayersVisible = set("otherPlayersVisible");
-  const setProvokeCellEnabled = set("provokeCellEnabled");
-  const setRenderingMode = set("renderingMode");
-  const setSkipCutscenesEnabled = set("skipCutscenesEnabled");
-  const setWalkSpeed = set("walkSpeed");
-  const restoreRenderingMode = () =>
-    updates.withPermits(1)(
-      Effect.gen(function* () {
-        const mode = yield* Ref.get(resumeRenderingMode);
-        yield* applyUnlocked({ renderingMode: mode });
-      }),
-    );
-
   return {
     apply,
-    changes,
     enemyMagnet,
     get,
-    getRenderingMode,
     infiniteRange,
     isAntiCounterEnabled,
-    onState,
     provokeCell,
     reapply,
     reapplyActions,
-    restoreRenderingMode,
-    resetCustomGuild,
-    resetCustomName,
-    setAnimationsEnabled,
-    setAntiCounterEnabled,
-    setCollisionsEnabled,
-    setCustomGuild,
-    setCustomName,
-    setDeathAdsVisible,
-    setEnemyMagnetEnabled,
-    setFrameRate,
-    setFrameRateLimit,
-    setInfiniteRangeEnabled,
-    setOtherPlayersVisible,
-    setProvokeCellEnabled,
-    setRenderingMode,
-    setSkipCutscenesEnabled,
-    setWalkSpeed,
     skipCutscenes,
   };
 });
