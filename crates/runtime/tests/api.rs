@@ -359,3 +359,114 @@ fn a_killed_runs_accept_finishes_before_the_next_starts() {
         }
     );
 }
+
+#[test]
+fn a_killed_runs_queued_accepts_never_reach_the_loader() {
+    use lucent_host::bridge::{ScriptEvent, Value as BridgeValue};
+    use std::time::{Duration, Instant};
+
+    let host = testing::headless_host();
+    let (mut session, link) = testing::start_probe(
+        &host,
+        common::ready_movie().accepting_drop(
+            Duration::ZERO,
+            json!({"type":"json","dataObj":{"cmd":"unrelated"}}).to_string(),
+        ),
+    );
+    let runtime = Runtime::start(link).unwrap();
+    common::ready(&runtime);
+    let control = session.attach().unwrap();
+    let emit = |data: Value| {
+        control
+            .call_loader(
+                "probe.emit",
+                vec![
+                    BridgeValue::String("onExtensionResponse".into()),
+                    BridgeValue::String(json!({"type":"json","dataObj":data}).to_string()),
+                ],
+            )
+            .recv_timeout(TIMEOUT)
+            .unwrap();
+    };
+    emit(json!({"cmd":"dropItem","items":{
+        "70":{"ItemID":70,"sName":"First","iQty":1},
+        "71":{"ItemID":71,"sName":"Queued A","iQty":1},
+        "72":{"ItemID":72,"sName":"Queued B","iQty":1},
+        "73":{"ItemID":73,"sName":"Next run","iQty":1}
+    }}));
+    let observer = session.attach().unwrap();
+    let first = common::started_run(
+        &mut session,
+        r#"
+        import { Effect } from "effect";
+        import * as api from "lucent/api";
+        import * as script from "lucent/script";
+        export default function* () {
+            yield* Effect.raceFirst(
+                Effect.raceFirst(api.drops.accept(70), api.drops.accept(71)),
+                Effect.raceFirst(api.drops.accept(72), Effect.gen(function* () {
+                    yield* api.packet.sendToClient("started");
+                    yield* script.sleep("1 hour");
+                })),
+            );
+        }
+    "#,
+    );
+    assert_eq!(
+        common::await_event(&observer, "onProbeAccept").args,
+        vec![BridgeValue::Number(70.0)]
+    );
+    first.kill();
+    assert!(matches!(
+        first.wait(TIMEOUT),
+        Err(RuntimeError::Killed(Kill::Requested))
+    ));
+    drop(first);
+    let second = common::started_run(
+        &mut session,
+        r#"
+        import * as api from "lucent/api";
+        import * as script from "lucent/script";
+        export default function* () {
+            yield* api.packet.sendToClient("started");
+            yield* script.stop(String(yield* api.drops.accept(73)));
+        }
+    "#,
+    );
+    emit(json!({"cmd":"getDrop","ItemID":70,"bSuccess":false}));
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut trace = vec![];
+    while trace.len() < 2 {
+        match observer.try_event().unwrap() {
+            Some(ScriptEvent::Loader { event, .. }) if event.name == "onProbeAccept" => {
+                let [BridgeValue::Number(id)] = event.args.as_slice() else {
+                    panic!("unexpected accept arguments");
+                };
+                trace.push(("accept", *id));
+            }
+            Some(ScriptEvent::Loader { event, .. }) if event.name == "onExtensionResponse" => {
+                let [BridgeValue::String(raw)] = event.args.as_slice() else {
+                    panic!("unexpected packet arguments");
+                };
+                let packet: Value = serde_json::from_str(raw).unwrap();
+                if packet["dataObj"]["cmd"] == "getDrop" {
+                    trace.push(("packet", packet["dataObj"]["ItemID"].as_f64().unwrap()));
+                }
+            }
+            Some(_) => {}
+            None => std::thread::sleep(Duration::from_millis(1)),
+        }
+        assert!(
+            Instant::now() < deadline,
+            "no accept after the first packet: {trace:?}"
+        );
+    }
+    assert_eq!(trace, [("packet", 70.0), ("accept", 73.0)]);
+    emit(json!({"cmd":"getDrop","ItemID":73,"bSuccess":false}));
+    assert_eq!(
+        second.wait(TIMEOUT).unwrap(),
+        ScriptOutcome::StoppedByScript {
+            reason: Some("false".into())
+        }
+    );
+}
