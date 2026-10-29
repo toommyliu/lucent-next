@@ -3,7 +3,8 @@ use std::sync::{Arc, RwLock, RwLockReadGuard};
 use indexmap::{IndexMap, IndexSet};
 use lucent_protocol::item::{ItemContainer, ItemData};
 
-use super::wire::trim_js;
+use super::wire::{selector_id, trim_js};
+use lucent_protocol::query::ItemSelector;
 
 #[derive(Clone, Debug)]
 pub struct LiveItem(Arc<RwLock<ItemData>>);
@@ -87,6 +88,18 @@ impl Default for ItemStore {
 }
 
 impl ItemStore {
+    pub fn resolve(&self, kind: ItemContainer, selector: &ItemSelector) -> Option<LiveItem> {
+        match selector {
+            ItemSelector::Id(id) | ItemSelector::ItemId { item_id: id } => {
+                self.get(kind, selector_id(*id)?)
+            }
+            ItemSelector::Name(name) | ItemSelector::Named { name } => self.by_name(kind, name),
+            ItemSelector::ShopItemId { shop_item_id } => {
+                self.by_shop_item_id(kind, selector_id(*shop_item_id)?)
+            }
+        }
+    }
+
     pub fn clear(&mut self) {
         *self = Self::default();
     }

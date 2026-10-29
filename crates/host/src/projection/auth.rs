@@ -1,6 +1,6 @@
 use super::wire::{wire_bool, wire_int};
 use indexmap::IndexMap;
-use lucent_protocol::auth::{ServerData, ServerSnapshot};
+use lucent_protocol::auth::{AuthSnapshot, ServerData, ServerSnapshot};
 use serde_json::Value;
 use std::sync::{Arc, RwLock};
 
@@ -32,6 +32,15 @@ impl std::fmt::Debug for AuthState {
     }
 }
 impl AuthState {
+    pub fn snapshot(&self) -> AuthSnapshot {
+        AuthSnapshot {
+            logged_in: self.logged_in,
+            username: self.username.clone(),
+            password: self.password.clone(),
+            servers: self.servers.values().map(LiveServer::snapshot).collect(),
+        }
+    }
+
     pub fn servers(&self) -> Vec<LiveServer> {
         self.servers.values().cloned().collect()
     }

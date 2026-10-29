@@ -605,3 +605,59 @@ fn auth_starts_logged_out_with_empty_credentials_and_no_servers() {
         json!({"loggedIn": false, "username": "", "password": "", "servers": []})
     );
 }
+
+#[test]
+fn fractional_entity_selectors_miss_without_failing_to_parse() {
+    let (_host, _session, link) = start();
+    enter_area(&link);
+    for input in [
+        json!({"kind": "player", "selector": 7.5}),
+        json!({"kind": "monster", "selector": 2.5}),
+        json!({"kind": "monster", "selector": {"monsterMapId": 2.5}}),
+    ] {
+        assert_eq!(query(&link, input), Value::Null);
+    }
+    assert_eq!(
+        query(&link, json!({"kind": "monster", "selector": " id:02 "})),
+        Value::Null
+    );
+    assert_eq!(
+        query(
+            &link,
+            json!({"kind": "monster", "selector": "\u{feff}ID-2\u{00a0}"})
+        )["monsterMapId"],
+        json!(2)
+    );
+}
+
+#[test]
+fn item_primary_key_selectors_take_precedence_and_names_keep_the_first_match() {
+    let (_host, _session, link) = start();
+    packet(
+        &link,
+        json!({
+            "cmd": "initInventory",
+            "items": [
+                {"ItemID": 2, "sName": " Sword "},
+                {"ItemID": 1, "sName": "Sword"},
+                {"ItemID": 3, "sName": ""}
+            ]
+        }),
+    );
+    let item = |selector| {
+        query(
+            &link,
+            json!({"kind": "item", "container": "inventory", "selector": selector}),
+        )["itemId"]
+            .clone()
+    };
+    assert_eq!(
+        item(json!({"shopItemId": 1, "itemId": 2, "name": "Sword"})),
+        json!(1)
+    );
+    assert_eq!(item(json!("\u{feff}SWORD\u{00a0}")), json!(2));
+    assert_eq!(item(json!("")), json!(3));
+    assert_eq!(item(json!("*")), Value::Null);
+    assert_eq!(item(json!("id:2")), Value::Null);
+    assert_eq!(item(json!({"shopItemId": 1.5})), Value::Null);
+}

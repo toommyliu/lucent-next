@@ -14,6 +14,7 @@ fn declarations(config: &Config) -> String {
     emit!(
         ServerData,
         ServerSnapshot,
+        AuthSnapshot,
         HydrationMethod,
         HydrationRequest,
         HydrationResult,
@@ -34,6 +35,9 @@ fn declarations(config: &Config) -> String {
         ItemSnapshot,
         MapState,
         Query,
+        PlayerSelector,
+        MonsterSelector,
+        ItemSelector,
         Point,
         EntityKind,
         AuraKind,
