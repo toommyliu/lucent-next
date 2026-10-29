@@ -28,6 +28,7 @@ const runtime = ManagedRuntime.make(
   ),
   { memoMap: api.memoMap },
 );
+runtime.runSync(Effect.void);
 
 export const start = (
   load: ScriptSource["load"],

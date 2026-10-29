@@ -21038,6 +21038,7 @@ ${prefix}}`;
     ),
     { memoMap: api.memoMap }
   );
+  runtime.runSync(void_3);
   var start = /* @__PURE__ */ __name((load, name, inputsJson) => {
     hideInternals();
     return runtime.runPromise(
