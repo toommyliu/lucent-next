@@ -1,8 +1,9 @@
 use std::{env, fs, path::PathBuf};
 
 use lucent_protocol::{
-    aura::*, auth::*, command::*, event::*, hydration::*, item::*, monster_drop::*, operation::*,
-    packet::*, query::*, quest::*, readiness::*, script::*, settings::*, shop::*, world::*,
+    aura::*, auth::*, auto_zone::*, command::*, event::*, hydration::*, item::*, monster_drop::*,
+    operation::*, packet::*, query::*, quest::*, readiness::*, script::*, settings::*, shop::*,
+    world::*,
 };
 use ts_rs::{Config, TS};
 
@@ -12,6 +13,9 @@ fn declarations(config: &Config) -> String {
         ($($ty:ty),+ $(,)?) => { $(output.push_str("export "); output.push_str(&<$ty>::decl(config)); output.push('\n');)+ };
     }
     emit!(
+        AutoZoneMap,
+        AutoZoneConfig,
+        AutoZonePatch,
         RenderingMode,
         GameSettings,
         SettingsPatch,

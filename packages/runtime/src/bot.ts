@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Option from "effect/Option";
 
+import { layer as autoZone } from "./game/automation/AutoZone";
 import { run as settingsPolicy } from "./game/automation/SettingsPolicy";
 import { layer as servicesLayer } from "./game/flash/api/Api";
 import { Bridge, layer as bridgeLayer } from "./game/flash/bridge/Bridge";
@@ -64,7 +65,7 @@ const services = apiLayer.pipe(Layer.provideMerge(host));
 const botLayer = Layer.effectDiscard(
   Effect.flatMap(Gateway, (gateway) => gateway.start()),
 ).pipe(Layer.provideMerge(services), Layer.provide(diagnostics));
-const runtime = ManagedRuntime.make(botLayer);
+const runtime = ManagedRuntime.make(autoZone.pipe(Layer.provideMerge(botLayer)));
 runtime.runSync(Effect.void);
 runtime.runPromise(settingsPolicy);
 

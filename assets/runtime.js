@@ -253,6 +253,8 @@
         for (const event of item.projected) {
           invoke(() => window.onProjectionEvent?.(event));
         }
+      } else if (item.type === "autozone") {
+        invoke(() => window.onAutoZoneChanged?.(item.config));
       } else if (item.type === "operation") {
         completeOperation(item.id, item.answer, item.error);
       } else {
@@ -20887,6 +20889,27 @@ ${prefix}}`;
     })
   );
 
+  // packages/runtime/src/host/autoZone.ts
+  var makeAutoZoneService = /* @__PURE__ */ __name((host3) => {
+    const state = /* @__PURE__ */ __name((config) => ({
+      enabled: config.enabled,
+      map: config.map ?? void 0
+    }), "state");
+    const getState = /* @__PURE__ */ __name(() => sync2(() => state(
+      JSON.parse(host3.read(JSON.stringify({ kind: "autoZone" })))
+    )), "getState");
+    const patch = /* @__PURE__ */ __name((patch2) => sync2(() => state(
+      JSON.parse(host3.command(JSON.stringify({ kind: "patchAutoZone", patch: patch2 })))
+    )), "patch");
+    return {
+      getState,
+      getMap: /* @__PURE__ */ __name(() => getState().pipe(map5((state2) => state2.map)), "getMap"),
+      isEnabled: /* @__PURE__ */ __name(() => getState().pipe(map5((state2) => state2.enabled)), "isEnabled"),
+      setEnabled: /* @__PURE__ */ __name((enabled) => patch({ enabled }), "setEnabled"),
+      setMap: /* @__PURE__ */ __name((map8) => patch({ map: map8 ?? null }), "setMap")
+    };
+  }, "makeAutoZoneService");
+
   // packages/runtime/src/shared/http.ts
   var SCRIPT_HTTP_MAX_BYTES = 8 * 1024 * 1024;
   var HttpErrorReasonSchema = Literals([
@@ -21016,13 +21039,6 @@ ${prefix}}`;
       setEnabled: defect("autoRelogin"),
       setServer: defect("autoRelogin")
     },
-    autoZone: {
-      getMap: defect("autoZone"),
-      getState: defect("autoZone"),
-      isEnabled: defect("autoZone"),
-      setEnabled: defect("autoZone"),
-      setMap: defect("autoZone")
-    },
     fileSystem: {
       exists: reject("fileSystem"),
       list: reject("fileSystem"),
@@ -21061,7 +21077,7 @@ ${prefix}}`;
       provide2(
         mergeAll2(
           scriptApiLayer,
-          succeed6(ScriptServices, unavailableScriptServices),
+          succeed6(ScriptServices, { ...unavailableScriptServices, autoZone: makeAutoZoneService(__host) }),
           succeed6(ScriptDialogs, unavailableScriptDialogs)
         )
       )

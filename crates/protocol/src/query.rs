@@ -1,5 +1,6 @@
 use crate::aura::AuraData;
 use crate::auth::AuthSnapshot;
+use crate::auto_zone::AutoZoneConfig;
 use crate::event::{AuraKind, MapState};
 use crate::item::{ItemContainer, ItemSnapshot};
 use crate::monster_drop::MonsterDrop;
@@ -71,6 +72,7 @@ macro_rules! queries {
 }
 
 queries! {
+    AutoZone {} => AutoZoneConfig,
     Settings {} => GameSettings,
     Map {} => MapState,
     Me {} => Option<PlayerSnapshot>,

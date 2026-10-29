@@ -1,11 +1,14 @@
+import type { AutoZoneConfig } from "@lucent/game/protocol";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as FiberMap from "effect/FiberMap";
 import * as Random from "effect/Random";
 import * as Schema from "effect/Schema";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import type * as FiberMapType from "effect/FiberMap";
 
-import type { ApiService } from "../flash/api/Api";
+import { Api, type ApiService } from "../flash/api/Api";
+import { HostState } from "../flash/state/HostState";
 
 export const AutoZoneSupportedMap = Schema.Literals([
   "ledgermayne",
@@ -170,11 +173,9 @@ const target = (
 export const makeAutoZone = Effect.fnUntraced(function* (
   api: ApiService,
   fibers: FiberMapType.FiberMap<string>,
+  initial: AutoZoneState = { enabled: false, map: undefined },
 ) {
-  const state = yield* SubscriptionRef.make<AutoZoneState>({
-    enabled: false,
-    map: undefined,
-  });
+  const state = yield* SubscriptionRef.make<AutoZoneState>(initial);
   const move = (destination: Target) =>
     destination.kind === "point"
       ? api.player.walkTo(destination)
@@ -238,6 +239,14 @@ export const makeAutoZone = Effect.fnUntraced(function* (
   });
   yield* Effect.addFinalizer(() => Effect.sync(dispose));
 
+  const applyConfig = (config: AutoZoneConfig) => Effect.gen(function* () {
+    const previous = yield* SubscriptionRef.get(state);
+    yield* SubscriptionRef.set(state, { enabled: config.enabled, map: config.map ?? undefined });
+    if (previous.map !== (config.map ?? undefined) || !config.enabled) {
+      yield* FiberMap.remove(fibers, "auto-zone-transition");
+    }
+  });
+
   const changes = SubscriptionRef.changes(state);
 
   const getMap = () =>
@@ -267,6 +276,7 @@ export const makeAutoZone = Effect.fnUntraced(function* (
   };
 
   return {
+    applyConfig,
     changes,
     getMap,
     getState,
@@ -277,3 +287,17 @@ export const makeAutoZone = Effect.fnUntraced(function* (
 });
 
 export type AutoZone = Effect.Success<ReturnType<typeof makeAutoZone>>;
+
+export const layer = Layer.effectDiscard(Effect.gen(function* () {
+  const api = yield* Api;
+  const host = yield* HostState;
+  const fibers = yield* FiberMap.make<string>();
+  const config = yield* host.read({ kind: "autoZone" });
+  const autoZone = yield* makeAutoZone(api, fibers, { enabled: config.enabled, map: config.map ?? undefined });
+  const runFork = Effect.runForkWith(yield* Effect.context<never>());
+  const onChange = (config: AutoZoneConfig) => { runFork(autoZone.applyConfig(config)); };
+  window.onAutoZoneChanged = onChange;
+  yield* Effect.addFinalizer(() => Effect.sync(() => {
+    if (window.onAutoZoneChanged === onChange) delete window.onAutoZoneChanged;
+  }));
+}));

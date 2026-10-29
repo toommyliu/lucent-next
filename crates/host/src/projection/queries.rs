@@ -1,6 +1,7 @@
 use lucent_protocol::{
     aura::AuraData,
     auth::AuthSnapshot,
+    auto_zone::AutoZoneConfig,
     event::{AuraKind, MapState},
     item::{ItemContainer, ItemSnapshot},
     monster_drop::MonsterDrop,
@@ -25,19 +26,30 @@ fn auras(auras: Vec<LiveAura>, kind: Option<AuraKind>) -> Vec<AuraData> {
 struct State<'a> {
     projection: &'a Projection,
     settings: &'a GameSettings,
+    auto_zone: &'a parking_lot::RwLock<AutoZoneConfig>,
 }
 
-pub fn answer(projection: &Projection, settings: &GameSettings, query: Query) -> String {
+pub fn answer(
+    projection: &Projection,
+    settings: &GameSettings,
+    auto_zone: &parking_lot::RwLock<AutoZoneConfig>,
+    query: Query,
+) -> String {
     lucent_protocol::query::answer(
         &State {
             projection,
             settings,
+            auto_zone,
         },
         query,
     )
 }
 
 impl Answer for State<'_> {
+    fn auto_zone(&self) -> AutoZoneConfig {
+        self.auto_zone.read().clone()
+    }
+
     fn settings(&self) -> GameSettings {
         self.settings.clone()
     }

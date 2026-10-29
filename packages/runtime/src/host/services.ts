@@ -85,13 +85,6 @@ export const unavailableScriptServices = {
     setEnabled: defect("autoRelogin"),
     setServer: defect("autoRelogin"),
   },
-  autoZone: {
-    getMap: defect("autoZone"),
-    getState: defect("autoZone"),
-    isEnabled: defect("autoZone"),
-    setEnabled: defect("autoZone"),
-    setMap: defect("autoZone"),
-  },
   fileSystem: {
     exists: reject("fileSystem"),
     list: reject("fileSystem"),
@@ -113,7 +106,7 @@ export const unavailableScriptServices = {
           }),
         ),
     }),
-} satisfies ScriptServicesShape;
+} satisfies Omit<ScriptServicesShape, "autoZone">;
 
 export const unavailableScriptDialogs = {
   alert: defect("dialogs"),

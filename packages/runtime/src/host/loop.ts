@@ -1,4 +1,5 @@
 import type {
+  AutoZoneConfig,
   OperationAnswer,
   ProjectionEvent,
   ScriptOutcome,
@@ -29,6 +30,7 @@ declare global {
   }>;
 
   interface Window {
+    onAutoZoneChanged?: (config: AutoZoneConfig) => void;
     onProjectionEvent?: (event: ProjectionEvent) => void;
     onProjectionInvalidated?: () => void;
   }
@@ -41,6 +43,7 @@ type ScriptEvent =
       args: unknown[];
       projected: ProjectionEvent[];
     }
+  | { type: "autozone"; config: AutoZoneConfig }
   | { type: "invalidated" }
   | {
       type: "operation";
@@ -112,6 +115,8 @@ export const turn = (itemsJson: string): string[] => {
       for (const event of item.projected) {
         invoke(() => window.onProjectionEvent?.(event));
       }
+    } else if (item.type === "autozone") {
+      invoke(() => window.onAutoZoneChanged?.(item.config));
     } else if (item.type === "operation") {
       completeOperation(item.id, item.answer, item.error);
     } else {

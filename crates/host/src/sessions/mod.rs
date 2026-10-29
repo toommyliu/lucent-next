@@ -2,6 +2,7 @@ mod link;
 pub(crate) mod operations;
 pub use link::ScriptLink;
 
+use lucent_protocol::auto_zone::AutoZoneConfig;
 use lucent_protocol::settings::GameSettings;
 use parking_lot::RwLock;
 
@@ -72,7 +73,15 @@ impl Host {
     pub(crate) fn start_movie(&self, surface: Surface, movie: Movie) -> Result<Session, HostError> {
         let id = self.shared.next_session.fetch_add(1, Ordering::Relaxed);
         let settings = Arc::new(RwLock::new(GameSettings::default()));
-        let player = self.spawn_player(id, &surface, false, &movie, settings.clone())?;
+        let auto_zone = Arc::new(RwLock::new(AutoZoneConfig::default()));
+        let player = self.spawn_player(
+            id,
+            &surface,
+            false,
+            &movie,
+            settings.clone(),
+            auto_zone.clone(),
+        )?;
         let operations = operations::Operations::start(id).map_err(HostError::OperationThread)?;
         Ok(Session {
             next_attachment: 0,
@@ -82,6 +91,7 @@ impl Host {
             id,
             surface,
             muted: false,
+            auto_zone,
             settings,
             host: self.clone(),
         })
@@ -94,6 +104,7 @@ impl Host {
         muted: bool,
         movie: &Movie,
         settings: Arc<RwLock<GameSettings>>,
+        auto_zone: Arc<RwLock<AutoZoneConfig>>,
     ) -> Result<player::Handle, HostError> {
         player::spawn(
             format!("player-{session}"),
@@ -105,6 +116,7 @@ impl Host {
                 movie: movie.clone(),
                 muted,
                 settings,
+                auto_zone,
             },
         )
         .map_err(HostError::PlayerThread)
@@ -121,6 +133,7 @@ pub struct Session {
     muted: bool,
     host: Host,
     settings: Arc<RwLock<GameSettings>>,
+    auto_zone: Arc<RwLock<AutoZoneConfig>>,
 }
 
 impl Session {
@@ -179,6 +192,7 @@ impl Session {
             attachment,
             events,
             self.settings.clone(),
+            self.auto_zone.clone(),
             operations::Endpoint {
                 inbox,
                 projection: player.projection.clone(),
@@ -208,6 +222,7 @@ impl Session {
             self.muted,
             &self.movie,
             self.settings.clone(),
+            self.auto_zone.clone(),
         )?;
         self.player = Some(player);
         Ok(())

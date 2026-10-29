@@ -7,7 +7,6 @@ import { makeScriptEnvironmentApi } from "../game/scripting/api/Environment";
 import { makeScriptAsyncScope } from "../game/scripting/scriptAsyncScope";
 import { makeScriptFileSystemApi } from "../game/scripting/ScriptFileSystem";
 import { makeScriptRuntimeApi } from "../game/scripting/ScriptRuntime";
-import type { ScriptServicesShape } from "../game/scripting/ScriptServices";
 import {
   unavailableScriptDialogs,
   unavailableScriptServices,
@@ -29,11 +28,11 @@ describe("unavailable host services", () => {
     Effect.gen(function* () {
       const scope = makeScriptAsyncScope();
       yield* Effect.addFinalizer(() => scope.close);
-      const services: ScriptServicesShape = unavailableScriptServices;
+      const services = unavailableScriptServices;
       const army = makeScriptArmyApi(services.army, scope, () => Effect.void);
       const environment = makeScriptEnvironmentApi(services.environment);
       const files = makeScriptFileSystemApi(services.fileSystem, scope);
-      const http = yield* services.http(scope);
+      const http = yield* services.http();
       const script = makeScriptRuntimeApi({
         dialogs: unavailableScriptDialogs,
         getOptions: () =>

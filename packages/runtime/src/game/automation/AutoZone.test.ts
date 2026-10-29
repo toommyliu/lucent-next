@@ -52,6 +52,11 @@ describe("AutoZone", () => {
       expect(moved).toHaveLength(1);
       expect(moved[0]!.x).toBeGreaterThanOrEqual(111);
       expect(moved[0]!.x).toBeLessThanOrEqual(272);
+      yield* handleEvent!({ type: "zone", map: "queeniona", zone: "A" });
+      yield* autoZone.applyConfig({ enabled: true, map: "ledgermayne" });
+      yield* TestClock.adjust("500 millis");
+      expect(yield* Ref.get(positions)).toEqual(moved);
+      expect(yield* autoZone.getState()).toEqual({ enabled: true, map: "ledgermayne" });
     }),
   );
 });

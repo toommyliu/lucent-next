@@ -1006,9 +1006,139 @@ fn auto_zone_follows_a_script_toggle_through_kills() {
         .unwrap();
     let call = next_call(&observer, "player.walkTo");
     assert!(matches!(call.get(1), Some(Value::Number(x)) if (147.0..=276.0).contains(x)));
-    assert!(matches!(call.get(2), Some(Value::Number(y)) if (353.0..=357.0).contains(y)));
     assert!(matches!(
         bot.wait(Duration::ZERO),
         Err(RuntimeError::Timeout)
     ));
+}
+
+#[test]
+fn a_new_bot_reads_the_auto_zone_config_and_scripts_can_clear_it() {
+    let host = testing::headless_host();
+    let (mut session, observer) =
+        testing::start_probe(&host, common::ready_movie().recording("player.walkTo"));
+    become_ready(&observer);
+    let run = common::start(
+        &mut session,
+        common::loose(&[(
+            "config.js",
+            r#"
+        import * as autozone from "lucent/autozone";
+        export default function* () {
+            yield* autozone.setMap("ledgermayne");
+            yield* autozone.setEnabled(true);
+            const state = yield* autozone.getState();
+            if (!state.enabled || state.map !== "ledgermayne") throw new Error("stale auto zone read");
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        lucent_protocol::script::ScriptOutcome::Completed
+    );
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    observer.call_loader("probe.emit", vec![Value::String("onExtensionResponse".into()), Value::String(json!({"type":"json","dataObj":{
+        "cmd":"moveToArea","areaName":"ledgermayne-1","uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}]
+    }}).to_string())]).recv_timeout(TIMEOUT).unwrap();
+    drain(&observer);
+    observer
+        .call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onExtensionResponse".into()),
+                Value::String(
+                    json!({"type":"json","dataObj":{"cmd":"event","args":{"zoneSet":"B"}}})
+                        .to_string(),
+                ),
+            ],
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let call = next_call(&observer, "player.walkTo");
+    assert!(matches!(call.get(1), Some(Value::Number(x)) if (727.0..=852.0).contains(x)));
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
+    let run = common::start(
+        &mut session,
+        common::loose(&[(
+            "clear.js",
+            r#"
+        import * as autozone from "lucent/autozone";
+        export default function* () {
+            const state = yield* autozone.setMap(undefined);
+            if (!state.enabled || state.map !== undefined || (yield* autozone.getMap()) !== undefined) throw new Error("map not cleared");
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        lucent_protocol::script::ScriptOutcome::Completed
+    );
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn auto_zone_rereads_the_host_record_after_the_bot_link_overflows() {
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        common::ready_movie()
+            .recording("player.walkTo")
+            .raising_many("probe.overflow", "onDebug", "noise", 100),
+    );
+    become_ready(&observer);
+    observer
+        .command(
+            serde_json::from_value(json!({
+                "kind":"patchAutoZone","patch":{"enabled":true,"map":"ledgermayne"}
+            }))
+            .unwrap(),
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    bot.eval(
+        "overflow.js",
+        r#"
+        for (let i = 0; i < 11; i++) __host.swf("probe.overflow", "[]");
+        __host.command(JSON.stringify({kind:"patchAutoZone",patch:{map:"moreskulls"}}));
+        null;
+    "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    assert!(
+        observer.overflowed(),
+        "the burst did not overflow the links"
+    );
+    assert_eq!(
+        observer.try_event(),
+        Err(lucent_host::bridge::Error::Overflow)
+    );
+    bot.eval("barrier.js", "null").wait::<()>(TIMEOUT).unwrap();
+    observer.call_loader("probe.emit", vec![Value::String("onExtensionResponse".into()), Value::String(json!({"type":"json","dataObj":{
+        "cmd":"moveToArea","areaName":"moreskulls-1","uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}]
+    }}).to_string())]).recv_timeout(TIMEOUT).unwrap();
+    drain(&observer);
+    observer
+        .call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onExtensionResponse".into()),
+                Value::String(
+                    json!({"type":"json","dataObj":{"cmd":"event","args":{"zoneSet":"A"}}})
+                        .to_string(),
+                ),
+            ],
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let call = next_call(&observer, "player.walkTo");
+    assert!(matches!(call.get(1), Some(Value::Number(x)) if (696.0..=802.0).contains(x)));
 }

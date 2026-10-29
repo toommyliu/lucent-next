@@ -181,6 +181,7 @@ mod tests {
         (
             Running {
                 settings: Default::default(),
+                auto_zone: Default::default(),
                 settings_applied: false,
                 operation_packets: Default::default(),
                 loader_events,
@@ -564,7 +565,9 @@ mod tests {
         let (request, reply) = Read::new(|_| 42);
         sender.send(Msg::Read(request)).unwrap();
         sender.send(Msg::Stop).unwrap();
-        assert!(first_viewport(&receiver, false, &Default::default()).is_none());
+        assert!(
+            first_viewport(&receiver, false, &Default::default(), &Default::default()).is_none()
+        );
         assert_eq!(
             reply.recv_timeout(Duration::ZERO),
             Err(BridgeError::NotReady)
