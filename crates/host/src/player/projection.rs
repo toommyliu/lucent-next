@@ -51,8 +51,11 @@ impl Running {
     }
 
     fn publish(&self, event: ScriptEvent) {
-        if let Some(stream) = &self.script_events {
-            stream.send(event);
+        if let Some(((_, last), rest)) = self.script_events.split_last() {
+            for (_, stream) in rest {
+                stream.send(event.clone());
+            }
+            last.send(event);
         }
     }
 
@@ -173,7 +176,7 @@ mod tests {
                 settings: Default::default(),
                 settings_applied: false,
                 loader_events,
-                script_events: Some(producer),
+                script_events: vec![(crate::sessions::AttachmentId(0), producer)],
                 projection: std::sync::Arc::new(parking_lot::RwLock::new(Projection::default())),
                 player: PlayerBuilder::new().build(),
                 tasks: Tasks::default(),

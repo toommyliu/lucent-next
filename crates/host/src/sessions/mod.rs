@@ -3,6 +3,10 @@ pub use link::ScriptLink;
 
 use lucent_protocol::settings::GameSettings;
 use parking_lot::RwLock;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AttachmentId(pub(crate) u64);
+
 use std::sync::Arc;
 
 use crate::bridge::{EVENT_CAPACITY, PendingRead, script_events};
@@ -67,7 +71,7 @@ impl Host {
         let settings = Arc::new(RwLock::new(GameSettings::default()));
         let player = self.spawn_player(id, &surface, false, &movie, settings.clone())?;
         Ok(Session {
-            unclaimed_link: Some(player.inbox.clone()),
+            next_attachment: 0,
             player: Some(player),
             movie,
             id,
@@ -104,7 +108,7 @@ impl Host {
 
 pub struct Session {
     player: Option<player::Handle>,
-    unclaimed_link: Option<player::Inbox>,
+    next_attachment: u64,
     movie: Movie,
     id: u64,
     surface: Surface,
@@ -154,13 +158,19 @@ impl Session {
         }
     }
 
-    pub fn take_script_link(&mut self) -> Option<ScriptLink> {
-        let inbox = self.unclaimed_link.take()?;
+    pub fn attach(&mut self) -> Option<ScriptLink> {
+        let player = self.player.as_ref()?;
+        let attachment = AttachmentId(self.next_attachment);
+        self.next_attachment = self
+            .next_attachment
+            .checked_add(1)
+            .expect("script attachment IDs exhausted");
+        let inbox = player.inbox.clone();
         let (producer, events) = script_events(EVENT_CAPACITY);
-        inbox.post(player::Msg::Attach(producer));
-        let player = self.player.as_ref().unwrap();
+        inbox.post(player::Msg::Attach(attachment, producer));
         Some(ScriptLink::new(
             self.id,
+            attachment,
             inbox,
             events,
             player.projection.clone(),
@@ -180,7 +190,6 @@ impl Session {
     }
 
     pub fn restart(&mut self, surface: Surface) -> Result<(), HostError> {
-        self.unclaimed_link = None;
         self.player = None;
         self.surface = surface;
         let player = self.host.spawn_player(
@@ -190,7 +199,6 @@ impl Session {
             &self.movie,
             self.settings.clone(),
         )?;
-        self.unclaimed_link = Some(player.inbox.clone());
         self.player = Some(player);
         Ok(())
     }
