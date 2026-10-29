@@ -275,3 +275,83 @@ fn settings_updates_report_rejected_patches_without_changing_the_record() {
     assert_eq!(observed["walkSpeed"], 8.0);
     assert_eq!(observed["animations"], true);
 }
+
+#[test]
+fn a_killed_runs_accept_finishes_before_the_next_starts() {
+    use lucent_runtime::{Kill, RuntimeError};
+    use std::{thread, time::Duration};
+
+    let host = testing::headless_host();
+    let packet = json!({"type":"json","dataObj":{
+        "cmd":"getDrop", "ItemID":70, "bSuccess":0, "iQtyNow":1
+    }})
+    .to_string();
+    let (_session, link) = testing::start_probe(
+        &host,
+        common::ready_movie()
+            .constant(
+                "inventory.getItem",
+                json!({"ItemID":70,"sName":"Drop","iQty":1}),
+            )
+            .accepting_drop(Duration::from_secs(2), packet),
+    );
+    let runtime = Runtime::start(link).unwrap();
+    common::ready(&runtime);
+    runtime
+        .eval(
+            "drop.js",
+            r#"
+        window.swf["probe.emit"]("onExtensionResponse", JSON.stringify({type:"json",dataObj:{
+            cmd:"dropItem", items:{"70":{ItemID:70,sName:"Drop",iQty:1}}
+        }}));
+        null;
+    "#,
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+    let started = runtime.eval(
+        "started.js",
+        r#"
+        new Promise(resolve => { window.onProbeAccept = () => resolve(true); })
+    "#,
+    );
+    let script = common::loose(&[(
+        "accept.js",
+        r#"
+        import * as api from "lucent/api";
+        import * as script from "lucent/script";
+        export default function* () {
+            yield* script.stop(String(yield* api.drops.accept(70)));
+        }
+    "#,
+    )]);
+    let first = runtime.run_script(script.clone(), Default::default());
+    assert!(started.wait::<bool>(TIMEOUT).unwrap());
+    thread::sleep(Duration::from_millis(500));
+    runtime.kill();
+    assert!(matches!(
+        first.wait(TIMEOUT),
+        Err(RuntimeError::Killed(Kill::Requested))
+    ));
+    let order = runtime.eval(
+        "order.js",
+        r#"
+        new Promise(resolve => {
+            window.onProbeAccept = () => resolve("accept");
+            const previous = window.onExtensionResponse;
+            window.onExtensionResponse = (...args) => {
+                if (JSON.parse(args[0]).dataObj.cmd === "getDrop") resolve("packet");
+                previous?.(...args);
+            };
+        })
+    "#,
+    );
+    let second = runtime.run_script(script, Default::default());
+    assert_eq!(order.wait::<String>(TIMEOUT).unwrap(), "packet");
+    assert_eq!(
+        second.wait(TIMEOUT).unwrap(),
+        ScriptOutcome::StoppedByScript {
+            reason: Some("false".into())
+        }
+    );
+}
