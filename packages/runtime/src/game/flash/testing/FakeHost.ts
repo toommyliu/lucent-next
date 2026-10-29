@@ -309,7 +309,10 @@ const run = (state: FakeHostState, loader: Loader, command: Command) => {
 
   switch (command.kind) {
     case "patchAutoZone":
-      state.autoZone = { ...state.autoZone, ...command.patch };
+      state.autoZone = {
+        enabled: command.patch.enabled ?? state.autoZone.enabled,
+        map: command.patch.map === undefined ? state.autoZone.map : command.patch.map,
+      };
       return state.autoZone;
     case "updateSettings":
       return state.settings;

@@ -216,7 +216,14 @@ fn dropping_a_runtime_blocked_in_a_loader_call_returns_promptly() {
     drop(release);
     let map: Value = serde_json::from_str(
         &session
-            .read_projection(|projection| answer(projection, &Default::default(), Query::Map {}))
+            .read_projection(|projection| {
+                answer(
+                    projection,
+                    &Default::default(),
+                    &Default::default(),
+                    Query::Map {},
+                )
+            })
             .recv_timeout(TIMEOUT)
             .unwrap(),
     )
@@ -261,7 +268,14 @@ fn a_killed_script_runs_none_of_its_queued_callbacks() {
 
     let map: Value = serde_json::from_str(
         &session
-            .read_projection(|projection| answer(projection, &Default::default(), Query::Map {}))
+            .read_projection(|projection| {
+                answer(
+                    projection,
+                    &Default::default(),
+                    &Default::default(),
+                    Query::Map {},
+                )
+            })
             .recv_timeout(TIMEOUT)
             .unwrap(),
     )
