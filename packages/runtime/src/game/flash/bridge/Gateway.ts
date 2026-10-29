@@ -162,8 +162,10 @@ export const makeGateway = (target?: Window) =>
       }),
     );
 
-    const publishEvent = (event: Event) =>
-      PubSub.publish(events, event).pipe(Effect.asVoid);
+    const publishEvent = (event: ProjectionEvent) =>
+      Effect.sync(() =>
+        enqueue("publishEvent", { type: "projection", event }),
+      );
 
     const dispatch = (
       delivery: Delivery,
@@ -176,7 +178,7 @@ export const makeGateway = (target?: Window) =>
             : runtimeEvent(delivery);
         if (event !== undefined) {
           yield* handle(event);
-          yield* publishEvent(event);
+          yield* PubSub.publish(events, event);
           return;
         }
 

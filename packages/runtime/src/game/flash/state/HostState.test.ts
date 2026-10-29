@@ -140,15 +140,33 @@ describe("HostState", () => {
     }).pipe(Effect.provide(live)),
   );
 
-  it.effect("misses a non-finite item selector without asking the host", () =>
+  it.effect("misses a selector the host cannot parse without asking it", () =>
     Effect.gen(function* () {
+      const queries: string[] = [];
       stubHost({
-        read: () => {
-          throw new Error("the host must not be asked");
+        read: (query) => {
+          queries.push(query);
+          return JSON.stringify(
+            item("inventory", { itemId: 5, name: "Sword" }),
+          );
         },
       });
       const host = yield* HostState;
       expect(yield* readItem(host, "inventory", Number.NaN)).toBeNull();
+      expect(
+        yield* readItem(host, "inventory", { itemId: Number.NaN }),
+      ).toBeNull();
+      expect(
+        yield* readItem(host, "inventory", {
+          shopItemId: Number.POSITIVE_INFINITY,
+        }),
+      ).toBeNull();
+      expect((yield* readItem(host, "inventory", { itemId: 5 }))?.name).toBe(
+        "Sword",
+      );
+      expect(queries).toEqual([
+        '{"kind":"item","container":"inventory","selector":{"itemId":5}}',
+      ]);
     }).pipe(Effect.provide(live)),
   );
 });

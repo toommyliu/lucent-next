@@ -175,7 +175,6 @@ export const makeMonsters = Effect.fnUntraced(function* (
       ),
     );
 
-  const getAllProjected = () => readMonsters();
   const getAvailableProjected = () =>
     bridge
       .invoke(
@@ -211,7 +210,7 @@ export const makeMonsters = Effect.fnUntraced(function* (
   });
 
   yield* events.on({ type: "join-map" }, () =>
-    getAllProjected().pipe(Effect.flatMap(ensureCurrentCell)),
+    readMonsters().pipe(Effect.flatMap(ensureCurrentCell)),
   );
   yield* events.on({ type: "player-location" }, (event) =>
     host
@@ -219,27 +218,40 @@ export const makeMonsters = Effect.fnUntraced(function* (
       .pipe(
         Effect.flatMap((player) =>
           player?.entityId === event.entityId
-            ? getAllProjected().pipe(Effect.flatMap(ensureCurrentCell))
+            ? readMonsters().pipe(Effect.flatMap(ensureCurrentCell))
             : Effect.void,
         ),
       ),
   );
 
+  const reread = (monsters: readonly LiveMonster[]) => {
+    const ids = new Set(monsters.map((monster) => monster.monsterMapId));
+    return readMonsters().pipe(
+      Effect.map((current) =>
+        current.filter((monster) => ids.has(monster.monsterMapId)),
+      ),
+    );
+  };
+
   const get = (selector: MonsterQuery) =>
     getProjected(selector).pipe(
-      Effect.tap((monster) =>
-        monster === null ? Effect.void : ensureDrops(monster),
+      Effect.flatMap((monster) =>
+        monster === null
+          ? Effect.succeed(null)
+          : ensureDrops(monster).pipe(
+              Effect.andThen(readMonster(monster.monsterMapId)),
+            ),
       ),
     );
   const getAll = () =>
-    getAllProjected().pipe(
-      Effect.tap(ensureCurrentCell),
-      Effect.map((monsters) => [...monsters]),
+    readMonsters().pipe(
+      Effect.flatMap(ensureCurrentCell),
+      Effect.andThen(readMonsters()),
     );
   const getAvailable = () =>
     getAvailableProjected().pipe(
       Effect.tap(ensureAllDrops),
-      Effect.map((monsters) => [...monsters]),
+      Effect.flatMap(reread),
     );
   const isAvailable = (selector: MonsterQuery) =>
     getProjected(selector).pipe(
@@ -265,7 +277,7 @@ export const makeMonsters = Effect.fnUntraced(function* (
     },
     lookup: {
       get: getProjected,
-      getAll: getAllProjected,
+      getAll: readMonsters,
       getAvailable: getAvailableProjected,
     },
   };

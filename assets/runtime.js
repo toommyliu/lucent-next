@@ -10138,12 +10138,14 @@ ${prefix}}`;
         }
       })
     );
-    const publishEvent = /* @__PURE__ */ __name((event) => publish(events, event).pipe(asVoid2), "publishEvent");
+    const publishEvent = /* @__PURE__ */ __name((event) => sync2(
+      () => enqueue("publishEvent", { type: "projection", event })
+    ), "publishEvent");
     const dispatch = /* @__PURE__ */ __name((delivery, handle) => gen2(function* () {
       const event = delivery.type === "projection" ? delivery.event : runtimeEvent(delivery);
       if (event !== void 0) {
         yield* handle(event);
-        yield* publishEvent(event);
+        yield* publish(events, event);
         return;
       }
       const input = packetInput(delivery);
@@ -11356,7 +11358,15 @@ ${prefix}}`;
       return { command, read };
     })
   );
-  var isSelectable = /* @__PURE__ */ __name((selector) => typeof selector !== "number" || Number.isFinite(selector), "isSelectable");
+  var isFiniteNumber = /* @__PURE__ */ __name((value) => typeof value === "number" && Number.isFinite(value), "isFiniteNumber");
+  var isSelectable = /* @__PURE__ */ __name((selector) => {
+    if (typeof selector === "string") return true;
+    if (typeof selector !== "object" || selector === null) {
+      return isFiniteNumber(selector);
+    }
+    const fields = selector;
+    return isFiniteNumber(fields["shopItemId"]) || isFiniteNumber(fields["itemId"]) || isFiniteNumber(fields["monsterMapId"]) || typeof fields["name"] === "string";
+  }, "isSelectable");
   var readItem = /* @__PURE__ */ __name((host, container, selector) => isSelectable(selector) ? host.read({ kind: "item", container, selector }).pipe(map4((item) => item === null ? null : toLiveItem(item))) : succeed7(null), "readItem");
   var readItems = /* @__PURE__ */ __name((host, container) => host.read({ kind: "items", container }).pipe(map4((items) => items.map(toLiveItem))), "readItems");
   var itemQuantity = /* @__PURE__ */ __name((host, container, selector) => readItem(host, container, selector).pipe(
@@ -14358,7 +14368,6 @@ ${prefix}}`;
         )
       )
     ), "getProjected");
-    const getAllProjected = /* @__PURE__ */ __name(() => readMonsters(), "getAllProjected");
     const getAvailableProjected = /* @__PURE__ */ __name(() => bridge.invoke(
       "world.getAvailableMonsterMapIds",
       void 0,
@@ -14387,28 +14396,38 @@ ${prefix}}`;
     });
     yield* events.on(
       { type: "join-map" },
-      () => getAllProjected().pipe(flatMap3(ensureCurrentCell))
+      () => readMonsters().pipe(flatMap3(ensureCurrentCell))
     );
     yield* events.on(
       { type: "player-location" },
       (event) => host.read({ kind: "me" }).pipe(
         flatMap3(
-          (player) => player?.entityId === event.entityId ? getAllProjected().pipe(flatMap3(ensureCurrentCell)) : void_3
+          (player) => player?.entityId === event.entityId ? readMonsters().pipe(flatMap3(ensureCurrentCell)) : void_3
         )
       )
     );
+    const reread = /* @__PURE__ */ __name((monsters) => {
+      const ids = new Set(monsters.map((monster) => monster.monsterMapId));
+      return readMonsters().pipe(
+        map4(
+          (current) => current.filter((monster) => ids.has(monster.monsterMapId))
+        )
+      );
+    }, "reread");
     const get6 = /* @__PURE__ */ __name((selector) => getProjected(selector).pipe(
-      tap2(
-        (monster) => monster === null ? void_3 : ensureDrops(monster)
+      flatMap3(
+        (monster) => monster === null ? succeed7(null) : ensureDrops(monster).pipe(
+          andThen2(readMonster(monster.monsterMapId))
+        )
       )
     ), "get");
-    const getAll = /* @__PURE__ */ __name(() => getAllProjected().pipe(
-      tap2(ensureCurrentCell),
-      map4((monsters) => [...monsters])
+    const getAll = /* @__PURE__ */ __name(() => readMonsters().pipe(
+      flatMap3(ensureCurrentCell),
+      andThen2(readMonsters())
     ), "getAll");
     const getAvailable = /* @__PURE__ */ __name(() => getAvailableProjected().pipe(
       tap2(ensureAllDrops),
-      map4((monsters) => [...monsters])
+      flatMap3(reread)
     ), "getAvailable");
     const isAvailable = /* @__PURE__ */ __name((selector) => getProjected(selector).pipe(
       flatMap3(
@@ -14428,7 +14447,7 @@ ${prefix}}`;
       },
       lookup: {
         get: getProjected,
-        getAll: getAllProjected,
+        getAll: readMonsters,
         getAvailable: getAvailableProjected
       }
     };
@@ -15471,13 +15490,14 @@ ${prefix}}`;
           isOpen(shopId).pipe(map4((open) => !open)),
           { timeout: "3 seconds" }
         );
-        if (settled) {
+        if (!settled) return false;
+        return getOrElse(
           yield* host.command({
             kind: "confirmShopClosed",
             shopId: shopId ?? null
-          });
-        }
-        return settled;
+          }),
+          () => false
+        );
       });
     }
     __name(close2, "close");
@@ -15855,7 +15875,7 @@ ${prefix}}`;
 
   // packages/runtime/src/host/run.ts
   var runtime = make5(apiLayer);
-  void runtime.context();
+  runtime.runSync(void_3);
   var run3 = /* @__PURE__ */ __name((program) => runtime.runPromise(
     gen2(function* () {
       return yield* program(yield* Api);

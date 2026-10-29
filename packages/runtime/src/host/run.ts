@@ -5,7 +5,7 @@ import { Api, type ApiService } from "../game/flash/api/Api";
 import { apiLayer } from "../game/flash/apiLayer";
 
 const runtime = ManagedRuntime.make(apiLayer);
-void runtime.context();
+runtime.runSync(Effect.void);
 
 export const run = <A, E>(
   program: (api: ApiService) => Effect.Effect<A, E>,

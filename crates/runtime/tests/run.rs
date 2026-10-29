@@ -34,3 +34,17 @@ fn a_failed_program_rejects_its_run_and_the_next_run_still_answers() {
         json!({"rejected": "Error: broken program", "map": ""})
     );
 }
+
+#[test]
+fn the_api_layer_listens_for_projection_events_before_the_first_turn() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+
+    let listening: String = runtime
+        .eval("first.js", "typeof window.onProjectionEvent")
+        .wait(TIMEOUT)
+        .unwrap();
+
+    assert_eq!(listening, "function");
+}

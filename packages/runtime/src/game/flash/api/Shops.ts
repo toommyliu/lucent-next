@@ -100,13 +100,14 @@ export const makeShops = (
         isOpen(shopId).pipe(Effect.map((open) => !open)),
         { timeout: "3 seconds" },
       );
-      if (settled) {
+      if (!settled) return false;
+      return Option.getOrElse(
         yield* host.command({
           kind: "confirmShopClosed",
           shopId: shopId ?? null,
-        });
-      }
-      return settled;
+        }),
+        () => false,
+      );
     });
   }
 

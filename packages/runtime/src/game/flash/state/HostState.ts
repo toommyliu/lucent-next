@@ -61,8 +61,22 @@ export const layer = Layer.effect(
   }),
 );
 
-export const isSelectable = (selector: unknown): boolean =>
-  typeof selector !== "number" || Number.isFinite(selector);
+const isFiniteNumber = (value: unknown): boolean =>
+  typeof value === "number" && Number.isFinite(value);
+
+export const isSelectable = (selector: unknown): boolean => {
+  if (typeof selector === "string") return true;
+  if (typeof selector !== "object" || selector === null) {
+    return isFiniteNumber(selector);
+  }
+  const fields = selector as Readonly<Record<string, unknown>>;
+  return (
+    isFiniteNumber(fields["shopItemId"]) ||
+    isFiniteNumber(fields["itemId"]) ||
+    isFiniteNumber(fields["monsterMapId"]) ||
+    typeof fields["name"] === "string"
+  );
+};
 
 export const readItem = (
   host: HostStateService,
