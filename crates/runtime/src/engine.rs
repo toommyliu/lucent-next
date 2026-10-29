@@ -262,7 +262,11 @@ impl Engine {
                             Err(RuntimeError::JavaScript(rejection_text(tc, &reason)))
                         }
                     };
-                    Ok(Some(settle(tc, result)))
+                    Ok(Some(if active.run.is_some() {
+                        result
+                    } else {
+                        settle(tc, result)
+                    }))
                 });
                 match settled {
                     Ok(Some(result)) if !self.overflowed() => {

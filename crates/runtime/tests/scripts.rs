@@ -234,6 +234,65 @@ fn replacing_a_script_settles_the_first_run_before_the_next_completes() {
 }
 
 #[test]
+fn a_replaced_run_reports_its_stop_despite_an_async_abort_listener_rejection() {
+    let (_host, _session, runtime) = ready_runtime();
+    let started = runtime.eval(
+        "listen.js",
+        "new Promise(resolve => { globalThis.started = resolve; })",
+    );
+    let first = runtime.run_script(
+        loose(&[(
+            "abort.js",
+            r#"
+            import * as script from "lucent/script";
+            export default function* () {
+                script.signal.addEventListener("abort", async () => { throw new Error("late"); });
+                globalThis.started("running");
+                yield* script.sleep("1 hour");
+            }
+            "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(started.wait::<String>(TIMEOUT).unwrap(), "running");
+    let second = runtime.run_script(
+        loose(&[("replacement.js", "export default function* () {}")]),
+        Default::default(),
+    );
+    assert_eq!(
+        first.wait(TIMEOUT).unwrap(),
+        ScriptOutcome::Stopped {
+            reason: Some("Replaced by another script".into())
+        }
+    );
+    assert_eq!(second.wait(TIMEOUT).unwrap(), ScriptOutcome::Completed);
+}
+
+#[test]
+fn a_script_outcome_survives_an_unhandled_rejection_during_serialization() {
+    let (_host, _session, runtime) = ready_runtime();
+    let run = runtime.run_script(
+        loose(&[(
+            "serialize.js",
+            r#"
+            export default function* () {
+                Object.prototype.toJSON = function () {
+                    if (this.kind === "completed") {
+                        delete Object.prototype.toJSON;
+                        Promise.reject(new Error("unrelated"));
+                    }
+                    return this;
+                };
+            }
+            "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(run.wait(TIMEOUT).unwrap(), ScriptOutcome::Completed);
+    completed(&runtime);
+}
+
+#[test]
 fn cooperative_stop_settles_a_yielding_script_and_allows_another_run() {
     let (_host, _session, runtime) = ready_runtime();
     let run = yielding(&runtime);
