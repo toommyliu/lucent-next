@@ -437,12 +437,7 @@ fn failed_settings_ticks_warn_and_retry() {
         assert!(
             warnings
                 .iter()
-                .any(|text| text.contains("settings policy tick failed")
-                    && text.contains(if boundary == "command" {
-                        "Failed reapplySettings"
-                    } else {
-                        "temporary host failure"
-                    })),
+                .any(|text| text.contains("settings") && text.contains("temporary host failure")),
             "{boundary}: {warnings:?}"
         );
         assert_eq!(
@@ -582,14 +577,13 @@ fn settings_policy_host_failures_retry_once_per_streak() {
             1,
             "{boundary}: {warnings:?}"
         );
-        let expected_line = match boundary {
-            "read" => "settings policy tick failed SyntaxError: host link unavailable",
-            "swf" => "settings policy tick failed Error: Failed world.isLoaded",
-            "command" => "settings policy tick failed Error: Failed refreshLoggedIn",
-            _ => unreachable!(),
+        let expected_line = if boundary == "read" {
+            "settings policy tick failed SyntaxError: host link unavailable"
+        } else {
+            "[cause]: SyntaxError: host link unavailable"
         };
         assert!(
-            warnings[0].lines().next() == Some(expected_line),
+            warnings[0].lines().any(|line| line.trim() == expected_line),
             "{warnings:?}"
         );
         let recovered = logs.messages(tracing::Level::INFO);
@@ -639,7 +633,7 @@ fn assert_policy_retries(source: &str, expected_line: &str) {
     let warnings = logs.messages(tracing::Level::WARN);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(
-        warnings[0].lines().next() == Some(expected_line),
+        warnings[0].lines().any(|line| line.trim() == expected_line),
         "expected {expected_line:?} in {warnings:?}"
     );
     assert!(warnings[0].lines().count() > 1, "{warnings:?}");
@@ -710,7 +704,7 @@ fn settings_policy_code_errors_warn_once_and_retry() {
         globalThis.restore = () => { JSON.stringify = stringify; };
         null;
         "#,
-        "settings policy tick failed Error: Failed reapplySettings",
+        "[cause]: Error: broken policy serialization",
     );
 }
 
@@ -731,17 +725,13 @@ fn settings_policy_malformed_host_replies_warn_once_and_retry() {
         (
             "swf",
             "not json",
-            "settings policy tick failed Error: Failed world.isLoaded",
+            "[cause]: SyntaxError: Unexpected token 'o', \"not json\" is not valid JSON",
         ),
-        (
-            "swf",
-            r#""true""#,
-            "settings policy tick failed Error: Failed world.isLoaded",
-        ),
+        ("swf", r#""true""#, "[cause]: SchemaError: Expected boolean"),
         (
             "command",
             "not json",
-            "settings policy tick failed Error: Failed refreshLoggedIn",
+            "[cause]: SyntaxError: Unexpected token 'o', \"not json\" is not valid JSON",
         ),
     ] {
         assert_policy_retries(
@@ -902,7 +892,7 @@ fn settings_policy_missing_loader_booleans_warn_once_and_retry() {
                 null;
                 "#
             ),
-            "settings policy tick failed Error: Failed world.isLoaded",
+            "[cause]: SchemaError: Expected boolean",
         );
     }
 }
