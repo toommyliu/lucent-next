@@ -73,7 +73,7 @@ fn a_watchdog_kill_leaves_the_same_bot_running() {
     logs.wait_for(INFO, "session 1: bot 1 is running");
     assert_eq!(
         session_lines(&logs, WARN),
-        ["session 1: loop.js was killed: a turn ran for more than 200 ms"]
+        ["session 1: loop.js was killed: a turn used more than 200 ms of CPU time"]
     );
     let first = logs.bot_turns()[0];
     let deadline = std::time::Instant::now() + TIMEOUT;

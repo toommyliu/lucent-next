@@ -499,7 +499,7 @@ mod tests {
             (
                 Err(RuntimeError::Killed(Kill::Watchdog)),
                 Level::WARN,
-                "x.js was killed: a turn ran for more than 200 ms",
+                "x.js was killed: a turn used more than 200 ms of CPU time",
             ),
             (
                 Err(RuntimeError::Killed(Kill::HeapLimit)),
