@@ -19,6 +19,8 @@ pub fn headless_host() -> Host {
     .expect("couldn't start the headless host")
 }
 
+pub type ProbeReply = (serde_json::Value, Vec<(String, String)>);
+
 #[derive(Default)]
 pub struct ProbeMovie {
     constants: Vec<(String, serde_json::Value)>,
@@ -28,11 +30,34 @@ pub struct ProbeMovie {
     records: Vec<String>,
     guarded_records: Vec<String>,
     drop_accept: Option<(Duration, String)>,
+    replies: Vec<(String, Vec<ProbeReply>)>,
 }
 
 impl ProbeMovie {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn responding(
+        mut self,
+        name: impl Into<String>,
+        replies: impl IntoIterator<Item = ProbeReply>,
+    ) -> Self {
+        let name = name.into();
+        let replies: Vec<_> = replies.into_iter().collect();
+        assert!(!replies.is_empty());
+        self.constants.retain(|(method, _)| method != &name);
+        self.raises.retain(|(method, ..)| method != &name);
+        self.sequences.retain(|(method, _)| method != &name);
+        self.throws.retain(|(method, _)| method != &name);
+        self.records.retain(|method| method != &name);
+        self.guarded_records.retain(|method| method != &name);
+        self.replies.retain(|(method, _)| method != &name);
+        if name == "drops.accept" {
+            self.drop_accept = None;
+        }
+        self.replies.push((name, replies));
+        self
     }
 
     pub fn recording(mut self, name: impl Into<String>) -> Self {
@@ -372,6 +397,77 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
             (name.as_str(), actions(&body))
         })
         .collect();
+    let reply_counters: Vec<_> = (0..movie.replies.len())
+        .map(|index| format!("_root.probeReply{index}"))
+        .collect();
+    let reply_bodies: Vec<_> = movie
+        .replies
+        .iter()
+        .zip(&reply_counters)
+        .map(|((name, replies), counter)| {
+            let mut body = vec![
+                push(vec![Value::Str(string("arguments"))]),
+                Action::GetVariable,
+                push(vec![
+                    Value::Str(string(name)),
+                    Value::Str(string("onProbeCall")),
+                    Value::Int(3),
+                ]),
+            ];
+            body.extend(external_interface());
+            body.extend([
+                push(vec![Value::Str(string("call"))]),
+                Action::CallMethod,
+                Action::Pop,
+                push(vec![
+                    Value::Str(string("index")),
+                    Value::Str(string(counter)),
+                ]),
+                Action::GetVariable,
+                Action::DefineLocal,
+                push(vec![
+                    Value::Str(string(counter)),
+                    Value::Str(string("index")),
+                ]),
+                Action::GetVariable,
+                push(vec![Value::Int(1)]),
+                Action::Add2,
+                Action::SetVariable,
+            ]);
+            for (index, (value, events)) in replies.iter().enumerate() {
+                let mut reply = Vec::new();
+                for (event, payload) in events {
+                    reply.push(push(vec![
+                        Value::Str(string(payload)),
+                        Value::Str(string(event)),
+                        Value::Int(2),
+                    ]));
+                    reply.extend(external_interface());
+                    reply.extend([
+                        push(vec![Value::Str(string("call"))]),
+                        Action::CallMethod,
+                        Action::Pop,
+                    ]);
+                }
+                push_json(&mut reply, value);
+                reply.push(Action::Return);
+                if index + 1 < replies.len() {
+                    body.extend([
+                        push(vec![Value::Str(string("index"))]),
+                        Action::GetVariable,
+                        push(vec![Value::Int(index as i32)]),
+                        Action::Equals2,
+                        Action::Not,
+                        Action::If(swf::avm1::types::If {
+                            offset: i16::try_from(actions(&reply).len()).unwrap(),
+                        }),
+                    ]);
+                }
+                body.extend(reply);
+            }
+            (name.as_str(), actions(&body))
+        })
+        .collect();
     let accept_body = movie.drop_accept.as_ref().map(|(delay, packet)| {
         let mut notify = vec![
             push(vec![Value::Str(string("item"))]),
@@ -442,7 +538,18 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
             .iter()
             .map(|(name, body)| (*name, vec![string("value")], body.as_slice())),
     );
+    callbacks.extend(
+        reply_bodies
+            .iter()
+            .map(|(name, body)| (*name, vec![], body.as_slice())),
+    );
     let mut main = Vec::new();
+    for counter in &reply_counters {
+        main.extend([
+            push(vec![Value::Str(string(counter)), Value::Int(0)]),
+            Action::SetVariable,
+        ]);
+    }
     for (name, params, body) in callbacks {
         main.push(Action::DefineFunction(DefineFunction {
             name: string(""),
@@ -496,6 +603,63 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
 mod tests {
     use super::*;
     use crate::bridge::{Error, Value};
+
+    #[test]
+    fn successive_probe_replies_record_all_arguments_and_raise_events_before_returning() {
+        let host = headless_host();
+        let (_session, link) = start_probe(
+            &host,
+            ProbeMovie::new()
+                .constant("probe.reply", serde_json::json!("old constant"))
+                .raising("probe.reply", "onDebug", "old event")
+                .throwing("probe.reply", "old throw")
+                .recording("probe.reply")
+                .responding("probe.reply", [(serde_json::json!("old reply"), vec![])])
+                .responding(
+                    "probe.reply",
+                    [
+                        (
+                            serde_json::json!(false),
+                            vec![("onDebug".into(), "first".into())],
+                        ),
+                        (
+                            serde_json::json!({"accepted":true}),
+                            vec![("onDebug".into(), "last".into())],
+                        ),
+                    ],
+                ),
+        );
+        for (reply, event) in [
+            (serde_json::json!(false), "first"),
+            (serde_json::json!({"accepted":true}), "last"),
+            (serde_json::json!({"accepted":true}), "last"),
+        ] {
+            let arguments = vec![
+                Value::String("quest".into()),
+                Value::Number(3075.0),
+                Value::Bool(true),
+            ];
+            assert_eq!(
+                link.call_loader("probe.reply", arguments.clone())
+                    .recv_timeout(Duration::from_secs(5)),
+                Ok(lucent_protocol::bridge::from_json(reply)),
+            );
+            let mut received = Vec::new();
+            while let Some(ScriptEvent::Loader { event, .. }) = link.try_event().unwrap() {
+                received.push((event.name, event.args));
+            }
+            assert_eq!(
+                received,
+                vec![
+                    (
+                        "onProbeCall".into(),
+                        vec![Value::String("probe.reply".into()), Value::List(arguments)]
+                    ),
+                    ("onDebug".into(), vec![Value::String(event.into())]),
+                ]
+            );
+        }
+    }
 
     #[test]
     fn a_synchronous_burst_overflows_the_script_event_queue() {
