@@ -56,9 +56,6 @@ impl ScriptLink {
     }
 
     pub fn try_event(&self) -> Result<Option<ScriptEvent>, bridge::Error> {
-        if self.events.overflowed() {
-            return self.events.try_recv();
-        }
         match self.asks.try_event(self.attachment) {
             Ok(Some(event)) => Ok(Some(event)),
             Ok(None) => self.events.try_recv(),
