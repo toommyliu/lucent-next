@@ -528,7 +528,8 @@ it.effect("ends a faulty recovery without refilling consumed attempts", () => Ef
   expect(attempts).toBe(1);
   yield* advance("5 seconds");
   yield* advance("1 second");
-  expect(yield* relogin.getState()).toMatchObject({ lastError: "Auto relogin failed unexpectedly.", attempting: false, attemptsRemaining: undefined });
+  expect(yield* relogin.getState()).toMatchObject({ lastError: "Auto relogin failed unexpectedly.", attempting: false });
+  expect((yield* relogin.getState()).attemptsRemaining).toBeUndefined();
   expect((yield* relogin.getRecords()).status.phase).toEqual({ tag: "failed" });
   yield* events.emit("OnConnectionLost");
   yield* relogin.setDelay("1 second");
