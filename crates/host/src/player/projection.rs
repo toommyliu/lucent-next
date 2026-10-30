@@ -53,7 +53,9 @@ impl Running {
     pub(super) fn publish(&self, event: ScriptEvent) {
         if let Some(((_, last), rest)) = self.script_events.split_last() {
             for (_, stream) in rest {
-                stream.send(event.clone());
+                if stream.accepts(&event) {
+                    stream.send(event.clone());
+                }
             }
             last.send(event);
         }

@@ -1,7 +1,7 @@
 "use strict";
 (() => {
   var __defProp = Object.defineProperty;
-  var __name = (target2, value) => __defProp(target2, "name", { value, configurable: true });
+  var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
   // packages/runtime/src/host/globals.ts
   var Event = class {
@@ -826,9 +826,9 @@ ${ind(d)}}`;
         return current;
       }
       const serialized = new Proxy(current, {
-        get(target2, key2) {
-          const value2 = Reflect.get(target2, key2, target2);
-          return Object.getOwnPropertyDescriptor(target2, key2)?.get !== void 0 ? redact(value2) : value2;
+        get(target, key2) {
+          const value2 = Reflect.get(target, key2, target);
+          return Object.getOwnPropertyDescriptor(target, key2)?.get !== void 0 ? redact(value2) : value2;
         }
       });
       ancestors.push(serialized);
@@ -2219,10 +2219,10 @@ ${ind(d)}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Filter.js
   var toPredicate = /* @__PURE__ */ __name((self) => (input) => !isFailure2(self(input)), "toPredicate");
   var has = /* @__PURE__ */ __name((key) => (input) => input.has(key) ? succeed2(input) : fail2(input), "has");
-  var compose = /* @__PURE__ */ dual(2, (left2, right2) => (input) => {
-    const leftOut = left2(input);
+  var compose = /* @__PURE__ */ dual(2, (left, right) => (input) => {
+    const leftOut = left(input);
     if (isFailure2(leftOut)) return leftOut;
-    return right2(leftOut.success);
+    return right(leftOut.success);
   });
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Scheduler.js
@@ -4773,14 +4773,14 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Layer.js
   var TypeId6 = "~effect/Layer";
   var MemoMapTypeId = "~effect/Layer/MemoMap";
-  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer7) => {
+  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer6) => {
     const entry = {
       observers: 0,
       deferred: makeUnsafe2(),
       scope: makeUnsafe3(),
       finalizer: /* @__PURE__ */ __name((exit3) => suspend(() => {
         if (--entry.observers > 0) return void_;
-        memoMap.map.delete(layer7);
+        memoMap.map.delete(layer6);
         return close(entry.scope, exit3);
       }), "finalizer")
     };
@@ -4827,24 +4827,24 @@ ${prefix}}`;
       this.parent = parent;
     }
     map = /* @__PURE__ */ new Map();
-    get(layer7, scope3) {
-      const local = this.map.get(layer7);
+    get(layer6, scope3) {
+      const local = this.map.get(layer6);
       if (local) {
         memoMapObserve(local, scope3);
         return local.deferred.effect ?? _await(local.deferred);
       }
-      return this.parent?.get(layer7, scope3);
+      return this.parent?.get(layer6, scope3);
     }
-    getOrElseMemoize(layer7, scope3, build) {
+    getOrElseMemoize(layer6, scope3, build) {
       return suspend(() => {
         let deferred;
         return onExitPrimitive(suspend(() => {
-          const existing = this.get(layer7, scope3);
+          const existing = this.get(layer6, scope3);
           if (existing) return existing;
-          const entry = makeMemoMapEntry(this, layer7);
+          const entry = makeMemoMapEntry(this, layer6);
           if (!memoMapObserve(entry, scope3)) return build(this, scope3);
           deferred = entry.deferred;
-          this.map.set(layer7, entry);
+          this.map.set(layer6, entry);
           return build(this, entry.scope);
         }), (exit3) => {
           if (deferred) doneUnsafe(deferred, exit3);
@@ -4882,11 +4882,10 @@ ${prefix}}`;
   var effectDiscard = /* @__PURE__ */ __name((effect2) => effectContext(as(effect2, empty())), "effectDiscard");
   var mergeAllEffect = /* @__PURE__ */ __name((layers, memoMap, scope3) => {
     const parentScope = forkUnsafe2(scope3, "parallel");
-    return forEach(layers, (layer7) => layer7.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
+    return forEach(layers, (layer6) => layer6.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
       concurrency: layers.length
     }).pipe(map3((context3) => mergeAll(...context3)));
   }, "mergeAllEffect");
-  var mergeAll2 = /* @__PURE__ */ __name((...layers) => fromBuild((memoMap, scope3) => mergeAllEffect(layers, memoMap, scope3)), "mergeAll");
   var provideWith = /* @__PURE__ */ __name((self, that, f) => fromBuild((memoMap, scope3) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope3) : that.build(memoMap, scope3), (context3) => self.build(memoMap, scope3).pipe(provideContext(context3), map3((merged) => f(merged, context3))))), "provideWith");
   var provideMerge = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, (self2, that2) => merge(that2, self2)));
 
@@ -5250,7 +5249,7 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/ManagedRuntime.js
   var TypeId8 = "~effect/ManagedRuntime";
-  var make6 = /* @__PURE__ */ __name((layer7, options) => {
+  var make6 = /* @__PURE__ */ __name((layer6, options) => {
     const memoMap = options?.memoMap ?? makeMemoMapUnsafe();
     const scope3 = makeUnsafe3("sequential");
     const layerScope = forkUnsafe2(scope3, "sequential");
@@ -5268,7 +5267,7 @@ ${prefix}}`;
     let buildFiber;
     const contextEffect = withFiber2((fiber2) => {
       if (!buildFiber) {
-        buildFiber = runFork2(tap3(buildWithMemoMap(layer7, memoMap, layerScope), (context3) => sync2(() => {
+        buildFiber = runFork2(tap3(buildWithMemoMap(layer6, memoMap, layerScope), (context3) => sync2(() => {
           self.cachedContext = context3;
         })), {
           ...defaultRunOptions,
@@ -5326,246 +5325,6 @@ ${prefix}}`;
     return flatMap3(managed.contextEffect, (context3) => provideContext2(effect2, context3));
   }
   __name(provide2, "provide");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableHashMap.js
-  var TypeId9 = "~effect/MutableHashMap";
-  var MutableHashMapProto = {
-    [TypeId9]: TypeId9,
-    [Symbol.iterator]() {
-      return this.backing[Symbol.iterator]();
-    },
-    toString() {
-      return `MutableHashMap(${format2(Array.from(this))})`;
-    },
-    toJSON() {
-      return {
-        _id: "MutableHashMap",
-        values: toJson(Array.from(this))
-      };
-    },
-    [NodeInspectSymbol]() {
-      return this.toJSON();
-    },
-    pipe() {
-      return pipeArguments(this, arguments);
-    }
-  };
-  var empty4 = /* @__PURE__ */ __name(() => {
-    const self = Object.create(MutableHashMapProto);
-    self.backing = /* @__PURE__ */ new Map();
-    self.buckets = /* @__PURE__ */ new Map();
-    return self;
-  }, "empty");
-  var get2 = /* @__PURE__ */ dual(2, (self, key) => {
-    if (self.backing.has(key)) {
-      return some2(self.backing.get(key));
-    } else if (isSimpleKey(key)) {
-      return none2();
-    }
-    const hash2 = hash(key);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      return none2();
-    }
-    return getFromBucket(self, bucket, key);
-  });
-  var isSimpleKey = /* @__PURE__ */ __name((u) => typeof u !== "object" && typeof u !== "function", "isSimpleKey");
-  var values = /* @__PURE__ */ __name((self) => self.backing.values(), "values");
-  var getFromBucket = /* @__PURE__ */ __name((self, bucket, key) => {
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      if (equals(key, bucket[i])) {
-        const refKey = bucket[i];
-        return some2(self.backing.get(refKey));
-      }
-    }
-    return none2();
-  }, "getFromBucket");
-  var has2 = /* @__PURE__ */ dual(2, (self, key) => isSome2(get2(self, key)));
-  var set = /* @__PURE__ */ dual(3, (self, key, value) => {
-    if (self.backing.has(key) || isSimpleKey(key)) {
-      self.backing.set(key, value);
-      return self;
-    }
-    const hash2 = hash(key);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      self.buckets.set(hash2, [key]);
-      self.backing.set(key, value);
-      return self;
-    }
-    let refKey = getRefKey(bucket, key);
-    if (refKey === void 0) {
-      bucket.push(key);
-      refKey = key;
-    }
-    self.backing.set(refKey, value);
-    return self;
-  });
-  var getRefKey = /* @__PURE__ */ __name((bucket, key) => {
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      if (equals(key, bucket[i])) {
-        return bucket[i];
-      }
-    }
-  }, "getRefKey");
-  var remove = /* @__PURE__ */ dual(2, (self, key_) => {
-    if (isSimpleKey(key_)) {
-      self.backing.delete(key_);
-      return self;
-    }
-    const hash2 = hash(key_);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      return self;
-    }
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      const bkey = bucket[i];
-      if (bkey === key_ || equals(key_, bkey)) {
-        self.backing.delete(bkey);
-        bucket.splice(i, 1);
-        break;
-      }
-    }
-    if (bucket.length === 0) {
-      self.buckets.delete(hash2);
-    }
-    return self;
-  });
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/FiberMap.js
-  var TypeId10 = "~effect/FiberMap";
-  var isFiberMap = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId10), "isFiberMap");
-  var Proto2 = {
-    [TypeId10]: TypeId10,
-    [Symbol.iterator]() {
-      if (this.state._tag === "Closed") {
-        return empty2();
-      }
-      return this.state.backing[Symbol.iterator]();
-    },
-    ...PipeInspectableProto,
-    toJSON() {
-      return {
-        _id: "FiberMap",
-        state: this.state
-      };
-    }
-  };
-  var makeUnsafe4 = /* @__PURE__ */ __name((backing, deferred) => {
-    const self = Object.create(Proto2);
-    self.state = {
-      _tag: "Open",
-      backing
-    };
-    self.deferred = deferred;
-    return self;
-  }, "makeUnsafe");
-  var make7 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe4(empty4(), makeUnsafe2())), (map9) => suspend2(() => {
-    const state = map9.state;
-    if (state._tag === "Closed") return void_3;
-    map9.state = {
-      _tag: "Closed"
-    };
-    return interruptAll(values(state.backing)).pipe(into(map9.deferred));
-  })), "make");
-  var internalFiberId = -1;
-  var isInternalInterruption = /* @__PURE__ */ toPredicate(/* @__PURE__ */ compose(filterInterruptors, /* @__PURE__ */ has(internalFiberId)));
-  var setUnsafe = /* @__PURE__ */ dual((args2) => isFiberMap(args2[0]), (self, key, fiber2, options) => {
-    if (self.state._tag === "Closed") {
-      fiber2.interruptUnsafe(internalFiberId);
-      return;
-    }
-    const previous = get2(self.state.backing, key);
-    if (previous._tag === "Some") {
-      if (previous.value === fiber2) {
-        return;
-      } else if (options?.onlyIfMissing === true) {
-        fiber2.interruptUnsafe(internalFiberId);
-        return;
-      }
-    }
-    set(self.state.backing, key, fiber2);
-    if (previous._tag === "Some") {
-      previous.value.interruptUnsafe(internalFiberId);
-    }
-    fiber2.addObserver((exit3) => {
-      if (self.state._tag === "Closed") {
-        return;
-      }
-      const current = get2(self.state.backing, key);
-      if (isSome2(current) && fiber2 === current.value) {
-        remove(self.state.backing, key);
-      }
-      if (isFailure3(exit3) && (options?.propagateInterruption === true ? !isInternalInterruption(exit3.cause) : !hasInterruptsOnly2(exit3.cause))) {
-        doneUnsafe(self.deferred, exit3);
-      }
-    });
-  });
-  var hasUnsafe = /* @__PURE__ */ dual(2, (self, key) => self.state._tag === "Closed" ? false : has2(self.state.backing, key));
-  var has3 = /* @__PURE__ */ dual(2, (self, key) => sync2(() => hasUnsafe(self, key)));
-  var remove2 = /* @__PURE__ */ dual(2, (self, key) => suspend2(() => {
-    if (self.state._tag === "Closed") {
-      return void_3;
-    }
-    const fiber2 = get2(self.state.backing, key);
-    if (fiber2._tag === "None") {
-      return void_3;
-    }
-    return interruptAs(fiber2.value, internalFiberId);
-  }));
-  var constInterruptedFiber = /* @__PURE__ */ (function() {
-    let fiber2 = void 0;
-    return () => {
-      if (fiber2 === void 0) {
-        fiber2 = runFork2(interrupt3);
-      }
-      return fiber2;
-    };
-  })();
-  var run = /* @__PURE__ */ __name(function() {
-    const self = arguments[0];
-    if (isEffect2(arguments[2])) {
-      return runImpl(self, arguments[1], arguments[2], arguments[3]);
-    }
-    const key = arguments[1];
-    const options = arguments[2];
-    return (effect2) => runImpl(self, key, effect2, options);
-  }, "run");
-  var runImpl = /* @__PURE__ */ __name((self, key, effect2, options) => withFiber2((parent) => {
-    if (self.state._tag === "Closed") {
-      return interrupt3;
-    } else if (options?.onlyIfMissing === true && hasUnsafe(self, key)) {
-      return sync2(constInterruptedFiber);
-    }
-    const fiber2 = forkUnsafe(parent, effect2, options?.startImmediately ?? true, true);
-    setUnsafe(self, key, fiber2, options);
-    return succeed7(fiber2);
-  }), "runImpl");
-  var runtime = /* @__PURE__ */ __name((self) => () => map5(context2(), (services2) => {
-    const runFork3 = runForkWith2(services2);
-    return (key, effect2, options) => {
-      if (self.state._tag === "Closed") {
-        return constInterruptedFiber();
-      } else if (options?.onlyIfMissing === true && hasUnsafe(self, key)) {
-        return constInterruptedFiber();
-      }
-      const fiber2 = runFork3(effect2, options);
-      setUnsafe(self, key, fiber2, options);
-      return fiber2;
-    };
-  }), "runtime");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Random.js
-  var Random2 = Random;
-  var randomWith = /* @__PURE__ */ __name((f) => withFiber2((fiber2) => succeed7(f(fiber2.getRef(Random2)))), "randomWith");
-  var nextIntBetween = /* @__PURE__ */ __name((min3, max3, options) => {
-    const extra = options?.halfOpen === true ? 0 : 1;
-    return randomWith((r) => {
-      const minInt = Math.ceil(min3);
-      const maxInt = Math.floor(max3);
-      return Math.floor(r.nextDoubleUnsafe() * (maxInt - minInt + extra)) + minInt;
-    });
-  }, "nextIntBetween");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/encoding/Base64.js
   var encode = /* @__PURE__ */ __name((input) => encodeBytes(typeof input === "string" ? encoder.encode(input) : input), "encode");
@@ -5667,9 +5426,9 @@ ${prefix}}`;
   var fromOptionExit = /* @__PURE__ */ __name((option2) => option2._tag === "None" ? missingExit : succeed8(option2.value), "fromOptionExit");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SchemaIssue.js
-  var TypeId11 = "~effect/SchemaIssue/Issue";
+  var TypeId9 = "~effect/SchemaIssue/Issue";
   function isIssue(u) {
-    return hasProperty(u, TypeId11) && u[TypeId11] === TypeId11;
+    return hasProperty(u, TypeId9) && u[TypeId9] === TypeId9;
   }
   __name(isIssue, "isIssue");
   function hasInput(issue) {
@@ -5680,7 +5439,7 @@ ${prefix}}`;
     static {
       __name(this, "IssueNodeImpl");
     }
-    [TypeId11] = TypeId11;
+    [TypeId9] = TypeId9;
     constructor(input, options) {
       if (options?.reportInput === true && input !== missing) {
         this.input = input;
@@ -6060,12 +5819,12 @@ ${prefix}}`;
   __name(decodeBase64, "decodeBase64");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SchemaTransformation.js
-  var TypeId12 = "~effect/SchemaTransformation/Transformation";
+  var TypeId10 = "~effect/SchemaTransformation/Transformation";
   var Transformation = class extends Class {
     static {
       __name(this, "Transformation");
     }
-    [TypeId12] = TypeId12;
+    [TypeId10] = TypeId10;
     _tag = "Transformation";
     decode;
     encode;
@@ -6079,7 +5838,7 @@ ${prefix}}`;
     }
   };
   function isTransformation(u) {
-    return hasProperty(u, TypeId12) && u[TypeId12] === TypeId12;
+    return hasProperty(u, TypeId10) && u[TypeId10] === TypeId10;
   }
   __name(isTransformation, "isTransformation");
   var makeTransformation = /* @__PURE__ */ __name((options) => {
@@ -6150,12 +5909,12 @@ ${prefix}}`;
       this.annotations = annotations;
     }
   };
-  var TypeId13 = "~effect/Schema";
+  var TypeId11 = "~effect/Schema";
   var ASTNodeImpl = class {
     static {
       __name(this, "ASTNodeImpl");
     }
-    [TypeId13] = TypeId13;
+    [TypeId11] = TypeId11;
     annotations;
     checks;
     encoding;
@@ -8095,12 +7854,12 @@ ${prefix}}`;
     };
   }
   __name(makeOption, "makeOption");
-  function make8(schema) {
+  function make7(schema) {
     return makeConstructorSync(toType(schema.ast));
   }
-  __name(make8, "make");
+  __name(make7, "make");
   function decodeUnknownEffect(schema, options) {
-    const parser = run2(schema.ast);
+    const parser = run(schema.ast);
     return options === void 0 ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
   }
   __name(decodeUnknownEffect, "decodeUnknownEffect");
@@ -8118,10 +7877,10 @@ ${prefix}}`;
     }
     return succeed7(value);
   }, "getValue");
-  function run2(ast) {
+  function run(ast) {
     return runWithCompiler(normalCompiler, ast);
   }
-  __name(run2, "run");
+  __name(run, "run");
   function parserResult(result3, input) {
     if (result3 === sameExit) {
       return succeed7(input);
@@ -8204,12 +7963,12 @@ ${prefix}}`;
   var constructorCompiler = /* @__PURE__ */ __name((ast) => resolve2(ast).makeEffect, "constructorCompiler");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/schema/make.js
-  var TypeId14 = "~effect/Schema/Schema";
+  var TypeId12 = "~effect/Schema/Schema";
   var RebuildOptions = /* @__PURE__ */ Symbol();
   var SchemaProto = {
-    [TypeId14]: TypeId14,
+    [TypeId12]: TypeId12,
     get make() {
-      const value = make8(this);
+      const value = make7(this);
       Object.defineProperty(this, "make", {
         value,
         enumerable: true
@@ -8245,10 +8004,10 @@ ${prefix}}`;
       return this.rebuild(appendChecks(this.ast, checks));
     },
     rebuild(ast) {
-      return make9(ast, this[RebuildOptions]);
+      return make8(ast, this[RebuildOptions]);
     }
   };
-  function make9(ast, options) {
+  function make8(ast, options) {
     function Schema() {
     }
     __name(Schema, "Schema");
@@ -8264,22 +8023,18 @@ ${prefix}}`;
     self.ast = ast;
     return self;
   }
-  __name(make9, "make");
+  __name(make8, "make");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Struct.js
   var lambda = /* @__PURE__ */ __name((f) => f, "lambda");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/schemaError.js
   var SchemaErrorTypeId = "~effect/Schema/SchemaError";
-  function isSchemaError(u) {
-    return hasProperty(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
-  }
-  __name(isSchemaError, "isSchemaError");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Schema.js
   function declareConstructor() {
     return (typeParameters, run3, annotations) => {
-      return make10(new Declaration(typeParameters.map(getAST), (typeParameters2) => run3(typeParameters2.map((ast) => make10(ast))), annotations));
+      return make9(new Declaration(typeParameters.map(getAST), (typeParameters2) => run3(typeParameters2.map((ast) => make9(ast))), annotations));
     };
   }
   __name(declareConstructor, "declareConstructor");
@@ -8319,10 +8074,6 @@ ${prefix}}`;
       return `SchemaError(${this.message})`;
     }
   };
-  function isSchemaError2(u) {
-    return isSchemaError(u);
-  }
-  __name(isSchemaError2, "isSchemaError");
   function fromIssueEffect(self) {
     if (effectIsExit(self)) {
       return fromIssueExit(self);
@@ -8334,32 +8085,6 @@ ${prefix}}`;
     return isSuccess3(exit3) ? exit3 : failCause2(map4(exit3.cause, (issue) => new SchemaError(issue)));
   }
   __name(fromIssueExit, "fromIssueExit");
-  function getSchemaErrorOrThrow(cause, message) {
-    let schemaError;
-    for (const reason of cause.reasons) {
-      if (!isFailReason2(reason) || !isSchemaError2(reason.error)) {
-        throw new globalThis.Error(message, {
-          cause
-        });
-      }
-      schemaError ??= reason.error;
-    }
-    if (schemaError === void 0) {
-      throw new globalThis.Error(message, {
-        cause
-      });
-    }
-    return schemaError;
-  }
-  __name(getSchemaErrorOrThrow, "getSchemaErrorOrThrow");
-  function runSchemaErrorSync(self) {
-    const exit3 = runSyncExit2(self);
-    if (isSuccess3(exit3)) {
-      return exit3.value;
-    }
-    throw getSchemaErrorOrThrow(exit3.cause, "Sync adapter can only throw schema errors");
-  }
-  __name(runSchemaErrorSync, "runSchemaErrorSync");
   function decodeUnknownEffect2(schema, options) {
     const parser = decodeUnknownEffect(schema, options);
     return (input, options2) => {
@@ -8368,19 +8093,12 @@ ${prefix}}`;
   }
   __name(decodeUnknownEffect2, "decodeUnknownEffect");
   var decodeUnknownOption2 = decodeUnknownOption;
-  function decodeUnknownSync(schema, options) {
-    const parser = decodeUnknownEffect2(schema, options);
-    return (input, options2) => {
-      return runSchemaErrorSync(parser(input, options2));
-    };
-  }
-  __name(decodeUnknownSync, "decodeUnknownSync");
-  var make10 = make9;
-  var optionalKey2 = /* @__PURE__ */ lambda((schema) => make10(optionalKey(schema.ast), {
+  var make9 = make8;
+  var optionalKey2 = /* @__PURE__ */ lambda((schema) => make9(optionalKey(schema.ast), {
     schema
   }));
   function Literal2(literal) {
-    const out = make10(new Literal(literal), {
+    const out = make9(new Literal(literal), {
       literal,
       transform(to) {
         return out.pipe(decodeTo2(Literal2(to), {
@@ -8392,14 +8110,14 @@ ${prefix}}`;
     return out;
   }
   __name(Literal2, "Literal");
-  var Unknown2 = /* @__PURE__ */ make10(unknown);
-  var Null2 = /* @__PURE__ */ make10(null_);
-  var String4 = /* @__PURE__ */ make10(string2);
-  var Number6 = /* @__PURE__ */ make10(number2);
-  var Boolean3 = /* @__PURE__ */ make10(boolean);
-  var Void2 = /* @__PURE__ */ make10(void_4);
+  var Unknown2 = /* @__PURE__ */ make9(unknown);
+  var Null2 = /* @__PURE__ */ make9(null_);
+  var String4 = /* @__PURE__ */ make9(string2);
+  var Number6 = /* @__PURE__ */ make9(number2);
+  var Boolean3 = /* @__PURE__ */ make9(boolean);
+  var Void2 = /* @__PURE__ */ make9(void_4);
   function makeStruct(ast, fields) {
-    return make10(ast, {
+    return make9(ast, {
       fields,
       mapFields(f, options) {
         const fields2 = f(this.fields);
@@ -8413,14 +8131,14 @@ ${prefix}}`;
   }
   __name(Struct, "Struct");
   function Record(key, value) {
-    return make10(record(key.ast, value.ast), {
+    return make9(record(key.ast, value.ast), {
       key,
       value
     });
   }
   __name(Record, "Record");
   function makeTuple(ast, elements) {
-    return make10(ast, {
+    return make9(ast, {
       elements,
       mapElements(f, options) {
         const elements2 = f(this.elements);
@@ -8433,11 +8151,11 @@ ${prefix}}`;
     return makeTuple(tuple(elements), elements);
   }
   __name(Tuple, "Tuple");
-  var ArraySchema = /* @__PURE__ */ lambda((schema) => make10(new Arrays(false, [], [schema.ast]), {
+  var ArraySchema = /* @__PURE__ */ lambda((schema) => make9(new Arrays(false, [], [schema.ast]), {
     value: schema
   }));
   function makeUnion(ast, members) {
-    return make10(ast, {
+    return make9(ast, {
       members,
       mapMembers(f, options) {
         const members2 = f(this.members);
@@ -8452,7 +8170,7 @@ ${prefix}}`;
   __name(Union2, "Union");
   function Literals(literals) {
     const members = literals.map(Literal2);
-    return make10(union(members, void 0, void 0), {
+    return make9(union(members, void 0, void 0), {
       literals,
       members,
       mapMembers(f) {
@@ -8470,7 +8188,7 @@ ${prefix}}`;
   var NullOr = /* @__PURE__ */ lambda((self) => Union2([self, Null2]));
   function decodeTo2(to, transformation) {
     return (from) => {
-      return make10(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough3()), {
+      return make9(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough3()), {
         from,
         to
       });
@@ -8478,7 +8196,7 @@ ${prefix}}`;
   }
   __name(decodeTo2, "decodeTo");
   function withConstructorDefault2(defaultValue) {
-    return (schema) => make10(withConstructorDefault(schema.ast, defaultValue), {
+    return (schema) => make9(withConstructorDefault(schema.ast, defaultValue), {
       schema
     });
   }
@@ -8532,7 +8250,7 @@ ${prefix}}`;
     });
   }
   __name(isBase64, "isBase64");
-  var Finite = /* @__PURE__ */ make10(finite);
+  var Finite = /* @__PURE__ */ make9(finite);
   function makeIsGreaterThanOrEqualTo(options) {
     const gte = isGreaterThanOrEqualTo(options.order);
     const formatter = options.formatter ?? format2;
@@ -8857,12 +8575,114 @@ ${prefix}}`;
   var arbitraryMinimumTimeZoneOffset = -12 * 60 * 60 * 1e3;
   var arbitraryMaximumTimeZoneOffset = 14 * 60 * 60 * 1e3;
 
+  // packages/runtime/src/game/flash/contract/Diagnostic.ts
+  var diagnosticTimestamp = /* @__PURE__ */ __name(() => performance.timeOrigin + performance.now(), "diagnosticTimestamp");
+  var makeDiagnostic = /* @__PURE__ */ __name((phase, operation, cause, args2) => ({
+    ...args2 === void 0 ? {} : { arguments: args2 },
+    cause,
+    operation,
+    phase,
+    timestamp: diagnosticTimestamp()
+  }), "makeDiagnostic");
+
+  // packages/runtime/src/game/flash/bridge/DiagnosticSink.ts
+  var noop = {
+    report: /* @__PURE__ */ __name(() => void 0, "report")
+  };
+  var debug = {
+    report: /* @__PURE__ */ __name((phase, operation, cause, args2) => {
+      console.warn(
+        "[flash:diagnostic]",
+        makeDiagnostic(phase, operation, cause, args2)
+      );
+    }, "report")
+  };
+  var DiagnosticSink = class extends Reference(
+    "lucent/renderer/flash/DiagnosticSink",
+    { defaultValue: /* @__PURE__ */ __name(() => noop, "defaultValue") }
+  ) {
+    static {
+      __name(this, "DiagnosticSink");
+    }
+  };
+  var noopLayer = succeed6(DiagnosticSink, noop);
+  var debugLayer = succeed6(DiagnosticSink, debug);
+
+  // packages/runtime/src/game/flash/bridge/Bridge.ts
+  var InvokeFailure = class extends TaggedError2("InvokeFailure") {
+    static {
+      __name(this, "InvokeFailure");
+    }
+  };
+  var makeBridge = /* @__PURE__ */ __name((target) => gen2(function* () {
+    const swf = (target ?? window).swf;
+    const diagnosticSink = yield* DiagnosticSink;
+    const fail7 = /* @__PURE__ */ __name((method, cause, args2) => sync2(
+      () => diagnosticSink.report(
+        "invoke",
+        String(method),
+        cause,
+        method === "auth.login" ? void 0 : args2
+      )
+    ).pipe(as2(none2())), "fail");
+    const invoke = /* @__PURE__ */ __name((method, args2, schema) => try_2({
+      try: /* @__PURE__ */ __name(() => {
+        const candidate = swf[method];
+        if (typeof candidate !== "function") {
+          throw new Error(`Missing Flash method: ${String(method)}`);
+        }
+        return Reflect.apply(candidate, swf, [...args2 ?? []]);
+      }, "try"),
+      catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
+    }).pipe(
+      flatMap3(decodeUnknownEffect2(schema)),
+      map5(some2),
+      catch_2((cause) => fail7(method, cause, args2))
+    ), "invoke");
+    const invokeJson = /* @__PURE__ */ __name((method, args2, schema) => invoke(method, args2, Union2([String4, Unknown2])).pipe(
+      flatMap3(
+        match({
+          onNone: /* @__PURE__ */ __name(() => succeed7(none2()), "onNone"),
+          onSome: /* @__PURE__ */ __name((value) => {
+            if (typeof value !== "string") {
+              return decodeUnknownEffect2(schema)(value).pipe(
+                map5(some2),
+                catch_2((cause) => fail7(method, cause, args2))
+              );
+            }
+            return try_2({
+              try: /* @__PURE__ */ __name(() => JSON.parse(value), "try"),
+              catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
+            }).pipe(
+              flatMap3(decodeUnknownEffect2(schema)),
+              map5(some2),
+              catch_2((cause) => fail7(method, cause, args2))
+            );
+          }, "onSome")
+        })
+      )
+    ), "invokeJson");
+    return {
+      invoke,
+      invokeJson
+    };
+  }), "makeBridge");
+  var Bridge = class extends Service()(
+    "lucent/renderer/flash/Bridge",
+    { make: makeBridge() }
+  ) {
+    static {
+      __name(this, "Bridge");
+    }
+  };
+  var layer = effect(Bridge, Bridge.make);
+
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Latch.js
-  var makeUnsafe5 = makeLatchUnsafe;
+  var makeUnsafe4 = makeLatchUnsafe;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableList.js
   var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
-  var make11 = /* @__PURE__ */ __name(() => ({
+  var make10 = /* @__PURE__ */ __name(() => ({
     head: void 0,
     tail: void 0,
     length: 0
@@ -8980,12 +8800,12 @@ ${prefix}}`;
     };
     self.length = array2.length;
   }, "filter");
-  var remove3 = /* @__PURE__ */ __name((self, value) => filter3(self, (v) => v !== value), "remove");
+  var remove = /* @__PURE__ */ __name((self, value) => filter3(self, (v) => v !== value), "remove");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableRef.js
-  var TypeId15 = "~effect/MutableRef";
+  var TypeId13 = "~effect/MutableRef";
   var MutableRefProto = {
-    [TypeId15]: TypeId15,
+    [TypeId13]: TypeId13,
     ...PipeInspectableProto,
     toJSON() {
       return {
@@ -8994,21 +8814,21 @@ ${prefix}}`;
       };
     }
   };
-  var make12 = /* @__PURE__ */ __name((value) => {
+  var make11 = /* @__PURE__ */ __name((value) => {
     const ref = Object.create(MutableRefProto);
     ref.current = value;
     return ref;
   }, "make");
-  var set2 = /* @__PURE__ */ dual(2, (self, value) => {
+  var set = /* @__PURE__ */ dual(2, (self, value) => {
     self.current = value;
     return self;
   });
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/PubSub.js
-  var TypeId16 = "~effect/PubSub";
+  var TypeId14 = "~effect/PubSub";
   var SubscriptionTypeId = "~effect/PubSub/Subscription";
-  var make13 = /* @__PURE__ */ __name((options) => sync2(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe5(false), make12(false), options.strategy(), make12(none2()))), "make");
-  var unbounded = /* @__PURE__ */ __name((options) => make13({
+  var make12 = /* @__PURE__ */ __name((options) => sync2(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe4(false), make11(false), options.strategy(), make11(none2()))), "make");
+  var unbounded = /* @__PURE__ */ __name((options) => make12({
     atomicPubSub: /* @__PURE__ */ __name(() => makeAtomicUnbounded(options), "atomicPubSub"),
     strategy: /* @__PURE__ */ __name(() => new DroppingStrategy(), "strategy")
   }), "unbounded");
@@ -9017,7 +8837,7 @@ ${prefix}}`;
     return new UnboundedPubSub(replay && replay > 0 ? new ReplayBuffer(Math.ceil(replay)) : void 0);
   }, "makeAtomicUnbounded");
   var shutdown = /* @__PURE__ */ __name((self) => uninterruptible2(withFiber2((fiber2) => {
-    set2(self.shutdownFlag, true);
+    set(self.shutdownFlag, true);
     return close(self.scope, interrupt2(fiber2.id)).pipe(andThen2(self.strategy.shutdown), when2(self.shutdownHook.open), asVoid2);
   })), "shutdown");
   var publish = /* @__PURE__ */ dual(2, (self, value) => suspend2(() => {
@@ -9045,7 +8865,7 @@ ${prefix}}`;
     return addFinalizer2(scope3, unsubscribe(subscription)).pipe(andThen2(addFinalizerExit(localScope, (exit3) => close(scope3, exit3))), as2(subscription));
   })), "subscribe");
   var unsubscribe = /* @__PURE__ */ __name((self) => uninterruptible2(withFiber2((state) => {
-    set2(self.shutdownFlag, true);
+    set(self.shutdownFlag, true);
     return forEach2(takeAll(self.pollers), (d) => interruptWith(d, state.id), {
       discard: true,
       concurrency: "unbounded"
@@ -9099,37 +8919,37 @@ ${prefix}}`;
       return resume(succeed7(self.ended.current.value));
     }
     const deferred = makeUnsafe2();
-    let set4 = self.subscribers.get(self.subscription);
-    if (!set4) {
-      set4 = /* @__PURE__ */ new Set();
-      self.subscribers.set(self.subscription, set4);
+    let set3 = self.subscribers.get(self.subscription);
+    if (!set3) {
+      set3 = /* @__PURE__ */ new Set();
+      self.subscribers.set(self.subscription, set3);
     }
-    set4.add(self.pollers);
+    set3.add(self.pollers);
     append2(self.pollers, deferred);
     self.strategy.completePollersUnsafe(self.pubsub, self.subscribers, self.subscription, self.pollers);
     if (deferred.effect) return resume(deferred.effect);
     deferred.resumes = [resume];
-    return sync2(() => remove3(self.pollers, deferred));
+    return sync2(() => remove(self.pollers, deferred));
   }), "pollForItem");
   var AbsentValue = /* @__PURE__ */ Symbol.for("effect/PubSub/AbsentValue");
   var addSubscribers = /* @__PURE__ */ __name((subscribers, subscription, pollers) => {
     if (!subscribers.has(subscription)) {
       subscribers.set(subscription, /* @__PURE__ */ new Set());
     }
-    const set4 = subscribers.get(subscription);
-    set4.add(pollers);
+    const set3 = subscribers.get(subscription);
+    set3.add(pollers);
   }, "addSubscribers");
   var removeSubscribers = /* @__PURE__ */ __name((subscribers, subscription, pollers) => {
     if (!subscribers.has(subscription)) {
       return;
     }
-    const set4 = subscribers.get(subscription);
-    set4.delete(pollers);
-    if (set4.size === 0) {
+    const set3 = subscribers.get(subscription);
+    set3.delete(pollers);
+    if (set3.size === 0) {
       subscribers.delete(subscription);
     }
   }, "removeSubscribers");
-  var makeSubscriptionUnsafe = /* @__PURE__ */ __name((pubsub, subscribers, strategy, ended) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make11(), makeUnsafe5(false), make12(false), strategy, pubsub.replayWindow(), ended), "makeSubscriptionUnsafe");
+  var makeSubscriptionUnsafe = /* @__PURE__ */ __name((pubsub, subscribers, strategy, ended) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make10(), makeUnsafe4(false), make11(false), strategy, pubsub.replayWindow(), ended), "makeSubscriptionUnsafe");
   var UnboundedPubSub = class {
     static {
       __name(this, "UnboundedPubSub");
@@ -9337,7 +9157,7 @@ ${prefix}}`;
     static {
       __name(this, "PubSubImpl");
     }
-    [TypeId16] = {
+    [TypeId14] = {
       _A: identity
     };
     pubsub;
@@ -9535,108 +9355,8 @@ ${prefix}}`;
     close: /* @__PURE__ */ __name(() => void 0, "close")
   };
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Semaphore.js
-  var makeUnsafe6 = /* @__PURE__ */ __name((permits) => new SemaphoreImpl(permits), "makeUnsafe");
-  var waitForPermits = /* @__PURE__ */ __name((self, n, effect2) => callback((resume) => {
-    if (self.free >= n) return resume(effect2);
-    const observer = /* @__PURE__ */ __name(() => {
-      if (self.free < n) return;
-      self.waiters.delete(observer);
-      resume(effect2);
-    }, "observer");
-    self.waiters.add(observer);
-    return sync(() => {
-      self.waiters.delete(observer);
-    });
-  }), "waitForPermits");
-  var SemaphoreImpl = class {
-    static {
-      __name(this, "SemaphoreImpl");
-    }
-    waiters = /* @__PURE__ */ new Set();
-    taken = 0;
-    permits;
-    constructor(permits) {
-      this.permits = permits;
-    }
-    get free() {
-      return this.permits - this.taken;
-    }
-    take(n) {
-      const take4 = suspend(() => {
-        if (this.free < n) {
-          return waitForPermits(this, n, take4);
-        }
-        this.taken += n;
-        return succeed3(n);
-      });
-      return take4;
-    }
-    takeIfAvailable(n) {
-      return suspend(() => {
-        if (this.free < n) return succeed3(false);
-        this.taken += n;
-        return succeed3(true);
-      });
-    }
-    releaseUnsafe(fiber2, n) {
-      this.taken -= n;
-      if (this.waiters.size > 0) {
-        fiber2.currentDispatcher.scheduleTask(() => {
-          for (const observer of this.waiters) {
-            if (this.free <= 0) break;
-            observer();
-          }
-        }, 0);
-      }
-      return this.free;
-    }
-    resize(permits) {
-      return withFiber((fiber2) => {
-        this.permits = permits;
-        if (this.free < 0) return void_;
-        this.releaseUnsafe(fiber2, 0);
-        return void_;
-      });
-    }
-    release(n) {
-      return withFiber((fiber2) => succeed3(this.releaseUnsafe(fiber2, n)));
-    }
-    get releaseAll() {
-      return withFiber((fiber2) => succeed3(this.releaseUnsafe(fiber2, this.taken)));
-    }
-    withPermits(n) {
-      return (self) => uninterruptibleMask((restore) => {
-        const acquire = suspend(() => {
-          if (this.free < n) {
-            const wait = waitForPermits(this, n, void_);
-            return flatMap2(restore(wait), () => acquire);
-          }
-          this.taken += n;
-          return onExitPrimitive(restore(self), () => {
-            this.releaseUnsafe(getCurrentFiber(), n);
-            return void 0;
-          }, true);
-        });
-        return acquire;
-      });
-    }
-    withPermit = /* @__PURE__ */ this.withPermits(1);
-    withPermitsIfAvailable(n) {
-      return (self) => uninterruptibleMask((restore) => {
-        if (this.free < n) return succeedNone;
-        this.taken += n;
-        return onExitPrimitive(restore(asSome(self)), () => {
-          this.releaseUnsafe(getCurrentFiber(), n);
-          return void 0;
-        }, true);
-      });
-    }
-  };
-  var make14 = /* @__PURE__ */ __name((permits) => sync(() => new SemaphoreImpl(permits)), "make");
-
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Queue.js
-  var TypeId17 = "~effect/Queue";
+  var TypeId15 = "~effect/Queue";
   var EnqueueTypeId = "~effect/Queue/Enqueue";
   var DequeueTypeId = "~effect/Queue/Dequeue";
   var variance = {
@@ -9644,7 +9364,7 @@ ${prefix}}`;
     _E: identity
   };
   var QueueProto = {
-    [TypeId17]: variance,
+    [TypeId15]: variance,
     [EnqueueTypeId]: variance,
     [DequeueTypeId]: variance,
     ...PipeInspectableProto,
@@ -9656,12 +9376,12 @@ ${prefix}}`;
       };
     }
   };
-  var make15 = /* @__PURE__ */ __name((options) => withFiber((fiber2) => {
+  var make13 = /* @__PURE__ */ __name((options) => withFiber((fiber2) => {
     const self = Object.create(QueueProto);
     self.dispatcher = fiber2.currentDispatcher;
     self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
     self.strategy = options?.strategy ?? "suspend";
-    self.messages = make11();
+    self.messages = make10();
     self.scheduleRunning = false;
     self.state = {
       _tag: "Open",
@@ -9671,14 +9391,14 @@ ${prefix}}`;
     };
     return succeed3(self);
   }), "make");
-  var bounded = /* @__PURE__ */ __name((capacity) => make15({
+  var bounded = /* @__PURE__ */ __name((capacity) => make13({
     capacity
   }), "bounded");
-  var dropping = /* @__PURE__ */ __name((capacity) => make15({
+  var dropping = /* @__PURE__ */ __name((capacity) => make13({
     capacity,
     strategy: "dropping"
   }), "dropping");
-  var unbounded2 = /* @__PURE__ */ __name(() => make15(), "unbounded");
+  var unbounded2 = /* @__PURE__ */ __name(() => make13(), "unbounded");
   var offer = /* @__PURE__ */ dual(2, (self, message) => suspend(() => offerUnsafe(self, message) ? exitTrue : self.state._tag === "Open" && self.strategy === "suspend" ? offerOrWait(self, message) : exitFalse));
   var offerUnsafe = /* @__PURE__ */ __name((self, message) => {
     if (self.state._tag !== "Open") {
@@ -9897,11 +9617,111 @@ ${prefix}}`;
     openState.awaiters.clear();
   }, "finalize");
 
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Semaphore.js
+  var makeUnsafe5 = /* @__PURE__ */ __name((permits) => new SemaphoreImpl(permits), "makeUnsafe");
+  var waitForPermits = /* @__PURE__ */ __name((self, n, effect2) => callback((resume) => {
+    if (self.free >= n) return resume(effect2);
+    const observer = /* @__PURE__ */ __name(() => {
+      if (self.free < n) return;
+      self.waiters.delete(observer);
+      resume(effect2);
+    }, "observer");
+    self.waiters.add(observer);
+    return sync(() => {
+      self.waiters.delete(observer);
+    });
+  }), "waitForPermits");
+  var SemaphoreImpl = class {
+    static {
+      __name(this, "SemaphoreImpl");
+    }
+    waiters = /* @__PURE__ */ new Set();
+    taken = 0;
+    permits;
+    constructor(permits) {
+      this.permits = permits;
+    }
+    get free() {
+      return this.permits - this.taken;
+    }
+    take(n) {
+      const take4 = suspend(() => {
+        if (this.free < n) {
+          return waitForPermits(this, n, take4);
+        }
+        this.taken += n;
+        return succeed3(n);
+      });
+      return take4;
+    }
+    takeIfAvailable(n) {
+      return suspend(() => {
+        if (this.free < n) return succeed3(false);
+        this.taken += n;
+        return succeed3(true);
+      });
+    }
+    releaseUnsafe(fiber2, n) {
+      this.taken -= n;
+      if (this.waiters.size > 0) {
+        fiber2.currentDispatcher.scheduleTask(() => {
+          for (const observer of this.waiters) {
+            if (this.free <= 0) break;
+            observer();
+          }
+        }, 0);
+      }
+      return this.free;
+    }
+    resize(permits) {
+      return withFiber((fiber2) => {
+        this.permits = permits;
+        if (this.free < 0) return void_;
+        this.releaseUnsafe(fiber2, 0);
+        return void_;
+      });
+    }
+    release(n) {
+      return withFiber((fiber2) => succeed3(this.releaseUnsafe(fiber2, n)));
+    }
+    get releaseAll() {
+      return withFiber((fiber2) => succeed3(this.releaseUnsafe(fiber2, this.taken)));
+    }
+    withPermits(n) {
+      return (self) => uninterruptibleMask((restore) => {
+        const acquire = suspend(() => {
+          if (this.free < n) {
+            const wait = waitForPermits(this, n, void_);
+            return flatMap2(restore(wait), () => acquire);
+          }
+          this.taken += n;
+          return onExitPrimitive(restore(self), () => {
+            this.releaseUnsafe(getCurrentFiber(), n);
+            return void 0;
+          }, true);
+        });
+        return acquire;
+      });
+    }
+    withPermit = /* @__PURE__ */ this.withPermits(1);
+    withPermitsIfAvailable(n) {
+      return (self) => uninterruptibleMask((restore) => {
+        if (this.free < n) return succeedNone;
+        this.taken += n;
+        return onExitPrimitive(restore(asSome(self)), () => {
+          this.releaseUnsafe(getCurrentFiber(), n);
+          return void 0;
+        }, true);
+      });
+    }
+  };
+  var make14 = /* @__PURE__ */ __name((permits) => sync(() => new SemaphoreImpl(permits)), "make");
+
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Channel.js
-  var TypeId18 = "~effect/Channel";
-  var isChannel = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId18), "isChannel");
+  var TypeId16 = "~effect/Channel";
+  var isChannel = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId16), "isChannel");
   var ChannelProto = {
-    [TypeId18]: {
+    [TypeId16]: {
       _Env: identity,
       _InErr: identity,
       _InElem: identity,
@@ -9949,7 +9769,7 @@ ${prefix}}`;
     const runFork3 = runForkWith2(yield* context2());
     const trackFiber = runIn(forkedScope);
     if (options.unordered) {
-      const semaphore = makeUnsafe6(concurrencyN);
+      const semaphore = makeUnsafe5(concurrencyN);
       const release = constant(semaphore.release(1));
       const handle = matchCauseEffect2({
         onFailure: /* @__PURE__ */ __name((cause) => flatMap3(failCause5(queue, cause), release), "onFailure"),
@@ -10054,7 +9874,7 @@ ${prefix}}`;
   }), "runHead");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/stream.js
-  var TypeId19 = "~effect/Stream";
+  var TypeId17 = "~effect/Stream";
   var streamVariance = {
     _R: identity,
     _E: identity,
@@ -10064,16 +9884,121 @@ ${prefix}}`;
     this.channel = channel;
   }, "Stream");
   Stream.prototype = {
-    [TypeId19]: streamVariance,
+    [TypeId17]: streamVariance,
     pipe() {
       return pipeArguments(this, arguments);
     }
   };
   var fromChannel = /* @__PURE__ */ __name((channel) => new Stream(channel), "fromChannel");
 
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableHashMap.js
+  var TypeId18 = "~effect/MutableHashMap";
+  var MutableHashMapProto = {
+    [TypeId18]: TypeId18,
+    [Symbol.iterator]() {
+      return this.backing[Symbol.iterator]();
+    },
+    toString() {
+      return `MutableHashMap(${format2(Array.from(this))})`;
+    },
+    toJSON() {
+      return {
+        _id: "MutableHashMap",
+        values: toJson(Array.from(this))
+      };
+    },
+    [NodeInspectSymbol]() {
+      return this.toJSON();
+    },
+    pipe() {
+      return pipeArguments(this, arguments);
+    }
+  };
+  var empty4 = /* @__PURE__ */ __name(() => {
+    const self = Object.create(MutableHashMapProto);
+    self.backing = /* @__PURE__ */ new Map();
+    self.buckets = /* @__PURE__ */ new Map();
+    return self;
+  }, "empty");
+  var get3 = /* @__PURE__ */ dual(2, (self, key) => {
+    if (self.backing.has(key)) {
+      return some2(self.backing.get(key));
+    } else if (isSimpleKey(key)) {
+      return none2();
+    }
+    const hash2 = hash(key);
+    const bucket = self.buckets.get(hash2);
+    if (bucket === void 0) {
+      return none2();
+    }
+    return getFromBucket(self, bucket, key);
+  });
+  var isSimpleKey = /* @__PURE__ */ __name((u) => typeof u !== "object" && typeof u !== "function", "isSimpleKey");
+  var values = /* @__PURE__ */ __name((self) => self.backing.values(), "values");
+  var getFromBucket = /* @__PURE__ */ __name((self, bucket, key) => {
+    for (let i = 0, len = bucket.length; i < len; i++) {
+      if (equals(key, bucket[i])) {
+        const refKey = bucket[i];
+        return some2(self.backing.get(refKey));
+      }
+    }
+    return none2();
+  }, "getFromBucket");
+  var has2 = /* @__PURE__ */ dual(2, (self, key) => isSome2(get3(self, key)));
+  var set2 = /* @__PURE__ */ dual(3, (self, key, value) => {
+    if (self.backing.has(key) || isSimpleKey(key)) {
+      self.backing.set(key, value);
+      return self;
+    }
+    const hash2 = hash(key);
+    const bucket = self.buckets.get(hash2);
+    if (bucket === void 0) {
+      self.buckets.set(hash2, [key]);
+      self.backing.set(key, value);
+      return self;
+    }
+    let refKey = getRefKey(bucket, key);
+    if (refKey === void 0) {
+      bucket.push(key);
+      refKey = key;
+    }
+    self.backing.set(refKey, value);
+    return self;
+  });
+  var getRefKey = /* @__PURE__ */ __name((bucket, key) => {
+    for (let i = 0, len = bucket.length; i < len; i++) {
+      if (equals(key, bucket[i])) {
+        return bucket[i];
+      }
+    }
+  }, "getRefKey");
+  var remove2 = /* @__PURE__ */ dual(2, (self, key_) => {
+    if (isSimpleKey(key_)) {
+      self.backing.delete(key_);
+      return self;
+    }
+    const hash2 = hash(key_);
+    const bucket = self.buckets.get(hash2);
+    if (bucket === void 0) {
+      return self;
+    }
+    for (let i = 0, len = bucket.length; i < len; i++) {
+      const bkey = bucket[i];
+      if (bkey === key_ || equals(key_, bkey)) {
+        self.backing.delete(bkey);
+        bucket.splice(i, 1);
+        break;
+      }
+    }
+    if (bucket.length === 0) {
+      self.buckets.delete(hash2);
+    }
+    return self;
+  });
+
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Stream.js
-  var TypeId20 = "~effect/Stream";
-  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId20), "isStream");
+  var TypeId19 = "~effect/Stream";
+  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId19), "isStream");
   var fromChannel2 = fromChannel;
   var toChannel = /* @__PURE__ */ __name((stream) => stream.channel, "toChannel");
   var suspend4 = /* @__PURE__ */ __name((stream) => fromChannel2(suspend3(() => stream().channel)), "suspend");
@@ -10096,151 +10021,6 @@ ${prefix}}`;
     });
   }));
   var runDrain2 = /* @__PURE__ */ __name((self) => runDrain(self.channel), "runDrain");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
-  var TypeId21 = "~effect/SubscriptionRef";
-  var Proto3 = {
-    ...PipeInspectableProto,
-    [TypeId21]: {
-      _A: identity
-    },
-    toJSON() {
-      return {
-        _id: "SubscriptionRef",
-        value: this.value
-      };
-    }
-  };
-  var make16 = /* @__PURE__ */ __name((value) => map5(unbounded({
-    replay: 1
-  }), (pubsub) => {
-    const self = Object.create(Proto3);
-    self.semaphore = makeUnsafe6(1);
-    self.value = value;
-    self.pubsub = pubsub;
-    publishUnsafe(self.pubsub, value);
-    return self;
-  }), "make");
-  var changes = /* @__PURE__ */ __name((self) => fromPubSub(self.pubsub), "changes");
-  var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
-  var setUnsafe2 = /* @__PURE__ */ __name((self, value) => {
-    self.value = value;
-    publishUnsafe(self.pubsub, value);
-  }, "setUnsafe");
-  var modify = /* @__PURE__ */ dual(2, (self, modify3) => self.semaphore.withPermit(sync2(() => {
-    const [b, newValue] = modify3(self.value);
-    setUnsafe2(self, newValue);
-    return b;
-  })));
-  var set3 = /* @__PURE__ */ dual(2, (self, value) => self.semaphore.withPermit(sync2(() => setUnsafe2(self, value))));
-  var update = /* @__PURE__ */ dual(2, (self, update3) => self.semaphore.withPermit(sync2(() => setUnsafe2(self, update3(self.value)))));
-  var updateAndGet = /* @__PURE__ */ dual(2, (self, update3) => self.semaphore.withPermit(sync2(() => {
-    const newValue = update3(self.value);
-    setUnsafe2(self, newValue);
-    return newValue;
-  })));
-
-  // packages/runtime/src/game/flash/contract/Diagnostic.ts
-  var diagnosticTimestamp = /* @__PURE__ */ __name(() => performance.timeOrigin + performance.now(), "diagnosticTimestamp");
-  var makeDiagnostic = /* @__PURE__ */ __name((phase, operation, cause, args2) => ({
-    ...args2 === void 0 ? {} : { arguments: args2 },
-    cause,
-    operation,
-    phase,
-    timestamp: diagnosticTimestamp()
-  }), "makeDiagnostic");
-
-  // packages/runtime/src/game/flash/bridge/DiagnosticSink.ts
-  var noop = {
-    report: /* @__PURE__ */ __name(() => void 0, "report")
-  };
-  var debug = {
-    report: /* @__PURE__ */ __name((phase, operation, cause, args2) => {
-      console.warn(
-        "[flash:diagnostic]",
-        makeDiagnostic(phase, operation, cause, args2)
-      );
-    }, "report")
-  };
-  var DiagnosticSink = class extends Reference(
-    "lucent/renderer/flash/DiagnosticSink",
-    { defaultValue: /* @__PURE__ */ __name(() => noop, "defaultValue") }
-  ) {
-    static {
-      __name(this, "DiagnosticSink");
-    }
-  };
-  var noopLayer = succeed6(DiagnosticSink, noop);
-  var debugLayer = succeed6(DiagnosticSink, debug);
-
-  // packages/runtime/src/game/flash/bridge/Bridge.ts
-  var InvokeFailure = class extends TaggedError2("InvokeFailure") {
-    static {
-      __name(this, "InvokeFailure");
-    }
-  };
-  var makeBridge = /* @__PURE__ */ __name((target2) => gen2(function* () {
-    const swf = (target2 ?? window).swf;
-    const diagnosticSink = yield* DiagnosticSink;
-    const fail7 = /* @__PURE__ */ __name((method, cause, args2) => sync2(
-      () => diagnosticSink.report(
-        "invoke",
-        String(method),
-        cause,
-        method === "auth.login" ? void 0 : args2
-      )
-    ).pipe(as2(none2())), "fail");
-    const invoke = /* @__PURE__ */ __name((method, args2, schema) => try_2({
-      try: /* @__PURE__ */ __name(() => {
-        const candidate = swf[method];
-        if (typeof candidate !== "function") {
-          throw new Error(`Missing Flash method: ${String(method)}`);
-        }
-        return Reflect.apply(candidate, swf, [...args2 ?? []]);
-      }, "try"),
-      catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
-    }).pipe(
-      flatMap3(decodeUnknownEffect2(schema)),
-      map5(some2),
-      catch_2((cause) => fail7(method, cause, args2))
-    ), "invoke");
-    const invokeJson = /* @__PURE__ */ __name((method, args2, schema) => invoke(method, args2, Union2([String4, Unknown2])).pipe(
-      flatMap3(
-        match({
-          onNone: /* @__PURE__ */ __name(() => succeed7(none2()), "onNone"),
-          onSome: /* @__PURE__ */ __name((value) => {
-            if (typeof value !== "string") {
-              return decodeUnknownEffect2(schema)(value).pipe(
-                map5(some2),
-                catch_2((cause) => fail7(method, cause, args2))
-              );
-            }
-            return try_2({
-              try: /* @__PURE__ */ __name(() => JSON.parse(value), "try"),
-              catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
-            }).pipe(
-              flatMap3(decodeUnknownEffect2(schema)),
-              map5(some2),
-              catch_2((cause) => fail7(method, cause, args2))
-            );
-          }, "onSome")
-        })
-      )
-    ), "invokeJson");
-    return {
-      invoke,
-      invokeJson
-    };
-  }), "makeBridge");
-  var Bridge = class extends Service()(
-    "lucent/renderer/flash/Bridge",
-    { make: makeBridge() }
-  ) {
-    static {
-      __name(this, "Bridge");
-    }
-  };
-  var layer = effect(Bridge, Bridge.make);
 
   // packages/runtime/src/game/flash/contract/Callback.ts
   var Callback = Union2([
@@ -10527,8 +10307,8 @@ ${prefix}}`;
         return void 0;
     }
   }, "runtimeEvent");
-  var makeGateway = /* @__PURE__ */ __name((target2) => gen2(function* () {
-    const resolvedTarget = target2 ?? window;
+  var makeGateway = /* @__PURE__ */ __name((target) => gen2(function* () {
+    const resolvedTarget = target ?? window;
     const bridge = yield* Bridge;
     const diagnosticSink = yield* DiagnosticSink;
     const scope3 = yield* scope2;
@@ -12052,8 +11832,8 @@ ${prefix}}`;
       if (wasActive && previous.cancellationIssued || !(yield* isEnabled())) {
         return;
       }
-      const target2 = yield* readCombatTarget(bridge);
-      if (target2?.type !== "monster" || target2.monsterMapId !== event.monsterMapId) {
+      const target = yield* readCombatTarget(bridge);
+      if (target?.type !== "monster" || target.monsterMapId !== event.monsterMapId) {
         return;
       }
       yield* stopCombat(bridge);
@@ -12593,9 +12373,9 @@ ${prefix}}`;
   var normalizeCombatProfile = /* @__PURE__ */ __name((value) => normalizeProfile(value, DEFAULT_COMBAT_PROFILE_ID) ?? genericProfile(), "normalizeCombatProfile");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Ref.js
-  var TypeId22 = "~effect/Ref";
+  var TypeId20 = "~effect/Ref";
   var RefProto = {
-    [TypeId22]: {
+    [TypeId20]: {
       _A: identity
     },
     ...PipeInspectableProto,
@@ -12606,19 +12386,19 @@ ${prefix}}`;
       };
     }
   };
-  var makeUnsafe7 = /* @__PURE__ */ __name((value) => {
+  var makeUnsafe6 = /* @__PURE__ */ __name((value) => {
     const self = Object.create(RefProto);
-    self.ref = make12(value);
+    self.ref = make11(value);
     return self;
   }, "makeUnsafe");
-  var make17 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe7(value)), "make");
-  var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
-  var modify2 = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
+  var make15 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe6(value)), "make");
+  var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
+  var modify = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
     const [b, a] = f(self.ref.current);
     self.ref.current = a;
     return b;
   }));
-  var update2 = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
+  var update = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
     self.ref.current = f(self.ref.current);
   }));
 
@@ -12629,13 +12409,13 @@ ${prefix}}`;
     players,
     ...skill5ItemId === void 0 ? {} : { skill5ItemId }
   }), "makeCombatProfileRuntimeDeps");
-  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map5(make17({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
-  var resetCombatProfileCursor = /* @__PURE__ */ __name((cursor) => update2(cursor.state, (state) => ({
+  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map5(make15({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
+  var resetCombatProfileCursor = /* @__PURE__ */ __name((cursor) => update(cursor.state, (state) => ({
     index: 0,
     resetVersion: state.resetVersion + 1
   })), "resetCombatProfileCursor");
   var makeCombatProfileMessageTriggerState = /* @__PURE__ */ __name(() => gen2(function* () {
-    const state = yield* make17(/* @__PURE__ */ new Map());
+    const state = yield* make15(/* @__PURE__ */ new Map());
     const semaphore = yield* make14(1);
     return {
       semaphore,
@@ -12689,11 +12469,11 @@ ${prefix}}`;
     if (castTarget !== void 0) {
       return auraValue(castTarget.getAura(condition.auraName));
     }
-    const target2 = yield* deps.combat.target.get();
-    if (target2 === null) {
+    const target = yield* deps.combat.target.get();
+    if (target === null) {
       return 0;
     }
-    const aura = target2.type === "monster" ? yield* deps.combat.target.auras.get(condition.auraName) : yield* deps.player.auras.get(condition.auraName);
+    const aura = target.type === "monster" ? yield* deps.combat.target.auras.get(condition.auraName) : yield* deps.player.auras.get(condition.auraName);
     return auraValue(aura);
   }), "getTargetAura");
   var matchesAuraCondition = /* @__PURE__ */ __name((deps, condition, castTarget) => gen2(function* () {
@@ -12791,7 +12571,7 @@ ${prefix}}`;
           castTarget
         );
       }
-      const startState = yield* get5(cursor.state);
+      const startState = yield* get4(cursor.state);
       for (let offset = 0; offset < steps.length; offset += 1) {
         const stepIndex = (startState.index + offset) % steps.length;
         const step = steps[stepIndex];
@@ -12807,7 +12587,7 @@ ${prefix}}`;
         if (prepared === null) {
           continue;
         }
-        const resetVersionBeforeCast = (yield* get5(cursor.state)).resetVersion;
+        const resetVersionBeforeCast = (yield* get4(cursor.state)).resetVersion;
         const cast = yield* castPreparedCombatProfileStep(
           deps,
           step,
@@ -12815,7 +12595,7 @@ ${prefix}}`;
           castTarget
         );
         const nextIndex = (stepIndex + 1) % steps.length;
-        yield* update2(
+        yield* update(
           cursor.state,
           (state) => state.resetVersion === resetVersionBeforeCast ? { ...state, index: nextIndex } : state
         );
@@ -12836,7 +12616,7 @@ ${prefix}}`;
   var castCombatProfileMessageTrigger = /* @__PURE__ */ __name((deps, trigger, triggerIndex, event, state, now = Date.now()) => state.semaphore.withPermits(1)(
     gen2(function* () {
       const cooldownMs = trigger.cooldownMs ?? 0;
-      const lastCast = (yield* get5(state.state)).get(triggerIndex);
+      const lastCast = (yield* get4(state.state)).get(triggerIndex);
       if (lastCast !== void 0 && now - lastCast < cooldownMs) {
         return false;
       }
@@ -12851,7 +12631,7 @@ ${prefix}}`;
       if (!cast) {
         return false;
       }
-      yield* update2(state.state, (previous) => {
+      yield* update(state.state, (previous) => {
         const next = new Map(previous);
         next.set(triggerIndex, now);
         return next;
@@ -12946,7 +12726,7 @@ ${prefix}}`;
       const cursor = yield* makeCombatProfileCursor();
       const messageState = yield* makeCombatProfileMessageTriggerState();
       const actionGate = yield* make14(1);
-      const state = yield* make17({
+      const state = yield* make15({
         generation: 0,
         resetPending: false,
         target: void 0
@@ -12958,7 +12738,7 @@ ${prefix}}`;
       const handleMonsterDeath = fn2(
         "CombatProfileSession.handleMonsterDeath"
       )(function* (monsterMapId) {
-        const action = yield* modify2(
+        const action = yield* modify(
           state,
           (current) => {
             if (current.target?.monsterMapId !== monsterMapId) {
@@ -12978,7 +12758,7 @@ ${prefix}}`;
         );
         if (action === void 0 || !action.reset) return;
         yield* resetCombatProfileCursor(cursor);
-        yield* update2(
+        yield* update(
           state,
           (current) => current.generation === action.generation ? { ...current, resetPending: false } : current
         );
@@ -12995,11 +12775,11 @@ ${prefix}}`;
               )) {
                 return;
               }
-              const observed = yield* get5(state);
+              const observed = yield* get4(state);
               if (observed.resetPending) return;
               yield* actionGate.withPermits(1)(
                 gen2(function* () {
-                  const current = yield* get5(state);
+                  const current = yield* get4(state);
                   if (current.resetPending || current.generation !== observed.generation) {
                     return;
                   }
@@ -13024,7 +12804,7 @@ ${prefix}}`;
                       return;
                     }
                   }
-                  const beforeCast = yield* get5(state);
+                  const beforeCast = yield* get4(state);
                   if (beforeCast.resetPending || beforeCast.generation !== observed.generation) {
                     return;
                   }
@@ -13050,7 +12830,7 @@ ${prefix}}`;
       }
       const resolveTarget = fn2("CombatProfileSession.resolveTarget")(
         function* (monsters) {
-          const initial = yield* get5(state);
+          const initial = yield* get4(state);
           if (initial.resetPending) return void 0;
           const allowFallback = options.allowTargetFallback ?? true;
           const active = initial.target;
@@ -13063,7 +12843,7 @@ ${prefix}}`;
           if (active !== void 0 && projected === void 0 && active.confirmed) {
             const now = yield* currentTimeMillis2;
             if (active.missingSinceMs === void 0) {
-              yield* update2(
+              yield* update(
                 state,
                 (current) => current.generation === initial.generation && current.target?.monsterMapId === active.monsterMapId ? {
                   ...current,
@@ -13096,7 +12876,7 @@ ${prefix}}`;
           );
           if (selected === void 0) {
             if (active !== void 0 && !activeIsEligible) {
-              yield* update2(
+              yield* update(
                 state,
                 (current) => current.generation === initial.generation ? {
                   generation: current.generation + 1,
@@ -13107,7 +12887,7 @@ ${prefix}}`;
             }
             return void 0;
           }
-          return yield* modify2(
+          return yield* modify(
             state,
             (current) => {
               if (current.generation !== initial.generation || current.resetPending) {
@@ -13142,12 +12922,12 @@ ${prefix}}`;
           );
         }
       );
-      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get5(state).pipe(
+      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get4(state).pipe(
         map5(
           (current) => !current.resetPending && current.generation === lease.generation && current.target?.monsterMapId === lease.monster.monsterMapId
         )
       ), "leaseIsCurrent");
-      const confirmLease = /* @__PURE__ */ __name((lease) => modify2(state, (current) => {
+      const confirmLease = /* @__PURE__ */ __name((lease) => modify(state, (current) => {
         if (current.resetPending || current.generation !== lease.generation || current.target?.monsterMapId !== lease.monster.monsterMapId) {
           return [false, current];
         }
@@ -13343,7 +13123,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/internal/CombatProfileClass.ts
   var classList = new Intl.ListFormat("en", { type: "disjunction" });
-  var sameClass = /* @__PURE__ */ __name((left2, right2) => left2.localeCompare(right2, void 0, { sensitivity: "accent" }) === 0, "sameClass");
+  var sameClass = /* @__PURE__ */ __name((left, right) => left.localeCompare(right, void 0, { sensitivity: "accent" }) === 0, "sameClass");
   var getCombatProfileClassWarning = fn2(
     "getCombatProfileClassWarning"
   )(function* (deps, profile) {
@@ -13368,7 +13148,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/combatProfileConsumableClaims.ts
   var makeCombatProfileConsumableClaims = /* @__PURE__ */ __name(() => {
-    const semaphore = makeUnsafe6(1);
+    const semaphore = makeUnsafe5(1);
     let state;
     const acquire = fn2("CombatProfileConsumableClaims.acquire")(function* (itemId) {
       return yield* semaphore.withPermit(
@@ -13498,7 +13278,7 @@ ${prefix}}`;
     misc: "inventory.getMiscSlots"
   };
   var makeInventory = /* @__PURE__ */ __name((bridge, host4, house, wait) => {
-    const consumableEquipment = makeUnsafe6(1);
+    const consumableEquipment = makeUnsafe5(1);
     const getAll = /* @__PURE__ */ __name(() => readItems(host4, "inventory"), "getAll");
     const get6 = /* @__PURE__ */ __name((selector) => readItem(host4, "inventory", selector), "get");
     const getSlots = fn2("Inventory.getSlots")(function* (pool = "bag") {
@@ -13677,7 +13457,7 @@ ${prefix}}`;
           return false;
         }
         const items = yield* getAll();
-        let target2;
+        let target;
         for (const item of items) {
           if (item.category.trim().toLowerCase() === "enhancement") continue;
           const resolution = resolveEnhancementStrategy(
@@ -13689,12 +13469,12 @@ ${prefix}}`;
           if (!resolution.ok || normalized.slot !== void 0 && resolution.strategy.slot !== normalized.slot || !matchesAppliedEnhancement(item, resolution.strategy)) {
             continue;
           }
-          if (target2 === void 0 || (item.enhancement?.level ?? 0) > (target2.enhancement?.level ?? 0)) {
-            target2 = item;
+          if (target === void 0 || (item.enhancement?.level ?? 0) > (target.enhancement?.level ?? 0)) {
+            target = item;
           }
         }
-        if (target2 === void 0) return false;
-        return yield* equip(target2.itemId, options);
+        if (target === void 0) return false;
+        return yield* equip(target.itemId, options);
       }
     );
     const equipByEnhancement = /* @__PURE__ */ __name((selector, options) => equipByEnhancementEffect(selector, options), "equipByEnhancement");
@@ -13745,7 +13525,7 @@ ${prefix}}`;
   }), "unavailable");
   var makeCombatProfileConsumables = /* @__PURE__ */ __name((deps) => {
     const claims = makeCombatProfileConsumableClaims();
-    const preflights = makeUnsafe6(1);
+    const preflights = makeUnsafe5(1);
     const prepareUnlocked = fn2("CombatProfileConsumables.prepareUnlocked")(
       function* (profile) {
         if (!profileUsesSkill5(profile)) {
@@ -13851,18 +13631,18 @@ ${prefix}}`;
     });
   }, "normalizeSkillInterval");
   var makeCombat = /* @__PURE__ */ __name((bridge, antiCounter, host4, drops, events, inventory, map9, monsters, player, players, settings, temporary, wait) => {
-    const consumableCasts = makeUnsafe6(1);
+    const consumableCasts = makeUnsafe5(1);
     const targetValue = readCombatTarget(bridge);
     const targetAuras = /* @__PURE__ */ __name((options) => targetValue.pipe(
-      flatMap3((target3) => {
-        if (target3 === null) return succeed7([]);
-        return (target3.type === "monster" ? host4.read({
+      flatMap3((target2) => {
+        if (target2 === null) return succeed7([]);
+        return (target2.type === "monster" ? host4.read({
           kind: "monsterAuras",
-          monsterMapId: target3.monsterMapId,
+          monsterMapId: target2.monsterMapId,
           auraKind: options?.kind ?? null
         }) : host4.read({
           kind: "playerAuras",
-          entityId: target3.entityId,
+          entityId: target2.entityId,
           auraKind: options?.kind ?? null
         })).pipe(map5((auras) => auras.map(toLiveAura)));
       })
@@ -14044,9 +13824,9 @@ ${prefix}}`;
         ).pipe(map5(getOrElse(() => false)));
       });
     }, "attack");
-    const reachHuntTarget = /* @__PURE__ */ __name((target3) => {
-      if (target3 === null || target3.cell === "") return succeed7(null);
-      return player.jumpToCell(target3.cell).pipe(map5((reached) => reached ? target3 : null));
+    const reachHuntTarget = /* @__PURE__ */ __name((target2) => {
+      if (target2 === null || target2.cell === "") return succeed7(null);
+      return player.jumpToCell(target2.cell).pipe(map5((reached) => reached ? target2 : null));
     }, "reachHuntTarget");
     const hunt = /* @__PURE__ */ __name((selector, options) => {
       return monsters.getAll().pipe(
@@ -14059,10 +13839,10 @@ ${prefix}}`;
           for (const monster of matches) {
             cells.set(monster.cell, (cells.get(monster.cell) ?? 0) + 1);
           }
-          const target3 = matches.reduce(
+          const target2 = matches.reduce(
             (best, candidate) => (cells.get(candidate.cell) ?? 0) > (cells.get(best.cell) ?? 0) ? candidate : best
           );
-          return reachHuntTarget(target3);
+          return reachHuntTarget(target2);
         })
       );
     }, "hunt");
@@ -14098,7 +13878,7 @@ ${prefix}}`;
                   {
                     canUseSkill,
                     getConsumableSkillItem,
-                    target: target2,
+                    target,
                     useSkill
                   },
                   player,
@@ -14127,7 +13907,7 @@ ${prefix}}`;
         return session;
       });
     }, "makeKillProfileRuntime");
-    const fight = /* @__PURE__ */ __name((selector, options, runtime3) => {
+    const fight = /* @__PURE__ */ __name((selector, options, runtime2) => {
       const skills = normalizeSkills(options?.skills);
       const skillInterval = normalizeSkillInterval(options?.skillInterval);
       const attackOrder = [...options?.targetPriority ?? [], selector];
@@ -14142,8 +13922,8 @@ ${prefix}}`;
       });
       return forever3(
         gen2(function* () {
-          if (runtime3 !== null) {
-            const result3 = yield* runtime3.runCycle().pipe(orDie2);
+          if (runtime2 !== null) {
+            const result3 = yield* runtime2.runCycle().pipe(orDie2);
             if (result3.kind === "no-target") {
               yield* stopCombat2;
             }
@@ -14154,13 +13934,13 @@ ${prefix}}`;
             yield* sleep2("250 millis");
             return;
           }
-          const target3 = yield* selectTarget;
-          if (target3 === null) {
+          const target2 = yield* selectTarget;
+          if (target2 === null) {
             yield* stopCombat2;
             yield* sleep2("100 millis");
             return;
           }
-          if (!(yield* attack(target3.monsterMapId))) {
+          if (!(yield* attack(target2.monsterMapId))) {
             yield* sleep2("250 millis");
             return;
           }
@@ -14171,7 +13951,7 @@ ${prefix}}`;
         })
       );
     }, "fight");
-    const killWithRuntime = /* @__PURE__ */ __name((selector, options, runtime3) => gen2(function* () {
+    const killWithRuntime = /* @__PURE__ */ __name((selector, options, runtime2) => gen2(function* () {
       const startMap = yield* host4.read({ kind: "map" });
       const available = yield* monsters.getAvailable();
       const monster = available.find(
@@ -14185,7 +13965,7 @@ ${prefix}}`;
           type: "monster-death"
         },
         {
-          trigger: forkScoped2(fight(selector, options, runtime3)).pipe(
+          trigger: forkScoped2(fight(selector, options, runtime2)).pipe(
             as2(true)
           )
         }
@@ -14211,15 +13991,15 @@ ${prefix}}`;
     }), "killWithRuntime");
     const kill = /* @__PURE__ */ __name((selector, options) => scoped2(
       gen2(function* () {
-        const runtime3 = yield* makeKillProfileRuntime(selector, options);
-        return yield* killWithRuntime(selector, options, runtime3);
+        const runtime2 = yield* makeKillProfileRuntime(selector, options);
+        return yield* killWithRuntime(selector, options, runtime2);
       })
     ).pipe(ensuring2(stopCombat2)), "kill");
     const killFor = /* @__PURE__ */ __name((selector, item, requested, source, options) => {
       const wanted = Math.max(1, Math.trunc(requested ?? 1));
       return scoped2(
         gen2(function* () {
-          const runtime3 = yield* makeKillProfileRuntime(selector, options);
+          const runtime2 = yield* makeKillProfileRuntime(selector, options);
           const loop = gen2(function* () {
             while (true) {
               if (yield* source.contains(item, wanted)) return true;
@@ -14227,7 +14007,7 @@ ${prefix}}`;
                 yield* drops.accept(item);
                 if (yield* source.contains(item, wanted)) return true;
               }
-              if (!(yield* killWithRuntime(selector, options, runtime3))) {
+              if (!(yield* killWithRuntime(selector, options, runtime2))) {
                 yield* sleep2("100 millis");
               }
             }
@@ -14251,7 +14031,7 @@ ${prefix}}`;
     ), "getTargetAura");
     const hasTargetAura = /* @__PURE__ */ __name((name, options) => getTargetAura2(name, options).pipe(map5((aura) => aura !== null)), "hasTargetAura");
     const getTarget = /* @__PURE__ */ __name(() => targetValue, "getTarget");
-    const target2 = {
+    const target = {
       auras: {
         get: getTargetAura2,
         getAll: targetAuras,
@@ -14274,7 +14054,7 @@ ${prefix}}`;
       killForItem,
       killForTempItem,
       prepareCombatProfile,
-      target: target2,
+      target,
       useSkill
     };
   }, "makeCombat");
@@ -14709,8 +14489,20 @@ ${prefix}}`;
     const rank = /* @__PURE__ */ __name((cell) => cellKey(cell) === current ? 0 : occupiedCells.has(cellKey(cell)) ? 2 : 1, "rank");
     return cells.filter(
       (cell) => !transitionCells.has(cellKey(cell)) && !aggressiveCells.has(cellKey(cell))
-    ).toSorted((left2, right2) => rank(left2) - rank(right2));
+    ).toSorted((left, right) => rank(left) - rank(right));
   }, "combatExitCells");
+
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Random.js
+  var Random2 = Random;
+  var randomWith = /* @__PURE__ */ __name((f) => withFiber2((fiber2) => succeed7(f(fiber2.getRef(Random2)))), "randomWith");
+  var nextIntBetween = /* @__PURE__ */ __name((min3, max3, options) => {
+    const extra = options?.halfOpen === true ? 0 : 1;
+    return randomWith((r) => {
+      const minInt = Math.ceil(min3);
+      const maxInt = Math.floor(max3);
+      return Math.floor(r.nextDoubleUnsafe() * (maxInt - minInt + extra)) + minInt;
+    });
+  }, "nextIntBetween");
 
   // packages/runtime/src/game/flash/domain/MapTarget.ts
   var minimumPrivateRoom = MINIMUM_PRIVATE_ROOM;
@@ -14738,11 +14530,11 @@ ${prefix}}`;
     maximumRoom
   );
   var withRoomNumber = /* @__PURE__ */ __name((map9, room) => {
-    const target2 = splitRoom(map9);
-    if (target2.roomToken !== void 0 && parseRoom(target2.roomToken) !== void 0) {
-      return target2.map;
+    const target = splitRoom(map9);
+    if (target.roomToken !== void 0 && parseRoom(target.roomToken) !== void 0) {
+      return target.map;
     }
-    return `${target2.name}-${Math.max(1, Math.trunc(room))}`;
+    return `${target.name}-${Math.max(1, Math.trunc(room))}`;
   }, "withRoomNumber");
   var applyRoomPolicy = fn2("applyRoomPolicy")(function* (map9, policy) {
     const trimmed = map9.trim();
@@ -14751,20 +14543,20 @@ ${prefix}}`;
     return withRoomNumber(trimmed, room);
   });
   var parseMapTarget = /* @__PURE__ */ __name((map9) => gen2(function* () {
-    const target2 = splitRoom(map9);
-    if (target2.roomToken === void 0) {
+    const target = splitRoom(map9);
+    if (target.roomToken === void 0) {
       return {
-        map: target2.map,
-        name: target2.name,
+        map: target.map,
+        name: target.name,
         requireExactRoom: false
       };
     }
-    const fixedRoom = parseRoom(target2.roomToken);
+    const fixedRoom = parseRoom(target.roomToken);
     const roomNumber = fixedRoom ?? (yield* randomPrivateRoom);
     const requireExactRoom = fixedRoom === void 0 || fixedRoom >= minimumPrivateRoom && fixedRoom <= maximumRoom;
     return {
-      map: fixedRoom === void 0 ? `${target2.name}-${roomNumber}` : target2.map,
-      name: target2.name,
+      map: fixedRoom === void 0 ? `${target.name}-${roomNumber}` : target.map,
+      name: target.name,
       requireExactRoom,
       roomNumber
     };
@@ -14800,7 +14592,7 @@ ${prefix}}`;
     pe: optionalKey2(NonNegativeWireInt)
   });
   var OutfitPayloads = ArraySchema(OutfitPayload);
-  var sameText = /* @__PURE__ */ __name((left2, right2) => left2.localeCompare(right2, void 0, { sensitivity: "accent" }) === 0, "sameText");
+  var sameText = /* @__PURE__ */ __name((left, right) => left.localeCompare(right, void 0, { sensitivity: "accent" }) === 0, "sameText");
   var findClassItem = /* @__PURE__ */ __name((items, query) => items.find(
     (item) => item.classItem && (query === void 0 ? item.equipped : item.matches(query))
   ), "findClassItem");
@@ -15047,9 +14839,9 @@ ${prefix}}`;
       }
       return false;
     });
-    const joinMap = /* @__PURE__ */ __name((target2, options) => gen2(function* () {
+    const joinMap = /* @__PURE__ */ __name((target, options) => gen2(function* () {
       const { cell, pad } = options ?? {};
-      const destination = yield* parseMapTarget(target2);
+      const destination = yield* parseMapTarget(target);
       if (destination.map === "") return false;
       const targetCell = cell ?? (pad === void 0 ? void 0 : "Enter");
       const currentMap = yield* host4.read({ kind: "map" });
@@ -15199,7 +14991,7 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/api/Quests.ts
   var isQuestId = /* @__PURE__ */ __name((questId) => Number.isSafeInteger(questId) && questId > 0, "isQuestId");
   var makeQuests = /* @__PURE__ */ __name((bridge, host4, wait) => {
-    const loads = makeUnsafe6(1);
+    const loads = makeUnsafe5(1);
     let nextLoadAt = 0;
     const read = /* @__PURE__ */ __name((questId) => host4.read({ kind: "quest", id: questId }).pipe(
       map5((quest) => quest === null ? null : toLiveQuest(quest))
@@ -15853,6 +15645,157 @@ ${prefix}}`;
     )
   );
 
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/FiberMap.js
+  var TypeId21 = "~effect/FiberMap";
+  var isFiberMap = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId21), "isFiberMap");
+  var Proto2 = {
+    [TypeId21]: TypeId21,
+    [Symbol.iterator]() {
+      if (this.state._tag === "Closed") {
+        return empty2();
+      }
+      return this.state.backing[Symbol.iterator]();
+    },
+    ...PipeInspectableProto,
+    toJSON() {
+      return {
+        _id: "FiberMap",
+        state: this.state
+      };
+    }
+  };
+  var makeUnsafe7 = /* @__PURE__ */ __name((backing, deferred) => {
+    const self = Object.create(Proto2);
+    self.state = {
+      _tag: "Open",
+      backing
+    };
+    self.deferred = deferred;
+    return self;
+  }, "makeUnsafe");
+  var make16 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe7(empty4(), makeUnsafe2())), (map9) => suspend2(() => {
+    const state = map9.state;
+    if (state._tag === "Closed") return void_3;
+    map9.state = {
+      _tag: "Closed"
+    };
+    return interruptAll(values(state.backing)).pipe(into(map9.deferred));
+  })), "make");
+  var internalFiberId = -1;
+  var isInternalInterruption = /* @__PURE__ */ toPredicate(/* @__PURE__ */ compose(filterInterruptors, /* @__PURE__ */ has(internalFiberId)));
+  var setUnsafe = /* @__PURE__ */ dual((args2) => isFiberMap(args2[0]), (self, key, fiber2, options) => {
+    if (self.state._tag === "Closed") {
+      fiber2.interruptUnsafe(internalFiberId);
+      return;
+    }
+    const previous = get3(self.state.backing, key);
+    if (previous._tag === "Some") {
+      if (previous.value === fiber2) {
+        return;
+      } else if (options?.onlyIfMissing === true) {
+        fiber2.interruptUnsafe(internalFiberId);
+        return;
+      }
+    }
+    set2(self.state.backing, key, fiber2);
+    if (previous._tag === "Some") {
+      previous.value.interruptUnsafe(internalFiberId);
+    }
+    fiber2.addObserver((exit3) => {
+      if (self.state._tag === "Closed") {
+        return;
+      }
+      const current = get3(self.state.backing, key);
+      if (isSome2(current) && fiber2 === current.value) {
+        remove2(self.state.backing, key);
+      }
+      if (isFailure3(exit3) && (options?.propagateInterruption === true ? !isInternalInterruption(exit3.cause) : !hasInterruptsOnly2(exit3.cause))) {
+        doneUnsafe(self.deferred, exit3);
+      }
+    });
+  });
+  var hasUnsafe = /* @__PURE__ */ dual(2, (self, key) => self.state._tag === "Closed" ? false : has2(self.state.backing, key));
+  var has3 = /* @__PURE__ */ dual(2, (self, key) => sync2(() => hasUnsafe(self, key)));
+  var remove3 = /* @__PURE__ */ dual(2, (self, key) => suspend2(() => {
+    if (self.state._tag === "Closed") {
+      return void_3;
+    }
+    const fiber2 = get3(self.state.backing, key);
+    if (fiber2._tag === "None") {
+      return void_3;
+    }
+    return interruptAs(fiber2.value, internalFiberId);
+  }));
+  var constInterruptedFiber = /* @__PURE__ */ (function() {
+    let fiber2 = void 0;
+    return () => {
+      if (fiber2 === void 0) {
+        fiber2 = runFork2(interrupt3);
+      }
+      return fiber2;
+    };
+  })();
+  var run2 = /* @__PURE__ */ __name(function() {
+    const self = arguments[0];
+    if (isEffect2(arguments[2])) {
+      return runImpl(self, arguments[1], arguments[2], arguments[3]);
+    }
+    const key = arguments[1];
+    const options = arguments[2];
+    return (effect2) => runImpl(self, key, effect2, options);
+  }, "run");
+  var runImpl = /* @__PURE__ */ __name((self, key, effect2, options) => withFiber2((parent) => {
+    if (self.state._tag === "Closed") {
+      return interrupt3;
+    } else if (options?.onlyIfMissing === true && hasUnsafe(self, key)) {
+      return sync2(constInterruptedFiber);
+    }
+    const fiber2 = forkUnsafe(parent, effect2, options?.startImmediately ?? true, true);
+    setUnsafe(self, key, fiber2, options);
+    return succeed7(fiber2);
+  }), "runImpl");
+
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
+  var TypeId22 = "~effect/SubscriptionRef";
+  var Proto3 = {
+    ...PipeInspectableProto,
+    [TypeId22]: {
+      _A: identity
+    },
+    toJSON() {
+      return {
+        _id: "SubscriptionRef",
+        value: this.value
+      };
+    }
+  };
+  var make17 = /* @__PURE__ */ __name((value) => map5(unbounded({
+    replay: 1
+  }), (pubsub) => {
+    const self = Object.create(Proto3);
+    self.semaphore = makeUnsafe5(1);
+    self.value = value;
+    self.pubsub = pubsub;
+    publishUnsafe(self.pubsub, value);
+    return self;
+  }), "make");
+  var changes = /* @__PURE__ */ __name((self) => fromPubSub(self.pubsub), "changes");
+  var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
+  var setUnsafe2 = /* @__PURE__ */ __name((self, value) => {
+    self.value = value;
+    publishUnsafe(self.pubsub, value);
+  }, "setUnsafe");
+  var modify2 = /* @__PURE__ */ dual(2, (self, modify3) => self.semaphore.withPermit(sync2(() => {
+    const [b, newValue] = modify3(self.value);
+    setUnsafe2(self, newValue);
+    return b;
+  })));
+  var update2 = /* @__PURE__ */ dual(2, (self, update3) => self.semaphore.withPermit(sync2(() => setUnsafe2(self, update3(self.value)))));
+
+  // packages/runtime/src/game/automation/autoReloginConfig.ts
+  var defaultAutoReloginDelay = 3e3;
+  var normalizeAutoReloginDelay = /* @__PURE__ */ __name((delayMs) => Number.isFinite(delayMs) ? clamp2({ minimum: 0, maximum: 3e5 })(delayMs) : defaultAutoReloginDelay, "normalizeAutoReloginDelay");
+
   // packages/runtime/src/game/automation/retryLoop.ts
   var makeRetryAttempt = /* @__PURE__ */ __name((name) => {
     const failing = /* @__PURE__ */ new Set();
@@ -15883,256 +15826,6 @@ ${prefix}}`;
       );
     });
   }, "makeRetryAttempt");
-
-  // packages/runtime/src/game/automation/AutoZone.ts
-  var AutoZoneSupportedMap = Literals([
-    "ledgermayne",
-    "moreskulls",
-    "ultradage",
-    "darkcarnax",
-    "astralshrine",
-    "queeniona",
-    "magnumopus"
-  ]);
-  var snapshotState = /* @__PURE__ */ __name((state) => ({ ...state }), "snapshotState");
-  var zones = {
-    astralshrine: {
-      "": [
-        [461, 465],
-        [320, 325]
-      ],
-      A: [
-        [643, 708],
-        [445, 447]
-      ],
-      B: [
-        [199, 287],
-        [181, 205]
-      ]
-    },
-    darkcarnax: {
-      "": [
-        [480, 530],
-        [419, 432]
-      ],
-      A: [
-        [731, 850],
-        [431, 432]
-      ],
-      B: [
-        [54, 155],
-        [431, 432]
-      ]
-    },
-    ledgermayne: {
-      "": [
-        [431, 547],
-        [234, 239]
-      ],
-      A: [
-        [147, 276],
-        [353, 357]
-      ],
-      B: [
-        [727, 852],
-        [353, 356]
-      ]
-    },
-    magnumopus: {
-      "": [
-        [466, 470],
-        [344, 420]
-      ],
-      A: [
-        [682, 813],
-        [367, 384]
-      ],
-      B: [
-        [170, 285],
-        [377, 384]
-      ]
-    },
-    moreskulls: {
-      "": [
-        [778, 806],
-        [358, 361]
-      ],
-      A: [
-        [696, 802],
-        [445, 452]
-      ],
-      B: [
-        [677, 766],
-        [321, 324]
-      ]
-    },
-    ultradage: {
-      "": [
-        [481, 483],
-        [296, 300]
-      ],
-      A: [
-        [49, 164],
-        [406, 412]
-      ],
-      B: [
-        [797, 900],
-        [400, 402]
-      ]
-    }
-  };
-  var positiveCharges = ["Positive Charge", "Positive Charge?"];
-  var negativeCharges = ["Negative Charge", "Negative Charge?"];
-  var left = [
-    [111, 272],
-    [369, 379]
-  ];
-  var right = [
-    [746, 869],
-    [369, 379]
-  ];
-  var target = /* @__PURE__ */ __name((map9, zone, charge) => {
-    if (map9 !== "queeniona") {
-      const range3 = zones[map9]?.[zone];
-      return range3 === void 0 ? void 0 : { kind: "range", range: range3 };
-    }
-    if (zone !== "A" && zone !== "B") {
-      return { kind: "point", x: 490, y: 320 };
-    }
-    const range2 = zone === "A" ? charge === "positive" ? right : charge === "negative" ? left : void 0 : charge === "positive" ? left : charge === "negative" ? right : void 0;
-    return range2 === void 0 ? void 0 : { kind: "range", range: range2 };
-  }, "target");
-  var makeAutoZone = fnUntraced2(function* (api, fibers, initial = { enabled: false, map: void 0 }) {
-    const state = yield* make16(initial);
-    const retry4 = makeRetryAttempt("auto zone");
-    const move = /* @__PURE__ */ __name((destination) => destination.kind === "point" ? api.player.walkTo(destination) : all2({
-      x: nextIntBetween(
-        destination.range[0][0],
-        destination.range[0][1]
-      ),
-      y: nextIntBetween(
-        destination.range[1][0],
-        destination.range[1][1]
-      )
-    }).pipe(
-      flatMap3((position) => api.player.walkTo(position)),
-      asVoid2
-    ), "move");
-    const hasAura = /* @__PURE__ */ __name((names) => forEach2(names, (name) => api.player.auras.get(name)).pipe(
-      map5((auras) => auras.some((aura) => aura !== null))
-    ), "hasAura");
-    const transition = /* @__PURE__ */ __name((map9, zone) => gen2(function* () {
-      if (map9 === "queeniona") yield* sleep2("500 millis");
-      const current = yield* get4(state);
-      const activeMap = yield* api.map.getName();
-      if (!current.enabled || current.map !== map9 || activeMap.localeCompare(map9, void 0, { sensitivity: "accent" }) !== 0) {
-        return;
-      }
-      const positive = map9 === "queeniona" ? yield* hasAura(positiveCharges) : false;
-      const negative = map9 === "queeniona" && !positive ? yield* hasAura(negativeCharges) : false;
-      const destination = target(
-        map9,
-        zone,
-        positive ? "positive" : negative ? "negative" : "none"
-      );
-      if (destination !== void 0) yield* move(destination);
-    }), "transition");
-    const dispose = yield* api.events.on({ type: "zone" }, (event) => {
-      if (event.type !== "zone") return void_3;
-      return get4(state).pipe(
-        flatMap3((current) => {
-          const map9 = current.map;
-          return current.enabled && map9 === event.map ? run(
-            fibers,
-            "auto-zone-transition",
-            retry4(() => transition(map9, event.zone), "500 millis")
-          ).pipe(asVoid2) : void_3;
-        })
-      );
-    });
-    yield* addFinalizer3(() => sync2(dispose));
-    const applyConfig = /* @__PURE__ */ __name((config) => retry4(
-      () => gen2(function* () {
-        const previous = yield* get4(state);
-        const next = { enabled: config.enabled, map: config.map ?? void 0 };
-        yield* set3(state, next);
-        if (previous.map !== next.map || !next.enabled) {
-          yield* remove2(fibers, "auto-zone-transition");
-        }
-      }),
-      "500 millis"
-    ), "applyConfig");
-    const changes2 = changes(state);
-    const getMap = /* @__PURE__ */ __name(() => get4(state).pipe(map5((current) => current.map)), "getMap");
-    const getState = /* @__PURE__ */ __name(() => get4(state).pipe(map5(snapshotState)), "getState");
-    const isEnabled = /* @__PURE__ */ __name(() => get4(state).pipe(map5((current) => current.enabled)), "isEnabled");
-    const setEnabled = /* @__PURE__ */ __name((enabled) => updateAndGet(state, (current) => ({
-      ...current,
-      enabled
-    })).pipe(map5(snapshotState)), "setEnabled");
-    const setMap = /* @__PURE__ */ __name((map9) => {
-      return remove2(fibers, "auto-zone-transition").pipe(
-        andThen2(
-          updateAndGet(state, (current) => ({
-            ...current,
-            map: map9
-          })).pipe(map5(snapshotState))
-        )
-      );
-    }, "setMap");
-    return {
-      applyConfig,
-      changes: changes2,
-      getMap,
-      getState,
-      isEnabled,
-      setEnabled,
-      setMap
-    };
-  });
-  var layer6 = effectDiscard(
-    gen2(function* () {
-      const api = yield* Api;
-      const host4 = yield* HostState;
-      const fibers = yield* make7();
-      const config = yield* host4.read({ kind: "autoZone" });
-      const autoZone = yield* makeAutoZone(api, fibers, {
-        enabled: config.enabled,
-        map: config.map ?? void 0
-      });
-      const runFork3 = yield* runtime(fibers)();
-      const retry4 = makeRetryAttempt("auto zone host read");
-      const decodeConfig = decodeUnknownSync(
-        Struct({
-          enabled: Boolean3,
-          map: NullOr(AutoZoneSupportedMap)
-        })
-      );
-      const refresh = retry4(
-        () => host4.read({ kind: "autoZone" }).pipe(
-          map5(decodeConfig),
-          flatMap3(autoZone.applyConfig)
-        ),
-        "500 millis"
-      );
-      const onChange = /* @__PURE__ */ __name((config2) => {
-        runFork3("auto-zone-config", autoZone.applyConfig(config2));
-      }, "onChange");
-      const onLost = /* @__PURE__ */ __name(() => {
-        runFork3("auto-zone-config", refresh, { onlyIfMissing: true });
-      }, "onLost");
-      window.onAutoZoneChanged = onChange;
-      window.onHostEventsLost = onLost;
-      yield* addFinalizer3(() => sync2(() => {
-        if (window.onAutoZoneChanged === onChange) delete window.onAutoZoneChanged;
-        if (window.onHostEventsLost === onLost) delete window.onHostEventsLost;
-      }));
-    })
-  );
-
-  // packages/runtime/src/game/automation/autoReloginConfig.ts
-  var defaultAutoReloginDelay = 3e3;
-  var normalizeAutoReloginDelay = /* @__PURE__ */ __name((delayMs) => Number.isFinite(delayMs) ? clamp2({ minimum: 0, maximum: 3e5 })(delayMs) : defaultAutoReloginDelay, "normalizeAutoReloginDelay");
 
   // packages/runtime/src/host/asks.ts
   var pending = /* @__PURE__ */ new Map();
@@ -16215,7 +15908,7 @@ ${prefix}}`;
   }).pipe(catchCause2(() => void_3)) ?? void_3, "lifecycle");
   var makeAutoRelogin = fnUntraced2(function* (api, fibers, config, retry4 = makeRetryAttempt("auto relogin")) {
     const supervise = /* @__PURE__ */ __name((effect2, interval = 500) => retry4(() => effect2, interval), "supervise");
-    const state = yield* make16({
+    const state = yield* make17({
       attemptsRemaining: void 0,
       delayMs: config?.delayMs ?? defaultAutoReloginDelay,
       enabled: config?.enabled ?? false,
@@ -16227,12 +15920,12 @@ ${prefix}}`;
       username: void 0
     });
     const loginPermit = yield* make14(1);
-    const explicitRuns = yield* make17(0);
+    const explicitRuns = yield* make15(0);
     const records = /* @__PURE__ */ __name((current) => ({
       config: { enabled: current.enabled, delayMs: current.delayMs, server: current.server ?? null },
       status: { phase: current.phase, attemptsRemaining: current.attemptsRemaining ?? null, lastError: current.lastError ?? null, captured: current.username !== void 0 && current.password !== void 0, username: current.username ?? null }
     }), "records");
-    const getRecords = /* @__PURE__ */ __name(() => get4(state).pipe(map5(records)), "getRecords");
+    const getRecords = /* @__PURE__ */ __name(() => get5(state).pipe(map5(records)), "getRecords");
     const recordChanges = changes(state).pipe(map8(records));
     const getState = /* @__PURE__ */ __name(() => getRecords().pipe(map5(publicReloginState)), "getState");
     const changes2 = recordChanges.pipe(map8(publicReloginState));
@@ -16254,17 +15947,17 @@ ${prefix}}`;
       timeoutOption2(timeout2),
       map5(getOrElse(() => ({ tag: "completed", value: fallback })))
     ), "racePlayerReady");
-    const updateCurrentGeneration = /* @__PURE__ */ __name((generation, update3) => update(
+    const updateCurrentGeneration = /* @__PURE__ */ __name((generation, update3) => update2(
       state,
       (current) => current.enabled && current.generation === generation ? update3(current) : current
     ), "updateCurrentGeneration");
     const captureIfMissing = /* @__PURE__ */ __name(() => gen2(function* () {
-      const current = yield* get4(state);
+      const current = yield* get5(state);
       if (!current.enabled) return true;
       if (current.username !== void 0 && current.password !== void 0) {
         return true;
       }
-      const markAwaitingSession = update(
+      const markAwaitingSession = update2(
         state,
         (latest) => latest.enabled && (latest.username === void 0 || latest.password === void 0) && (latest.phase.tag !== "awaiting-session" || latest.attemptsRemaining !== void 0 || latest.lastError !== void 0) ? {
           ...latest,
@@ -16283,7 +15976,7 @@ ${prefix}}`;
         yield* markAwaitingSession;
         return false;
       }
-      yield* update(
+      yield* update2(
         state,
         (latest) => latest.enabled && (latest.username === void 0 || latest.password === void 0) ? {
           ...latest,
@@ -16296,7 +15989,7 @@ ${prefix}}`;
       );
       return true;
     }), "captureIfMissing");
-    const watchForCapturableSession = /* @__PURE__ */ __name(() => run(
+    const watchForCapturableSession = /* @__PURE__ */ __name(() => run2(
       fibers,
       captureWatcherKey,
       sleep2(captureInterval).pipe(
@@ -16313,7 +16006,7 @@ ${prefix}}`;
     const markReadySuccess = gen2(function* () {
       if (!(yield* isPlayerReady())) return false;
       yield* captureIfMissing();
-      yield* update(
+      yield* update2(
         state,
         (current) => current.enabled ? {
           ...current,
@@ -16536,14 +16229,14 @@ ${prefix}}`;
         phase
       })), "phase")
     }), "backgroundObserver");
-    const resolveBackgroundServer = /* @__PURE__ */ __name((generation) => get4(state).pipe(
+    const resolveBackgroundServer = /* @__PURE__ */ __name((generation) => get5(state).pipe(
       map5(
         (current) => current.enabled && current.generation === generation ? current.server : void 0
       )
     ), "resolveBackgroundServer");
     const waitForRecoveryDelay = /* @__PURE__ */ __name((generation, startedAt) => gen2(function* () {
       while (true) {
-        const current = yield* get4(state);
+        const current = yield* get5(state);
         if (!current.enabled || current.generation !== generation) return false;
         const elapsed = (yield* currentTimeMillis2) - startedAt;
         const remaining = Math.max(0, current.delayMs - elapsed);
@@ -16565,7 +16258,7 @@ ${prefix}}`;
       }
     }), "waitForRecoveryDelay");
     const runBackground = /* @__PURE__ */ __name((generation, startedAt, skipDelay, resumeAtServerSelect) => gen2(function* () {
-      const current = yield* get4(state);
+      const current = yield* get5(state);
       if (!current.enabled || current.generation !== generation || current.username === void 0 || current.password === void 0) {
         return;
       }
@@ -16582,7 +16275,7 @@ ${prefix}}`;
         yield* markReadySuccess;
         return;
       }
-      const latest = yield* get4(state);
+      const latest = yield* get5(state);
       if (!latest.enabled || latest.generation !== generation) return;
       const result3 = yield* result2(
         loginPermit.withPermits(1)(
@@ -16622,9 +16315,9 @@ ${prefix}}`;
       })))
     ))), "runBackground");
     const startRecovery = /* @__PURE__ */ __name((skipDelay = false, resumeAtServerSelect = false) => gen2(function* () {
-      if ((yield* get5(explicitRuns)) > 0) return;
+      if ((yield* get4(explicitRuns)) > 0) return;
       const startedAt = yield* currentTimeMillis2;
-      const generation = yield* modify(state, (current) => {
+      const generation = yield* modify2(state, (current) => {
         if (!current.enabled || current.username === void 0 || current.password === void 0 || current.phase.tag === "failed") {
           return [void 0, current];
         }
@@ -16639,18 +16332,18 @@ ${prefix}}`;
         ];
       });
       if (generation === void 0) return;
-      yield* run(
+      yield* run2(
         fibers,
         backgroundKey,
         runBackground(generation, startedAt, skipDelay, resumeAtServerSelect)
       );
     }), "startRecovery");
-    const watchForReady = /* @__PURE__ */ __name(() => run(
+    const watchForReady = /* @__PURE__ */ __name(() => run2(
       fibers,
       readyWatcherKey,
       waitForPlayerReady().pipe(
         flatMap3(
-          (ready) => ready ? remove2(fibers, backgroundKey).pipe(
+          (ready) => ready ? remove3(fibers, backgroundKey).pipe(
             andThen2(markReadySuccess)
           ) : void_3
         ),
@@ -16659,10 +16352,10 @@ ${prefix}}`;
       )
     ).pipe(asVoid2), "watchForReady");
     const runLogin = /* @__PURE__ */ __name((request) => acquireUseRelease2(
-      update2(explicitRuns, (count) => count + 1),
+      update(explicitRuns, (count) => count + 1),
       () => gen2(function* () {
-        yield* remove2(fibers, backgroundKey);
-        yield* update(
+        yield* remove3(fibers, backgroundKey);
+        yield* update2(
           state,
           (current) => current.enabled ? {
             ...current,
@@ -16674,7 +16367,7 @@ ${prefix}}`;
         );
         return yield* loginPermit.withPermits(1)(orchestrateLogin(request));
       }),
-      () => update2(explicitRuns, (count) => count - 1)
+      () => update(explicitRuns, (count) => count - 1)
     ).pipe(
       mapError3(
         (error) => new AutoReloginLoginError({
@@ -16683,10 +16376,10 @@ ${prefix}}`;
       )
     ), "runLogin");
     const stop = /* @__PURE__ */ __name(() => gen2(function* () {
-      yield* remove2(fibers, backgroundKey);
-      yield* remove2(fibers, captureWatcherKey);
-      yield* remove2(fibers, readyWatcherKey);
-      yield* update(
+      yield* remove3(fibers, backgroundKey);
+      yield* remove3(fibers, captureWatcherKey);
+      yield* remove3(fibers, readyWatcherKey);
+      yield* update2(
         state,
         (current) => ({
           ...current,
@@ -16702,9 +16395,9 @@ ${prefix}}`;
       return yield* getState();
     }), "stop");
     const start2 = /* @__PURE__ */ __name(() => gen2(function* () {
-      const current = yield* get4(state);
+      const current = yield* get5(state);
       if (!current.enabled) {
-        yield* update(
+        yield* update2(
           state,
           (value) => ({
             ...value,
@@ -16720,19 +16413,19 @@ ${prefix}}`;
       if (yield* isPlayerReady()) {
         yield* markReadySuccess;
       } else {
-        const latest = yield* get4(state);
+        const latest = yield* get5(state);
         if (latest.username === void 0 || latest.password === void 0) {
           yield* watchForCapturableSession();
         }
       }
       return yield* getState();
     }), "start");
-    const getDelayMs = /* @__PURE__ */ __name(() => get4(state).pipe(map5((current) => current.delayMs)), "getDelayMs");
-    const getServer = /* @__PURE__ */ __name(() => get4(state).pipe(map5((current) => current.server)), "getServer");
-    const isEnabled = /* @__PURE__ */ __name(() => get4(state).pipe(map5((current) => current.enabled)), "isEnabled");
+    const getDelayMs = /* @__PURE__ */ __name(() => get5(state).pipe(map5((current) => current.delayMs)), "getDelayMs");
+    const getServer = /* @__PURE__ */ __name(() => get5(state).pipe(map5((current) => current.server)), "getServer");
+    const isEnabled = /* @__PURE__ */ __name(() => get5(state).pipe(map5((current) => current.enabled)), "isEnabled");
     const reconfigure = /* @__PURE__ */ __name((update3) => gen2(function* () {
-      yield* update(state, update3);
-      const current = yield* get4(state);
+      yield* update2(state, update3);
+      const current = yield* get5(state);
       if (current.enabled && (current.username === void 0 || current.password === void 0)) {
         yield* watchForCapturableSession();
       }
@@ -16746,7 +16439,7 @@ ${prefix}}`;
     const setServer = /* @__PURE__ */ __name((server) => gen2(function* () {
       const servers = server === void 0 || server.trim() === "" ? [] : yield* api.auth.getServers();
       const nextServer = normalizeAutoReloginServer(server, servers);
-      const shouldRetry = yield* modify(state, (current2) => {
+      const shouldRetry = yield* modify2(state, (current2) => {
         const changed = current2.server !== nextServer;
         const retry5 = changed && current2.enabled && current2.phase.tag === "failed" && current2.username !== void 0 && current2.password !== void 0;
         return [
@@ -16765,7 +16458,7 @@ ${prefix}}`;
       if (shouldRetry && !(yield* isPlayerReady())) {
         yield* startRecovery(true, true);
       }
-      const current = yield* get4(state);
+      const current = yield* get5(state);
       if (current.enabled && (current.username === void 0 || current.password === void 0)) {
         yield* watchForCapturableSession();
       }
@@ -16778,8 +16471,8 @@ ${prefix}}`;
         if (event.type !== "connection") return void_3;
         if (event.status === "OnConnectionLost" || event.status === "OnConnectionFailed") {
           return gen2(function* () {
-            yield* remove2(fibers, readyWatcherKey);
-            if ((yield* get5(explicitRuns)) > 0 || (yield* has3(fibers, backgroundKey))) {
+            yield* remove3(fibers, readyWatcherKey);
+            if ((yield* get4(explicitRuns)) > 0 || (yield* has3(fibers, backgroundKey))) {
               return;
             }
             yield* startRecovery();
@@ -16829,7 +16522,7 @@ ${prefix}}`;
   var botRelogin = effectDiscard(gen2(function* () {
     const host4 = __host;
     const api = yield* Api;
-    const fibers = yield* make7();
+    const fibers = yield* make16();
     const ready = yield* make5();
     const queue = yield* dropping(1024);
     const runFork3 = runForkWith2(yield* context2());
@@ -17000,7 +16693,7 @@ ${prefix}}`;
   var botLayer = effectDiscard(
     flatMap3(Gateway, (gateway2) => gateway2.start())
   ).pipe(provideMerge(services));
-  var runtime2 = make6(mergeAll2(layer6, botRelogin).pipe(provideMerge(botLayer)));
-  runtime2.runSync(void_3);
+  var runtime = make6(botRelogin.pipe(provideMerge(botLayer)));
+  runtime.runSync(void_3);
   Object.assign(globalThis, { __lucent: Object.freeze({ turn, wake }) });
 })();

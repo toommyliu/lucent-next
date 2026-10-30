@@ -201,6 +201,14 @@ impl Session {
     }
 
     pub fn attach(&mut self) -> Option<ScriptLink> {
+        self.attach_events(false)
+    }
+
+    pub fn attach_auto_zone(&mut self) -> Option<ScriptLink> {
+        self.attach_events(true)
+    }
+
+    fn attach_events(&mut self, auto_zone_only: bool) -> Option<ScriptLink> {
         let player = self.player.as_ref()?;
         let attachment = AttachmentId(self.next_attachment);
         self.next_attachment = self
@@ -208,7 +216,10 @@ impl Session {
             .checked_add(1)
             .expect("script attachment IDs exhausted");
         let inbox = player.inbox.clone();
-        let (producer, events) = script_events(EVENT_CAPACITY);
+        let (mut producer, events) = script_events(EVENT_CAPACITY);
+        if auto_zone_only {
+            producer.only_auto_zone();
+        }
         inbox.post(player::Msg::Attach(attachment, producer));
         self.asks.shared.attach(attachment);
         Some(ScriptLink::new(

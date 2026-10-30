@@ -507,3 +507,18 @@ fn script_kills_leave_the_same_native_settings_policy_running() {
         1
     );
 }
+
+#[test]
+fn the_settings_policy_drops_its_unused_event_attachment() {
+    let (_host, mut session, _observer) = start();
+    let mut policy = lucent_host::automation::SettingsPolicy::new(
+        session.attach().unwrap(),
+        std::task::Waker::noop().clone(),
+    );
+    assert_eq!(
+        session.attached_link_count().recv_timeout(TIMEOUT).unwrap(),
+        1
+    );
+    drop(session);
+    assert_eq!(policy.advance(Instant::now()), None);
+}

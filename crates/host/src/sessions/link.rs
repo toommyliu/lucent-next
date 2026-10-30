@@ -60,6 +60,10 @@ impl ScriptLink {
         }
     }
 
+    pub(crate) fn inbox(&self) -> Inbox {
+        self.inbox.clone()
+    }
+
     pub fn player_status(&self) -> PlayerStatus {
         PlayerStatus(self.stopped.clone())
     }

@@ -14,31 +14,27 @@ use crate::{
 const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct SettingsPolicy {
-    link: ScriptLink,
+    inbox: crate::player::Inbox,
+    status: crate::PlayerStatus,
     settings: Settings,
     waker: Waker,
 }
 
 impl SettingsPolicy {
     pub fn new(link: ScriptLink, waker: Waker) -> Self {
-        link.set_waker(waker.clone());
         Self {
-            link,
+            inbox: link.inbox(),
+            status: link.player_status(),
             settings: Settings::new(Instant::now()),
             waker,
         }
     }
 
     pub fn advance(&mut self, now: Instant) -> Option<Instant> {
-        for _ in 0..64 {
-            match self.link.try_event() {
-                Ok(Some(_)) | Err(Error::Overflow) => {}
-                Ok(None) => return Some(self.settings.advance(&self.link, &self.waker, now)),
-                Err(_) => return None,
-            }
+        if self.status.is_stopped() {
+            return None;
         }
-        self.settings.advance(&self.link, &self.waker, now);
-        Some(now)
+        Some(self.settings.advance(&self.inbox, &self.waker, now))
     }
 }
 
@@ -49,15 +45,17 @@ trait SettingsHost {
     fn call(&self, method: &'static str) -> Pending<Value>;
 }
 
-impl SettingsHost for ScriptLink {
+impl SettingsHost for crate::player::Inbox {
     fn ready(&self) -> Pending<bool> {
-        self.readiness()
+        self.read_projection(|projection| projection.current_readiness().missing.is_empty())
     }
     fn cached_logged_in(&self) -> Pending<bool> {
-        self.cached_logged_in()
+        self.read_projection(|projection| projection.auth.logged_in)
     }
     fn command(&self, command: Command) -> Pending<String> {
-        self.command(command)
+        let (reply, pending) = Pending::channel();
+        self.post(crate::player::Msg::Command(command, reply));
+        pending
     }
     fn call(&self, method: &'static str) -> Pending<Value> {
         self.call_loader(method, vec![])

@@ -202,6 +202,7 @@ pub enum ScriptEvent {
 }
 
 pub(crate) struct ScriptEventSender {
+    auto_zone_only: bool,
     events: Option<EventSender<ScriptEvent>>,
     waker: Arc<Mutex<Option<Waker>>>,
 }
@@ -216,6 +217,7 @@ pub(crate) fn script_events(capacity: usize) -> (ScriptEventSender, ScriptEvents
     let waker = Arc::new(Mutex::new(None));
     (
         ScriptEventSender {
+            auto_zone_only: false,
             events: Some(sender),
             waker: waker.clone(),
         },
@@ -224,7 +226,24 @@ pub(crate) fn script_events(capacity: usize) -> (ScriptEventSender, ScriptEvents
 }
 
 impl ScriptEventSender {
+    pub(crate) fn only_auto_zone(&mut self) {
+        self.auto_zone_only = true;
+    }
+
+    pub(crate) fn accepts(&self, event: &ScriptEvent) -> bool {
+        !self.auto_zone_only
+            || matches!(
+                event,
+                ScriptEvent::AutoZoneChanged { .. } | ScriptEvent::Invalidated
+            )
+            || matches!(event, ScriptEvent::Loader { projected, .. }
+                if projected.iter().any(|event| matches!(event, ProjectionEvent::Zone { .. })))
+    }
+
     pub(crate) fn send(&self, event: ScriptEvent) {
+        if !self.accepts(&event) {
+            return;
+        }
         self.events.as_ref().unwrap().send(event);
         self.wake();
     }
@@ -433,6 +452,60 @@ mod tests {
             self.seen.send(pending.try_recv()).unwrap();
             pending.set_waker(Waker::from(self.clone()));
         }
+    }
+
+    #[test]
+    fn auto_zone_streams_wake_only_for_zones_config_invalidation_and_close() {
+        struct Count(std::sync::atomic::AtomicUsize);
+        impl std::task::Wake for Count {
+            fn wake(self: Arc<Self>) {
+                self.0.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        let (mut producer, events) = script_events(2);
+        producer.only_auto_zone();
+        let count = Arc::new(Count(std::sync::atomic::AtomicUsize::new(0)));
+        events.set_waker(Waker::from(count.clone()));
+        for _ in 0..2048 {
+            producer.send(ScriptEvent::Loader {
+                event: Event {
+                    name: "onDebug".into(),
+                    args: vec![],
+                },
+                projected: vec![],
+            });
+        }
+        assert_eq!(count.0.load(Ordering::Relaxed), 0);
+        assert_eq!(events.try_recv(), Ok(None));
+        producer.send(ScriptEvent::Loader {
+            event: Event {
+                name: "onExtensionResponse".into(),
+                args: vec![],
+            },
+            projected: vec![ProjectionEvent::Zone {
+                map: "ledgermayne".into(),
+                zone: "A".into(),
+            }],
+        });
+        assert_eq!(count.0.load(Ordering::Relaxed), 1);
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Some(ScriptEvent::Loader { .. }))
+        ));
+        producer.send(ScriptEvent::AutoZoneChanged {
+            config: Default::default(),
+        });
+        assert_eq!(count.0.load(Ordering::Relaxed), 2);
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Some(ScriptEvent::AutoZoneChanged { .. }))
+        ));
+        producer.send(ScriptEvent::Invalidated);
+        assert_eq!(count.0.load(Ordering::Relaxed), 3);
+        assert_eq!(events.try_recv(), Ok(Some(ScriptEvent::Invalidated)));
+        drop(producer);
+        assert_eq!(count.0.load(Ordering::Relaxed), 4);
+        assert_eq!(events.try_recv(), Err(Error::Stopped));
     }
 
     #[test]
