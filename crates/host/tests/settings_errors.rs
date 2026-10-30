@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 #[path = "../../runtime/tests/common/logs.rs"]
 mod logs;
 
