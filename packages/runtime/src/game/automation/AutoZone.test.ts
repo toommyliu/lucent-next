@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FiberMap from "effect/FiberMap";
 import * as Ref from "effect/Ref";
@@ -59,4 +60,43 @@ describe("AutoZone", () => {
       expect(yield* autoZone.getState()).toEqual({ enabled: true, map: "ledgermayne" });
     }),
   );
+  for (const change of ["map", "disable"] as const) {
+    it.effect(`cancels an active walk on ${change}`, () =>
+      Effect.gen(function* () {
+        const started = yield* Deferred.make<void>();
+        const walking = yield* Ref.make(false);
+        const interrupted = yield* Ref.make(0);
+        const fibers = yield* FiberMap.make<string>();
+        let handleEvent: ((event: Event) => Effect.Effect<void>) | undefined;
+        const api = {
+          events: {
+            on: (_selector: EventSelector | undefined, handler: (event: Event) => Effect.Effect<void>) => {
+              handleEvent = handler;
+              return Effect.succeed(() => undefined);
+            },
+          },
+          map: { getName: () => Effect.succeed("ledgermayne") },
+          player: {
+            walkTo: (_position: Position) => Ref.set(walking, true).pipe(
+              Effect.andThen(Deferred.succeed(started, undefined)),
+              Effect.andThen(Effect.never),
+              Effect.onInterrupt(() => Ref.update(interrupted, (count) => count + 1).pipe(
+                Effect.andThen(Ref.set(walking, false)),
+              )),
+            ),
+          },
+        } as unknown as ApiService;
+        const autoZone = yield* makeAutoZone(api, fibers, { enabled: true, map: "ledgermayne" });
+        yield* handleEvent!({ type: "zone", map: "ledgermayne", zone: "A" });
+        yield* Deferred.await(started);
+        expect(yield* Ref.get(walking)).toBe(true);
+        yield* autoZone.applyConfig(change === "map"
+          ? { enabled: true, map: "moreskulls" }
+          : { enabled: false, map: "ledgermayne" });
+        expect(yield* Ref.get(interrupted)).toBe(1);
+        expect(yield* Ref.get(walking)).toBe(false);
+      }),
+    );
+  }
+
 });
