@@ -392,7 +392,6 @@ fn collect_events(
             Ok(Some(event)) => items.push(host::Item::from(event)),
             Ok(None) => return Some(items),
             Err(EventError::Overflow) => {
-                items.clear();
                 items.push(host::Item::EventsLost);
             }
             Err(_) => return None,
