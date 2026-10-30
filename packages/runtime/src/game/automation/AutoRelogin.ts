@@ -823,7 +823,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         );
       }
 
-      yield* captureIfMissing();
+      yield* captureIfMissing(true);
       if (yield* isPlayerReady()) {
         yield* markReadySuccess;
       } else {

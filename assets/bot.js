@@ -16749,7 +16749,7 @@ ${prefix}}`;
           })
         );
       }
-      yield* captureIfMissing();
+      yield* captureIfMissing(true);
       if (yield* isPlayerReady()) {
         yield* markReadySuccess;
       } else {

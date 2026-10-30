@@ -1603,7 +1603,7 @@ fn set_enabled_captures_cached_credentials_when_refresh_fails() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn relogin_boundary_failures_answer_once_and_allow_the_next_capture() {
+fn relogin_boundary_failures_fall_back_to_cached_credentials() {
     let logs = common::logs::Logs::default();
     let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
@@ -1619,7 +1619,7 @@ fn relogin_boundary_failures_answer_once_and_allow_the_next_capture() {
         };
         null;
     "#).wait::<()>(TIMEOUT).unwrap();
-    for attempt in 0..3 {
+    for _ in 0..3 {
         let run = common::start(
             &mut session,
             common::loose(&[(
@@ -1633,18 +1633,10 @@ fn relogin_boundary_failures_answer_once_and_allow_the_next_capture() {
             )]),
             Default::default(),
         );
-        let outcome = run.wait(TIMEOUT).unwrap();
-        if attempt < 2 {
-            assert!(
-                matches!(
-                    outcome,
-                    lucent_protocol::script::ScriptOutcome::Failed { .. }
-                ),
-                "{outcome:?}"
-            );
-        } else {
-            assert_eq!(outcome, lucent_protocol::script::ScriptOutcome::Completed);
-        }
+        assert_eq!(
+            run.wait(TIMEOUT).unwrap(),
+            lucent_protocol::script::ScriptOutcome::Completed
+        );
     }
     let warnings: Vec<_> = logs
         .messages(tracing::Level::WARN)
@@ -1660,7 +1652,7 @@ fn relogin_boundary_failures_answer_once_and_allow_the_next_capture() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn malformed_relogin_replies_fail_the_ask_and_allow_the_next_capture() {
+fn relogin_reply_errors_allow_the_next_capture() {
     for reply in ["{}", "{"] {
         let logs = common::logs::Logs::default();
         let dispatch = logs.dispatch();
@@ -1689,14 +1681,11 @@ fn malformed_relogin_replies_fail_the_ask_and_allow_the_next_capture() {
                 Default::default(),
             );
             let outcome = run.wait(TIMEOUT).unwrap();
-            if attempt < 2 {
-                assert!(
-                    matches!(
-                        outcome,
-                        lucent_protocol::script::ScriptOutcome::Failed { .. }
-                    ),
-                    "{outcome:?}"
-                );
+            if reply == "{}" && attempt < 2 {
+                let lucent_protocol::script::ScriptOutcome::Failed { message, .. } = outcome else {
+                    panic!("expected a failed ask, got {outcome:?}");
+                };
+                assert_eq!(message, "The bot request failed");
             } else {
                 assert_eq!(outcome, lucent_protocol::script::ScriptOutcome::Completed);
             }
