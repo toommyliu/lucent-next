@@ -15566,7 +15566,8 @@ ${prefix}}`;
   });
   var invoke = /* @__PURE__ */ __name((method, args2, schema) => sync2(() => {
     const reply = callHost("swf", method, JSON.stringify(args2 ?? []));
-    return reply === void 0 ? none2() : some2(decodeUnknownSync(schema)(JSON.parse(reply)));
+    const value = reply === void 0 ? void 0 : JSON.parse(reply);
+    return some2(decodeUnknownSync(schema)(value));
   }), "invoke");
   var bridgeLayer = succeed6(Bridge, {
     invoke,

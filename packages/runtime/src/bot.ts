@@ -31,9 +31,8 @@ const readiness = Schema.Struct({
 const invoke: BridgeService["invoke"] = (method, args, schema) =>
   Effect.sync(() => {
     const reply = callHost("swf", method, JSON.stringify(args ?? []));
-    return reply === undefined
-      ? Option.none()
-      : Option.some(Schema.decodeUnknownSync(schema)(JSON.parse(reply)));
+    const value: unknown = reply === undefined ? undefined : JSON.parse(reply);
+    return Option.some(Schema.decodeUnknownSync(schema)(value));
   });
 
 const bridgeLayer = Layer.succeed(Bridge, {
