@@ -21,16 +21,22 @@ describe("retryLoop", () => {
       let secondAttempts = 0;
       yield* makeRetryLoop("first")(() => {
         firstAttempts++;
-        return firstFails ? Effect.fail(new Error("first unavailable")) : Effect.void;
+        return firstFails
+          ? Effect.fail(new Error("first unavailable"))
+          : Effect.void;
       }, 500).pipe(Effect.forkScoped);
       yield* makeRetryLoop("second")(() => {
         secondAttempts++;
-        return secondFails ? Effect.fail(new Error("second unavailable")) : Effect.void;
+        return secondFails
+          ? Effect.fail(new Error("second unavailable"))
+          : Effect.void;
       }, 500).pipe(Effect.forkScoped);
 
       yield* advance(1000);
       expect([firstAttempts, secondAttempts]).toEqual([3, 3]);
-      expect(warn.mock.calls.map(([message]) => message)).toEqual(["first tick failed"]);
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([
+        "first tick failed",
+      ]);
       expect(info.mock.calls).toEqual([]);
 
       secondFails = true;
@@ -52,7 +58,10 @@ describe("retryLoop", () => {
       ]);
       secondFails = false;
       yield* advance(500);
-      expect(info.mock.calls).toEqual([["first recovered"], ["second recovered"]]);
+      expect(info.mock.calls).toEqual([
+        ["first recovered"],
+        ["second recovered"],
+      ]);
       firstFails = false;
       yield* advance(500);
       expect(info.mock.calls).toEqual([

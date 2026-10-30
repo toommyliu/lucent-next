@@ -8699,8 +8699,8 @@ ${prefix}}`;
     }
     return self.strategy.handleSurplus(self.pubsub, self.subscribers, [value], self.shutdownFlag, self.ended);
   }));
-  var subscribe = /* @__PURE__ */ __name((self) => uninterruptible2(contextWith2((services) => {
-    const localScope = get(services, Scope);
+  var subscribe = /* @__PURE__ */ __name((self) => uninterruptible2(contextWith2((services2) => {
+    const localScope = get(services2, Scope);
     const scope3 = forkUnsafe2(self.scope);
     const subscription = makeSubscriptionUnsafe(self.pubsub, self.subscribers, self.strategy, self.ended);
     return addFinalizer2(scope3, unsubscribe(subscription)).pipe(andThen2(addFinalizerExit(localScope, (exit3) => close(scope3, exit3))), as2(subscription));
@@ -11262,15 +11262,15 @@ ${prefix}}`;
   var layer3 = effect(
     HostState,
     gen2(function* () {
-      const host3 = __host;
+      const host4 = __host;
       const diagnosticSink = yield* DiagnosticSink;
       const read = /* @__PURE__ */ __name((query) => sync2(
-        () => JSON.parse(host3.read(JSON.stringify(query)))
+        () => JSON.parse(host4.read(JSON.stringify(query)))
       ), "read");
       const command = /* @__PURE__ */ __name((command2) => sync2(() => {
         try {
           return some2(
-            JSON.parse(host3.command(JSON.stringify(command2)))
+            JSON.parse(host4.command(JSON.stringify(command2)))
           );
         } catch (cause) {
           diagnosticSink.report(
@@ -11294,12 +11294,12 @@ ${prefix}}`;
     const fields = selector;
     return isFiniteNumber(fields["shopItemId"]) || isFiniteNumber(fields["itemId"]) || isFiniteNumber(fields["monsterMapId"]) || typeof fields["name"] === "string";
   }, "isSelectable");
-  var readItem = /* @__PURE__ */ __name((host3, container, selector) => isSelectable(selector) ? host3.read({ kind: "item", container, selector }).pipe(map4((item) => item === null ? null : toLiveItem(item))) : succeed7(null), "readItem");
-  var readItems = /* @__PURE__ */ __name((host3, container) => host3.read({ kind: "items", container }).pipe(map4((items) => items.map(toLiveItem))), "readItems");
-  var itemQuantity = /* @__PURE__ */ __name((host3, container, selector) => readItem(host3, container, selector).pipe(
+  var readItem = /* @__PURE__ */ __name((host4, container, selector) => isSelectable(selector) ? host4.read({ kind: "item", container, selector }).pipe(map4((item) => item === null ? null : toLiveItem(item))) : succeed7(null), "readItem");
+  var readItems = /* @__PURE__ */ __name((host4, container) => host4.read({ kind: "items", container }).pipe(map4((items) => items.map(toLiveItem))), "readItems");
+  var itemQuantity = /* @__PURE__ */ __name((host4, container, selector) => readItem(host4, container, selector).pipe(
     map4((item) => item?.quantity ?? 0)
   ), "itemQuantity");
-  var isHydrated = /* @__PURE__ */ __name((host3, container) => host3.read({ kind: "itemHydration", container }).pipe(map4((version) => version > 0)), "isHydrated");
+  var isHydrated = /* @__PURE__ */ __name((host4, container) => host4.read({ kind: "itemHydration", container }).pipe(map4((version) => version > 0)), "isHydrated");
 
   // packages/runtime/src/game/flash/api/Auth.ts
   var Credentials = Struct({
@@ -11324,9 +11324,9 @@ ${prefix}}`;
   var decodeCredentials = decodeUnknownOption2(Credentials);
   var temporaryKickFallbackMs = 6e4;
   var temporaryKickMaximumMs = 7e4;
-  var makeAuth = /* @__PURE__ */ __name((bridge, host3, wait) => {
-    const cached2 = host3.read({ kind: "auth" });
-    const loggedIn = host3.command({ kind: "refreshLoggedIn" }).pipe(
+  var makeAuth = /* @__PURE__ */ __name((bridge, host4, wait) => {
+    const cached2 = host4.read({ kind: "auth" });
+    const loggedIn = host4.command({ kind: "refreshLoggedIn" }).pipe(
       flatMap3(
         match({
           onNone: /* @__PURE__ */ __name(() => cached2.pipe(map4((auth) => auth.loggedIn)), "onNone"),
@@ -11334,7 +11334,7 @@ ${prefix}}`;
         })
       )
     );
-    const currentCredentials = host3.command({ kind: "refreshCredentials" }).pipe(
+    const currentCredentials = host4.command({ kind: "refreshCredentials" }).pipe(
       flatMap3(
         match({
           onNone: /* @__PURE__ */ __name(() => cached2, "onNone"),
@@ -11418,7 +11418,7 @@ ${prefix}}`;
       });
     }, "connectTo");
     const getPassword = /* @__PURE__ */ __name(() => currentCredentials.pipe(map4((current) => current.password)), "getPassword");
-    const getServers = /* @__PURE__ */ __name(() => host3.command({ kind: "refreshServers" }).pipe(
+    const getServers = /* @__PURE__ */ __name(() => host4.command({ kind: "refreshServers" }).pipe(
       flatMap3(
         match({
           onNone: /* @__PURE__ */ __name(() => cached2.pipe(map4((auth) => auth.servers)), "onNone"),
@@ -11441,7 +11441,7 @@ ${prefix}}`;
       }
       return waitForTemporaryKickClear.pipe(
         flatMap3(
-          (ready) => ready ? host3.command({
+          (ready) => ready ? host4.command({
             kind: "login",
             username: credentials.value.username,
             password: credentials.value.password
@@ -11449,7 +11449,7 @@ ${prefix}}`;
         )
       );
     }, "login");
-    const logout = /* @__PURE__ */ __name(() => host3.command({ kind: "logout" }).pipe(asVoid2), "logout");
+    const logout = /* @__PURE__ */ __name(() => host4.command({ kind: "logout" }).pipe(asVoid2), "logout");
     return {
       connectTo,
       getPassword,
@@ -11605,18 +11605,18 @@ ${prefix}}`;
       (current) => current !== null ? succeed7(true) : house.getAvailableSlots().pipe(map4((available) => available > 0))
     )
   ), "houseCanAccept");
-  var makeBank = fnUntraced2(function* (bridge, host3, auth, inventory, house, wait) {
+  var makeBank = fnUntraced2(function* (bridge, host4, auth, inventory, house, wait) {
     const loads = yield* make13(1);
     const opens = yield* make13(1);
     const isOpen = /* @__PURE__ */ __name(() => bridge.invoke("bank.isOpen", void 0, Boolean3).pipe(map4(getOrElse(() => false))), "isOpen");
-    const getAll = /* @__PURE__ */ __name(() => isHydrated(host3, "bank").pipe(
+    const getAll = /* @__PURE__ */ __name(() => isHydrated(host4, "bank").pipe(
       flatMap3(
-        (hydrated) => hydrated ? readItems(host3, "bank") : succeed7([])
+        (hydrated) => hydrated ? readItems(host4, "bank") : succeed7([])
       )
     ), "getAll");
-    const get4 = /* @__PURE__ */ __name((selector) => isHydrated(host3, "bank").pipe(
+    const get4 = /* @__PURE__ */ __name((selector) => isHydrated(host4, "bank").pipe(
       flatMap3(
-        (hydrated) => hydrated ? readItem(host3, "bank", selector) : succeed7(null)
+        (hydrated) => hydrated ? readItem(host4, "bank", selector) : succeed7(null)
       )
     ), "get");
     const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("bank.getSlots", void 0, WireInt).pipe(map4(getOrElse(() => 0))), "getSlots");
@@ -11626,7 +11626,7 @@ ${prefix}}`;
       return loads.withPermits(1)(
         gen2(function* () {
           if (!(yield* auth.isLoggedIn())) return false;
-          const version = yield* host3.read({
+          const version = yield* host4.read({
             kind: "itemHydration",
             container: "bank"
           });
@@ -11642,7 +11642,7 @@ ${prefix}}`;
             timeout: "10 seconds"
           });
           if (!loaded) return false;
-          const refreshed = yield* host3.command({
+          const refreshed = yield* host4.command({
             kind: "refreshContainer",
             container: "bank"
           });
@@ -11697,8 +11697,8 @@ ${prefix}}`;
         );
         if (packet === null || response?.bSuccess === false) return false;
         const [projectedInventoryItem, projectedBankItem] = yield* all2([
-          readItem(host3, "inventory", inventoryItem.itemId),
-          readItem(host3, "bank", inventoryItem.itemId)
+          readItem(host4, "inventory", inventoryItem.itemId),
+          readItem(host4, "bank", inventoryItem.itemId)
         ]);
         return projectedInventoryItem === null && projectedBankItem !== null;
       });
@@ -11735,9 +11735,9 @@ ${prefix}}`;
         );
         if (packet === null || response?.bSuccess === false) return false;
         const [bank, inventoryItem, houseItem] = yield* all2([
-          readItem(host3, "bank", bankItem.itemId),
-          readItem(host3, "inventory", bankItem.itemId),
-          readItem(host3, "house", bankItem.itemId)
+          readItem(host4, "bank", bankItem.itemId),
+          readItem(host4, "inventory", bankItem.itemId),
+          readItem(host4, "house", bankItem.itemId)
         ]);
         return bank === null && (inventoryItem !== null || houseItem !== null);
       });
@@ -11778,9 +11778,9 @@ ${prefix}}`;
         );
         if (packet === null) return false;
         const [newBankItem, newInventoryItem, newHouseItem] = yield* all2([
-          readItem(host3, "bank", inventoryItem.itemId),
-          readItem(host3, "inventory", bankItem.itemId),
-          readItem(host3, "house", bankItem.itemId)
+          readItem(host4, "bank", inventoryItem.itemId),
+          readItem(host4, "inventory", bankItem.itemId),
+          readItem(host4, "house", bankItem.itemId)
         ]);
         return newBankItem !== null && (newInventoryItem !== null || newHouseItem !== null);
       });
@@ -12995,15 +12995,15 @@ ${prefix}}`;
     bag: "inventory.getSlots",
     misc: "inventory.getMiscSlots"
   };
-  var makeInventory = /* @__PURE__ */ __name((bridge, host3, house, wait) => {
+  var makeInventory = /* @__PURE__ */ __name((bridge, host4, house, wait) => {
     const consumableEquipment = makeUnsafe5(1);
-    const getAll = /* @__PURE__ */ __name(() => readItems(host3, "inventory"), "getAll");
-    const get4 = /* @__PURE__ */ __name((selector) => readItem(host3, "inventory", selector), "get");
+    const getAll = /* @__PURE__ */ __name(() => readItems(host4, "inventory"), "getAll");
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "inventory", selector), "get");
     const getSlots = fn2("Inventory.getSlots")(function* (pool = "bag") {
-      if (!(yield* isHydrated(host3, "inventory"))) return 0;
+      if (!(yield* isHydrated(host4, "inventory"))) return 0;
       return yield* bridge.invoke(slotMethods[pool], void 0, WireInt).pipe(map4(getOrElse(() => 0)));
     });
-    const getUsedSlots = /* @__PURE__ */ __name((pool = "bag") => host3.read({ kind: "items", container: "inventory" }).pipe(
+    const getUsedSlots = /* @__PURE__ */ __name((pool = "bag") => host4.read({ kind: "items", container: "inventory" }).pipe(
       map4(
         (items) => items.filter((item) => item.pool === pool).length
       )
@@ -13032,7 +13032,7 @@ ${prefix}}`;
       return yield* bridge.invoke("player.isMember", void 0, Boolean3).pipe(map4(getOrElse(() => false)));
     });
     const getLocalUserId = fn2("Inventory.getLocalUserId")(function* () {
-      const cached2 = yield* host3.read({ kind: "selfEntityId" });
+      const cached2 = yield* host4.read({ kind: "selfEntityId" });
       return cached2 === null ? yield* bridge.invoke("player.getUserId", void 0, PositiveWireInt) : some2(cached2);
     });
     const wearItem = fn2("Inventory.wearItem")(function* (itemId) {
@@ -13096,7 +13096,7 @@ ${prefix}}`;
           })
         );
         if (response === null) return false;
-        const slot = yield* host3.command({ kind: "refreshEquippedConsumable" });
+        const slot = yield* host4.command({ kind: "refreshEquippedConsumable" });
         return isSome2(slot) && slot.value === itemId;
       },
       consumableEquipment.withPermit,
@@ -13211,7 +13211,7 @@ ${prefix}}`;
           Boolean3
         ).pipe(map4(getOrElse(() => false)));
         if (!sent) return false;
-        yield* host3.command({ kind: "refreshEquippedConsumable" });
+        yield* host4.command({ kind: "refreshEquippedConsumable" });
         const current = yield* get4(item.itemId);
         return current?.equipped !== true;
       },
@@ -13348,17 +13348,17 @@ ${prefix}}`;
       }, "onSome")
     });
   }, "normalizeSkillInterval");
-  var makeCombat = /* @__PURE__ */ __name((bridge, antiCounter, host3, drops, events, inventory, map7, monsters, player, players, settings, temporary, wait) => {
+  var makeCombat = /* @__PURE__ */ __name((bridge, antiCounter, host4, drops, events, inventory, map7, monsters, player, players, settings, temporary, wait) => {
     const consumableCasts = makeUnsafe5(1);
     const targetValue = readCombatTarget(bridge);
     const targetAuras = /* @__PURE__ */ __name((options) => targetValue.pipe(
       flatMap3((target2) => {
         if (target2 === null) return succeed7([]);
-        return (target2.type === "monster" ? host3.read({
+        return (target2.type === "monster" ? host4.read({
           kind: "monsterAuras",
           monsterMapId: target2.monsterMapId,
           auraKind: options?.kind ?? null
-        }) : host3.read({
+        }) : host4.read({
           kind: "playerAuras",
           entityId: target2.entityId,
           auraKind: options?.kind ?? null
@@ -13412,7 +13412,7 @@ ${prefix}}`;
         }
         let dispatch;
         let confirmation = null;
-        const projectedSourceId = yield* host3.read({ kind: "selfEntityId" });
+        const projectedSourceId = yield* host4.read({ kind: "selfEntityId" });
         const sourceId = projectedSourceId ?? (yield* bridge.invoke("player.getUserId", void 0, PositiveWireInt).pipe(map4(getOrNull)));
         if (sourceId === null) return null;
         yield* wait.forPacket(
@@ -13670,7 +13670,7 @@ ${prefix}}`;
       );
     }, "fight");
     const killWithRuntime = /* @__PURE__ */ __name((selector, options, runtime2) => gen2(function* () {
-      const startMap = yield* host3.read({ kind: "map" });
+      const startMap = yield* host4.read({ kind: "map" });
       const available = yield* monsters.getAvailable();
       const monster = available.find(
         (candidate) => candidate.matches(selector)
@@ -13690,11 +13690,11 @@ ${prefix}}`;
       ).pipe(map4((event) => event !== null));
       const projectedEnd = wait.untilSome(
         all2([
-          host3.read({
+          host4.read({
             kind: "monster",
             selector: { monsterMapId: monster.monsterMapId }
           }),
-          host3.read({ kind: "map" })
+          host4.read({ kind: "map" })
         ]).pipe(
           map4(
             ([current, currentMap]) => current === null || currentMap.id !== startMap.id || currentMap.name !== startMap.name || currentMap.roomNumber !== startMap.roomNumber ? some2(false) : current.dead ? some2(true) : none2()
@@ -13779,8 +13779,8 @@ ${prefix}}`;
 
   // packages/runtime/src/host/operations.ts
   var operations = /* @__PURE__ */ new Map();
-  var operate = /* @__PURE__ */ __name((operation, host3) => new Promise((resolve3, reject) => {
-    const id = host3.operate(JSON.stringify(operation));
+  var operate = /* @__PURE__ */ __name((operation, host4) => new Promise((resolve3, reject) => {
+    const id = host4.operate(JSON.stringify(operation));
     const timeout2 = setTimeout(() => {
       operations.delete(id);
       reject(new Error("The host operation timed out"));
@@ -13797,19 +13797,19 @@ ${prefix}}`;
   }, "completeOperation");
 
   // packages/runtime/src/game/flash/api/Drops.ts
-  var makeDrops = fnUntraced2(function* (bridge, host3, auth) {
+  var makeDrops = fnUntraced2(function* (bridge, host4, auth) {
     const operationHost = globalThis.__host;
-    const get4 = /* @__PURE__ */ __name((selector) => readItem(host3, "drop", selector), "get");
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "drop", selector), "get");
     const accept = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? promise2(
       () => operate({ kind: "acceptDrop", selector }, operationHost).then((answer) => answer.value).catch(() => false)
     ) : succeed7(false), "accept");
     const contains = /* @__PURE__ */ __name((selector) => get4(selector).pipe(map4((drop) => drop !== null)), "contains");
-    const getAll = /* @__PURE__ */ __name(() => readItems(host3, "drop"), "getAll");
+    const getAll = /* @__PURE__ */ __name(() => readItems(host4, "drop"), "getAll");
     const isCustomUiEnabled = /* @__PURE__ */ __name(() => bridge.invoke("drops.isUsingCustomDrops", void 0, Boolean3).pipe(map4(getOrElse(() => false))), "isCustomUiEnabled");
     const reject = /* @__PURE__ */ __name((selector) => gen2(function* () {
       if (!(yield* auth.isLoggedIn())) return false;
       if (!isSelectable(selector)) return false;
-      const rejected = yield* host3.command({ kind: "rejectDrop", selector });
+      const rejected = yield* host4.command({ kind: "rejectDrop", selector });
       return getOrElse(rejected, () => false);
     }), "reject");
     const toggleUi = /* @__PURE__ */ __name(() => bridge.invoke("drops.toggleUi", void 0, Void2).pipe(asVoid2), "toggleUi");
@@ -13841,10 +13841,10 @@ ${prefix}}`;
   }, "matchesEvent");
 
   // packages/runtime/src/game/flash/api/Events.ts
-  var makeEvents = fnUntraced2(function* (gateway, wait) {
+  var makeEvents = fnUntraced2(function* (gateway2, wait) {
     const scope3 = yield* scope2;
     const runFork3 = runForkWith2(yield* context2());
-    const stream = /* @__PURE__ */ __name((selector) => gateway.events.pipe(
+    const stream = /* @__PURE__ */ __name((selector) => gateway2.events.pipe(
       filter6(
         (event) => matchesEvent(event, selector)
       )
@@ -13872,14 +13872,14 @@ ${prefix}}`;
   });
 
   // packages/runtime/src/game/flash/api/House.ts
-  var makeHouse = /* @__PURE__ */ __name((bridge, host3) => {
-    const contains = /* @__PURE__ */ __name((selector, quantity) => itemQuantity(host3, "house", selector).pipe(
+  var makeHouse = /* @__PURE__ */ __name((bridge, host4) => {
+    const contains = /* @__PURE__ */ __name((selector, quantity) => itemQuantity(host4, "house", selector).pipe(
       map4((owned) => owned >= normalizeItemQuantity(quantity))
     ), "contains");
-    const getAll = /* @__PURE__ */ __name(() => readItems(host3, "house"), "getAll");
+    const getAll = /* @__PURE__ */ __name(() => readItems(host4, "house"), "getAll");
     const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("house.getSlots", void 0, WireInt).pipe(map4(getOrElse(() => 0))), "getSlots");
-    const getUsedSlots = /* @__PURE__ */ __name(() => host3.read({ kind: "items", container: "house" }).pipe(map4((items) => items.length)), "getUsedSlots");
-    const get4 = /* @__PURE__ */ __name((selector) => readItem(host3, "house", selector), "get");
+    const getUsedSlots = /* @__PURE__ */ __name(() => host4.read({ kind: "items", container: "house" }).pipe(map4((items) => items.length)), "getUsedSlots");
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "house", selector), "get");
     const getAvailableSlots = /* @__PURE__ */ __name(() => zipWith2(
       getSlots(),
       getUsedSlots(),
@@ -13896,25 +13896,25 @@ ${prefix}}`;
   }, "makeHouse");
 
   // packages/runtime/src/game/flash/api/Map.ts
-  var makeMap = /* @__PURE__ */ __name((bridge, host3, wait) => {
+  var makeMap = /* @__PURE__ */ __name((bridge, host4, wait) => {
     const isLoaded = /* @__PURE__ */ __name(() => bridge.invoke("world.isLoaded", void 0, Boolean3).pipe(map4(getOrElse(() => false))), "isLoaded");
-    const getCellPads = /* @__PURE__ */ __name(() => host3.command({ kind: "refreshCellPads" }).pipe(
+    const getCellPads = /* @__PURE__ */ __name(() => host4.command({ kind: "refreshCellPads" }).pipe(
       flatMap3(
         match({
-          onNone: /* @__PURE__ */ __name(() => host3.read({ kind: "cellPads" }), "onNone"),
+          onNone: /* @__PURE__ */ __name(() => host4.read({ kind: "cellPads" }), "onNone"),
           onSome: succeed7
         })
       )
     ), "getCellPads");
-    const getCells = /* @__PURE__ */ __name(() => host3.command({ kind: "refreshCells" }).pipe(
+    const getCells = /* @__PURE__ */ __name(() => host4.command({ kind: "refreshCells" }).pipe(
       flatMap3(
         match({
-          onNone: /* @__PURE__ */ __name(() => host3.read({ kind: "cells" }), "onNone"),
+          onNone: /* @__PURE__ */ __name(() => host4.read({ kind: "cells" }), "onNone"),
           onSome: succeed7
         })
       )
     ), "getCells");
-    const getMap = /* @__PURE__ */ __name(() => host3.read({ kind: "map" }), "getMap");
+    const getMap = /* @__PURE__ */ __name(() => host4.read({ kind: "map" }), "getMap");
     const getId = /* @__PURE__ */ __name(() => getMap().pipe(map4((map7) => map7.id)), "getId");
     const getMapItem = /* @__PURE__ */ __name((itemId) => {
       if (!Number.isSafeInteger(itemId) || itemId <= 0) return void_3;
@@ -13955,23 +13955,23 @@ ${prefix}}`;
   var monsterDropRequestSpacing = spaced("350 millis").pipe(
     jittered
   );
-  var makeMonsters = fnUntraced2(function* (bridge, host3, wait) {
-    const readMonster = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host3.read({ kind: "monster", selector }).pipe(
+  var makeMonsters = fnUntraced2(function* (bridge, host4, wait) {
+    const readMonster = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host4.read({ kind: "monster", selector }).pipe(
       map4(
         (monster) => monster === null ? null : toLiveMonster(monster)
       )
     ) : succeed7(null), "readMonster");
-    const readMonsters = /* @__PURE__ */ __name(() => host3.read({ kind: "monsters" }).pipe(map4((monsters) => monsters.map(toLiveMonster))), "readMonsters");
-    const readDrops = /* @__PURE__ */ __name((monsterMapId) => host3.read({ kind: "monsterDrops", monsterMapId }), "readDrops");
+    const readMonsters = /* @__PURE__ */ __name(() => host4.read({ kind: "monsters" }).pipe(map4((monsters) => monsters.map(toLiveMonster))), "readMonsters");
+    const readDrops = /* @__PURE__ */ __name((monsterMapId) => host4.read({ kind: "monsterDrops", monsterMapId }), "readDrops");
     const requests = yield* unbounded2();
     const inFlight = /* @__PURE__ */ new Map();
     yield* addFinalizer3(() => shutdown2(requests));
     const requestKey = fn2("Monsters.requestKey")(function* (monsterMapId) {
-      const map7 = yield* host3.read({ kind: "map" });
+      const map7 = yield* host4.read({ kind: "map" });
       return `${map7.id}:${map7.name}:${map7.roomNumber}:${monsterMapId}`;
     });
     const isInCurrentCell = fn2("Monsters.isInCurrentCell")(function* (monster) {
-      const player = yield* host3.read({ kind: "me" });
+      const player = yield* host4.read({ kind: "me" });
       return player !== null && monster.isInCell(player.cell);
     });
     const executeRequest = fn2("Monsters.executeDropRequest")(function* (request) {
@@ -14047,7 +14047,7 @@ ${prefix}}`;
     }), "ensureAllDrops");
     const getProjected = /* @__PURE__ */ __name((selector) => readMonster(selector).pipe(
       flatMap3(
-        (current) => current !== null || !isSelectable(selector) ? succeed7(current) : host3.command({ kind: "hydrateMonster", selector }).pipe(
+        (current) => current !== null || !isSelectable(selector) ? succeed7(current) : host4.command({ kind: "hydrateMonster", selector }).pipe(
           map4(
             (hydrated) => isSome2(hydrated) && hydrated.value !== null ? toLiveMonster(hydrated.value) : null
           )
@@ -14074,7 +14074,7 @@ ${prefix}}`;
       )
     ), "getAvailableProjected");
     const ensureCurrentCell = fn2("Monsters.ensureCurrentCell")(function* (monsters) {
-      const player = yield* host3.read({ kind: "me" });
+      const player = yield* host4.read({ kind: "me" });
       if (player === null) return;
       yield* ensureAllDrops(
         monsters.filter((monster) => monster.isInCell(player.cell))
@@ -14135,10 +14135,10 @@ ${prefix}}`;
     "MAP_NAME",
     "PLAYER_NAME"
   ];
-  var makePacket = fnUntraced2(function* (gateway, host3, wait) {
+  var makePacket = fnUntraced2(function* (gateway2, host4, wait) {
     const scope3 = yield* scope2;
     const runFork3 = runForkWith2(yield* context2());
-    const stream = /* @__PURE__ */ __name((selector) => gateway.packets.pipe(
+    const stream = /* @__PURE__ */ __name((selector) => gateway2.packets.pipe(
       filter6(
         (packet) => matchesPacket(packet, selector)
       )
@@ -14147,8 +14147,8 @@ ${prefix}}`;
       if (!placeholders.some((token) => packet.includes(`{${token}}`))) {
         return packet;
       }
-      const map7 = yield* host3.read({ kind: "map" });
-      const player = yield* host3.read({ kind: "me" });
+      const map7 = yield* host4.read({ kind: "map" });
+      const player = yield* host4.read({ kind: "me" });
       return packet.replaceAll("{MAP_ID}", String(map7.id)).replaceAll("{ROOM_NUMBER}", String(map7.roomNumber)).replaceAll("{MAP_NAME}", map7.name).replaceAll("{PLAYER_NAME}", player?.username ?? "");
     }), "resolve");
     const on = /* @__PURE__ */ __name(((selector, handler) => stream(selector).pipe(
@@ -14158,7 +14158,7 @@ ${prefix}}`;
         runFork3(interrupt4(fiber2));
       })
     )), "on");
-    const onRaw = /* @__PURE__ */ __name((handler) => gateway.rawPackets.pipe(
+    const onRaw = /* @__PURE__ */ __name((handler) => gateway2.rawPackets.pipe(
       runForEach2(handler),
       forkIn2(scope3),
       map4((fiber2) => () => {
@@ -14167,10 +14167,10 @@ ${prefix}}`;
     ), "onRaw");
     const once = wait.forPacket;
     const sendToClient = /* @__PURE__ */ __name((packet, encoding) => resolve3(packet).pipe(
-      flatMap3((resolved) => gateway.sendToClient(resolved, encoding))
+      flatMap3((resolved) => gateway2.sendToClient(resolved, encoding))
     ), "sendToClient");
     const sendToServer = /* @__PURE__ */ __name((packet, encoding) => resolve3(packet).pipe(
-      flatMap3((resolved) => gateway.sendToServer(resolved, encoding))
+      flatMap3((resolved) => gateway2.sendToServer(resolved, encoding))
     ), "sendToServer");
     return {
       on,
@@ -14332,9 +14332,9 @@ ${prefix}}`;
     },
     name: payload.name
   }), "toOutfit");
-  var makePlayer = /* @__PURE__ */ __name((bridge, host3, auth, inventory, map7, wait) => {
+  var makePlayer = /* @__PURE__ */ __name((bridge, host4, auth, inventory, map7, wait) => {
     const read = /* @__PURE__ */ __name((method, schema, fallback) => bridge.invoke(method, void 0, schema).pipe(map4(getOrElse(() => fallback))), "read");
-    const get4 = /* @__PURE__ */ __name(() => host3.read({ kind: "me" }).pipe(
+    const get4 = /* @__PURE__ */ __name(() => host4.read({ kind: "me" }).pipe(
       map4((player) => player === null ? null : toLivePlayer(player))
     ), "get");
     const readLocation = /* @__PURE__ */ __name((projected, method) => projected !== "" ? succeed7(projected) : map7.isLoaded().pipe(
@@ -14439,10 +14439,10 @@ ${prefix}}`;
     const getClassRank = fn2("Player.getClassRank")(function* (query) {
       const inventoryClass = findClassItem(yield* inventory.getAll(), query);
       if (inventoryClass !== void 0) return inventoryClass.classRank;
-      if (query === void 0 || !(yield* isHydrated(host3, "bank"))) {
+      if (query === void 0 || !(yield* isHydrated(host4, "bank"))) {
         return null;
       }
-      const bankClass = findClassItem(yield* readItems(host3, "bank"), query);
+      const bankClass = findClassItem(yield* readItems(host4, "bank"), query);
       return bankClass?.classRank ?? null;
     });
     const getGender = /* @__PURE__ */ __name(() => read("player.getGender", String4, ""), "getGender");
@@ -14480,7 +14480,7 @@ ${prefix}}`;
       )
     ), "isAlive");
     const isMember = /* @__PURE__ */ __name(() => read("player.isMember", Boolean3, false), "isMember");
-    const isReady = /* @__PURE__ */ __name(() => host3.read({ kind: "readiness" }).pipe(
+    const isReady = /* @__PURE__ */ __name(() => host4.read({ kind: "readiness" }).pipe(
       flatMap3(
         (readiness) => readiness.missing.length === 0 ? all2([
           auth.isLoggedIn(),
@@ -14545,7 +14545,7 @@ ${prefix}}`;
       const currentPad = yield* getPad();
       const cells = combatExitCells(
         yield* map7.getCells(),
-        yield* host3.read({ kind: "monsters" }),
+        yield* host4.read({ kind: "monsters" }),
         currentCell
       );
       for (const cell of cells.slice(0, maxCombatExitJumps)) {
@@ -14563,7 +14563,7 @@ ${prefix}}`;
       const destination = yield* parseMapTarget(target);
       if (destination.map === "") return false;
       const targetCell = cell ?? (pad === void 0 ? void 0 : "Enter");
-      const currentMap = yield* host3.read({ kind: "map" });
+      const currentMap = yield* host4.read({ kind: "map" });
       const alreadyLoaded = (yield* map7.isLoaded()) && sameText(currentMap.name, destination.name) && (!destination.requireExactRoom || currentMap.roomNumber === destination.roomNumber);
       if (alreadyLoaded) {
         if (!(yield* wait.until(isReady(), { timeout: "10 seconds" })))
@@ -14581,7 +14581,7 @@ ${prefix}}`;
       if (isNone2(yield* bridge.invoke("player.joinMap", args2, Void2)))
         return false;
       const loaded = yield* wait.until(
-        host3.read({ kind: "map" }).pipe(
+        host4.read({ kind: "map" }).pipe(
           flatMap3(
             (current) => map7.isLoaded().pipe(
               map4(
@@ -14667,14 +14667,14 @@ ${prefix}}`;
   }, "makePlayer");
 
   // packages/runtime/src/game/flash/api/Players.ts
-  var makePlayers = /* @__PURE__ */ __name((host3) => {
-    const get4 = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host3.read({ kind: "player", selector }).pipe(
+  var makePlayers = /* @__PURE__ */ __name((host4) => {
+    const get4 = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host4.read({ kind: "player", selector }).pipe(
       map4(
         (player) => player === null ? null : toLivePlayer(player)
       )
     ) : succeed7(null), "get");
-    const getAll = /* @__PURE__ */ __name(() => host3.read({ kind: "players" }).pipe(map4((players) => players.map(toLivePlayer))), "getAll");
-    const getMe = /* @__PURE__ */ __name(() => host3.read({ kind: "me" }).pipe(
+    const getAll = /* @__PURE__ */ __name(() => host4.read({ kind: "players" }).pipe(map4((players) => players.map(toLivePlayer))), "getAll");
+    const getMe = /* @__PURE__ */ __name(() => host4.read({ kind: "me" }).pipe(
       map4((player) => player === null ? null : toLivePlayer(player))
     ), "getMe");
     return {
@@ -14685,8 +14685,8 @@ ${prefix}}`;
   }, "makePlayers");
 
   // packages/runtime/src/game/flash/api/ProjectionReadiness.ts
-  var makeProjectionReadiness = /* @__PURE__ */ __name((host3) => ({
-    inspect: /* @__PURE__ */ __name(() => host3.read({ kind: "readiness" }), "inspect")
+  var makeProjectionReadiness = /* @__PURE__ */ __name((host4) => ({
+    inspect: /* @__PURE__ */ __name(() => host4.read({ kind: "readiness" }), "inspect")
   }), "makeProjectionReadiness");
   var ProjectionReadiness = class extends Service()("lucent/renderer/flash/ProjectionReadiness") {
     static {
@@ -14696,13 +14696,13 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/Quests.ts
   var isQuestId = /* @__PURE__ */ __name((questId) => Number.isSafeInteger(questId) && questId > 0, "isQuestId");
-  var makeQuests = /* @__PURE__ */ __name((bridge, host3, wait) => {
+  var makeQuests = /* @__PURE__ */ __name((bridge, host4, wait) => {
     const loads = makeUnsafe5(1);
     let nextLoadAt = 0;
-    const read = /* @__PURE__ */ __name((questId) => host3.read({ kind: "quest", id: questId }).pipe(
+    const read = /* @__PURE__ */ __name((questId) => host4.read({ kind: "quest", id: questId }).pipe(
       map4((quest) => quest === null ? null : toLiveQuest(quest))
     ), "read");
-    const isLoaded = /* @__PURE__ */ __name((questId) => host3.read({ kind: "quest", id: questId }).pipe(map4((quest) => quest !== null)), "isLoaded");
+    const isLoaded = /* @__PURE__ */ __name((questId) => host4.read({ kind: "quest", id: questId }).pipe(map4((quest) => quest !== null)), "isLoaded");
     const waitForLoadSlot = gen2(function* () {
       const delay3 = nextLoadAt - (yield* currentTimeMillis2);
       if (delay3 > 0) yield* sleep2(delay3);
@@ -14835,16 +14835,16 @@ ${prefix}}`;
         )
       );
     }, "get");
-    const getAccepted = /* @__PURE__ */ __name(() => host3.command({ kind: "refreshAcceptedQuests" }).pipe(
+    const getAccepted = /* @__PURE__ */ __name(() => host4.command({ kind: "refreshAcceptedQuests" }).pipe(
       flatMap3(
         match({
-          onNone: /* @__PURE__ */ __name(() => host3.read({ kind: "acceptedQuests" }), "onNone"),
+          onNone: /* @__PURE__ */ __name(() => host4.read({ kind: "acceptedQuests" }), "onNone"),
           onSome: succeed7
         })
       ),
       map4((quests) => quests.map(toLiveQuest))
     ), "getAccepted");
-    const getAll = /* @__PURE__ */ __name(() => host3.read({ kind: "quests" }).pipe(map4((quests) => quests.map(toLiveQuest))), "getAll");
+    const getAll = /* @__PURE__ */ __name(() => host4.read({ kind: "quests" }).pipe(map4((quests) => quests.map(toLiveQuest))), "getAll");
     const isAvailable = /* @__PURE__ */ __name((questId) => {
       if (!isQuestId(questId)) return succeed7(false);
       return bridge.invoke("quests.isAvailable", [questId], Boolean3).pipe(map4(getOrElse(() => false)));
@@ -14870,21 +14870,21 @@ ${prefix}}`;
   var start = fnUntraced2(function* ({
     antiCounter,
     events,
-    gateway,
-    host: host3,
+    gateway: gateway2,
+    host: host4,
     monsters
   }) {
     const ensureCurrentCell = /* @__PURE__ */ __name(() => monsters.lookup.getAll().pipe(flatMap3(monsters.ensureCurrentCell)), "ensureCurrentCell");
     yield* events.on({ type: "join-map" }, ensureCurrentCell);
     yield* events.on(
       { type: "player-location" },
-      (event) => host3.read({ kind: "me" }).pipe(
+      (event) => host4.read({ kind: "me" }).pipe(
         flatMap3(
           (player) => player?.entityId === event.entityId ? ensureCurrentCell() : void_3
         )
       )
     );
-    yield* gateway.start(antiCounter.handleEvent);
+    yield* gateway2.start(antiCounter.handleEvent);
   });
   var ScriptReactions = class extends Service()(
     "lucent/renderer/flash/ScriptReactions"
@@ -14896,8 +14896,8 @@ ${prefix}}`;
   var layer4 = effectDiscard(flatMap3(ScriptReactions, start));
 
   // packages/runtime/src/game/flash/api/Settings.ts
-  var makeSettings = /* @__PURE__ */ __name((host3) => {
-    const get4 = /* @__PURE__ */ __name(() => host3.read({ kind: "settings" }), "get");
+  var makeSettings = /* @__PURE__ */ __name((host4) => {
+    const get4 = /* @__PURE__ */ __name(() => host4.read({ kind: "settings" }), "get");
     return {
       apply: /* @__PURE__ */ __name((patch) => gen2(function* () {
         for (const field of ["frameRate", "walkSpeed"]) {
@@ -14905,15 +14905,15 @@ ${prefix}}`;
             return yield* die3(new Error(`${field} must be a finite number`));
           }
         }
-        const result2 = yield* host3.command({ kind: "updateSettings", patch });
+        const result2 = yield* host4.command({ kind: "updateSettings", patch });
         if (isNone2(result2)) {
           return yield* die3(new Error("host rejected settings patch"));
         }
       }), "apply"),
       get: get4,
       isAntiCounterEnabled: /* @__PURE__ */ __name(() => get4().pipe(map4((state) => state.antiCounterEnabled)), "isAntiCounterEnabled"),
-      reapply: /* @__PURE__ */ __name(() => host3.command({ kind: "reapplySettings", actionsOnly: false }).pipe(asVoid2), "reapply"),
-      reapplyActions: /* @__PURE__ */ __name(() => host3.command({ kind: "reapplySettings", actionsOnly: true }).pipe(asVoid2), "reapplyActions")
+      reapply: /* @__PURE__ */ __name(() => host4.command({ kind: "reapplySettings", actionsOnly: false }).pipe(asVoid2), "reapply"),
+      reapplyActions: /* @__PURE__ */ __name(() => host4.command({ kind: "reapplySettings", actionsOnly: true }).pipe(asVoid2), "reapplyActions")
     };
   }, "makeSettings");
 
@@ -14932,9 +14932,9 @@ ${prefix}}`;
   var decodeShopLoadResponse = decodeUnknownOption2(ShopLoadResponse);
   var isShopId = /* @__PURE__ */ __name((shopId) => Number.isSafeInteger(shopId) && shopId > 0, "isShopId");
   var selectorFor = /* @__PURE__ */ __name((item) => item.shopItemId === void 0 ? { itemId: item.itemId } : { shopItemId: item.shopItemId }, "selectorFor");
-  var makeShops = /* @__PURE__ */ __name((bridge, host3, inventory, wait) => {
-    const get4 = /* @__PURE__ */ __name((selector) => readItem(host3, "shop", selector), "get");
-    const getCurrent = /* @__PURE__ */ __name(() => host3.read({ kind: "shop" }).pipe(map4((shop) => shop === null ? null : toLiveShop(shop))), "getCurrent");
+  var makeShops = /* @__PURE__ */ __name((bridge, host4, inventory, wait) => {
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "shop", selector), "get");
+    const getCurrent = /* @__PURE__ */ __name(() => host4.read({ kind: "shop" }).pipe(map4((shop) => shop === null ? null : toLiveShop(shop))), "getCurrent");
     const isOpen = /* @__PURE__ */ __name((shopId) => {
       if (shopId !== void 0 && !isShopId(shopId)) {
         return succeed7(false);
@@ -14946,7 +14946,7 @@ ${prefix}}`;
       ).pipe(
         flatMap3(
           match({
-            onNone: /* @__PURE__ */ __name(() => host3.read({ kind: "shop" }).pipe(
+            onNone: /* @__PURE__ */ __name(() => host4.read({ kind: "shop" }).pipe(
               map4(
                 (shop) => shopId !== void 0 ? shop?.id === shopId : shop !== null
               )
@@ -14974,7 +14974,7 @@ ${prefix}}`;
         );
         if (!settled) return false;
         return getOrElse(
-          yield* host3.command({
+          yield* host4.command({
             kind: "confirmShopClosed",
             shopId: shopId ?? null
           }),
@@ -14987,7 +14987,7 @@ ${prefix}}`;
       if (!isShopId(shopId)) return succeed7(false);
       return gen2(function* () {
         if (yield* isOpen(shopId)) return true;
-        const current = yield* host3.read({ kind: "shop" });
+        const current = yield* host4.read({ kind: "shop" });
         const reopensCachedShop = current?.id === shopId && current.limited === false;
         if (current !== null && current.id !== shopId && (yield* isOpen(current.id))) {
           yield* close2(current.id);
@@ -15022,7 +15022,7 @@ ${prefix}}`;
         );
         if (packet === null) return false;
         const [shop, open] = yield* all2([
-          host3.read({ kind: "shop" }),
+          host4.read({ kind: "shop" }),
           isOpen(shopId)
         ]);
         return shop?.id === shopId && open;
@@ -15047,9 +15047,9 @@ ${prefix}}`;
             return false;
           }
           const startingQuantities = yield* all2({
-            bank: itemQuantity(host3, "bank", item.itemId),
-            house: itemQuantity(host3, "house", item.itemId),
-            inventory: itemQuantity(host3, "inventory", item.itemId)
+            bank: itemQuantity(host4, "bank", item.itemId),
+            house: itemQuantity(host4, "house", item.itemId),
+            inventory: itemQuantity(host4, "inventory", item.itemId)
           });
           let response;
           const packet = yield* wait.forPacket(
@@ -15075,8 +15075,8 @@ ${prefix}}`;
           );
           if (packet === null || response?.bitSuccess !== true) return false;
           const container = response.bBank && item.category !== "Class" ? "bank" : item.houseItem ? "house" : "inventory";
-          yield* host3.command({ kind: "refreshContainer", container });
-          const owned = yield* itemQuantity(host3, container, item.itemId);
+          yield* host4.command({ kind: "refreshContainer", container });
+          const owned = yield* itemQuantity(host4, container, item.itemId);
           return owned >= startingQuantities[container] + requested;
         });
       })
@@ -15107,7 +15107,7 @@ ${prefix}}`;
         })
       );
     }, "sell");
-    const getAll = /* @__PURE__ */ __name(() => readItems(host3, "shop"), "getAll");
+    const getAll = /* @__PURE__ */ __name(() => readItems(host4, "shop"), "getAll");
     const getMaxBuyQuantity = /* @__PURE__ */ __name((selector) => get4(selector).pipe(
       flatMap3(
         (item) => item === null ? succeed7(0) : bridge.invoke("shops.getMaxBuyQuantity", [selectorFor(item)], WireInt).pipe(map4(getOrElse(() => 0)))
@@ -15116,7 +15116,7 @@ ${prefix}}`;
     const isMergeShop = /* @__PURE__ */ __name(() => bridge.invoke("shops.isMergeShop", void 0, Boolean3).pipe(
       flatMap3(
         match({
-          onNone: /* @__PURE__ */ __name(() => host3.read({ kind: "shop" }).pipe(map4((shop) => shop?.merge ?? false)), "onNone"),
+          onNone: /* @__PURE__ */ __name(() => host4.read({ kind: "shop" }).pipe(map4((shop) => shop?.merge ?? false)), "onNone"),
           onSome: /* @__PURE__ */ __name((merge3) => succeed7(merge3), "onSome")
         })
       )
@@ -15149,12 +15149,12 @@ ${prefix}}`;
   }, "makeShops");
 
   // packages/runtime/src/game/flash/api/TempInventory.ts
-  var makeTempInventory = /* @__PURE__ */ __name((host3) => {
-    const contains = /* @__PURE__ */ __name((selector, quantity) => itemQuantity(host3, "temporary", selector).pipe(
+  var makeTempInventory = /* @__PURE__ */ __name((host4) => {
+    const contains = /* @__PURE__ */ __name((selector, quantity) => itemQuantity(host4, "temporary", selector).pipe(
       map4((owned) => owned >= normalizeItemQuantity(quantity))
     ), "contains");
-    const get4 = /* @__PURE__ */ __name((selector) => readItem(host3, "temporary", selector), "get");
-    const getAll = /* @__PURE__ */ __name(() => readItems(host3, "temporary"), "getAll");
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "temporary", selector), "get");
+    const getAll = /* @__PURE__ */ __name(() => readItems(host4, "temporary"), "getAll");
     return {
       contains,
       get: get4,
@@ -15244,8 +15244,8 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/Wait.ts
   var isWaitOptions = /* @__PURE__ */ __name((options) => typeof options === "object" && !Array.isArray(options) && ("timeout" in options || "interval" in options), "isWaitOptions");
-  var makeWaitApi = /* @__PURE__ */ __name((bridge, gateway) => {
-    const wait = makeWait(gateway);
+  var makeWaitApi = /* @__PURE__ */ __name((bridge, gateway2) => {
+    const wait = makeWait(gateway2);
     const isGameActionAvailable = /* @__PURE__ */ __name((action) => bridge.invoke("world.isActionAvailable", [action], Boolean3).pipe(map4(getOrElse(() => false))), "isGameActionAvailable");
     const forGameAction = /* @__PURE__ */ __name((action, options) => {
       const normalized = options === void 0 ? {} : isWaitOptions(options) ? options : { timeout: options };
@@ -15264,31 +15264,31 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/api/Api.ts
   var makeApiServices = gen2(function* () {
     const bridge = yield* Bridge;
-    const gateway = yield* Gateway;
-    const host3 = yield* HostState;
-    const wait = makeWaitApi(bridge, gateway);
-    const events = yield* makeEvents(gateway, wait);
-    const packet = yield* makePacket(gateway, host3, wait);
-    const auth = makeAuth(bridge, host3, wait);
-    const house = makeHouse(bridge, host3);
-    const inventory = makeInventory(bridge, host3, house, wait);
-    const bank = yield* makeBank(bridge, host3, auth, inventory, house, wait);
-    const drops = yield* makeDrops(bridge, host3, auth);
-    const map7 = makeMap(bridge, host3, wait);
-    const monsterServices = yield* makeMonsters(bridge, host3, wait);
+    const gateway2 = yield* Gateway;
+    const host4 = yield* HostState;
+    const wait = makeWaitApi(bridge, gateway2);
+    const events = yield* makeEvents(gateway2, wait);
+    const packet = yield* makePacket(gateway2, host4, wait);
+    const auth = makeAuth(bridge, host4, wait);
+    const house = makeHouse(bridge, host4);
+    const inventory = makeInventory(bridge, host4, house, wait);
+    const bank = yield* makeBank(bridge, host4, auth, inventory, house, wait);
+    const drops = yield* makeDrops(bridge, host4, auth);
+    const map7 = makeMap(bridge, host4, wait);
+    const monsterServices = yield* makeMonsters(bridge, host4, wait);
     const monsters = monsterServices.api;
-    const players = makePlayers(host3);
-    const player = makePlayer(bridge, host3, auth, inventory, map7, wait);
-    const projectionReadiness = makeProjectionReadiness(host3);
-    const quests = makeQuests(bridge, host3, wait);
-    const settings = makeSettings(host3);
+    const players = makePlayers(host4);
+    const player = makePlayer(bridge, host4, auth, inventory, map7, wait);
+    const projectionReadiness = makeProjectionReadiness(host4);
+    const quests = makeQuests(bridge, host4, wait);
+    const settings = makeSettings(host4);
     const antiCounter = makeAntiCounter(bridge, settings.isAntiCounterEnabled);
-    const shops = makeShops(bridge, host3, inventory, wait);
-    const tempInventory = makeTempInventory(host3);
+    const shops = makeShops(bridge, host4, inventory, wait);
+    const tempInventory = makeTempInventory(host4);
     const combat = makeCombat(
       bridge,
       antiCounter,
-      host3,
+      host4,
       drops,
       events,
       inventory,
@@ -15325,8 +15325,8 @@ ${prefix}}`;
       scriptReactions: {
         antiCounter,
         events,
-        gateway,
-        host: host3,
+        gateway: gateway2,
+        host: host4,
         monsters: monsterServices
       }
     };
@@ -15382,15 +15382,34 @@ ${prefix}}`;
   }, "makeRetryLoop");
 
   // packages/runtime/src/game/automation/SettingsPolicy.ts
+  var requireResult = /* @__PURE__ */ __name((operation) => (result2) => isNone2(result2) ? die3(new Error(`Failed ${operation}`)) : void_3, "requireResult");
+  var bridgeLayer = effect(
+    Bridge,
+    map4(Bridge, (bridge) => ({
+      ...bridge,
+      invoke: /* @__PURE__ */ __name((method, args2, schema) => bridge.invoke(method, args2, schema).pipe(tap2(requireResult(method))), "invoke")
+    }))
+  );
+  var hostLayer = effect(
+    HostState,
+    map4(HostState, (host4) => ({
+      ...host4,
+      command: /* @__PURE__ */ __name((command) => host4.command(command).pipe(tap2(requireResult(command.kind))), "command")
+    }))
+  );
+  var apiLayer = layer5.pipe(
+    provide2(bridgeLayer),
+    provide2(hostLayer)
+  );
   var run2 = gen2(function* () {
     const api = yield* Api;
-    const host3 = yield* HostState;
+    const host4 = yield* HostState;
     const repeat4 = makeRetryLoop("settings policy");
     const tick = /* @__PURE__ */ __name((actionsOnly) => gen2(function* () {
       if (!(yield* api.player.isReady())) return;
-      const result2 = yield* host3.command({ kind: "reapplySettings", actionsOnly });
+      const result2 = yield* host4.command({ kind: "reapplySettings", actionsOnly });
       if (isNone2(result2)) {
-        return yield* die3(new Error("Settings reapplication failed"));
+        return yield* die3(new Error("Failed reapplySettings"));
       }
       if (result2.value !== null) {
         return yield* die3(new Error("Invalid reapplySettings reply"));
@@ -15404,17 +15423,6 @@ ${prefix}}`;
       { concurrency: "unbounded", discard: true }
     );
   });
-
-  // packages/runtime/src/game/flash/apiLayer.ts
-  var gatewayLayer = layer2.pipe(provideMerge(layer));
-  var hostLayer = layer3.pipe(provideMerge(gatewayLayer));
-  var servicesLayer = layer5.pipe(provideMerge(hostLayer));
-  var apiLayer = effectDiscard(
-    flatMap3(Gateway, (gateway) => gateway.start())
-  ).pipe(provideMerge(servicesLayer));
-  var scriptApiLayer = layer4.pipe(
-    provideMerge(servicesLayer)
-  );
 
   // packages/runtime/src/host/loop.ts
   var host2 = __host;
@@ -15505,15 +15513,12 @@ ${prefix}}`;
   });
 
   // packages/runtime/src/bot.ts
-  var botLayer = apiLayer.pipe(
-    provide2(
-      succeed6(DiagnosticSink, {
-        report: /* @__PURE__ */ __name((_phase, operation, cause) => {
-          throw new Error(`Failed ${operation}`, { cause });
-        }, "report")
-      })
-    )
-  );
+  var gateway = layer2.pipe(provideMerge(layer));
+  var host3 = layer3.pipe(provideMerge(gateway));
+  var services = apiLayer.pipe(provideMerge(host3));
+  var botLayer = effectDiscard(
+    flatMap3(Gateway, (gateway2) => gateway2.start())
+  ).pipe(provideMerge(services));
   var runtime = make5(botLayer);
   runtime.runSync(void_3);
   runtime.runPromise(run2);
