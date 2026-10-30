@@ -95,9 +95,6 @@ fn wait<T>(pending: Pending<T>, interrupt: &Interrupt) -> Result<T, String> {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub(crate) enum Item {
     EventsLost,
-    AutoRelogin {
-        records: lucent_protocol::auto_relogin::AutoReloginRecords,
-    },
     Ask {
         id: String,
         #[serde(rename = "askedBy")]
@@ -131,7 +128,6 @@ pub(crate) enum Item {
 impl From<ScriptEvent> for Item {
     fn from(event: ScriptEvent) -> Self {
         match event {
-            ScriptEvent::AutoReloginChanged { records } => Item::AutoRelogin { records },
             ScriptEvent::Ask { request } => Item::Ask {
                 id: request.id.to_string(),
                 asked_by: request.asked_by.to_string(),

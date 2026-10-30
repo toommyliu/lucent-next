@@ -22,6 +22,16 @@ pub enum Error {
     BotStopped,
     #[error("The bot request queue is full")]
     BotQueueFull,
+    #[error("The bot request timed out")]
+    BotRequestTimeout,
+    #[error("A bot is already attached")]
+    BotAlreadyAttached,
+    #[error("Only the attached bot can publish auto relogin records")]
+    BotPublishDenied,
+    #[error("Only the attached bot can answer requests")]
+    BotAnswerDenied,
+    #[error("Invalid bot request")]
+    InvalidBotRequest,
     #[error("The bot request failed")]
     BotRequestFailed,
     #[error("the player has not received its first viewport")]
@@ -99,9 +109,6 @@ pub(crate) fn invoke(player: &mut Player, name: &str, args: Vec<Value>) -> Resul
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScriptEvent {
-    AutoReloginChanged {
-        records: lucent_protocol::auto_relogin::AutoReloginRecords,
-    },
     Ask {
         request: crate::sessions::asks::Request,
     },
@@ -370,5 +377,23 @@ mod tests {
         assert_eq!(old.try_recv(), Err(mpsc::TryRecvError::Disconnected));
         drop(producer);
         assert_eq!(current.try_recv().unwrap(), Err(Error::Stopped));
+    }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BotRequestError {
+    QueueFull,
+    InvalidRequest,
+    Failed,
+}
+
+impl From<BotRequestError> for Error {
+    fn from(error: BotRequestError) -> Self {
+        match error {
+            BotRequestError::QueueFull => Self::BotQueueFull,
+            BotRequestError::InvalidRequest => Self::InvalidBotRequest,
+            BotRequestError::Failed => Self::BotRequestFailed,
+        }
     }
 }

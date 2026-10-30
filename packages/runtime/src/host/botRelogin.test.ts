@@ -56,7 +56,7 @@ it("bounds asks already pulled while an apply is blocked", async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
   for (let i = 0; i < 1100; i++) ask(String(i), { kind: "autoRelogin.setDelay", delayMs: i });
   await vi.waitFor(() => expect(answers.length).toBeGreaterThan(0));
-  expect(answers.every(a => a[1] === null && a[2] === "The bot request queue is full")).toBe(true);
+  expect(answers.every(a => a[1] === null && a[2] === "queueFull")).toBe(true);
 });
 
 it("answers a failed apply once and frees the slot for the next ask", async () => {
@@ -67,7 +67,7 @@ it("answers a failed apply once and frees the slot for the next ask", async () =
   ask("bad", { kind: "autoRelogin.setServer", server: "one" });
   ask("good", { kind: "autoRelogin.setDelay", delayMs: 42 });
   await vi.waitFor(() => expect(answers.map(a => a[0])).toEqual(["bad", "good"]), { timeout: 200 });
-  expect(answers[0]).toEqual(["bad", null, "The bot request failed"]);
+  expect(answers[0]).toEqual(["bad", null, "failed"]);
   expect((answers[1]![1] as {delayMs:number}).delayMs).toBe(42);
   expect(applies).toBe(1);
 });
@@ -76,10 +76,10 @@ it("uses the shared retry rule for background publication", async () => {
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   const info = vi.spyOn(console, "info").mockImplementation(() => {});
   try {
-    await boot(() => Effect.succeed([]));
+    const { ask } = await boot(() => Effect.succeed([]));
     let attempts = 0;
     __host.publishAutoRelogin = () => { if (++attempts <= 2) throw new Error("publication unavailable"); };
-    window.onAutoReloginEventsLost!();
+    ask("change", { kind: "autoRelogin.setDelay", delayMs: 42 });
     await vi.waitFor(() => expect(attempts).toBe(3), { timeout: 1600 });
     expect(warn.mock.calls).toEqual([["auto relogin tick failed", expect.stringContaining("publication unavailable")]]);
     expect(info.mock.calls).toEqual([["auto relogin recovered"]]);

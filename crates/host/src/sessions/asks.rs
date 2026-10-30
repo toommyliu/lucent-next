@@ -18,7 +18,6 @@ pub struct Request {
 
 struct Route {
     asked_by: AttachmentId,
-    bot: AttachmentId,
     deadline: Instant,
 }
 #[derive(Default)]
@@ -26,7 +25,6 @@ struct Mailbox {
     items: VecDeque<ScriptEvent>,
     waker: Option<Waker>,
     failed: bool,
-    records: Option<lucent_protocol::auto_relogin::AutoReloginRecords>,
 }
 #[derive(Default)]
 struct State {
@@ -83,7 +81,7 @@ impl State {
                 route.asked_by,
                 ScriptEvent::Answer {
                     id,
-                    answer: Err(Error::Timeout),
+                    answer: Err(Error::BotRequestTimeout),
                 },
                 wakers,
             );
@@ -154,35 +152,20 @@ impl Shared {
             return Err(Error::Stopped);
         }
         if state.bot.is_some() {
-            return Err(Error::Unavailable("bot already attached".into()));
+            return Err(Error::BotAlreadyAttached);
         }
         state.bot = Some(id);
         Ok(())
     }
-    pub(crate) fn publish(
-        &self,
-        id: AttachmentId,
-        records: lucent_protocol::auto_relogin::AutoReloginRecords,
-        write: impl FnOnce(),
-    ) -> Result<(), Error> {
-        let mut wakers = Vec::new();
-        {
-            let mut state = self.state.lock();
-            if state.stopped || state.bot != Some(id) {
-                return Err(Error::Unavailable("bot records".into()));
-            }
-            write();
-            for (attachment, mailbox) in &mut state.links {
-                if *attachment == id {
-                    continue;
-                }
-                mailbox.records = Some(records.clone());
-                if let Some(waker) = &mailbox.waker {
-                    wakers.push(waker.clone());
-                }
-            }
+    pub(crate) fn publish(&self, id: AttachmentId, write: impl FnOnce()) -> Result<(), Error> {
+        let state = self.state.lock();
+        if state.stopped {
+            return Err(Error::Stopped);
         }
-        wake(wakers);
+        if state.bot != Some(id) {
+            return Err(Error::BotPublishDenied);
+        }
+        write();
         Ok(())
     }
     pub(crate) fn ask(
@@ -214,7 +197,6 @@ impl Shared {
                 id,
                 Route {
                     asked_by,
-                    bot,
                     deadline: Instant::now() + Duration::from_secs(5),
                 },
             );
@@ -248,15 +230,11 @@ impl Shared {
                 return Err(Error::Stopped);
             }
             if state.bot != Some(bot) {
-                return Err(Error::Unavailable("bot answer".into()));
+                return Err(Error::BotAnswerDenied);
             }
-            if let Some(route) = state.routes.get(&id) {
-                if route.bot != bot {
-                    return Err(Error::Unavailable("bot answer".into()));
-                }
-                let route = state.routes.remove(&id).unwrap();
+            if let Some(route) = state.routes.remove(&id) {
                 let answer = if Instant::now() >= route.deadline {
-                    Err(Error::Timeout)
+                    Err(Error::BotRequestTimeout)
                 } else {
                     answer
                 };
@@ -278,7 +256,7 @@ impl Shared {
             && state
                 .routes
                 .get(&id)
-                .is_some_and(|route| route.bot == bot && route.deadline > Instant::now())
+                .is_some_and(|route| route.deadline > Instant::now())
     }
     pub(crate) fn cancel(&self, asker: AttachmentId, id: u64) {
         let mut state = self.state.lock();
@@ -317,19 +295,16 @@ impl Shared {
     }
     pub(crate) fn try_event(&self, id: AttachmentId) -> Result<Option<ScriptEvent>, Error> {
         let mut state = self.state.lock();
-        if state.stopped {
-            return Err(Error::Stopped);
-        }
+        let stopped = state.stopped;
         let mailbox = state.links.get_mut(&id).ok_or(Error::Stopped)?;
         if mailbox.failed {
             return Err(Error::Stopped);
         }
-        Ok(mailbox.items.pop_front().or_else(|| {
-            mailbox
-                .records
-                .take()
-                .map(|records| ScriptEvent::AutoReloginChanged { records })
-        }))
+        match mailbox.items.pop_front() {
+            Some(item) => Ok(Some(item)),
+            None if stopped => Err(Error::Stopped),
+            None => Ok(None),
+        }
     }
     pub(crate) fn set_waker(&self, id: AttachmentId, waker: Waker) {
         let pending = {
@@ -337,7 +312,7 @@ impl Shared {
             let stopped = state.stopped;
             if let Some(mailbox) = state.links.get_mut(&id) {
                 mailbox.waker = Some(waker.clone());
-                stopped || mailbox.failed || !mailbox.items.is_empty() || mailbox.records.is_some()
+                stopped || mailbox.failed || !mailbox.items.is_empty()
             } else {
                 true
             }
@@ -359,7 +334,6 @@ mod tests {
     #[test]
     fn expiring_a_full_answer_mailbox_drops_its_other_routes() {
         let asker = AttachmentId(1);
-        let bot = AttachmentId(2);
         let mut state = State::default();
         state.links.insert(
             asker,
@@ -375,7 +349,6 @@ mod tests {
                 id,
                 Route {
                     asked_by: asker,
-                    bot,
                     deadline: Instant::now(),
                 },
             );

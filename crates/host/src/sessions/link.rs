@@ -56,15 +56,16 @@ impl ScriptLink {
     }
 
     pub fn try_event(&self) -> Result<Option<ScriptEvent>, bridge::Error> {
-        if self.stopped.load(Ordering::Acquire) {
-            return Err(bridge::Error::Stopped);
-        }
         if self.events.overflowed() {
             return self.events.try_recv();
         }
-        match self.asks.try_event(self.attachment)? {
-            Some(event) => Ok(Some(event)),
-            None => self.events.try_recv(),
+        match self.asks.try_event(self.attachment) {
+            Ok(Some(event)) => Ok(Some(event)),
+            Ok(None) => self.events.try_recv(),
+            Err(bridge::Error::Stopped) if self.stopped.load(Ordering::Acquire) => {
+                self.events.try_recv()
+            }
+            Err(error) => Err(error),
         }
     }
 
@@ -108,7 +109,7 @@ impl ScriptLink {
         &self,
         records: lucent_protocol::auto_relogin::AutoReloginRecords,
     ) -> Result<(), bridge::Error> {
-        self.asks.publish(self.attachment, records.clone(), || {
+        self.asks.publish(self.attachment, || {
             *self.records.auto_relogin.write() = records;
         })
     }

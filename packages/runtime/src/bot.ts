@@ -51,7 +51,13 @@ const commandHost = Layer.effect(
   Effect.map(HostState, (host) => ({
     ...host,
     command: (command) =>
-      host.command(command).pipe(Effect.tap(requireResult(command.kind))),
+      host.command(command).pipe(Effect.tap((result) =>
+        command.kind === "refreshCredentials" || command.kind === "refreshServers" ||
+        command.kind === "refreshLoggedIn" ||
+        command.kind === "logout" || command.kind === "reapplySettings"
+          ? requireResult(command.kind)(result)
+          : Effect.void,
+      )),
   })),
 );
 

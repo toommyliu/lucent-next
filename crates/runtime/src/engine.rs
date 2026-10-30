@@ -725,20 +725,15 @@ fn host_answer(
     let json = json.to_rust_string_lossy(scope);
     let link = scope.get_slot::<ScriptLink>().unwrap();
     let result = (|| -> Result<Option<String>, String> {
-        let (id, answer, error): (String, serde_json::Value, Option<String>) =
-            serde_json::from_str(&json).map_err(|error| error.to_string())?;
+        let (id, answer, error): (
+            String,
+            serde_json::Value,
+            Option<lucent_host::bridge::BotRequestError>,
+        ) = serde_json::from_str(&json).map_err(|error| error.to_string())?;
         let id = id.parse::<u64>().map_err(|error| error.to_string())?;
-        link.answer(
-            id,
-            error.map_or(Ok(answer), |error| {
-                Err(match error.as_str() {
-                    "The bot request queue is full" => EventError::BotQueueFull,
-                    _ => EventError::BotRequestFailed,
-                })
-            }),
-        )
-        .map(|_| None)
-        .map_err(|error| error.to_string())
+        link.answer(id, error.map_or(Ok(answer), |error| Err(error.into())))
+            .map(|_| None)
+            .map_err(|error| error.to_string())
     })();
     return_reply(scope, reply, result);
 }

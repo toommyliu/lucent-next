@@ -1,5 +1,4 @@
 import type {
-  AutoReloginRecords,
   AutoZoneConfig,
   OperationAnswer,
   ProjectionEvent,
@@ -38,8 +37,6 @@ declare global {
 
   interface Window {
     onHostEventsLost?: () => void;
-    onAutoReloginEventsLost?: () => void;
-    onAutoReloginChanged?: (records: AutoReloginRecords) => void;
     onBotAsk?: (id: string, payload: unknown) => void;
     onAutoZoneChanged?: (config: AutoZoneConfig) => void;
     onProjectionEvent?: (event: ProjectionEvent) => void;
@@ -48,7 +45,6 @@ declare global {
 }
 
 type ScriptEvent =
-  | { type: "autorelogin"; records: AutoReloginRecords }
   | { type: "ask"; id: string; askedBy: string; payload: unknown }
   | { type: "answer"; id: string; answer: unknown; error: string | null }
   | { type: "operationstarted"; id: string }
@@ -124,14 +120,12 @@ export const turn = (itemsJson: string): string[] => {
   };
   const items = JSON.parse(itemsJson) as ScriptEvent[];
   const lost = items.some((item) => item.type === "eventslost");
-  if (lost) {
-    const error = new Error("Host events were lost; pending requests failed");
-    failOperations(error);
-    failAsks(error);
-    invoke(() => window.onHostEventsLost?.()); invoke(() => window.onAutoReloginEventsLost?.()); }
   for (const item of items) {
-    if (item.type === "autorelogin") {
-      if (!lost) invoke(() => window.onAutoReloginChanged?.(item.records));
+    if (item.type === "eventslost") {
+      const error = new Error("Host events were lost; pending requests failed");
+      failOperations(error);
+      failAsks(error);
+      invoke(() => window.onHostEventsLost?.());
     } else if (item.type === "ask") {
       invoke(() => window.onBotAsk?.(item.id, item.payload));
     } else if (item.type === "answer") {

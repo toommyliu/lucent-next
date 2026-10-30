@@ -21,19 +21,8 @@ const decodeRequest = Schema.decodeUnknownOption(Schema.Union([
   Schema.Struct({ kind: Schema.Literal("autoRelogin.setServer"), server: Schema.NullOr(Schema.String) }),
 ]));
 
-const Records = Schema.Struct({
-  config: Schema.Struct({ enabled: Schema.Boolean, delayMs: Schema.Number, server: Schema.NullOr(Schema.String) }),
-  status: Schema.Struct({
-    username: Schema.NullOr(Schema.String), captured: Schema.Boolean, attemptsRemaining: Schema.NullOr(Schema.Number), lastError: Schema.NullOr(Schema.String),
-    phase: Schema.Union([
-      Schema.Struct({ tag: Schema.Literals(["armed", "awaiting-session", "awaiting-player-ready", "awaiting-server-select", "failed", "logging-in", "selecting-server", "waiting-delay", "waiting-kick"]) }),
-      Schema.Struct({ tag: Schema.Literal("backoff"), delayMs: Schema.Number }),
-    ]),
-  }),
-});
-
 const readReloginRecords = (host: Pick<typeof __host, "read">): AutoReloginRecords =>
-  Schema.decodeUnknownSync(Records)(JSON.parse(host.read('{"kind":"autoRelogin"}')));
+  JSON.parse(host.read('{"kind":"autoRelogin"}')) as AutoReloginRecords;
 
 export const botRelogin = Layer.effectDiscard(Effect.gen(function* () {
   const host = __host;
@@ -49,14 +38,14 @@ export const botRelogin = Layer.effectDiscard(Effect.gen(function* () {
     const json = JSON.stringify(records);
     host.publishAutoRelogin(json);
   });
-  const answer = (id: string, value: unknown, error: string | null) => Effect.sync(() => {
+  const answer = (id: string, value: unknown, error: "queueFull" | "invalidRequest" | "failed" | null) => Effect.sync(() => {
     const json = JSON.stringify([id, value, error]);
     host.answer(json);
   });
 
   window.onBotAsk = (id, payload) => {
     if (!Queue.offerUnsafe(queue, { id, payload })) {
-      host.answer(JSON.stringify([id, null, "The bot request queue is full"]));
+      host.answer(JSON.stringify([id, null, "queueFull"]));
     }
   };
   yield* Effect.forever(Effect.gen(function* () {
@@ -64,7 +53,7 @@ export const botRelogin = Layer.effectDiscard(Effect.gen(function* () {
     const relogin = yield* Deferred.await(ready);
     if (!host.isAskPending(id)) return;
     const request = decodeRequest(payload);
-    if (Option.isNone(request)) { yield* answer(id, null, "Invalid bot request"); return; }
+    if (Option.isNone(request)) { yield* answer(id, null, "invalidRequest"); return; }
     yield* Effect.gen(function* () {
       const input = request.value;
       switch (input.kind) {
@@ -75,19 +64,16 @@ export const botRelogin = Layer.effectDiscard(Effect.gen(function* () {
       const records = yield* relogin.getRecords();
       yield* publish(records);
       yield* answer(id, publicReloginState(records), null);
-    }).pipe(Effect.catchCause(cause => Cause.hasInterrupts(cause) ? Effect.failCause(cause) : answer(id, null, "The bot request failed")));
+    }).pipe(Effect.catchCause(cause => Cause.hasInterrupts(cause) ? Effect.failCause(cause) : answer(id, null, "failed")));
   })).pipe(Effect.forkScoped);
-  window.onAutoReloginEventsLost = () => launch(Effect.gen(function* () {
-    yield* Effect.sync(() => readReloginRecords(host));
-    const relogin = yield* Deferred.await(ready);
-    yield* publish(yield* relogin.getRecords());
-  }));
-
   yield* supervise(Effect.gen(function* () {
     const stored = yield* Effect.sync(() => readReloginRecords(host));
-    const relogin = yield* makeAutoRelogin(api, fibers, stored.config);
+    const relogin = yield* makeAutoRelogin(api, fibers, stored.config, retry);
     yield* Deferred.succeed(ready, relogin);
     launch(Stream.runForEach(relogin.recordChanges, () => supervise(relogin.getRecords().pipe(Effect.flatMap(publish)))));
-    if (stored.config.enabled) launch(relogin.setEnabled(true));
+    if (stored.config.enabled) launch(Effect.gen(function* () {
+      const latest = yield* Effect.sync(() => readReloginRecords(host));
+      if (latest.config.enabled) yield* relogin.setEnabled(true);
+    }));
   })).pipe(Effect.forkScoped);
 }));

@@ -5339,16 +5339,12 @@ ${prefix}}`;
     }, "invoke");
     const items = JSON.parse(itemsJson);
     const lost = items.some((item) => item.type === "eventslost");
-    if (lost) {
-      const error = new Error("Host events were lost; pending requests failed");
-      failOperations(error);
-      failAsks(error);
-      invoke(() => window.onHostEventsLost?.());
-      invoke(() => window.onAutoReloginEventsLost?.());
-    }
     for (const item of items) {
-      if (item.type === "autorelogin") {
-        if (!lost) invoke(() => window.onAutoReloginChanged?.(item.records));
+      if (item.type === "eventslost") {
+        const error = new Error("Host events were lost; pending requests failed");
+        failOperations(error);
+        failAsks(error);
+        invoke(() => window.onHostEventsLost?.());
       } else if (item.type === "ask") {
         invoke(() => window.onBotAsk?.(item.id, item.payload));
       } else if (item.type === "answer") {

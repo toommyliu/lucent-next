@@ -3661,6 +3661,7 @@ ${prefix}}`;
       return fiber2.succeedWith(exit3 ?? exitFailCause(cause));
     }
   });
+  var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => flatMap2(timeoutOption(self, options.duration), (option2) => isNone2(option2) ? options.orElse() : succeed3(option2.value)));
   var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as(sleep(duration), none2())));
   var ScopeTypeId = "~effect/Scope";
   var ScopeCloseableTypeId = "~effect/Scope/Closeable";
@@ -5180,6 +5181,7 @@ ${prefix}}`;
   var tapError2 = tapError;
   var retry2 = retry;
   var timeoutOption2 = timeoutOption;
+  var timeoutOrElse2 = timeoutOrElse;
   var sleep2 = sleep;
   var race2 = race;
   var raceFirst2 = raceFirst;
@@ -16163,6 +16165,34 @@ ${prefix}}`;
   var defaultAutoReloginDelay = 3e3;
   var normalizeAutoReloginDelay = /* @__PURE__ */ __name((delayMs) => Number.isFinite(delayMs) ? clamp2({ minimum: 0, maximum: 3e5 })(delayMs) : defaultAutoReloginDelay, "normalizeAutoReloginDelay");
 
+  // packages/runtime/src/host/asks.ts
+  var pending = /* @__PURE__ */ new Map();
+  var completeAsk = /* @__PURE__ */ __name((id, answer, error) => {
+    const resolve3 = pending.get(id);
+    pending.delete(id);
+    resolve3?.complete(answer, error);
+  }, "completeAsk");
+  var failAsks = /* @__PURE__ */ __name((cause) => {
+    for (const request of pending.values()) {
+      request.cancel();
+      request.complete(null, cause.message);
+    }
+    pending.clear();
+  }, "failAsks");
+
+  // packages/runtime/src/host/autoRelogin.ts
+  var publicReloginState = /* @__PURE__ */ __name(({ config, status }) => ({
+    enabled: config.enabled,
+    delayMs: config.delayMs,
+    captured: status.captured,
+    ...status.username == null ? {} : { username: status.username },
+    attempting: ["awaiting-player-ready", "awaiting-server-select", "backoff", "logging-in", "selecting-server"].includes(status.phase.tag),
+    waitingDelay: status.phase.tag === "waiting-delay" || status.phase.tag === "waiting-kick",
+    ...config.server === null ? {} : { server: config.server },
+    ...status.attemptsRemaining === null ? {} : { attemptsRemaining: status.attemptsRemaining },
+    ...status.lastError === null ? {} : { lastError: status.lastError }
+  }), "publicReloginState");
+
   // packages/runtime/src/game/automation/AutoRelogin.ts
   var AutoReloginLoginError = class extends TaggedError2(
     "AutoReloginLoginError"
@@ -16203,24 +16233,6 @@ ${prefix}}`;
       ({ name }) => name.localeCompare(requested, void 0, { sensitivity: "accent" }) === 0
     )?.name ?? requested;
   }, "normalizeAutoReloginServer");
-  var attemptingPhases = /* @__PURE__ */ new Set([
-    "awaiting-player-ready",
-    "awaiting-server-select",
-    "backoff",
-    "logging-in",
-    "selecting-server"
-  ]);
-  var publicState = /* @__PURE__ */ __name((state) => ({
-    attempting: attemptingPhases.has(state.phase.tag),
-    captured: state.username !== void 0 && state.password !== void 0,
-    delayMs: state.delayMs,
-    enabled: state.enabled,
-    waitingDelay: state.phase.tag === "waiting-delay" || state.phase.tag === "waiting-kick",
-    ...state.attemptsRemaining === void 0 ? {} : { attemptsRemaining: state.attemptsRemaining },
-    ...state.lastError === void 0 ? {} : { lastError: state.lastError },
-    ...state.server === void 0 ? {} : { server: state.server },
-    ...state.username === void 0 ? {} : { username: state.username }
-  }), "publicState");
   var formatErrorDetail = /* @__PURE__ */ __name((detail) => {
     const trimmed = detail.trim();
     if (trimmed === "") return "Auto relogin failed.";
@@ -16232,8 +16244,7 @@ ${prefix}}`;
     step,
     ...message === void 0 ? {} : { message }
   }).pipe(catchCause2(() => void_3)) ?? void_3, "lifecycle");
-  var makeAutoRelogin = fnUntraced2(function* (api, fibers, config) {
-    const retry4 = makeRetryAttempt("auto relogin");
+  var makeAutoRelogin = fnUntraced2(function* (api, fibers, config, retry4 = makeRetryAttempt("auto relogin")) {
     const supervise = /* @__PURE__ */ __name((effect2, interval = 500) => retry4(() => effect2, interval), "supervise");
     const state = yield* make16({
       attemptsRemaining: void 0,
@@ -16248,14 +16259,14 @@ ${prefix}}`;
     });
     const loginPermit = yield* make14(1);
     const explicitRuns = yield* make17(0);
-    const getState = /* @__PURE__ */ __name(() => get4(state).pipe(map5(publicState)), "getState");
-    const changes2 = changes(state).pipe(map8(publicState));
     const records = /* @__PURE__ */ __name((current) => ({
       config: { enabled: current.enabled, delayMs: current.delayMs, server: current.server ?? null },
       status: { phase: current.phase, attemptsRemaining: current.attemptsRemaining ?? null, lastError: current.lastError ?? null, captured: current.username !== void 0 && current.password !== void 0, username: current.username ?? null }
     }), "records");
     const getRecords = /* @__PURE__ */ __name(() => get4(state).pipe(map5(records)), "getRecords");
     const recordChanges = changes(state).pipe(map8(records));
+    const getState = /* @__PURE__ */ __name(() => getRecords().pipe(map5(publicReloginState)), "getState");
+    const changes2 = recordChanges.pipe(map8(publicReloginState));
     const isPlayerReady = /* @__PURE__ */ __name(() => api.player.isReady().pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : succeed7(false))), "isPlayerReady");
     const waitUntilPlayerReady = /* @__PURE__ */ __name(() => repeat2(isPlayerReady(), {
       schedule: spaced(readinessPollInterval),
@@ -16265,11 +16276,14 @@ ${prefix}}`;
       timeoutOption2(playerReadyTimeout),
       map5(isSome2)
     ), "waitForPlayerReady");
-    const racePlayerReady = /* @__PURE__ */ __name((effect2) => race2(
+    const racePlayerReady = /* @__PURE__ */ __name((effect2, timeout2, fallback) => raceFirst2(
       effect2.pipe(
         map5((value) => ({ tag: "completed", value }))
       ),
       waitUntilPlayerReady().pipe(as2({ tag: "ready" }))
+    ).pipe(
+      timeoutOption2(timeout2),
+      map5(getOrElse(() => ({ tag: "completed", value: fallback })))
     ), "racePlayerReady");
     const updateCurrentGeneration = /* @__PURE__ */ __name((generation, update3) => update(
       state,
@@ -16374,6 +16388,10 @@ ${prefix}}`;
       request.server?.trim() || void 0
     ), resumeAtServerSelect = false) => {
       let requiresFreshServerList = false;
+      const logout = /* @__PURE__ */ __name((attemptsRemaining) => api.auth.logout().pipe(
+        timeoutOrElse2({ duration: serverSelectTimeout, orElse: /* @__PURE__ */ __name(() => die3("Logout timed out"), "orElse") }),
+        catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : failAttempt("Logout could not be submitted", true, "login", attemptsRemaining))
+      ), "logout");
       const completePlayerConnection = /* @__PURE__ */ __name((attemptsRemaining) => gen2(function* () {
         yield* observer.phase({ tag: "awaiting-player-ready" });
         yield* lifecycle(request, "ready", attemptsRemaining);
@@ -16381,7 +16399,7 @@ ${prefix}}`;
           return { status: "ready" };
         }
         if (yield* isPlayerReady()) return { status: "ready" };
-        yield* api.auth.logout();
+        yield* logout(attemptsRemaining);
         return yield* failAttempt(
           "Player did not become ready",
           true,
@@ -16422,7 +16440,9 @@ ${prefix}}`;
           }
           if (yield* isPlayerReady()) return { status: "ready" };
           const login = yield* racePlayerReady(
-            api.auth.login(request.username, request.password)
+            api.auth.login(request.username, request.password),
+            "80 seconds",
+            false
           );
           if (login.tag === "ready") return { status: "ready" };
           const submitted = login.value;
@@ -16476,7 +16496,11 @@ ${prefix}}`;
         if (server === void 0) return { status: "server-select" };
         yield* observer.phase({ tag: "selecting-server" });
         yield* lifecycle(request, "connect", attemptsRemaining);
-        const selection = yield* racePlayerReady(api.auth.connectTo(server));
+        const selection = yield* racePlayerReady(api.auth.connectTo(server), serverSelectTimeout, {
+          status: "not-ready",
+          retryable: true,
+          message: "Server selection timed out"
+        });
         if (selection.tag === "ready") return { status: "ready" };
         const selected = selection.value;
         if (selected.status !== "connected") {
@@ -16486,7 +16510,7 @@ ${prefix}}`;
           }
           if (selected.status === "full") {
             requiresFreshServerList = true;
-            yield* api.auth.logout();
+            yield* logout(attemptsRemaining);
           }
           return yield* failAttempt(
             selected.message,
@@ -16619,11 +16643,13 @@ ${prefix}}`;
         lastError: failure.detail,
         phase: { tag: "failed" }
       }));
-    }).pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : updateCurrentGeneration(generation, (current) => ({
-      ...current,
-      lastError: "Auto relogin failed unexpectedly.",
-      phase: { tag: "failed" }
-    })))), "runBackground");
+    }).pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : sync2(() => console.error("Unexpected auto relogin failure", pretty(cause))).pipe(
+      andThen2(updateCurrentGeneration(generation, (current) => ({
+        ...current,
+        lastError: "Auto relogin failed unexpectedly.",
+        phase: { tag: "failed" }
+      })))
+    ))), "runBackground");
     const startRecovery = /* @__PURE__ */ __name((skipDelay = false, resumeAtServerSelect = false) => gen2(function* () {
       if ((yield* get5(explicitRuns)) > 0) return;
       const startedAt = yield* currentTimeMillis2;
@@ -16774,9 +16800,10 @@ ${prefix}}`;
       }
       return yield* getState();
     }), "setServer");
+    let connectionFailing = false;
     const disposeConnection = yield* api.events.on(
       { type: "connection" },
-      (event) => supervise(suspend2(() => {
+      (event) => suspend2(() => {
         if (event.type !== "connection") return void_3;
         if (event.status === "OnConnectionLost" || event.status === "OnConnectionFailed") {
           return gen2(function* () {
@@ -16791,7 +16818,15 @@ ${prefix}}`;
           return captureIfMissing.pipe(andThen2(watchForReady()));
         }
         return void_3;
-      }))
+      }).pipe(
+        tap3(() => sync2(() => {
+          connectionFailing = false;
+        })),
+        catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : sync2(() => {
+          if (!connectionFailing) console.warn("auto relogin connection handler failed", pretty(cause));
+          connectionFailing = true;
+        }))
+      )
     );
     yield* addFinalizer3(
       () => sync2(() => {
@@ -16813,54 +16848,13 @@ ${prefix}}`;
     };
   });
 
-  // packages/runtime/src/host/asks.ts
-  var pending = /* @__PURE__ */ new Map();
-  var completeAsk = /* @__PURE__ */ __name((id, answer, error) => {
-    const resolve3 = pending.get(id);
-    pending.delete(id);
-    resolve3?.complete(answer, error);
-  }, "completeAsk");
-  var failAsks = /* @__PURE__ */ __name((cause) => {
-    for (const request of pending.values()) {
-      request.cancel();
-      request.complete(null, cause.message);
-    }
-    pending.clear();
-  }, "failAsks");
-
-  // packages/runtime/src/host/autoRelogin.ts
-  var publicReloginState = /* @__PURE__ */ __name(({ config, status }) => ({
-    enabled: config.enabled,
-    delayMs: config.delayMs,
-    captured: status.captured,
-    ...status.username == null ? {} : { username: status.username },
-    attempting: ["awaiting-player-ready", "awaiting-server-select", "backoff", "logging-in", "selecting-server"].includes(status.phase.tag),
-    waitingDelay: status.phase.tag === "waiting-delay" || status.phase.tag === "waiting-kick",
-    ...config.server === null ? {} : { server: config.server },
-    ...status.attemptsRemaining === null ? {} : { attemptsRemaining: status.attemptsRemaining },
-    ...status.lastError === null ? {} : { lastError: status.lastError }
-  }), "publicReloginState");
-
   // packages/runtime/src/host/botRelogin.ts
   var decodeRequest = decodeUnknownOption2(Union2([
     Struct({ kind: Literal2("autoRelogin.setEnabled"), enabled: Boolean3 }),
     Struct({ kind: Literal2("autoRelogin.setDelay"), delayMs: Number6 }),
     Struct({ kind: Literal2("autoRelogin.setServer"), server: NullOr(String4) })
   ]));
-  var Records = Struct({
-    config: Struct({ enabled: Boolean3, delayMs: Number6, server: NullOr(String4) }),
-    status: Struct({
-      username: NullOr(String4),
-      captured: Boolean3,
-      attemptsRemaining: NullOr(Number6),
-      lastError: NullOr(String4),
-      phase: Union2([
-        Struct({ tag: Literals(["armed", "awaiting-session", "awaiting-player-ready", "awaiting-server-select", "failed", "logging-in", "selecting-server", "waiting-delay", "waiting-kick"]) }),
-        Struct({ tag: Literal2("backoff"), delayMs: Number6 })
-      ])
-    })
-  });
-  var readReloginRecords = /* @__PURE__ */ __name((host4) => decodeUnknownSync(Records)(JSON.parse(host4.read('{"kind":"autoRelogin"}'))), "readReloginRecords");
+  var readReloginRecords = /* @__PURE__ */ __name((host4) => JSON.parse(host4.read('{"kind":"autoRelogin"}')), "readReloginRecords");
   var botRelogin = effectDiscard(gen2(function* () {
     const host4 = __host;
     const api = yield* Api;
@@ -16883,7 +16877,7 @@ ${prefix}}`;
     }), "answer");
     window.onBotAsk = (id, payload) => {
       if (!offerUnsafe(queue, { id, payload })) {
-        host4.answer(JSON.stringify([id, null, "The bot request queue is full"]));
+        host4.answer(JSON.stringify([id, null, "queueFull"]));
       }
     };
     yield* forever3(gen2(function* () {
@@ -16892,7 +16886,7 @@ ${prefix}}`;
       if (!host4.isAskPending(id)) return;
       const request = decodeRequest(payload);
       if (isNone2(request)) {
-        yield* answer(id, null, "Invalid bot request");
+        yield* answer(id, null, "invalidRequest");
         return;
       }
       yield* gen2(function* () {
@@ -16911,19 +16905,17 @@ ${prefix}}`;
         const records = yield* relogin.getRecords();
         yield* publish2(records);
         yield* answer(id, publicReloginState(records), null);
-      }).pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : answer(id, null, "The bot request failed")));
+      }).pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : answer(id, null, "failed")));
     })).pipe(forkScoped2);
-    window.onAutoReloginEventsLost = () => launch(gen2(function* () {
-      yield* sync2(() => readReloginRecords(host4));
-      const relogin = yield* _await(ready);
-      yield* publish2(yield* relogin.getRecords());
-    }));
     yield* supervise(gen2(function* () {
       const stored = yield* sync2(() => readReloginRecords(host4));
-      const relogin = yield* makeAutoRelogin(api, fibers, stored.config);
+      const relogin = yield* makeAutoRelogin(api, fibers, stored.config, retry4);
       yield* succeed5(ready, relogin);
       launch(runForEach2(relogin.recordChanges, () => supervise(relogin.getRecords().pipe(flatMap3(publish2)))));
-      if (stored.config.enabled) launch(relogin.setEnabled(true));
+      if (stored.config.enabled) launch(gen2(function* () {
+        const latest = yield* sync2(() => readReloginRecords(host4));
+        if (latest.config.enabled) yield* relogin.setEnabled(true);
+      }));
     })).pipe(forkScoped2);
   }));
 
@@ -16965,16 +16957,12 @@ ${prefix}}`;
     }, "invoke");
     const items = JSON.parse(itemsJson);
     const lost = items.some((item) => item.type === "eventslost");
-    if (lost) {
-      const error = new Error("Host events were lost; pending requests failed");
-      failOperations(error);
-      failAsks(error);
-      invoke(() => window.onHostEventsLost?.());
-      invoke(() => window.onAutoReloginEventsLost?.());
-    }
     for (const item of items) {
-      if (item.type === "autorelogin") {
-        if (!lost) invoke(() => window.onAutoReloginChanged?.(item.records));
+      if (item.type === "eventslost") {
+        const error = new Error("Host events were lost; pending requests failed");
+        failOperations(error);
+        failAsks(error);
+        invoke(() => window.onHostEventsLost?.());
       } else if (item.type === "ask") {
         invoke(() => window.onBotAsk?.(item.id, item.payload));
       } else if (item.type === "answer") {
@@ -17061,7 +17049,9 @@ ${prefix}}`;
     HostState,
     map5(HostState, (host4) => ({
       ...host4,
-      command: /* @__PURE__ */ __name((command) => host4.command(command).pipe(tap3(requireResult(command.kind))), "command")
+      command: /* @__PURE__ */ __name((command) => host4.command(command).pipe(tap3(
+        (result3) => command.kind === "refreshCredentials" || command.kind === "refreshServers" || command.kind === "refreshLoggedIn" || command.kind === "logout" || command.kind === "reapplySettings" ? requireResult(command.kind)(result3) : void_3
+      )), "command")
     }))
   );
   var apiLayer = layer5.pipe(provide2(readinessBridge));
