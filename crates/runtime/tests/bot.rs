@@ -1613,8 +1613,43 @@ fn malformed_relogin_replies_end_the_bot_with_their_error() {
             )]),
             Default::default(),
         );
+        let outcome = bot.wait(Duration::from_secs(2));
         assert!(
-            matches!(bot.wait(Duration::from_secs(2)), Err(RuntimeError::JavaScript(error)) if error.contains("trim") || error.contains("JSON"))
+            matches!(&outcome, Err(RuntimeError::JavaScript(error)) if error.contains("SchemaError") || error.contains("JSON")),
+            "{outcome:?}"
         );
     }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn a_relogin_code_defect_ends_the_bot_with_its_error() {
+    let (_host, mut session, observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    next_call(&observer, "settings.setWalkSpeed");
+    bot.eval(
+        "break-relogin.js",
+        r#"
+        String.prototype.trim = () => { throw new Error("relogin code defect"); };
+        null;
+    "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    let _run = common::start(
+        &mut session,
+        common::loose(&[(
+            "server.js",
+            r#"
+        import * as relogin from "lucent/autorelogin";
+        export default function* () { yield* relogin.setServer("Artix"); }
+    "#,
+        )]),
+        Default::default(),
+    );
+    let outcome = bot.wait(Duration::from_secs(2));
+    assert!(
+        matches!(&outcome, Err(RuntimeError::JavaScript(error)) if error.contains("relogin code defect")),
+        "{outcome:?}"
+    );
 }

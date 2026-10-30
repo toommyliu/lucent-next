@@ -342,25 +342,7 @@ export const makePlayer = (
       ),
     );
   const isMember = () => read("player.isMember", Schema.Boolean, false);
-  const isReady = () =>
-    host
-      .read({ kind: "readiness" })
-      .pipe(
-        Effect.flatMap((readiness) =>
-          readiness.missing.length === 0
-            ? Effect.all([
-                auth.isLoggedIn(),
-                map.isLoaded(),
-                read("player.isLoaded", Schema.Boolean, false),
-              ]).pipe(
-                Effect.map(
-                  ([loggedIn, loaded, playerLoaded]) =>
-                    loggedIn && loaded && playerLoaded,
-                ),
-              )
-            : Effect.succeed(false),
-        ),
-      );
+  const isReady = makePlayerReadiness(host, auth, map, bridge);
 
   const readLiveLocation = () =>
     Effect.all({
@@ -608,3 +590,23 @@ export const makePlayer = (
 };
 
 export type Player = ReturnType<typeof makePlayer>;
+
+export const makePlayerReadiness = (host: HostStateService, auth: Auth, map: Map, bridge: BridgeService) => () =>
+    host
+      .read({ kind: "readiness" })
+      .pipe(
+        Effect.flatMap((readiness) =>
+          readiness.missing.length === 0
+            ? Effect.all([
+                auth.isLoggedIn(),
+                map.isLoaded(),
+                bridge.invoke("player.isLoaded", undefined, Schema.Boolean).pipe(Effect.map(Option.getOrElse(() => false))),
+              ]).pipe(
+                Effect.map(
+                  ([loggedIn, loaded, playerLoaded]) =>
+                    loggedIn && loaded && playerLoaded,
+                ),
+              )
+            : Effect.succeed(false),
+        ),
+      );

@@ -4726,6 +4726,7 @@ ${prefix}}`;
   }, "DeferredImpl");
   DeferredImpl.prototype = DeferredProto;
   var makeUnsafe2 = /* @__PURE__ */ __name(() => new DeferredImpl(), "makeUnsafe");
+  var make5 = /* @__PURE__ */ __name(() => sync(() => makeUnsafe2()), "make");
   var _await = /* @__PURE__ */ __name((self) => callback((resume) => {
     if (self.effect) return resume(self.effect);
     self.resumes ??= [];
@@ -4891,6 +4892,7 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Cause.js
   var isFailReason2 = isFailReason;
+  var isDieReason2 = isDieReason;
   var fromReasons = causeFromReasons;
   var die2 = causeDie;
   var hasInterruptsOnly2 = hasInterruptsOnly;
@@ -5248,7 +5250,7 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/ManagedRuntime.js
   var TypeId8 = "~effect/ManagedRuntime";
-  var make5 = /* @__PURE__ */ __name((layer7, options) => {
+  var make6 = /* @__PURE__ */ __name((layer7, options) => {
     const memoMap = options?.memoMap ?? makeMemoMapUnsafe();
     const scope3 = makeUnsafe3("sequential");
     const layerScope = forkUnsafe2(scope3, "sequential");
@@ -5458,7 +5460,7 @@ ${prefix}}`;
     self.deferred = deferred;
     return self;
   }, "makeUnsafe");
-  var make6 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe4(empty4(), makeUnsafe2())), (map9) => suspend2(() => {
+  var make7 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe4(empty4(), makeUnsafe2())), (map9) => suspend2(() => {
     const state = map9.state;
     if (state._tag === "Closed") return void_3;
     map9.state = {
@@ -8093,10 +8095,10 @@ ${prefix}}`;
     };
   }
   __name(makeOption, "makeOption");
-  function make7(schema) {
+  function make8(schema) {
     return makeConstructorSync(toType(schema.ast));
   }
-  __name(make7, "make");
+  __name(make8, "make");
   function decodeUnknownEffect(schema, options) {
     const parser = run2(schema.ast);
     return options === void 0 ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
@@ -8182,11 +8184,11 @@ ${prefix}}`;
       } : {
         disableChecks: true
       } : options?.parseOptions ?? defaultParseOptions;
-      const make17 = entry.make;
-      if (make17 !== void 0 && input !== missing) {
+      const make18 = entry.make;
+      if (make18 !== void 0 && input !== missing) {
         let output;
         try {
-          output = make17(input, parseOptions);
+          output = make18(input, parseOptions);
         } catch (error) {
           getSchemaIssueOrThrow(die2(error), "Constructor adapter can only throw schema issues");
           throw error;
@@ -8207,7 +8209,7 @@ ${prefix}}`;
   var SchemaProto = {
     [TypeId14]: TypeId14,
     get make() {
-      const value = make7(this);
+      const value = make8(this);
       Object.defineProperty(this, "make", {
         value,
         enumerable: true
@@ -8243,10 +8245,10 @@ ${prefix}}`;
       return this.rebuild(appendChecks(this.ast, checks));
     },
     rebuild(ast) {
-      return make8(ast, this[RebuildOptions]);
+      return make9(ast, this[RebuildOptions]);
     }
   };
-  function make8(ast, options) {
+  function make9(ast, options) {
     function Schema() {
     }
     __name(Schema, "Schema");
@@ -8262,7 +8264,7 @@ ${prefix}}`;
     self.ast = ast;
     return self;
   }
-  __name(make8, "make");
+  __name(make9, "make");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Struct.js
   var lambda = /* @__PURE__ */ __name((f) => f, "lambda");
@@ -8277,7 +8279,7 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Schema.js
   function declareConstructor() {
     return (typeParameters, run4, annotations) => {
-      return make9(new Declaration(typeParameters.map(getAST), (typeParameters2) => run4(typeParameters2.map((ast) => make9(ast))), annotations));
+      return make10(new Declaration(typeParameters.map(getAST), (typeParameters2) => run4(typeParameters2.map((ast) => make10(ast))), annotations));
     };
   }
   __name(declareConstructor, "declareConstructor");
@@ -8373,12 +8375,12 @@ ${prefix}}`;
     };
   }
   __name(decodeUnknownSync, "decodeUnknownSync");
-  var make9 = make8;
-  var optionalKey2 = /* @__PURE__ */ lambda((schema) => make9(optionalKey(schema.ast), {
+  var make10 = make9;
+  var optionalKey2 = /* @__PURE__ */ lambda((schema) => make10(optionalKey(schema.ast), {
     schema
   }));
   function Literal2(literal) {
-    const out = make9(new Literal(literal), {
+    const out = make10(new Literal(literal), {
       literal,
       transform(to) {
         return out.pipe(decodeTo2(Literal2(to), {
@@ -8390,14 +8392,14 @@ ${prefix}}`;
     return out;
   }
   __name(Literal2, "Literal");
-  var Unknown2 = /* @__PURE__ */ make9(unknown);
-  var Null2 = /* @__PURE__ */ make9(null_);
-  var String4 = /* @__PURE__ */ make9(string2);
-  var Number6 = /* @__PURE__ */ make9(number2);
-  var Boolean3 = /* @__PURE__ */ make9(boolean);
-  var Void2 = /* @__PURE__ */ make9(void_4);
+  var Unknown2 = /* @__PURE__ */ make10(unknown);
+  var Null2 = /* @__PURE__ */ make10(null_);
+  var String4 = /* @__PURE__ */ make10(string2);
+  var Number6 = /* @__PURE__ */ make10(number2);
+  var Boolean3 = /* @__PURE__ */ make10(boolean);
+  var Void2 = /* @__PURE__ */ make10(void_4);
   function makeStruct(ast, fields) {
-    return make9(ast, {
+    return make10(ast, {
       fields,
       mapFields(f, options) {
         const fields2 = f(this.fields);
@@ -8411,14 +8413,14 @@ ${prefix}}`;
   }
   __name(Struct, "Struct");
   function Record(key, value) {
-    return make9(record(key.ast, value.ast), {
+    return make10(record(key.ast, value.ast), {
       key,
       value
     });
   }
   __name(Record, "Record");
   function makeTuple(ast, elements) {
-    return make9(ast, {
+    return make10(ast, {
       elements,
       mapElements(f, options) {
         const elements2 = f(this.elements);
@@ -8431,11 +8433,11 @@ ${prefix}}`;
     return makeTuple(tuple(elements), elements);
   }
   __name(Tuple, "Tuple");
-  var ArraySchema = /* @__PURE__ */ lambda((schema) => make9(new Arrays(false, [], [schema.ast]), {
+  var ArraySchema = /* @__PURE__ */ lambda((schema) => make10(new Arrays(false, [], [schema.ast]), {
     value: schema
   }));
   function makeUnion(ast, members) {
-    return make9(ast, {
+    return make10(ast, {
       members,
       mapMembers(f, options) {
         const members2 = f(this.members);
@@ -8450,7 +8452,7 @@ ${prefix}}`;
   __name(Union2, "Union");
   function Literals(literals) {
     const members = literals.map(Literal2);
-    return make9(union(members, void 0, void 0), {
+    return make10(union(members, void 0, void 0), {
       literals,
       members,
       mapMembers(f) {
@@ -8468,7 +8470,7 @@ ${prefix}}`;
   var NullOr = /* @__PURE__ */ lambda((self) => Union2([self, Null2]));
   function decodeTo2(to, transformation) {
     return (from) => {
-      return make9(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough3()), {
+      return make10(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough3()), {
         from,
         to
       });
@@ -8476,7 +8478,7 @@ ${prefix}}`;
   }
   __name(decodeTo2, "decodeTo");
   function withConstructorDefault2(defaultValue) {
-    return (schema) => make9(withConstructorDefault(schema.ast, defaultValue), {
+    return (schema) => make10(withConstructorDefault(schema.ast, defaultValue), {
       schema
     });
   }
@@ -8530,7 +8532,7 @@ ${prefix}}`;
     });
   }
   __name(isBase64, "isBase64");
-  var Finite = /* @__PURE__ */ make9(finite);
+  var Finite = /* @__PURE__ */ make10(finite);
   function makeIsGreaterThanOrEqualTo(options) {
     const gte = isGreaterThanOrEqualTo(options.order);
     const formatter = options.formatter ?? format2;
@@ -8860,7 +8862,7 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableList.js
   var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
-  var make10 = /* @__PURE__ */ __name(() => ({
+  var make11 = /* @__PURE__ */ __name(() => ({
     head: void 0,
     tail: void 0,
     length: 0
@@ -8992,7 +8994,7 @@ ${prefix}}`;
       };
     }
   };
-  var make11 = /* @__PURE__ */ __name((value) => {
+  var make12 = /* @__PURE__ */ __name((value) => {
     const ref = Object.create(MutableRefProto);
     ref.current = value;
     return ref;
@@ -9005,8 +9007,8 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/PubSub.js
   var TypeId16 = "~effect/PubSub";
   var SubscriptionTypeId = "~effect/PubSub/Subscription";
-  var make12 = /* @__PURE__ */ __name((options) => sync2(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe5(false), make11(false), options.strategy(), make11(none2()))), "make");
-  var unbounded = /* @__PURE__ */ __name((options) => make12({
+  var make13 = /* @__PURE__ */ __name((options) => sync2(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe5(false), make12(false), options.strategy(), make12(none2()))), "make");
+  var unbounded = /* @__PURE__ */ __name((options) => make13({
     atomicPubSub: /* @__PURE__ */ __name(() => makeAtomicUnbounded(options), "atomicPubSub"),
     strategy: /* @__PURE__ */ __name(() => new DroppingStrategy(), "strategy")
   }), "unbounded");
@@ -9127,7 +9129,7 @@ ${prefix}}`;
       subscribers.delete(subscription);
     }
   }, "removeSubscribers");
-  var makeSubscriptionUnsafe = /* @__PURE__ */ __name((pubsub, subscribers, strategy, ended) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make10(), makeUnsafe5(false), make11(false), strategy, pubsub.replayWindow(), ended), "makeSubscriptionUnsafe");
+  var makeSubscriptionUnsafe = /* @__PURE__ */ __name((pubsub, subscribers, strategy, ended) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make11(), makeUnsafe5(false), make12(false), strategy, pubsub.replayWindow(), ended), "makeSubscriptionUnsafe");
   var UnboundedPubSub = class {
     static {
       __name(this, "UnboundedPubSub");
@@ -9631,7 +9633,7 @@ ${prefix}}`;
       });
     }
   };
-  var make13 = /* @__PURE__ */ __name((permits) => sync(() => new SemaphoreImpl(permits)), "make");
+  var make14 = /* @__PURE__ */ __name((permits) => sync(() => new SemaphoreImpl(permits)), "make");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Queue.js
   var TypeId17 = "~effect/Queue";
@@ -9654,12 +9656,12 @@ ${prefix}}`;
       };
     }
   };
-  var make14 = /* @__PURE__ */ __name((options) => withFiber((fiber2) => {
+  var make15 = /* @__PURE__ */ __name((options) => withFiber((fiber2) => {
     const self = Object.create(QueueProto);
     self.dispatcher = fiber2.currentDispatcher;
     self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
     self.strategy = options?.strategy ?? "suspend";
-    self.messages = make10();
+    self.messages = make11();
     self.scheduleRunning = false;
     self.state = {
       _tag: "Open",
@@ -9669,10 +9671,10 @@ ${prefix}}`;
     };
     return succeed3(self);
   }), "make");
-  var bounded = /* @__PURE__ */ __name((capacity) => make14({
+  var bounded = /* @__PURE__ */ __name((capacity) => make15({
     capacity
   }), "bounded");
-  var unbounded2 = /* @__PURE__ */ __name(() => make14(), "unbounded");
+  var unbounded2 = /* @__PURE__ */ __name(() => make15(), "unbounded");
   var offer = /* @__PURE__ */ dual(2, (self, message) => suspend(() => offerUnsafe(self, message) ? exitTrue : self.state._tag === "Open" && self.strategy === "suspend" ? offerOrWait(self, message) : exitFalse));
   var offerUnsafe = /* @__PURE__ */ __name((self, message) => {
     if (self.state._tag !== "Open") {
@@ -10105,7 +10107,7 @@ ${prefix}}`;
       };
     }
   };
-  var make15 = /* @__PURE__ */ __name((value) => map5(unbounded({
+  var make16 = /* @__PURE__ */ __name((value) => map5(unbounded({
     replay: 1
   }), (pubsub) => {
     const self = Object.create(Proto3);
@@ -12102,8 +12104,8 @@ ${prefix}}`;
     )
   ), "houseCanAccept");
   var makeBank = fnUntraced2(function* (bridge, host4, auth, inventory, house, wait) {
-    const loads = yield* make13(1);
-    const opens = yield* make13(1);
+    const loads = yield* make14(1);
+    const opens = yield* make14(1);
     const isOpen = /* @__PURE__ */ __name(() => bridge.invoke("bank.isOpen", void 0, Boolean3).pipe(map5(getOrElse(() => false))), "isOpen");
     const getAll = /* @__PURE__ */ __name(() => isHydrated(host4, "bank").pipe(
       flatMap3(
@@ -12602,10 +12604,10 @@ ${prefix}}`;
   };
   var makeUnsafe7 = /* @__PURE__ */ __name((value) => {
     const self = Object.create(RefProto);
-    self.ref = make11(value);
+    self.ref = make12(value);
     return self;
   }, "makeUnsafe");
-  var make16 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe7(value)), "make");
+  var make17 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe7(value)), "make");
   var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
   var modify2 = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
     const [b, a] = f(self.ref.current);
@@ -12623,14 +12625,14 @@ ${prefix}}`;
     players,
     ...skill5ItemId === void 0 ? {} : { skill5ItemId }
   }), "makeCombatProfileRuntimeDeps");
-  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map5(make16({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
+  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map5(make17({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
   var resetCombatProfileCursor = /* @__PURE__ */ __name((cursor) => update2(cursor.state, (state) => ({
     index: 0,
     resetVersion: state.resetVersion + 1
   })), "resetCombatProfileCursor");
   var makeCombatProfileMessageTriggerState = /* @__PURE__ */ __name(() => gen2(function* () {
-    const state = yield* make16(/* @__PURE__ */ new Map());
-    const semaphore = yield* make13(1);
+    const state = yield* make17(/* @__PURE__ */ new Map());
+    const semaphore = yield* make14(1);
     return {
       semaphore,
       state
@@ -12939,8 +12941,8 @@ ${prefix}}`;
       }
       const cursor = yield* makeCombatProfileCursor();
       const messageState = yield* makeCombatProfileMessageTriggerState();
-      const actionGate = yield* make13(1);
-      const state = yield* make16({
+      const actionGate = yield* make14(1);
+      const state = yield* make17({
         generation: 0,
         resetPending: false,
         target: void 0
@@ -14968,19 +14970,7 @@ ${prefix}}`;
       )
     ), "isAlive");
     const isMember = /* @__PURE__ */ __name(() => read("player.isMember", Boolean3, false), "isMember");
-    const isReady = /* @__PURE__ */ __name(() => host4.read({ kind: "readiness" }).pipe(
-      flatMap3(
-        (readiness) => readiness.missing.length === 0 ? all2([
-          auth.isLoggedIn(),
-          map9.isLoaded(),
-          read("player.isLoaded", Boolean3, false)
-        ]).pipe(
-          map5(
-            ([loggedIn, loaded, playerLoaded]) => loggedIn && loaded && playerLoaded
-          )
-        ) : succeed7(false)
-      )
-    ), "isReady");
+    const isReady = makePlayerReadiness(host4, auth, map9, bridge);
     const readLiveLocation = /* @__PURE__ */ __name(() => all2({
       cell: bridge.invoke("player.getCell", void 0, String4).pipe(map5(getOrElse(() => ""))),
       pad: bridge.invoke("player.getPad", void 0, String4).pipe(map5(getOrElse(() => "")))
@@ -15153,6 +15143,19 @@ ${prefix}}`;
       walkTo
     };
   }, "makePlayer");
+  var makePlayerReadiness = /* @__PURE__ */ __name((host4, auth, map9, bridge) => () => host4.read({ kind: "readiness" }).pipe(
+    flatMap3(
+      (readiness) => readiness.missing.length === 0 ? all2([
+        auth.isLoggedIn(),
+        map9.isLoaded(),
+        bridge.invoke("player.isLoaded", void 0, Boolean3).pipe(map5(getOrElse(() => false)))
+      ]).pipe(
+        map5(
+          ([loggedIn, loaded, playerLoaded]) => loggedIn && loaded && playerLoaded
+        )
+      ) : succeed7(false)
+    )
+  ), "makePlayerReadiness");
 
   // packages/runtime/src/game/flash/api/Players.ts
   var makePlayers = /* @__PURE__ */ __name((host4) => {
@@ -15995,7 +15998,7 @@ ${prefix}}`;
     return range2 === void 0 ? void 0 : { kind: "range", range: range2 };
   }, "target");
   var makeAutoZone = fnUntraced2(function* (api, fibers, initial = { enabled: false, map: void 0 }) {
-    const state = yield* make15(initial);
+    const state = yield* make16(initial);
     const retry4 = makeRetryAttempt("auto zone");
     const move = /* @__PURE__ */ __name((destination) => destination.kind === "point" ? api.player.walkTo(destination) : all2({
       x: nextIntBetween(
@@ -16086,7 +16089,7 @@ ${prefix}}`;
     gen2(function* () {
       const api = yield* Api;
       const host4 = yield* HostState;
-      const fibers = yield* make6();
+      const fibers = yield* make7();
       const config = yield* host4.read({ kind: "autoZone" });
       const autoZone = yield* makeAutoZone(api, fibers, {
         enabled: config.enabled,
@@ -16219,8 +16222,8 @@ ${prefix}}`;
     step,
     ...message === void 0 ? {} : { message }
   }).pipe(catchCause2(() => void_3)) ?? void_3, "lifecycle");
-  var makeAutoRelogin = fnUntraced2(function* (api, fibers, config) {
-    const state = yield* make15({
+  var makeAutoRelogin = fnUntraced2(function* (api, fibers, config, supervise = (effect2) => effect2) {
+    const state = yield* make16({
       attemptsRemaining: void 0,
       delayMs: config?.delayMs ?? defaultAutoReloginDelay,
       enabled: config?.enabled ?? false,
@@ -16231,8 +16234,8 @@ ${prefix}}`;
       server: config?.server ?? void 0,
       username: void 0
     });
-    const loginPermit = yield* make13(1);
-    const explicitRuns = yield* make16(0);
+    const loginPermit = yield* make14(1);
+    const explicitRuns = yield* make17(0);
     const getState = /* @__PURE__ */ __name(() => get4(state).pipe(map5(publicState)), "getState");
     const changes2 = changes(state).pipe(map8(publicState));
     const records = /* @__PURE__ */ __name((current) => ({
@@ -16241,7 +16244,7 @@ ${prefix}}`;
     }), "records");
     const getRecords = /* @__PURE__ */ __name(() => get4(state).pipe(map5(records)), "getRecords");
     const recordChanges = changes(state).pipe(map8(records));
-    const isPlayerReady = /* @__PURE__ */ __name(() => api.player.isReady().pipe(catchCause2(() => succeed7(false))), "isPlayerReady");
+    const isPlayerReady = /* @__PURE__ */ __name(() => api.player.isReady(), "isPlayerReady");
     const waitUntilPlayerReady = /* @__PURE__ */ __name(() => repeat2(isPlayerReady(), {
       schedule: spaced(readinessPollInterval),
       until: Boolean
@@ -16303,12 +16306,13 @@ ${prefix}}`;
       captureWatcherKey,
       sleep2(captureInterval).pipe(
         andThen2(
-          repeat2(captureIfMissing, {
+          repeat2(supervise(captureIfMissing, captureInterval), {
             schedule: spaced(captureInterval),
             until: /* @__PURE__ */ __name((captured) => captured, "until")
           })
         ),
-        asVoid2
+        asVoid2,
+        supervise
       )
     ).pipe(asVoid2), "watchForCapturableSession");
     const markReadySuccess = gen2(function* () {
@@ -16603,21 +16607,7 @@ ${prefix}}`;
         lastError: failure.detail,
         phase: { tag: "failed" }
       }));
-    }).pipe(
-      catchCause2(
-        (cause) => hasInterruptsOnly2(cause) ? void_3 : logError("Unexpected auto relogin failure", cause).pipe(
-          annotateLogs({ component: "auto-relogin" }),
-          andThen2(
-            updateCurrentGeneration(generation, (current) => ({
-              ...current,
-              attemptsRemaining: void 0,
-              lastError: "Auto relogin failed unexpectedly.",
-              phase: { tag: "failed" }
-            }))
-          )
-        )
-      )
-    ), "runBackground");
+    }).pipe(supervise), "runBackground");
     const startRecovery = /* @__PURE__ */ __name((skipDelay = false, resumeAtServerSelect = false) => gen2(function* () {
       if ((yield* get5(explicitRuns)) > 0) return;
       const startedAt = yield* currentTimeMillis2;
@@ -16651,7 +16641,8 @@ ${prefix}}`;
             andThen2(markReadySuccess)
           ) : void_3
         ),
-        asVoid2
+        asVoid2,
+        supervise
       )
     ).pipe(asVoid2), "watchForReady");
     const runLogin = /* @__PURE__ */ __name((request) => acquireUseRelease2(
@@ -16769,7 +16760,7 @@ ${prefix}}`;
     }), "setServer");
     const disposeConnection = yield* api.events.on(
       { type: "connection" },
-      (event) => {
+      (event) => supervise(suspend2(() => {
         if (event.type !== "connection") return void_3;
         if (event.status === "OnConnectionLost" || event.status === "OnConnectionFailed") {
           return gen2(function* () {
@@ -16784,7 +16775,7 @@ ${prefix}}`;
           return captureIfMissing.pipe(andThen2(watchForReady()));
         }
         return void_3;
-      }
+      }))
     );
     yield* addFinalizer3(
       () => sync2(() => {
@@ -16806,6 +16797,43 @@ ${prefix}}`;
     };
   });
 
+  // packages/runtime/src/game/automation/AutoReloginFailureRule.ts
+  var HostBoundaryFailure = class extends Error {
+    static {
+      __name(this, "HostBoundaryFailure");
+    }
+    constructor(cause) {
+      super("Auto relogin host boundary failed", { cause });
+    }
+  };
+  var callReloginHost = /* @__PURE__ */ __name((call) => {
+    try {
+      return call();
+    } catch (cause) {
+      throw new HostBoundaryFailure(cause);
+    }
+  }, "callReloginHost");
+  var makeReloginSupervisor = /* @__PURE__ */ __name((onDefect) => (effect2, retryAfter = 500) => suspend2(() => {
+    let failed = false;
+    const attempt = effect2.pipe(
+      tap3(() => sync2(() => {
+        if (failed) console.warn("auto relogin host boundary recovered");
+        failed = false;
+      })),
+      catchCause2((cause) => {
+        if (hasInterruptsOnly2(cause)) return failCause4(cause);
+        if (!cause.reasons.every((reason) => isDieReason2(reason) && reason.defect instanceof HostBoundaryFailure)) {
+          return sync2(() => onDefect(squash(cause))).pipe(andThen2(failCause4(cause)));
+        }
+        return sync2(() => {
+          if (!failed) console.warn("auto relogin host boundary failed; retrying");
+          failed = true;
+        }).pipe(andThen2(sleep2(retryAfter)), andThen2(attempt));
+      })
+    );
+    return attempt;
+  }), "makeReloginSupervisor");
+
   // packages/runtime/src/host/asks.ts
   var pending = /* @__PURE__ */ new Map();
   var completeAsk = /* @__PURE__ */ __name((id, answer, error) => {
@@ -16826,51 +16854,162 @@ ${prefix}}`;
     ...status.lastError === null ? {} : { lastError: status.lastError }
   }), "publicReloginState");
 
-  // packages/runtime/src/host/botRelogin.ts
-  var botRelogin = effectDiscard(gen2(function* () {
-    const host4 = __host;
-    const api = yield* Api;
-    const fibers = yield* make6();
-    const stored = JSON.parse(host4.read('{"kind":"autoRelogin"}'));
-    const relogin = yield* makeAutoRelogin(api, fibers, stored.config);
-    const permit = yield* make13(1);
-    const runFork3 = runForkWith2(yield* context2());
-    const publish2 = /* @__PURE__ */ __name((records) => sync2(() => host4.publishAutoRelogin(JSON.stringify(records))), "publish");
-    yield* runForEach2(relogin.recordChanges, () => relogin.getRecords().pipe(flatMap3(publish2))).pipe(forkScoped2);
-    if (stored.config.enabled) yield* relogin.setEnabled(true).pipe(forkScoped2);
-    window.onBotAsk = (id, payload) => {
-      const apply = gen2(function* () {
-        if (typeof payload !== "object" || payload === null || !("kind" in payload)) throw new TypeError("Unknown bot request");
-        switch (payload.kind) {
-          case "autoRelogin.setEnabled":
-            if (!("enabled" in payload) || typeof payload.enabled !== "boolean") throw new TypeError("Invalid enabled value");
-            yield* relogin.setEnabled(payload.enabled);
+  // packages/runtime/src/host/botReloginApi.ts
+  var Server = Struct({
+    chat: Number6,
+    count: Number6,
+    language: String4,
+    max: Number6,
+    memberOnly: Boolean3,
+    name: String4,
+    online: Boolean3,
+    full: Boolean3
+  });
+  var Servers = ArraySchema(Server);
+  var Credentials2 = Struct({ username: String4, password: String4 });
+  var Readiness = Struct({
+    epoch: Number6,
+    failures: Record(String4, String4),
+    missing: ArraySchema(Literals(["houseInventory", "inventory", "map", "player"])),
+    state: Struct({ houseInventory: Boolean3, inventory: Boolean3, map: Boolean3, player: Boolean3 })
+  });
+  var Records = Struct({
+    config: Struct({ enabled: Boolean3, delayMs: Number6, server: NullOr(String4) }),
+    status: Struct({
+      captured: Boolean3,
+      attemptsRemaining: NullOr(Number6),
+      lastError: NullOr(String4),
+      phase: Union2([
+        Struct({ tag: Literals(["armed", "awaiting-session", "awaiting-player-ready", "awaiting-server-select", "failed", "logging-in", "selecting-server", "waiting-delay", "waiting-kick"]) }),
+        Struct({ tag: Literal2("backoff"), delayMs: Number6 })
+      ])
+    })
+  });
+  var readReloginRecords = /* @__PURE__ */ __name((host4) => decodeUnknownSync(Records)(JSON.parse(callReloginHost(() => host4.read('{"kind":"autoRelogin"}')))), "readReloginRecords");
+  var makeBotReloginApi = /* @__PURE__ */ __name((api, gateway2, native) => {
+    const call = /* @__PURE__ */ __name((method, args2) => sync2(() => {
+      const json = JSON.stringify(args2 ?? []);
+      const reply = callReloginHost(() => native.swf(method, json));
+      return reply === void 0 ? void 0 : JSON.parse(reply);
+    }), "call");
+    const bridge = {
+      invoke: /* @__PURE__ */ __name((method, args2, schema) => call(method, args2).pipe(
+        flatMap3(decodeUnknownEffect2(schema)),
+        orDie2,
+        map5(some2)
+      ), "invoke"),
+      invokeJson: /* @__PURE__ */ __name((method, args2, schema) => call(method, args2).pipe(
+        map5((value) => typeof value === "string" ? JSON.parse(value) : value),
+        flatMap3(decodeUnknownEffect2(schema)),
+        orDie2,
+        map5(some2)
+      ), "invokeJson")
+    };
+    const host4 = {
+      read: /* @__PURE__ */ __name((query) => sync2(() => {
+        const json = JSON.stringify(query);
+        const value = JSON.parse(callReloginHost(() => native.read(json)));
+        if (query.kind !== "readiness") throw new Error(`Unexpected relogin query: ${query.kind}`);
+        return decodeUnknownSync(Readiness)(value);
+      }), "read"),
+      command: /* @__PURE__ */ __name((command) => sync2(() => {
+        const json = JSON.stringify(command);
+        const value = JSON.parse(callReloginHost(() => native.command(json)));
+        let decoded;
+        switch (command.kind) {
+          case "refreshCredentials":
+            decoded = decodeUnknownSync(Credentials2)(value);
             break;
-          case "autoRelogin.setDelay":
-            if (!("delayMs" in payload) || typeof payload.delayMs !== "number") throw new TypeError("Invalid delay");
-            yield* relogin.setDelay(payload.delayMs);
+          case "refreshServers":
+            decoded = decodeUnknownSync(Servers)(value);
             break;
-          case "autoRelogin.setServer":
-            if (!("server" in payload) || payload.server !== null && typeof payload.server !== "string") throw new TypeError("Invalid server");
-            yield* relogin.setServer(payload.server ?? void 0);
+          case "refreshLoggedIn":
+          case "login":
+            decoded = decodeUnknownSync(Boolean3)(value);
+            break;
+          case "logout":
+            decoded = decodeUnknownSync(Null2)(value);
             break;
           default:
-            throw new TypeError("Unknown bot request");
+            throw new Error(`Unexpected relogin command: ${command.kind}`);
+        }
+        return some2(decoded);
+      }), "command")
+    };
+    const wait = makeWaitApi(bridge, gateway2);
+    const auth = makeAuth(bridge, host4, wait);
+    const map9 = makeMap(bridge, host4, wait);
+    return { auth, events: api.events, player: { isReady: makePlayerReadiness(host4, auth, map9, bridge) } };
+  }, "makeBotReloginApi");
+
+  // packages/runtime/src/host/botRelogin.ts
+  var decodeRequest = decodeUnknownOption2(Union2([
+    Struct({ kind: Literal2("autoRelogin.setEnabled"), enabled: Boolean3 }),
+    Struct({ kind: Literal2("autoRelogin.setDelay"), delayMs: Number6 }),
+    Struct({ kind: Literal2("autoRelogin.setServer"), server: NullOr(String4) })
+  ]));
+  var botRelogin = effectDiscard(gen2(function* () {
+    const host4 = __host;
+    const api = makeBotReloginApi(yield* Api, yield* Gateway, host4);
+    const fibers = yield* make7();
+    const ready = yield* make5();
+    const permit = yield* make14(1);
+    const runFork3 = runForkWith2(yield* context2());
+    let terminated = false;
+    const supervise = makeReloginSupervisor((error) => {
+      if (terminated) return;
+      terminated = true;
+      void Promise.reject(error);
+    });
+    const launch = /* @__PURE__ */ __name((effect2) => {
+      runFork3(supervise(effect2));
+    }, "launch");
+    const publish2 = /* @__PURE__ */ __name((records) => sync2(() => {
+      const json = JSON.stringify(records);
+      callReloginHost(() => host4.publishAutoRelogin(json));
+    }), "publish");
+    const answer = /* @__PURE__ */ __name((id, value, error) => sync2(() => {
+      const json = JSON.stringify([id, value, error]);
+      callReloginHost(() => host4.answer(json));
+    }), "answer");
+    window.onBotAsk = (id, payload) => {
+      const request = decodeRequest(payload);
+      if (isNone2(request)) {
+        launch(answer(id, null, "Invalid bot request"));
+        return;
+      }
+      const apply = gen2(function* () {
+        const relogin = yield* _await(ready);
+        const input = request.value;
+        switch (input.kind) {
+          case "autoRelogin.setEnabled":
+            yield* relogin.setEnabled(input.enabled);
+            break;
+          case "autoRelogin.setDelay":
+            yield* relogin.setDelay(input.delayMs);
+            break;
+          case "autoRelogin.setServer":
+            yield* relogin.setServer(input.server ?? void 0);
+            break;
         }
         const records = yield* relogin.getRecords();
         yield* publish2(records);
-        host4.answer(JSON.stringify([id, publicReloginState(records), null]));
+        yield* answer(id, publicReloginState(records), null);
       });
-      runFork3(permit.withPermits(1)(apply).pipe(catchCause2(() => sync2(() => {
-        host4.answer(JSON.stringify([id, null, "The bot request failed"]));
-      }))));
+      launch(permit.withPermits(1)(supervise(apply)));
     };
-    window.onAutoReloginEventsLost = () => {
-      runFork3(sync2(() => host4.read('{"kind":"autoRelogin"}')).pipe(
-        andThen2(relogin.getRecords()),
-        flatMap3(publish2)
-      ));
-    };
+    window.onAutoReloginEventsLost = () => launch(gen2(function* () {
+      yield* sync2(() => readReloginRecords(host4));
+      const relogin = yield* _await(ready);
+      yield* publish2(yield* relogin.getRecords());
+    }));
+    yield* supervise(gen2(function* () {
+      const stored = yield* sync2(() => readReloginRecords(host4));
+      const relogin = yield* makeAutoRelogin(api, fibers, stored.config, supervise);
+      yield* succeed5(ready, relogin);
+      launch(runForEach2(relogin.recordChanges, () => supervise(relogin.getRecords().pipe(flatMap3(publish2)))));
+      if (stored.config.enabled) launch(relogin.setEnabled(true));
+    })).pipe(forkScoped2);
   }));
 
   // packages/runtime/src/host/loop.ts
@@ -17017,7 +17156,7 @@ ${prefix}}`;
   var botLayer = effectDiscard(
     flatMap3(Gateway, (gateway2) => gateway2.start())
   ).pipe(provideMerge(services), provide2(diagnostics));
-  var runtime2 = make5(mergeAll2(layer6, botRelogin).pipe(provideMerge(botLayer)));
+  var runtime2 = make6(mergeAll2(layer6, botRelogin).pipe(provideMerge(botLayer)));
   runtime2.runSync(void_3);
   runtime2.runPromise(run3);
   Object.assign(globalThis, { __lucent: Object.freeze({ turn, wake }) });

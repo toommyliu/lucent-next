@@ -15871,19 +15871,7 @@ ${prefix}}`;
       )
     ), "isAlive");
     const isMember = /* @__PURE__ */ __name(() => read("player.isMember", Boolean3, false), "isMember");
-    const isReady = /* @__PURE__ */ __name(() => host3.read({ kind: "readiness" }).pipe(
-      flatMap3(
-        (readiness) => readiness.missing.length === 0 ? all2([
-          auth.isLoggedIn(),
-          map8.isLoaded(),
-          read("player.isLoaded", Boolean3, false)
-        ]).pipe(
-          map5(
-            ([loggedIn, loaded, playerLoaded]) => loggedIn && loaded && playerLoaded
-          )
-        ) : succeed7(false)
-      )
-    ), "isReady");
+    const isReady = makePlayerReadiness(host3, auth, map8, bridge);
     const readLiveLocation = /* @__PURE__ */ __name(() => all2({
       cell: bridge.invoke("player.getCell", void 0, String4).pipe(map5(getOrElse(() => ""))),
       pad: bridge.invoke("player.getPad", void 0, String4).pipe(map5(getOrElse(() => "")))
@@ -16056,6 +16044,19 @@ ${prefix}}`;
       walkTo
     };
   }, "makePlayer");
+  var makePlayerReadiness = /* @__PURE__ */ __name((host3, auth, map8, bridge) => () => host3.read({ kind: "readiness" }).pipe(
+    flatMap3(
+      (readiness) => readiness.missing.length === 0 ? all2([
+        auth.isLoggedIn(),
+        map8.isLoaded(),
+        bridge.invoke("player.isLoaded", void 0, Boolean3).pipe(map5(getOrElse(() => false)))
+      ]).pipe(
+        map5(
+          ([loggedIn, loaded, playerLoaded]) => loggedIn && loaded && playerLoaded
+        )
+      ) : succeed7(false)
+    )
+  ), "makePlayerReadiness");
 
   // packages/runtime/src/game/flash/api/Players.ts
   var makePlayers = /* @__PURE__ */ __name((host3) => {

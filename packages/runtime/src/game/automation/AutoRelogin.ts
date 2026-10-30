@@ -1,5 +1,4 @@
 import type { AutoReloginConfig, AutoReloginRecords } from "@lucent/game/protocol";
-import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
@@ -17,6 +16,7 @@ import type * as FiberMapType from "effect/FiberMap";
 import { defaultAutoReloginDelay as defaultDelay, normalizeAutoReloginDelay } from "./autoReloginConfig";
 export { normalizeAutoReloginDelay } from "./autoReloginConfig";
 
+import type { ReloginSupervisor } from "./AutoReloginFailureRule";
 import type { ApiService } from "../flash/api/Api";
 
 export interface AutoReloginApi {
@@ -198,6 +198,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
   api: AutoReloginApi,
   fibers: FiberMapType.FiberMap<string>,
   config?: AutoReloginConfig,
+  supervise: ReloginSupervisor = (effect) => effect,
 ) {
   const state = yield* SubscriptionRef.make<State>({
     attemptsRemaining: undefined,
@@ -224,7 +225,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
   const recordChanges = SubscriptionRef.changes(state).pipe(Stream.map(records));
 
   const isPlayerReady = () =>
-    api.player.isReady().pipe(Effect.catchCause(() => Effect.succeed(false)));
+    api.player.isReady();
 
   const waitUntilPlayerReady = () =>
     Effect.repeat(isPlayerReady(), {
@@ -316,12 +317,13 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       captureWatcherKey,
       Effect.sleep(captureInterval).pipe(
         Effect.andThen(
-          Effect.repeat(captureIfMissing, {
+          Effect.repeat(supervise(captureIfMissing, captureInterval), {
             schedule: Schedule.spaced(captureInterval),
             until: (captured) => captured,
           }),
         ),
         Effect.asVoid,
+        supervise,
       ),
     ).pipe(Effect.asVoid);
 
@@ -700,23 +702,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         lastError: failure.detail,
         phase: { tag: "failed" },
       }));
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.void
-          : Effect.logError("Unexpected auto relogin failure", cause).pipe(
-              Effect.annotateLogs({ component: "auto-relogin" }),
-              Effect.andThen(
-                updateCurrentGeneration(generation, (current) => ({
-                  ...current,
-                  attemptsRemaining: undefined,
-                  lastError: "Auto relogin failed unexpectedly.",
-                  phase: { tag: "failed" },
-                })),
-              ),
-            ),
-      ),
-    );
+    }).pipe(supervise);
 
   const startRecovery = (skipDelay = false, resumeAtServerSelect = false) =>
     Effect.gen(function* () {
@@ -762,6 +748,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
             : Effect.void,
         ),
         Effect.asVoid,
+        supervise,
       ),
     ).pipe(Effect.asVoid);
 
@@ -922,7 +909,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
 
   const disposeConnection = yield* api.events.on(
     { type: "connection" },
-    (event) => {
+    (event) => supervise(Effect.suspend(() => {
       if (event.type !== "connection") return Effect.void;
       if (
         event.status === "OnConnectionLost" ||
@@ -944,7 +931,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         return captureIfMissing.pipe(Effect.andThen(watchForReady()));
       }
       return Effect.void;
-    },
+    })),
   );
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
