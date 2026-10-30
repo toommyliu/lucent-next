@@ -16237,9 +16237,7 @@ ${prefix}}`;
         }
       }), "apply"),
       get: get5,
-      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get5().pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled"),
-      reapply: /* @__PURE__ */ __name(() => host3.command({ kind: "reapplySettings", actionsOnly: false }).pipe(asVoid2), "reapply"),
-      reapplyActions: /* @__PURE__ */ __name(() => host3.command({ kind: "reapplySettings", actionsOnly: true }).pipe(asVoid2), "reapplyActions")
+      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get5().pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled")
     };
   }, "makeSettings");
 
@@ -16683,9 +16681,6 @@ ${prefix}}`;
   var gatewayLayer = layer2.pipe(provideMerge(layer));
   var hostLayer = layer3.pipe(provideMerge(gatewayLayer));
   var servicesLayer = layer5.pipe(provideMerge(hostLayer));
-  var apiLayer = effectDiscard(
-    flatMap3(Gateway, (gateway) => gateway.start())
-  ).pipe(provideMerge(servicesLayer));
   var scriptApiLayer = layer4.pipe(
     provideMerge(servicesLayer)
   );

@@ -72,17 +72,29 @@ fn malformed_packets_do_not_stop_bot_event_delivery() {
         "listen.js",
         r#"
         globalThis.seen = [];
-        __lucent.onEvent(event => {
-            if (event.type === "debug") seen.push(event.message);
-        }).then(() => null);
+        const parse = JSON.parse;
+        JSON.parse = (...args) => {
+            const value = parse(...args);
+            if (value?.type === "json" && ["before", "after"].includes(value.dataObj?.cmd)) {
+                seen.push(value.dataObj.cmd);
+            }
+            return value;
+        };
+        null;
         "#,
     )
     .wait::<()>(TIMEOUT)
     .unwrap();
     for (name, payload) in [
-        ("onDebug", "before malformed packet"),
+        (
+            "onExtensionResponse",
+            r#"{"type":"json","dataObj":{"cmd":"before"}}"#,
+        ),
         ("onExtensionResponse", "not json"),
-        ("onDebug", "after malformed packet"),
+        (
+            "onExtensionResponse",
+            r#"{"type":"json","dataObj":{"cmd":"after"}}"#,
+        ),
     ] {
         observer
             .call_loader(
@@ -99,10 +111,11 @@ fn malformed_packets_do_not_stop_bot_event_delivery() {
         )
         .wait::<Vec<String>>(TIMEOUT)
         .unwrap();
-    assert_eq!(
-        seen,
-        vec!["before malformed packet", "after malformed packet"]
-    );
+    assert_eq!(seen, vec!["before", "after"]);
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
 }
 
 #[test]
@@ -893,6 +906,32 @@ fn settings_policy_missing_loader_booleans_warn_once_and_retry() {
                 "#
             ),
             "[cause]: SchemaError: Expected boolean",
+        );
+    }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn settings_policy_invalid_reapply_reply_warns_once_and_retries() {
+    for reply in ["false", "{}"] {
+        assert_policy_retries(
+            &format!(
+                r#"
+                globalThis.attempts = 0;
+                const command = __host.command;
+                __host.command = json => {{
+                    if (JSON.parse(json).kind === "reapplySettings") {{
+                        attempts++;
+                        return {reply};
+                    }}
+                    return command(json);
+                }};
+                globalThis.restore = () => {{ __host.command = command; }};
+                null;
+                "#,
+                reply = serde_json::to_string(reply).unwrap()
+            ),
+            "settings policy tick failed Error: Invalid reapplySettings reply",
         );
     }
 }

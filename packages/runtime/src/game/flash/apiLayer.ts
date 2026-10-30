@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as Api from "./api/Api";
@@ -10,10 +9,6 @@ import * as HostState from "./state/HostState";
 const gatewayLayer = Gateway.layer.pipe(Layer.provideMerge(Bridge.layer));
 const hostLayer = HostState.layer.pipe(Layer.provideMerge(gatewayLayer));
 const servicesLayer = Api.layer.pipe(Layer.provideMerge(hostLayer));
-
-export const apiLayer = Layer.effectDiscard(
-  Effect.flatMap(Gateway.Gateway, (gateway) => gateway.start()),
-).pipe(Layer.provideMerge(servicesLayer));
 
 export const scriptApiLayer = ScriptReactions.layer.pipe(
   Layer.provideMerge(servicesLayer),

@@ -139,11 +139,6 @@ impl Bot {
     pub fn eval(&self, name: impl Into<String>, source: impl Into<String>) -> PendingEval {
         self.0.eval(name, source)
     }
-
-    #[cfg(feature = "testing")]
-    pub fn kill(&self) {
-        self.0.kill();
-    }
 }
 
 impl ScriptRun {
@@ -348,14 +343,7 @@ fn run(
             }
             Some(Stop::Shutdown) => return Ok(()),
         }
-        let deadline = match turn {
-            Ok(deadline) => deadline,
-            Err(error) if matches!(execution, Execution::Bot) => return Err(error),
-            Err(error) => {
-                tracing::error!(%error, "script turn failed");
-                None
-            }
-        };
+        let deadline = turn?;
         if let Some(ready) = ready.take() {
             let _ = ready.send(());
             if let Execution::StartScript {

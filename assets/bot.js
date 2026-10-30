@@ -14911,9 +14911,7 @@ ${prefix}}`;
         }
       }), "apply"),
       get: get4,
-      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get4().pipe(map4((state) => state.antiCounterEnabled)), "isAntiCounterEnabled"),
-      reapply: /* @__PURE__ */ __name(() => host4.command({ kind: "reapplySettings", actionsOnly: false }).pipe(asVoid2), "reapply"),
-      reapplyActions: /* @__PURE__ */ __name(() => host4.command({ kind: "reapplySettings", actionsOnly: true }).pipe(asVoid2), "reapplyActions")
+      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get4().pipe(map4((state) => state.antiCounterEnabled)), "isAntiCounterEnabled")
     };
   }, "makeSettings");
 
@@ -15382,25 +15380,6 @@ ${prefix}}`;
   }, "makeRetryLoop");
 
   // packages/runtime/src/game/automation/SettingsPolicy.ts
-  var requireResult = /* @__PURE__ */ __name((operation) => (result2) => isNone2(result2) ? die3(new Error(`Failed ${operation}`)) : void_3, "requireResult");
-  var bridgeLayer = effect(
-    Bridge,
-    map4(Bridge, (bridge) => ({
-      ...bridge,
-      invoke: /* @__PURE__ */ __name((method, args2, schema) => bridge.invoke(method, args2, schema).pipe(tap2(requireResult(method))), "invoke")
-    }))
-  );
-  var hostLayer = effect(
-    HostState,
-    map4(HostState, (host4) => ({
-      ...host4,
-      command: /* @__PURE__ */ __name((command) => host4.command(command).pipe(tap2(requireResult(command.kind))), "command")
-    }))
-  );
-  var apiLayer = layer5.pipe(
-    provide2(bridgeLayer),
-    provide2(hostLayer)
-  );
   var run2 = gen2(function* () {
     const api = yield* Api;
     const host4 = yield* HostState;
@@ -15513,20 +15492,47 @@ ${prefix}}`;
   });
 
   // packages/runtime/src/bot.ts
+  var causes = /* @__PURE__ */ new Map();
+  var diagnostics = succeed6(DiagnosticSink, {
+    report: /* @__PURE__ */ __name((_phase, operation, cause) => {
+      causes.set(operation, cause);
+    }, "report")
+  });
+  var requireResult = /* @__PURE__ */ __name((operation) => (result2) => {
+    const cause = causes.get(operation);
+    causes.delete(operation);
+    return isNone2(result2) ? die3(new Error(`Failed ${operation}`, { cause })) : void_3;
+  }, "requireResult");
+  var readinessBridge = effect(
+    Bridge,
+    map4(Bridge, (bridge) => ({
+      ...bridge,
+      invoke: /* @__PURE__ */ __name((method, args2, schema) => bridge.invoke(method, args2, schema).pipe(
+        tap2(
+          (result2) => method === "world.isLoaded" || method === "player.isLoaded" ? requireResult(method)(result2) : void_3
+        )
+      ), "invoke")
+    }))
+  );
+  var commandHost = effect(
+    HostState,
+    map4(HostState, (host4) => ({
+      ...host4,
+      command: /* @__PURE__ */ __name((command) => host4.command(command).pipe(tap2(requireResult(command.kind))), "command")
+    }))
+  );
+  var apiLayer = layer5.pipe(provide2(readinessBridge));
   var gateway = layer2.pipe(provideMerge(layer));
-  var host3 = layer3.pipe(provideMerge(gateway));
+  var host3 = commandHost.pipe(
+    provide2(layer3),
+    provideMerge(gateway)
+  );
   var services = apiLayer.pipe(provideMerge(host3));
   var botLayer = effectDiscard(
     flatMap3(Gateway, (gateway2) => gateway2.start())
-  ).pipe(provideMerge(services));
+  ).pipe(provideMerge(services), provide2(diagnostics));
   var runtime = make5(botLayer);
   runtime.runSync(void_3);
   runtime.runPromise(run2);
-  var onEvent = /* @__PURE__ */ __name((listener) => runtime.runPromise(
-    flatMap3(
-      Api,
-      (api) => api.events.on(void 0, (event) => sync2(() => listener(event)))
-    )
-  ), "onEvent");
-  Object.assign(globalThis, { __lucent: Object.freeze({ turn, wake, onEvent }) });
+  Object.assign(globalThis, { __lucent: Object.freeze({ turn, wake }) });
 })();
