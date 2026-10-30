@@ -560,7 +560,16 @@ fn settings_policy_host_failures_retry_once_per_streak() {
                     if (++failures <= 3) throw new SyntaxError("host link unavailable");
                     return original(...args);
                 }};
-                new Promise(resolve => setTimeout(() => resolve(null), 2200));
+                new Promise(resolve => {{
+                    const log = __host.log;
+                    __host.log = (level, text) => {{
+                        log(level, text);
+                        if (level === "info" && text === "settings policy recovered") {{
+                            __host.log = log;
+                            resolve(null);
+                        }}
+                    }};
+                }});
                 "#
             ),
         )
