@@ -501,3 +501,100 @@ fn a_drop_accept_propagates_a_malformed_logged_in_reply() {
         })
     );
 }
+
+#[test]
+fn cancelling_queued_handles_immediately_frees_fifo_capacity() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(
+        &host,
+        ProbeMovie::new()
+            .constant("auth.isLoggedIn", json!(true))
+            .accepting_drop(Duration::ZERO, packet(json!({"cmd":"unrelated"}))),
+    );
+    drop_item(&link, "Item", false);
+    let issued = accept(&link);
+    while !matches!(next(&link), ScriptEvent::Loader { event, .. } if event.name == "onProbeAccept")
+    {
+    }
+    let mut queued = vec![];
+    loop {
+        match link.operate(Operation::AcceptDrop {
+            selector: ItemSelector::Id(999.0),
+        }) {
+            Ok(id) => queued.push(id),
+            Err(lucent_host::bridge::Error::Overflow) => break,
+            Err(error) => panic!("{error:?}"),
+        }
+    }
+    assert_eq!(queued.len(), 1024);
+    let cancelled = queued.pop().unwrap();
+    link.cancel_operation(cancelled);
+    link.cancel_operation(cancelled);
+    let replacement = link
+        .operate(Operation::AcceptDrop {
+            selector: ItemSelector::Id(999.0),
+        })
+        .unwrap();
+    assert_ne!(replacement, cancelled);
+    assert_eq!(
+        link.submit_operation(
+            replacement,
+            Operation::AcceptDrop {
+                selector: ItemSelector::Id(70.0)
+            }
+        ),
+        Err(lucent_host::bridge::Error::Stopped)
+    );
+    link.cancel_operation(replacement);
+    for id in queued {
+        link.cancel_operation(id);
+    }
+    emit(
+        &link,
+        "onExtensionResponse",
+        packet(json!({"cmd":"getDrop","ItemID":70,"bSuccess":false})),
+    );
+    assert!(!answer(&link, issued));
+    let sentinel = link
+        .operate(Operation::AcceptDrop {
+            selector: ItemSelector::Id(999.0),
+        })
+        .unwrap();
+    assert!(!answer(&link, sentinel));
+}
+
+#[test]
+fn cancelling_an_issued_handle_suppresses_its_answer_until_the_next_operation() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(
+        &host,
+        ProbeMovie::new()
+            .constant("auth.isLoggedIn", json!(true))
+            .accepting_drop(Duration::ZERO, packet(json!({"cmd":"unrelated"}))),
+    );
+    drop_item(&link, "Item", false);
+    let issued = accept(&link);
+    while !matches!(next(&link), ScriptEvent::Loader { event, .. } if event.name == "onProbeAccept")
+    {
+    }
+    link.cancel_operation(issued);
+    link.cancel_operation(issued);
+    let sentinel = link
+        .operate(Operation::AcceptDrop {
+            selector: ItemSelector::Id(999.0),
+        })
+        .unwrap();
+    emit(
+        &link,
+        "onExtensionResponse",
+        packet(json!({"cmd":"getDrop","ItemID":70,"bSuccess":false})),
+    );
+    assert!(!answer(&link, sentinel));
+    link.cancel_operation(issued);
+    let final_id = link
+        .operate(Operation::AcceptDrop {
+            selector: ItemSelector::Id(999.0),
+        })
+        .unwrap();
+    assert!(!answer(&link, final_id));
+}

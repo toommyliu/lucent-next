@@ -1,0 +1,665 @@
+[
+  {
+    "name": "integer-number-representations",
+    "input": {
+      "version": 1.0,
+      "profiles": [
+        {
+          "id": "empty",
+          "label": "Empty profile",
+          "delayMs": 0.0,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1.0,
+              "conditions": [],
+              "waitMs": 60000.0
+            }
+          ]
+        }
+      ]
+    },
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "empty",
+          "label": "Empty profile",
+          "delayMs": 0,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": [],
+              "waitMs": 60000
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "empty-library",
+    "input": {
+      "version": 1,
+      "profiles": []
+    },
+    "expected": {
+      "version": 1,
+      "profiles": []
+    }
+  },
+  {
+    "name": "missing-optional-fields",
+    "input": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "empty",
+          "label": "Empty profile",
+          "delayMs": 0,
+          "cooldownMode": "use-if-ready",
+          "steps": []
+        }
+      ]
+    },
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "empty",
+          "label": "Empty profile",
+          "delayMs": 0,
+          "cooldownMode": "use-if-ready",
+          "steps": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "release-default-document",
+    "input": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "generic-base",
+          "label": "Generic",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": []
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            },
+            {
+              "skill": 3,
+              "conditions": []
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            }
+          ]
+        }
+      ]
+    },
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "generic-base",
+          "label": "Generic",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": []
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            },
+            {
+              "skill": 3,
+              "conditions": []
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "release-saved-document",
+    "input": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "generic-base",
+          "label": "Generic",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": []
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            },
+            {
+              "skill": 3,
+              "conditions": []
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            }
+          ]
+        },
+        {
+          "id": "dot-solo",
+          "label": "Dragon of Time Solo",
+          "classNames": [
+            "Dragon of Time"
+          ],
+          "delayMs": 125,
+          "cooldownMode": "wait-for-cooldown",
+          "resetSkillIndexOnTargetDeath": true,
+          "steps": [
+            {
+              "skill": 3,
+              "conditions": [
+                {
+                  "type": "self-hp",
+                  "op": "<=",
+                  "value": 45,
+                  "unit": "percent"
+                }
+              ],
+              "priority": true
+            },
+            {
+              "skill": 5,
+              "conditions": [
+                {
+                  "type": "self-aura",
+                  "auraName": "Temporal Rift",
+                  "op": ">=",
+                  "value": 4
+                }
+              ]
+            },
+            {
+              "skill": 2,
+              "conditions": [],
+              "waitMs": 250
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            }
+          ],
+          "messageTriggers": [
+            {
+              "messageIncludes": "Temporal Rift fades",
+              "skill": 4,
+              "source": "aura",
+              "cooldownMs": 12000
+            }
+          ]
+        }
+      ]
+    },
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "generic-base",
+          "label": "Generic",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": []
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            },
+            {
+              "skill": 3,
+              "conditions": []
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            }
+          ]
+        },
+        {
+          "id": "dot-solo",
+          "label": "Dragon of Time Solo",
+          "classNames": [
+            "Dragon of Time"
+          ],
+          "delayMs": 125,
+          "cooldownMode": "wait-for-cooldown",
+          "resetSkillIndexOnTargetDeath": true,
+          "steps": [
+            {
+              "skill": 3,
+              "conditions": [
+                {
+                  "type": "self-hp",
+                  "op": "<=",
+                  "value": 45,
+                  "unit": "percent"
+                }
+              ],
+              "priority": true
+            },
+            {
+              "skill": 5,
+              "conditions": [
+                {
+                  "type": "self-aura",
+                  "auraName": "Temporal Rift",
+                  "op": ">=",
+                  "value": 4
+                }
+              ]
+            },
+            {
+              "skill": 2,
+              "conditions": [],
+              "waitMs": 250
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            }
+          ],
+          "messageTriggers": [
+            {
+              "messageIncludes": "Temporal Rift fades",
+              "skill": 4,
+              "source": "aura",
+              "cooldownMs": 12000
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "variants-and-range-edges",
+    "input": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "variants",
+          "label": "All variants",
+          "classNames": [
+            "Mage",
+            "ArchPaladin"
+          ],
+          "consumable": "Potent Honor Potion",
+          "delayMs": 60000,
+          "cooldownMode": "wait-for-cooldown",
+          "resetSkillIndexOnTargetDeath": true,
+          "steps": [
+            {
+              "skill": 0,
+              "conditions": [
+                {
+                  "type": "self-hp",
+                  "op": "<=",
+                  "value": 0,
+                  "unit": "percent"
+                },
+                {
+                  "type": "self-mp",
+                  "op": ">=",
+                  "value": 999999,
+                  "unit": "value"
+                },
+                {
+                  "type": "ally-hp",
+                  "op": ">=",
+                  "value": 100,
+                  "unit": "percent"
+                },
+                {
+                  "type": "self-hp",
+                  "op": "<=",
+                  "value": 999999,
+                  "unit": "percent"
+                },
+                {
+                  "type": "self-aura",
+                  "auraName": "Focus",
+                  "op": ">=",
+                  "value": 999
+                },
+                {
+                  "type": "target-aura",
+                  "auraName": "Marked",
+                  "op": "<=",
+                  "value": 0
+                }
+              ],
+              "priority": false,
+              "cooldownMode": "use-if-ready",
+              "waitMs": 0
+            },
+            {
+              "skill": 1,
+              "conditions": [],
+              "priority": true,
+              "cooldownMode": "wait-for-cooldown",
+              "waitMs": 60000
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            },
+            {
+              "skill": 3,
+              "conditions": []
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            },
+            {
+              "skill": 5,
+              "conditions": []
+            },
+            {
+              "skill": 1,
+              "conditions": []
+            }
+          ],
+          "messageTriggers": [
+            {
+              "messageIncludes": "enrage",
+              "skill": 0,
+              "source": "any"
+            },
+            {
+              "messageIncludes": "cast",
+              "skill": 5,
+              "source": "animation",
+              "cooldownMs": 0
+            },
+            {
+              "messageIncludes": "fades",
+              "skill": 4,
+              "source": "aura",
+              "cooldownMs": 60000
+            }
+          ]
+        },
+        {
+          "id": "empty",
+          "label": "Empty profile",
+          "delayMs": 0,
+          "cooldownMode": "use-if-ready",
+          "steps": [],
+          "classNames": [],
+          "resetSkillIndexOnTargetDeath": false,
+          "messageTriggers": []
+        }
+      ]
+    },
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "variants",
+          "label": "All variants",
+          "classNames": [
+            "Mage",
+            "ArchPaladin"
+          ],
+          "consumable": "Potent Honor Potion",
+          "delayMs": 60000,
+          "cooldownMode": "wait-for-cooldown",
+          "resetSkillIndexOnTargetDeath": true,
+          "steps": [
+            {
+              "skill": 0,
+              "conditions": [
+                {
+                  "type": "self-hp",
+                  "op": "<=",
+                  "value": 0,
+                  "unit": "percent"
+                },
+                {
+                  "type": "self-mp",
+                  "op": ">=",
+                  "value": 999999,
+                  "unit": "value"
+                },
+                {
+                  "type": "ally-hp",
+                  "op": ">=",
+                  "value": 100,
+                  "unit": "percent"
+                },
+                {
+                  "type": "self-hp",
+                  "op": "<=",
+                  "value": 999999,
+                  "unit": "percent"
+                },
+                {
+                  "type": "self-aura",
+                  "auraName": "Focus",
+                  "op": ">=",
+                  "value": 999
+                },
+                {
+                  "type": "target-aura",
+                  "auraName": "Marked",
+                  "op": "<=",
+                  "value": 0
+                }
+              ],
+              "priority": false,
+              "cooldownMode": "use-if-ready",
+              "waitMs": 0
+            },
+            {
+              "skill": 1,
+              "conditions": [],
+              "priority": true,
+              "cooldownMode": "wait-for-cooldown",
+              "waitMs": 60000
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            },
+            {
+              "skill": 3,
+              "conditions": []
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            },
+            {
+              "skill": 5,
+              "conditions": []
+            },
+            {
+              "skill": 1,
+              "conditions": []
+            }
+          ],
+          "messageTriggers": [
+            {
+              "messageIncludes": "enrage",
+              "skill": 0,
+              "source": "any"
+            },
+            {
+              "messageIncludes": "cast",
+              "skill": 5,
+              "source": "animation",
+              "cooldownMs": 0
+            },
+            {
+              "messageIncludes": "fades",
+              "skill": 4,
+              "source": "aura",
+              "cooldownMs": 60000
+            }
+          ]
+        },
+        {
+          "id": "empty",
+          "label": "Empty profile",
+          "delayMs": 0,
+          "cooldownMode": "use-if-ready",
+          "steps": [],
+          "classNames": [],
+          "resetSkillIndexOnTargetDeath": false,
+          "messageTriggers": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "trimmed-strings-and-unknown-fields",
+    "input": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "﻿ id 　",
+          "label": " 😀xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ",
+          "delayMs": 0,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": [
+                {
+                  "type": "self-aura",
+                  "auraName": " Focus ",
+                  "op": ">=",
+                  "value": 1,
+                  "ignored": true
+                }
+              ],
+              "ignored": true
+            }
+          ],
+          "classNames": [
+            "\tMage\n"
+          ],
+          "consumable": " Potion ",
+          "messageTriggers": [
+            {
+              "messageIncludes": " xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ",
+              "skill": 5,
+              "source": "any",
+              "ignored": true
+            }
+          ],
+          "ignored": true
+        }
+      ],
+      "ignored": true
+    },
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "id",
+          "label": "😀xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "delayMs": 0,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": [
+                {
+                  "type": "self-aura",
+                  "auraName": "Focus",
+                  "op": ">=",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "classNames": [
+            "Mage"
+          ],
+          "consumable": "Potion",
+          "messageTriggers": [
+            {
+              "messageIncludes": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "skill": 5,
+              "source": "any"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "trigger-only-rotation",
+    "input": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "trigger-only",
+          "label": "Trigger only",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [],
+          "messageTriggers": [
+            {
+              "messageIncludes": "enrage",
+              "skill": 5,
+              "source": "any"
+            }
+          ]
+        }
+      ]
+    },
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "trigger-only",
+          "label": "Trigger only",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [],
+          "messageTriggers": [
+            {
+              "messageIncludes": "enrage",
+              "skill": 5,
+              "source": "any"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

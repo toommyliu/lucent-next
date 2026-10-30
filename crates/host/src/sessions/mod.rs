@@ -17,7 +17,7 @@ pub(crate) struct Records {
     pub(crate) relogin: Arc<relogin::Shared>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct AttachmentId(pub(crate) u64);
 
 use std::sync::Arc;

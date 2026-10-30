@@ -15,7 +15,9 @@ declare global {
     swf(method: string, argsJson: string): string | undefined;
     read(queryJson: string): string;
     command(commandJson: string): string;
-    operate(operationJson: string): string;
+    prepareOperation(): string;
+    operate(id: string, operationJson: string): void;
+    cancelOperation(id: string): void;
     ask(payloadJson: string): string;
     cancelAsk(id: string): void;
     isAskPending(id: string): boolean;

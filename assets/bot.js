@@ -3142,9 +3142,6 @@ ${prefix}}`;
       }
     });
   }, "try_");
-  var promise = /* @__PURE__ */ __name((evaluate2) => callbackOptions(function(resume, signal) {
-    evaluate2(signal).then((a) => resume(succeed3(a)), (e) => resume(die(e)));
-  }, evaluate2.length !== 0), "promise");
   var tryPromise = /* @__PURE__ */ __name((options) => {
     const f = typeof options === "function" ? options : options.try;
     const catcher = typeof options === "function" ? (cause) => new UnknownError(cause, "An error occurred in Effect.tryPromise") : options.catch;
@@ -5032,7 +5029,6 @@ ${prefix}}`;
   var all2 = all;
   var forEach2 = forEach;
   var whileLoop2 = whileLoop;
-  var promise2 = promise;
   var tryPromise2 = tryPromise;
   var succeed7 = succeed3;
   var suspend2 = suspend;
@@ -14134,40 +14130,63 @@ ${prefix}}`;
 
   // packages/runtime/src/host/operations.ts
   var operations = /* @__PURE__ */ new Map();
-  var operate = /* @__PURE__ */ __name((operation, host4) => new Promise((resolve3, reject) => {
-    const id = host4.operate(JSON.stringify(operation));
-    operations.set(id, { resolve: resolve3, reject });
+  var operate = /* @__PURE__ */ __name((operation, host4) => callback2((resume) => {
+    let id;
+    let json;
+    try {
+      json = JSON.stringify(operation);
+      id = host4.prepareOperation();
+    } catch (cause) {
+      resume(fail5(cause instanceof Error ? cause : new Error(String(cause))));
+      return;
+    }
+    const cancel = /* @__PURE__ */ __name(() => {
+      const pending2 = operations.get(id);
+      if (pending2 === void 0) return;
+      operations.delete(id);
+      clearTimeout(pending2.timeout);
+      host4.cancelOperation(id);
+    }, "cancel");
+    const complete = /* @__PURE__ */ __name((answer, error) => {
+      const pending2 = operations.get(id);
+      if (pending2 === void 0) return;
+      operations.delete(id);
+      clearTimeout(pending2.timeout);
+      resume(answer === null ? fail5(new Error(error ?? "The host operation failed")) : succeed7(answer));
+    }, "complete");
+    const fail7 = /* @__PURE__ */ __name((cause) => {
+      cancel();
+      resume(fail5(cause));
+    }, "fail");
+    operations.set(id, { complete, fail: fail7 });
+    try {
+      host4.operate(id, json);
+    } catch (cause) {
+      fail7(cause instanceof Error ? cause : new Error(String(cause)));
+    }
+    return sync2(cancel);
   }), "operate");
   var startOperation = /* @__PURE__ */ __name((id) => {
     const pending2 = operations.get(id);
     if (pending2 === void 0 || pending2.timeout !== void 0) return;
     pending2.timeout = setTimeout(() => {
-      operations.delete(id);
-      pending2.reject(new Error("The host operation timed out"));
+      pending2.fail(new Error("The host operation timed out"));
     }, 35e3);
   }, "startOperation");
-  var completeOperation = /* @__PURE__ */ __name((id, answer, error) => {
-    const pending2 = operations.get(id);
-    if (pending2 === void 0) return;
-    operations.delete(id);
-    clearTimeout(pending2.timeout);
-    if (answer !== null) pending2.resolve(answer);
-    else pending2.reject(new Error(error ?? "The host operation failed"));
-  }, "completeOperation");
+  var completeOperation = /* @__PURE__ */ __name((id, answer, error) => operations.get(id)?.complete(answer, error), "completeOperation");
   var failOperations = /* @__PURE__ */ __name((cause) => {
-    for (const operation of operations.values()) {
-      clearTimeout(operation.timeout);
-      operation.reject(cause);
+    for (const pending2 of operations.values()) {
+      pending2.fail(cause);
     }
-    operations.clear();
   }, "failOperations");
 
   // packages/runtime/src/game/flash/api/Drops.ts
   var makeDrops = fnUntraced2(function* (bridge, host4, auth) {
     const operationHost = globalThis.__host;
     const get6 = /* @__PURE__ */ __name((selector) => readItem(host4, "drop", selector), "get");
-    const accept = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? promise2(
-      () => operate({ kind: "acceptDrop", selector }, operationHost).then((answer) => answer.value).catch(() => false)
+    const accept = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? operate({ kind: "acceptDrop", selector }, operationHost).pipe(
+      map4((answer) => answer.value),
+      catch_2(() => succeed7(false))
     ) : succeed7(false), "accept");
     const contains = /* @__PURE__ */ __name((selector) => get6(selector).pipe(map4((drop) => drop !== null)), "contains");
     const getAll = /* @__PURE__ */ __name(() => readItems(host4, "drop"), "getAll");
