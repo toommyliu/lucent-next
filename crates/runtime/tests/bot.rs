@@ -760,3 +760,22 @@ fn settings_policy_recovery_waits_for_the_failed_loop() {
         1
     );
 }
+
+#[cfg(feature = "testing")]
+#[test]
+fn settings_policy_missing_loader_booleans_are_terminal() {
+    let (_host, mut session, observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    next_call(&observer, "settings.setWalkSpeed");
+    bot.eval(
+        "missing-loader-result.js",
+        "__host.swf = () => undefined; null;",
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    let result = bot.wait(Duration::from_secs(2));
+    assert!(
+        matches!(&result, Err(RuntimeError::JavaScript(error)) if error == "SchemaError"),
+        "{result:?}"
+    );
+}
