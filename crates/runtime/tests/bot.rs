@@ -1219,10 +1219,10 @@ fn auto_zone_policy_defects_end_the_bot() {
     bot.eval(
         "auto-zone-defect.js",
         r#"
-        window.onAutoZoneChanged({
+        setTimeout(() => window.onAutoZoneChanged({
             get enabled() { throw new Error("auto zone policy defect"); },
             map: null
-        });
+        }), 10);
         null;
     "#,
     )

@@ -4,6 +4,7 @@ import * as Layer from "effect/Layer";
 import * as FiberMap from "effect/FiberMap";
 import * as Random from "effect/Random";
 import * as Schema from "effect/Schema";
+import * as Schedule from "effect/Schedule";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import type * as FiberMapType from "effect/FiberMap";
 
@@ -300,14 +301,38 @@ export const layer = Layer.effectDiscard(
       enabled: config.enabled,
       map: config.map ?? undefined,
     });
-    const runFork = Effect.runForkWith(yield* Effect.context<never>());
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const boundary = __host;
+    const decodeConfig = Schema.decodeUnknownSync(Schema.Struct({
+      enabled: Schema.Boolean,
+      map: Schema.NullOr(AutoZoneSupportedMap),
+    }));
+    let refreshing = false;
+    let failed = false;
+    const refresh = Effect.try({
+      try: () => boundary.read('{"kind":"autoZone"}'),
+      catch: (cause) => cause,
+    }).pipe(
+      Effect.tapError((error) => Effect.sync(() => {
+        if (!failed) console.warn("auto zone host read failed; retrying", error);
+        failed = true;
+      })),
+      Effect.retry(Schedule.spaced("500 millis")),
+      Effect.map((json) => decodeConfig(JSON.parse(json))),
+      Effect.flatMap(autoZone.applyConfig),
+      Effect.tap(() => Effect.sync(() => {
+        if (failed) console.warn("auto zone host read recovered");
+        failed = false;
+      })),
+      Effect.ensuring(Effect.sync(() => { refreshing = false; })),
+    );
     const onChange = (config: AutoZoneConfig) => {
-      runFork(autoZone.applyConfig(config));
+      void runPromise(autoZone.applyConfig(config));
     };
     const onLost = () => {
-      runFork(host.read({ kind: "autoZone" }).pipe(
-        Effect.flatMap(autoZone.applyConfig),
-      ));
+      if (refreshing) return;
+      refreshing = true;
+      void runPromise(refresh);
     };
     window.onAutoZoneChanged = onChange;
     window.onHostEventsLost = onLost;

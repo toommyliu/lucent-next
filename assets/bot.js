@@ -3530,6 +3530,14 @@ ${prefix}}`;
     return isFailure2(eb) ? failCause(eb.failure) : f(eb.success, cause);
   }));
   var catch_ = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
+  var tapCauseFilter = /* @__PURE__ */ dual(3, (self, filter7, f) => catchCause(self, (cause) => {
+    const result2 = filter7(cause);
+    if (isFailure2(result2)) {
+      return failCause(cause);
+    }
+    return andThen(f(result2.success, cause), failCause(cause));
+  }));
+  var tapError = /* @__PURE__ */ dual(2, (self, f) => tapCauseFilter(self, findError, (e) => f(e)));
   var mapError2 = /* @__PURE__ */ dual(2, (self, f) => catch_(self, (error) => failSync(() => f(error))));
   var orDie = /* @__PURE__ */ __name((self) => catch_(self, die), "orDie");
   var result = /* @__PURE__ */ __name((self) => matchEager(self, {
@@ -4997,9 +5005,25 @@ ${prefix}}`;
       disableYield: true
     }), (out) => succeed3(out)), findErrorOnly, (error) => orElse(error, meta.attempt === 0 ? none2() : some2(meta)));
   }));
+  var retryOrElse = /* @__PURE__ */ dual(3, (self, policy, orElse) => flatMap2(toStepWithMetadata(policy), (step) => {
+    let meta = CurrentMetadata.defaultValue();
+    let lastError;
+    const loop = catchCauseFilter(suspend(() => provideService(self, CurrentMetadata, meta)), findErrorOnly, (error) => {
+      lastError = error;
+      return flatMap2(step(error), (meta_) => {
+        meta = meta_;
+        return loop;
+      });
+    });
+    return catchDone(loop, (out) => internalCall(() => orElse(lastError, out)));
+  }));
   var repeat = /* @__PURE__ */ dual(2, (self, options) => {
     const schedule4 = typeof options === "function" ? options(identity) : isSchedule(options) ? options : buildFromOptions(options);
     return repeatOrElse(self, schedule4, fail3);
+  });
+  var retry = /* @__PURE__ */ dual(2, (self, options) => {
+    const schedule4 = typeof options === "function" ? options(identity) : isSchedule(options) ? options : buildFromOptions(options);
+    return retryOrElse(self, schedule4, fail3);
   });
   var passthroughForever = /* @__PURE__ */ passthrough(forever2);
   var buildFromOptions = /* @__PURE__ */ __name((options) => {
@@ -5061,6 +5085,8 @@ ${prefix}}`;
   var catch_2 = catch_;
   var catchCause2 = catchCause;
   var orDie2 = orDie;
+  var tapError2 = tapError;
+  var retry2 = retry;
   var timeoutOption2 = timeoutOption;
   var sleep2 = sleep;
   var raceFirst2 = raceFirst;
@@ -8136,6 +8162,10 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/schemaError.js
   var SchemaErrorTypeId = "~effect/Schema/SchemaError";
+  function isSchemaError(u) {
+    return hasProperty(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
+  }
+  __name(isSchemaError, "isSchemaError");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Schema.js
   function declareConstructor() {
@@ -8180,6 +8210,10 @@ ${prefix}}`;
       return `SchemaError(${this.message})`;
     }
   };
+  function isSchemaError2(u) {
+    return isSchemaError(u);
+  }
+  __name(isSchemaError2, "isSchemaError");
   function fromIssueEffect(self) {
     if (effectIsExit(self)) {
       return fromIssueExit(self);
@@ -8191,6 +8225,32 @@ ${prefix}}`;
     return isSuccess3(exit3) ? exit3 : failCause2(map3(exit3.cause, (issue) => new SchemaError(issue)));
   }
   __name(fromIssueExit, "fromIssueExit");
+  function getSchemaErrorOrThrow(cause, message) {
+    let schemaError;
+    for (const reason of cause.reasons) {
+      if (!isFailReason2(reason) || !isSchemaError2(reason.error)) {
+        throw new globalThis.Error(message, {
+          cause
+        });
+      }
+      schemaError ??= reason.error;
+    }
+    if (schemaError === void 0) {
+      throw new globalThis.Error(message, {
+        cause
+      });
+    }
+    return schemaError;
+  }
+  __name(getSchemaErrorOrThrow, "getSchemaErrorOrThrow");
+  function runSchemaErrorSync(self) {
+    const exit3 = runSyncExit2(self);
+    if (isSuccess3(exit3)) {
+      return exit3.value;
+    }
+    throw getSchemaErrorOrThrow(exit3.cause, "Sync adapter can only throw schema errors");
+  }
+  __name(runSchemaErrorSync, "runSchemaErrorSync");
   function decodeUnknownEffect2(schema, options) {
     const parser = decodeUnknownEffect(schema, options);
     return (input, options2) => {
@@ -8199,6 +8259,13 @@ ${prefix}}`;
   }
   __name(decodeUnknownEffect2, "decodeUnknownEffect");
   var decodeUnknownOption2 = decodeUnknownOption;
+  function decodeUnknownSync(schema, options) {
+    const parser = decodeUnknownEffect2(schema, options);
+    return (input, options2) => {
+      return runSchemaErrorSync(parser(input, options2));
+    };
+  }
+  __name(decodeUnknownSync, "decodeUnknownSync");
   var make9 = make8;
   var optionalKey2 = /* @__PURE__ */ lambda((schema) => make9(optionalKey(schema.ast), {
     schema
@@ -15852,14 +15919,40 @@ ${prefix}}`;
         enabled: config.enabled,
         map: config.map ?? void 0
       });
-      const runFork3 = runForkWith2(yield* context2());
+      const runPromise3 = runPromiseWith2(yield* context2());
+      const boundary = __host;
+      const decodeConfig = decodeUnknownSync(Struct({
+        enabled: Boolean3,
+        map: NullOr(AutoZoneSupportedMap)
+      }));
+      let refreshing = false;
+      let failed = false;
+      const refresh = try_2({
+        try: /* @__PURE__ */ __name(() => boundary.read('{"kind":"autoZone"}'), "try"),
+        catch: /* @__PURE__ */ __name((cause) => cause, "catch")
+      }).pipe(
+        tapError2((error) => sync2(() => {
+          if (!failed) console.warn("auto zone host read failed; retrying", error);
+          failed = true;
+        })),
+        retry2(spaced("500 millis")),
+        map4((json) => decodeConfig(JSON.parse(json))),
+        flatMap3(autoZone.applyConfig),
+        tap2(() => sync2(() => {
+          if (failed) console.warn("auto zone host read recovered");
+          failed = false;
+        })),
+        ensuring2(sync2(() => {
+          refreshing = false;
+        }))
+      );
       const onChange = /* @__PURE__ */ __name((config2) => {
-        runFork3(autoZone.applyConfig(config2));
+        void runPromise3(autoZone.applyConfig(config2));
       }, "onChange");
       const onLost = /* @__PURE__ */ __name(() => {
-        runFork3(host4.read({ kind: "autoZone" }).pipe(
-          flatMap3(autoZone.applyConfig)
-        ));
+        if (refreshing) return;
+        refreshing = true;
+        void runPromise3(refresh);
       }, "onLost");
       window.onAutoZoneChanged = onChange;
       window.onHostEventsLost = onLost;
