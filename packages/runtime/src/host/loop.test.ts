@@ -16,15 +16,15 @@ it("delivers answers before an event loss marker and fails only remaining reques
   const b = Effect.runFork(ask({}, host));
   const first = Effect.runPromise(Fiber.join(a));
   const second = Effect.runPromise(Fiber.join(b)).catch((error: unknown) => error);
-  const operation = operate({ kind: "acceptDrop", itemId: 1 } as never, { operate: () => "op" });
+  const operation = Effect.runPromise(operate({ kind: "acceptDrop", selector: 1 }, { prepareOperation: () => "op", operate: vi.fn(), cancelOperation: vi.fn() }));
   const completed = operation.catch((error: unknown) => error);
   turn(JSON.stringify([
     { type: "answer", id: "a", answer: 7, error: null },
-    { type: "operation", id: "op", answer: { kind: "done" }, error: null },
+    { type: "operation", id: "op", answer: { kind: "acceptDrop", value: true }, error: null },
     { type: "eventslost" },
   ]));
   expect(await first).toBe(7);
-  expect(await completed).toEqual({ kind: "done" });
+  expect(await completed).toEqual({ kind: "acceptDrop", value: true });
   expect(String(await second)).toContain("Host events were lost");
   vi.unstubAllGlobals();
 });

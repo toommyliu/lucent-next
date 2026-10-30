@@ -32,7 +32,7 @@ pub struct ScriptLink {
     records: super::Records,
     stopped: Arc<AtomicBool>,
     packets: Arc<super::operations::Packets>,
-    operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
+    operations: Arc<super::operations::Shared>,
 }
 
 impl ScriptLink {
@@ -42,7 +42,7 @@ impl ScriptLink {
         events: ScriptEvents,
         records: super::Records,
         player: super::operations::Endpoint,
-        operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
+        operations: Arc<super::operations::Shared>,
         asks: Arc<super::asks::Shared>,
     ) -> Self {
         Self {
@@ -142,30 +142,54 @@ impl ScriptLink {
         &self,
         operation: lucent_protocol::operation::Operation,
     ) -> Result<u64, bridge::Error> {
-        use std::sync::atomic::AtomicU64;
-        static NEXT: AtomicU64 = AtomicU64::new(1);
+        let id = self.prepare_operation()?;
+        if let Err(error) = self.submit_operation(id, operation) {
+            self.cancel_operation(id);
+            return Err(error);
+        }
+        Ok(id)
+    }
+
+    pub fn prepare_operation(&self) -> Result<u64, bridge::Error> {
         if self.stopped.load(Ordering::Acquire) {
             return Err(bridge::Error::Stopped);
         }
-        let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        self.operations
-            .try_send(Some(super::operations::Request {
-                id,
-                attachment: self.attachment,
-                detached: self.detached.clone(),
-                operation,
-                player: super::operations::Endpoint {
-                    inbox: self.inbox.clone(),
-                    projection: self.projection.clone(),
-                    stopped: self.stopped.clone(),
-                    packets: self.packets.clone(),
-                },
-            }))
-            .map_err(|error| match error {
-                std::sync::mpsc::TrySendError::Full(_) => bridge::Error::Overflow,
-                std::sync::mpsc::TrySendError::Disconnected(_) => bridge::Error::Stopped,
-            })?;
-        Ok(id)
+        self.operations.prepare(self.attachment)
+    }
+
+    pub fn submit_operation(
+        &self,
+        id: u64,
+        operation: lucent_protocol::operation::Operation,
+    ) -> Result<(), bridge::Error> {
+        self.operations.submit(super::operations::Request {
+            id,
+            attachment: self.attachment,
+            detached: self.detached.clone(),
+            operation,
+            player: super::operations::Endpoint {
+                inbox: self.inbox.clone(),
+                projection: self.projection.clone(),
+                stopped: self.stopped.clone(),
+                packets: self.packets.clone(),
+            },
+        })
+    }
+
+    pub fn cancel_operation(&self, id: u64) {
+        self.operations.cancel(self.attachment, id);
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn set_operation_probe(&self, probe: impl Fn(u64, bool) + Send + Sync + 'static) {
+        self.operations.set_probe(probe);
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn operation_canceller(&self) -> impl Fn(u64) + Send + Sync + 'static + use<> {
+        let operations = self.operations.clone();
+        let owner = self.attachment;
+        move |id| operations.cancel(owner, id)
     }
 
     pub fn command(&self, command: lucent_protocol::command::Command) -> Pending<String> {
@@ -273,6 +297,7 @@ impl ScriptLink {
 impl Drop for ScriptLink {
     fn drop(&mut self) {
         self.detached.store(true, Ordering::Release);
+        self.operations.detach(self.attachment);
         self.asks.detach(self.attachment);
         self.inbox.post(Msg::Detach(self.attachment));
     }

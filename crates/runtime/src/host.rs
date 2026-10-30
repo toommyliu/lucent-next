@@ -29,10 +29,12 @@ pub(crate) fn swf(
     Ok(to_json(value).map(|value| value.to_string()))
 }
 
-pub(crate) fn operate(link: &ScriptLink, json: &str) -> Result<String, String> {
+pub(crate) fn operate(link: &ScriptLink, id: &str, json: &str) -> Result<(), String> {
+    let id = id
+        .parse()
+        .map_err(|_| "invalid operation handle".to_string())?;
     let operation = serde_json::from_str(json).map_err(|error| format!("{error}"))?;
-    link.operate(operation)
-        .map(|id| id.to_string())
+    link.submit_operation(id, operation)
         .map_err(|error| error.to_string())
 }
 

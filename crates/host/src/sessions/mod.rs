@@ -15,7 +15,7 @@ pub(crate) struct Records {
     auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct AttachmentId(pub(crate) u64);
 
 use std::sync::Arc;

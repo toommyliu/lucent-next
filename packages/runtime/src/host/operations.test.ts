@@ -11,34 +11,36 @@ afterEach(() => {
 
 it("answers false when the host loses an accept answer", async () => {
   vi.useFakeTimers();
-  const submit = vi.fn(() => "lost");
-  vi.stubGlobal("__host", { operate: submit });
+  const prepare = vi.fn(() => "lost");
+  const host = { prepareOperation: prepare, operate: vi.fn(), cancelOperation: vi.fn() };
+  vi.stubGlobal("__host", host);
   let result: boolean | undefined;
   const finished = Effect.runPromise(Effect.scoped(Effect.gen(function* () {
     const api = yield* makeFakeApi({ swf: {} } as Window, makeFakeHostState());
     result = yield* api.drops.accept(70);
   })));
-  await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(prepare).toHaveBeenCalledOnce());
   startOperation("lost");
   await vi.advanceTimersByTimeAsync(15_000);
   expect(result).toBeUndefined();
   await vi.advanceTimersByTimeAsync(20_000);
   expect(result).toBe(false);
   await finished;
+  expect(host.cancelOperation).toHaveBeenCalledExactlyOnceWith("lost");
   completeOperation("lost", { kind: "acceptDrop", value: true }, null);
   expect(result).toBe(false);
 });
 
 it("keeps a slow real accept alive and clears its deadline after the answer", async () => {
   vi.useFakeTimers();
-  const submit = vi.fn(() => "slow");
-  vi.stubGlobal("__host", { operate: submit });
+  const prepare = vi.fn(() => "slow");
+  vi.stubGlobal("__host", { prepareOperation: prepare, operate: vi.fn(), cancelOperation: vi.fn() });
   let result: boolean | undefined;
   const finished = Effect.runPromise(Effect.scoped(Effect.gen(function* () {
     const api = yield* makeFakeApi({ swf: {} } as Window, makeFakeHostState());
     result = yield* api.drops.accept(70);
   })));
-  await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(prepare).toHaveBeenCalledOnce());
   startOperation("slow");
   await vi.advanceTimersByTimeAsync(15_000);
   expect(result).toBeUndefined();
@@ -50,7 +52,7 @@ it("keeps a slow real accept alive and clears its deadline after the answer", as
 
 it("keeps queued accepts waiting beyond the execution deadline", async () => {
   vi.useFakeTimers();
-  vi.stubGlobal("__host", { operate: () => "queued" });
+  vi.stubGlobal("__host", { prepareOperation: () => "queued", operate: vi.fn(), cancelOperation: vi.fn() });
   let result: boolean | undefined;
   const finished = Effect.runPromise(Effect.scoped(Effect.gen(function* () {
     const api = yield* makeFakeApi({ swf: {} } as Window, makeFakeHostState());
@@ -63,8 +65,26 @@ it("keeps queued accepts waiting beyond the execution deadline", async () => {
   expect(result).toBe(true);
 });
 
+it("cancels an interrupted accept and ignores its late answer", async () => {
+  const cancelOperation = vi.fn();
+  const prepare = vi.fn(() => "interrupted");
+  vi.stubGlobal("__host", { prepareOperation: prepare, operate: vi.fn(), cancelOperation });
+  let resumed = false;
+  const result = await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+    const api = yield* makeFakeApi({ swf: {} } as Window, makeFakeHostState());
+    return yield* api.drops.accept(70).pipe(
+      Effect.tap(() => Effect.sync(() => { resumed = true; })),
+      Effect.timeoutOption("1 millis"),
+    );
+  })));
+  expect(result._tag).toBe("None");
+  expect(cancelOperation).toHaveBeenCalledExactlyOnceWith("interrupted");
+  completeOperation("interrupted", { kind: "acceptDrop", value: true }, null);
+  expect(resumed).toBe(false);
+});
+
 it("fails queued and running operations when their event stream overflows", async () => {
-  const host = { now: () => 0, operate: () => "queued-lost", ask: () => "ask-lost", cancelAsk: vi.fn() };
+  const host = { now: () => 0, prepareOperation: () => "queued-lost", operate: vi.fn(), cancelOperation: vi.fn(), ask: () => "ask-lost", cancelAsk: vi.fn() };
   vi.stubGlobal("__host", host);
   vi.stubGlobal("window", {});
   const { turn } = await import("./loop");
@@ -72,12 +92,39 @@ it("fails queued and running operations when their event stream overflows", asyn
   let askError: unknown;
   const asking = Effect.runPromise(ask({}, host)).catch(cause => { askError = cause; });
   let error: unknown;
-  void operate({ kind: "acceptDrop", dropId: 1 } as never, host).catch(cause => { error = cause; });
+  const operating = Effect.runPromise(operate({ kind: "acceptDrop", selector: 1 }, host)).catch(cause => { error = cause; });
   turn('[{"type":"eventslost"}]');
   await Promise.resolve();
   await asking;
+  await operating;
   expect(String(askError)).toContain("Host events were lost; pending requests failed");
   expect(host.cancelAsk).toHaveBeenCalledWith("ask-lost");
+  expect(host.cancelOperation).toHaveBeenCalledWith("queued-lost");
   expect(error).toBeInstanceOf(Error);
   expect((error as Error).message).toBe("Host events were lost; pending requests failed");
+});
+
+it("registers completion before submission and starts each evaluation lazily", async () => {
+  const host = {
+    prepareOperation: vi.fn().mockReturnValueOnce("one").mockReturnValueOnce("two"),
+    operate: vi.fn((id: string) => completeOperation(id, { kind: "acceptDrop", value: true }, null)),
+    cancelOperation: vi.fn(),
+  };
+  const operation = operate({ kind: "acceptDrop", selector: 70 }, host);
+  expect(host.prepareOperation).not.toHaveBeenCalled();
+  expect(await Effect.runPromise(operation)).toEqual({ kind: "acceptDrop", value: true });
+  expect(await Effect.runPromise(operation)).toEqual({ kind: "acceptDrop", value: true });
+  expect(host.operate.mock.calls.map(([id]) => id)).toEqual(["one", "two"]);
+  expect(host.cancelOperation).not.toHaveBeenCalled();
+});
+
+it("cancels a reserved handle when submission fails", async () => {
+  const host = {
+    prepareOperation: () => "failed",
+    operate: () => { throw new Error("submission failed"); },
+    cancelOperation: vi.fn(),
+  };
+  await expect(Effect.runPromise(operate({ kind: "acceptDrop", selector: 70 }, host))).rejects.toThrow("submission failed");
+  expect(host.cancelOperation).toHaveBeenCalledExactlyOnceWith("failed");
+  completeOperation("failed", { kind: "acceptDrop", value: true }, null);
 });

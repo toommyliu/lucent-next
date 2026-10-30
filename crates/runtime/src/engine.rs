@@ -76,7 +76,15 @@ impl Engine {
                 ("swf", v8::Function::new(scope, host_swf)),
                 ("read", v8::Function::new(scope, host_read)),
                 ("command", v8::Function::new(scope, host_command)),
+                (
+                    "prepareOperation",
+                    v8::Function::new(scope, host_prepare_operation),
+                ),
                 ("operate", v8::Function::new(scope, host_operate)),
+                (
+                    "cancelOperation",
+                    v8::Function::new(scope, host_cancel_operation),
+                ),
                 ("ask", v8::Function::new(scope, host_ask)),
                 ("cancelAsk", v8::Function::new(scope, host_cancel_ask)),
                 (
@@ -756,16 +764,46 @@ fn host_publish_auto_relogin(
     return_reply(scope, reply, result);
 }
 
+fn host_prepare_operation(
+    scope: &mut v8::PinScope,
+    _args: v8::FunctionCallbackArguments,
+    reply: v8::ReturnValue<v8::Value>,
+) {
+    let result = scope
+        .get_slot::<ScriptLink>()
+        .unwrap()
+        .prepare_operation()
+        .map(|id| Some(id.to_string()))
+        .map_err(|error| error.to_string());
+    return_reply(scope, reply, result);
+}
+
+fn host_cancel_operation(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    _reply: v8::ReturnValue<v8::Value>,
+) {
+    if let Some(id) = args.get(0).to_string(scope)
+        && let Ok(id) = id.to_rust_string_lossy(scope).parse()
+    {
+        scope.get_slot::<ScriptLink>().unwrap().cancel_operation(id);
+    }
+}
+
 fn host_operate(
     scope: &mut v8::PinScope,
     args: v8::FunctionCallbackArguments,
     reply: v8::ReturnValue<v8::Value>,
 ) {
-    let Some(json) = args.get(0).to_string(scope) else {
+    let Some(id) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let id = id.to_rust_string_lossy(scope);
+    let Some(json) = args.get(1).to_string(scope) else {
         return;
     };
     let json = json.to_rust_string_lossy(scope);
-    let result = host::operate(scope.get_slot::<ScriptLink>().unwrap(), &json).map(Some);
+    let result = host::operate(scope.get_slot::<ScriptLink>().unwrap(), &id, &json).map(|()| None);
     return_reply(scope, reply, result);
 }
 
