@@ -12276,6 +12276,7 @@ ${prefix}}`;
     }, "login");
     const logout = /* @__PURE__ */ __name(() => host3.command({ kind: "logout" }).pipe(asVoid2), "logout");
     return {
+      getCached: /* @__PURE__ */ __name(() => cached2, "getCached"),
       connectTo,
       getPassword,
       getServers,

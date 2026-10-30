@@ -1890,6 +1890,7 @@ fn assert_reconnect_uses_cached_auth(capture_on_reconnect: bool) {
                     result.loggedIn = {cached_logged_in};
                     if (result.loggedIn && recoveryCalls.login > 0 && refreshFailures.loggedIn > 0) ready = true;
                 }}
+                if (JSON.parse(json).kind === "readiness" && ready) result.missing = [];
                 return JSON.stringify(result);
             }};
             reconnecting = true;

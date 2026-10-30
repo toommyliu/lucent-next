@@ -24,6 +24,9 @@ const connection = (status: string): Event => ({
 
 const apiWith = (overrides: ApiOverrides = {}): AutoReloginApi => ({
   auth: {
+    getCached: overrides.auth?.getCached ?? (() => Effect.succeed({
+      loggedIn: false, username: "Hero", password: "pw", servers: [],
+    })),
     connectTo:
       overrides.auth?.connectTo ??
       ((server) =>
@@ -556,6 +559,7 @@ it.effect("moves past failed connection events and logs once per streak", () => 
   let broken = false;
   const relogin = yield* makeFeature(apiWith({ events: {on:events.on}, auth: {
     getUsername: () => Effect.sync(() => { reads++; if (broken) throw new Error("capture event failure"); return ""; }),
+    getCached: () => Effect.die("cached auth unavailable"),
   } }));
   yield* relogin.setEnabled(true);
   broken = true;

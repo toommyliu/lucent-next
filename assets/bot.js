@@ -11954,6 +11954,7 @@ ${prefix}}`;
     }, "login");
     const logout = /* @__PURE__ */ __name(() => host4.command({ kind: "logout" }).pipe(asVoid2), "logout");
     return {
+      getCached: /* @__PURE__ */ __name(() => cached2, "getCached"),
       connectTo,
       getPassword,
       getServers,
@@ -16267,6 +16268,8 @@ ${prefix}}`;
     const recordChanges = changes(state).pipe(map8(records));
     const getState = /* @__PURE__ */ __name(() => getRecords().pipe(map5(publicReloginState)), "getState");
     const changes2 = recordChanges.pipe(map8(publicReloginState));
+    const refreshOrCached = /* @__PURE__ */ __name((refresh, select) => refresh.pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : api.auth.getCached().pipe(map5(select)))), "refreshOrCached");
+    const isLoggedIn = /* @__PURE__ */ __name(() => refreshOrCached(api.auth.isLoggedIn(), (auth) => auth.loggedIn), "isLoggedIn");
     const isPlayerReady = /* @__PURE__ */ __name(() => api.player.isReady().pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : succeed7(false))), "isPlayerReady");
     const waitUntilPlayerReady = /* @__PURE__ */ __name(() => repeat2(isPlayerReady(), {
       schedule: spaced(readinessPollInterval),
@@ -16289,7 +16292,7 @@ ${prefix}}`;
       state,
       (current) => current.enabled && current.generation === generation ? update3(current) : current
     ), "updateCurrentGeneration");
-    const captureIfMissing = gen2(function* () {
+    const captureIfMissing = /* @__PURE__ */ __name((cachedFallback = false) => gen2(function* () {
       const current = yield* get4(state);
       if (!current.enabled) return true;
       if (current.username !== void 0 && current.password !== void 0) {
@@ -16304,12 +16307,12 @@ ${prefix}}`;
           phase: { tag: "awaiting-session" }
         } : latest
       );
-      const username = (yield* api.auth.getUsername()).trim();
+      const username = (yield* cachedFallback ? refreshOrCached(api.auth.getUsername(), (auth) => auth.username) : api.auth.getUsername()).trim();
       if (username === "") {
         yield* markAwaitingSession;
         return false;
       }
-      const password = yield* api.auth.getPassword();
+      const password = yield* cachedFallback ? refreshOrCached(api.auth.getPassword(), (auth) => auth.password) : api.auth.getPassword();
       if (password === "") {
         yield* markAwaitingSession;
         return false;
@@ -16326,13 +16329,13 @@ ${prefix}}`;
         } : latest
       );
       return true;
-    });
+    }), "captureIfMissing");
     const watchForCapturableSession = /* @__PURE__ */ __name(() => run(
       fibers,
       captureWatcherKey,
       sleep2(captureInterval).pipe(
         andThen2(
-          repeat2(supervise(captureIfMissing, captureInterval), {
+          repeat2(supervise(captureIfMissing(true), captureInterval), {
             schedule: spaced(captureInterval),
             until: /* @__PURE__ */ __name((captured) => captured, "until")
           })
@@ -16343,7 +16346,7 @@ ${prefix}}`;
     ).pipe(asVoid2), "watchForCapturableSession");
     const markReadySuccess = gen2(function* () {
       if (!(yield* isPlayerReady())) return false;
-      yield* captureIfMissing;
+      yield* captureIfMissing(true);
       yield* update(
         state,
         (current) => current.enabled ? {
@@ -16367,7 +16370,7 @@ ${prefix}}`;
     const waitForLoginOutcome = /* @__PURE__ */ __name(() => {
       const readOutcome = gen2(function* () {
         if (yield* isPlayerReady()) return some2("ready");
-        if (yield* api.auth.isLoggedIn()) {
+        if (yield* isLoggedIn()) {
           return some2("connected");
         }
         if (yield* api.auth.isServerSelectReady()) {
@@ -16478,7 +16481,7 @@ ${prefix}}`;
         let server = yield* resolveServer;
         if (server === void 0) return { status: "server-select" };
         if (yield* isPlayerReady()) return { status: "ready" };
-        if (yield* api.auth.isLoggedIn()) {
+        if (yield* isLoggedIn()) {
           return yield* completePlayerConnection(attemptsRemaining);
         }
         const manualConnection = yield* api.events.once(
@@ -16489,7 +16492,7 @@ ${prefix}}`;
           return yield* completePlayerConnection(attemptsRemaining);
         }
         if (yield* isPlayerReady()) return { status: "ready" };
-        if (yield* api.auth.isLoggedIn()) {
+        if (yield* isLoggedIn()) {
           return yield* completePlayerConnection(attemptsRemaining);
         }
         server = yield* resolveServer;
@@ -16505,7 +16508,7 @@ ${prefix}}`;
         const selected = selection.value;
         if (selected.status !== "connected") {
           if (yield* isPlayerReady()) return { status: "ready" };
-          if (yield* api.auth.isLoggedIn()) {
+          if (yield* isLoggedIn()) {
             return yield* completePlayerConnection(attemptsRemaining);
           }
           if (selected.status === "full") {
@@ -16745,7 +16748,7 @@ ${prefix}}`;
           })
         );
       }
-      yield* captureIfMissing;
+      yield* captureIfMissing();
       if (yield* isPlayerReady()) {
         yield* markReadySuccess;
       } else {
@@ -16815,7 +16818,7 @@ ${prefix}}`;
           });
         }
         if (event.status === "OnConnection") {
-          return captureIfMissing.pipe(andThen2(watchForReady()));
+          return captureIfMissing(true).pipe(andThen2(watchForReady()));
         }
         return void_3;
       }).pipe(
