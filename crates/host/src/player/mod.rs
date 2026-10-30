@@ -27,6 +27,7 @@ use crate::bridge::{
     Bridge, Call, Error as BridgeError, Events, PendingCall, PendingRead, ScriptEventSender, Value,
 };
 use crate::projection::Projection;
+use crate::sessions::AttachmentId;
 use backends::{Navigator, Tasks, Ui};
 use net::Net;
 use view::Effect;
@@ -162,7 +163,10 @@ pub(crate) enum Msg {
         mpsc::Sender<Result<String, BridgeError>>,
     ),
     Call(Call),
-    Attach(ScriptEventSender),
+    Attach(AttachmentId, ScriptEventSender),
+    Detach(AttachmentId),
+    #[cfg(feature = "testing")]
+    LinkCount(mpsc::Sender<Result<usize, BridgeError>>),
     View(ViewEvent),
     Mute(bool),
     Poll(async_task::Runnable),
@@ -256,19 +260,26 @@ fn run(
     Ok(())
 }
 
+type ScriptAttachments = Vec<(AttachmentId, ScriptEventSender)>;
+
 fn first_viewport(
     inbox: &mpsc::Receiver<Msg>,
     mut muted: bool,
     settings: &RwLock<GameSettings>,
-) -> Option<(Viewport, bool, Option<ScriptEventSender>)> {
-    let mut script_events = None;
+) -> Option<(Viewport, bool, ScriptAttachments)> {
+    let mut script_events = Vec::new();
     loop {
         match inbox.recv().ok()? {
             Msg::View(ViewEvent::Resized(viewport)) => {
                 return Some((viewport, muted, script_events));
             }
             Msg::Mute(mute) => muted = mute,
-            Msg::Attach(producer) => script_events = Some(producer),
+            Msg::Attach(id, producer) => script_events.push((id, producer)),
+            Msg::Detach(id) => script_events.retain(|(attached, _)| *attached != id),
+            #[cfg(feature = "testing")]
+            Msg::LinkCount(reply) => {
+                let _ = reply.send(Ok(script_events.len()));
+            }
             Msg::Call(call) => call.reject(BridgeError::NotReady),
             Msg::Read(read) => (read.0)(Err(BridgeError::NotReady)),
             Msg::Command(command, reply) => {
@@ -298,7 +309,7 @@ struct Running {
     settings: Arc<RwLock<GameSettings>>,
     settings_applied: bool,
     loader_events: Events,
-    script_events: Option<ScriptEventSender>,
+    script_events: ScriptAttachments,
     projection: Arc<RwLock<Projection>>,
     player: Arc<Mutex<Player>>,
     tasks: Tasks,
@@ -349,7 +360,7 @@ impl Running {
             settings: options.settings,
             settings_applied: false,
             loader_events,
-            script_events: None,
+            script_events: Vec::new(),
             projection,
             player,
             tasks,
@@ -366,7 +377,12 @@ impl Running {
         self.drain_events();
         match msg {
             Msg::Stop => return ControlFlow::Break(()),
-            Msg::Attach(producer) => self.script_events = Some(producer),
+            Msg::Attach(id, producer) => self.script_events.push((id, producer)),
+            Msg::Detach(id) => self.script_events.retain(|(attached, _)| *attached != id),
+            #[cfg(feature = "testing")]
+            Msg::LinkCount(reply) => {
+                let _ = reply.send(Ok(self.script_events.len()));
+            }
             Msg::Read(read) => (read.0)(Ok(&self.projection.read())),
             Msg::Command(command, reply) => {
                 let result = self.command(command);
@@ -460,7 +476,7 @@ mod tests {
             settings: Arc::new(RwLock::new(GameSettings::default())),
             settings_applied: false,
             loader_events,
-            script_events: None,
+            script_events: Vec::new(),
             projection: Arc::new(RwLock::new(Projection::default())),
             player: PlayerBuilder::new().build(),
             tasks: Tasks::default(),
@@ -474,25 +490,33 @@ mod tests {
     }
 
     #[test]
-    fn an_attachment_before_the_viewport_is_kept_until_the_player_stops() {
+    fn attachments_before_the_viewport_are_kept_until_detached_or_stopped() {
         let viewport = Viewport::new(1024.0, 768.0, 1.0).unwrap();
-        let (producer, events) = crate::bridge::script_events(1);
+        let (first, first_events) = crate::bridge::script_events(1);
+        let (removed, removed_events) = crate::bridge::script_events(1);
+        let (last, last_events) = crate::bridge::script_events(1);
         let (tx, rx) = mpsc::channel();
-        tx.send(Msg::Attach(producer)).unwrap();
+        tx.send(Msg::Attach(AttachmentId(0), first)).unwrap();
+        tx.send(Msg::Attach(AttachmentId(1), removed)).unwrap();
+        tx.send(Msg::Attach(AttachmentId(2), last)).unwrap();
+        tx.send(Msg::Detach(AttachmentId(1))).unwrap();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
-        let (received, muted, producer) = first_viewport(&rx, false, &Default::default()).unwrap();
+        let (received, muted, producers) = first_viewport(&rx, false, &Default::default()).unwrap();
         assert_eq!((received, muted), (viewport, false));
-        assert_eq!(events.try_recv(), Ok(None));
-        producer
-            .as_ref()
-            .unwrap()
-            .send(crate::bridge::ScriptEvent::Invalidated);
-        assert_eq!(
-            events.try_recv(),
-            Ok(Some(crate::bridge::ScriptEvent::Invalidated))
-        );
-        drop(producer);
-        assert_eq!(events.try_recv(), Err(BridgeError::Stopped));
+        assert_eq!(producers.len(), 2);
+        assert_eq!(removed_events.try_recv(), Err(BridgeError::Stopped));
+        for (_, producer) in &producers {
+            producer.send(crate::bridge::ScriptEvent::Invalidated);
+        }
+        for events in [&first_events, &last_events] {
+            assert_eq!(
+                events.try_recv(),
+                Ok(Some(crate::bridge::ScriptEvent::Invalidated))
+            );
+        }
+        drop(producers);
+        assert_eq!(first_events.try_recv(), Err(BridgeError::Stopped));
+        assert_eq!(last_events.try_recv(), Err(BridgeError::Stopped));
     }
 
     #[test]
@@ -500,7 +524,7 @@ mod tests {
         let (producer, events) = crate::bridge::script_events(1);
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::Stop).unwrap();
-        tx.send(Msg::Attach(producer)).unwrap();
+        tx.send(Msg::Attach(AttachmentId(0), producer)).unwrap();
         assert!(first_viewport(&rx, false, &Default::default()).is_none());
         drop(rx);
         assert_eq!(events.try_recv(), Err(BridgeError::Stopped));

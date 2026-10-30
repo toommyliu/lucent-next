@@ -78,7 +78,7 @@ pub fn start_probe_without_viewport(host: &Host, movie: ProbeMovie) -> (Session,
     let mut session = host
         .start_movie(headless_surface(), Movie(Arc::from(fixture_swf(&movie))))
         .expect("couldn't start the probe player");
-    let link = session.take_script_link().unwrap();
+    let link = session.attach().unwrap();
     (session, link)
 }
 
@@ -388,21 +388,31 @@ mod tests {
     fn restart_reloads_the_movie_and_ends_the_previous_link() {
         let host = headless_host();
         let (mut session, old) = start_probe(&host, ProbeMovie::new());
-        assert!(session.take_script_link().is_none());
+        let other = session.attach().unwrap();
         session.restart(headless_surface()).unwrap();
         assert_eq!(old.try_event(), Err(Error::Stopped));
+        assert_eq!(other.try_event(), Err(Error::Stopped));
+        assert_eq!(other.read(|_| 42), Err(Error::Stopped));
         assert_eq!(
             old.call_loader("probe.echo", vec![])
                 .recv_timeout(Duration::from_secs(1)),
             Err(Error::Stopped)
         );
         assert_eq!(old.read(|_| 42), Err(Error::Stopped));
-        let current = session.take_script_link().unwrap();
+        let current = session.attach().unwrap();
         assert_eq!(current.id(), old.id());
+        drop(old);
+        drop(other);
         session.send(ViewEvent::Resized(
             Viewport::new(100.0, 100.0, 1.0).unwrap(),
         ));
         wait_loaded(&current);
+        assert_eq!(
+            session
+                .attached_link_count()
+                .recv_timeout(Duration::from_secs(5)),
+            Ok(1)
+        );
         assert_eq!(
             current
                 .call_loader("probe.echo", vec![Value::Number(42.0)])

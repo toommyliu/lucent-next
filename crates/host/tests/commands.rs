@@ -815,7 +815,7 @@ fn refresh_equipped_consumable_with_an_empty_slot_unequips_every_consumable() {
 fn commands_before_the_viewport_are_not_ready_and_stop_with_the_session() {
     let host = testing::headless_host();
     let mut session = host.start_session(testing::headless_surface()).unwrap();
-    let link = session.take_script_link().unwrap();
+    let link = session.attach().unwrap();
     assert_eq!(
         link.command(Command::RefreshLoggedIn {})
             .recv_timeout(Duration::from_secs(5)),
@@ -1076,7 +1076,7 @@ fn a_restarted_player_gets_the_stored_settings() {
         link.query(serde_json::from_value(json!({"kind": "settings"})).unwrap())
             .is_err()
     );
-    let current = session.take_script_link().unwrap();
+    let current = session.attach().unwrap();
     current.set_waker(Waker::from(Arc::new(Unpark(std::thread::current()))));
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),

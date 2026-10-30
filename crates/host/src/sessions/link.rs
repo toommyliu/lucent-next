@@ -7,12 +7,14 @@ use std::sync::{
 use std::task::Waker;
 use std::time::{Duration, Instant};
 
+use super::AttachmentId;
 use crate::bridge::{self, Pending, PendingCall, ScriptEvent, ScriptEvents, Value};
-use crate::player::Inbox;
+use crate::player::{Inbox, Msg};
 use crate::projection::{Projection, answer};
 
 pub struct ScriptLink {
     id: u64,
+    attachment: AttachmentId,
     inbox: Inbox,
     events: ScriptEvents,
     projection: Arc<RwLock<Projection>>,
@@ -23,6 +25,7 @@ pub struct ScriptLink {
 impl ScriptLink {
     pub(crate) fn new(
         id: u64,
+        attachment: AttachmentId,
         inbox: Inbox,
         events: ScriptEvents,
         projection: Arc<RwLock<Projection>>,
@@ -31,6 +34,7 @@ impl ScriptLink {
     ) -> Self {
         Self {
             id,
+            attachment,
             inbox,
             events,
             projection,
@@ -133,6 +137,12 @@ impl ScriptLink {
     }
 }
 
+impl Drop for ScriptLink {
+    fn drop(&mut self) {
+        self.inbox.post(Msg::Detach(self.attachment));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,7 +153,7 @@ mod tests {
     fn settings_reads_do_not_wait_for_the_projection() {
         let host = testing::headless_host();
         let mut session = host.start_session(testing::headless_surface()).unwrap();
-        let link = session.take_script_link().unwrap();
+        let link = session.attach().unwrap();
         let _projection = link.projection.write();
         let mut query = Some(Query::Settings {});
         let answer = link.query_for(Duration::ZERO, &mut query).unwrap();
@@ -157,7 +167,7 @@ mod tests {
     fn a_contended_read_times_out_without_calling_its_reader_and_stops_with_its_player() {
         let host = testing::headless_host();
         let mut session = host.start_session(testing::headless_surface()).unwrap();
-        let link = session.take_script_link().unwrap();
+        let link = session.attach().unwrap();
         let projection = link.projection.clone();
         let _guard = projection.write();
         let (timed_out, result) = mpsc::channel();
