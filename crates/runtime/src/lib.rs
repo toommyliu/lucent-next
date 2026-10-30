@@ -4,11 +4,14 @@ mod engine;
 mod host;
 mod interrupt;
 mod modules;
+mod supervisor;
+
+pub use supervisor::{ScriptControls, ScriptRequest, Supervisor};
 
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
 use std::task::{Wake, Waker};
 use std::thread;
@@ -59,6 +62,7 @@ pub struct Runtime {
     interrupt: Arc<Interrupt>,
     thread: Option<thread::JoinHandle<()>>,
     terminal: mpsc::Receiver<Result<(), RuntimeError>>,
+    turns: Arc<AtomicU64>,
 }
 
 enum Command {
@@ -127,9 +131,13 @@ pub struct Bot(Runtime);
 
 impl Bot {
     pub fn start(link: ScriptLink) -> Result<Self, RuntimeError> {
+        Self::spawn(link, Waker::noop().clone())
+    }
+
+    pub(crate) fn spawn(link: ScriptLink, exited: Waker) -> Result<Self, RuntimeError> {
         link.claim_bot()
             .map_err(|error| RuntimeError::JavaScript(error.to_string()))?;
-        Runtime::spawn(link, Execution::Bot).map(Self)
+        Runtime::spawn(link, Execution::Bot, exited).map(Self)
     }
 
     pub fn wait(&self, timeout: Duration) -> Result<(), RuntimeError> {
@@ -140,6 +148,10 @@ impl Bot {
                 RecvTimeoutError::Timeout => RuntimeError::Timeout,
                 RecvTimeoutError::Disconnected => RuntimeError::Stopped,
             })?
+    }
+
+    pub(crate) fn turns(&self) -> u64 {
+        self.0.turns.load(Ordering::Relaxed)
     }
 
     #[cfg(feature = "testing")]
@@ -159,6 +171,15 @@ impl ScriptRun {
         script: Script,
         inputs: ScriptInputs,
     ) -> Result<Self, RuntimeError> {
+        Self::spawn(link, script, inputs, Waker::noop().clone())
+    }
+
+    pub(crate) fn spawn(
+        link: ScriptLink,
+        script: Script,
+        inputs: ScriptInputs,
+        exited: Waker,
+    ) -> Result<Self, RuntimeError> {
         let (reply, pending) = mpsc::channel();
         let runtime = Runtime::spawn(
             link,
@@ -167,6 +188,7 @@ impl ScriptRun {
                 inputs,
                 reply,
             },
+            exited,
         )?;
         Ok(Self {
             runtime,
@@ -194,10 +216,12 @@ impl ScriptRun {
 
 impl Runtime {
     pub fn start(link: ScriptLink) -> Result<Self, RuntimeError> {
-        Self::spawn(link, Execution::Evals)
+        Self::spawn(link, Execution::Evals, Waker::noop().clone())
     }
 
-    fn spawn(link: ScriptLink, execution: Execution) -> Result<Self, RuntimeError> {
+    fn spawn(link: ScriptLink, execution: Execution, exited: Waker) -> Result<Self, RuntimeError> {
+        let turns = Arc::new(AtomicU64::new(0));
+        let thread_turns = turns.clone();
         let interrupt = Arc::new(Interrupt::new()?);
         let thread_interrupt = interrupt.clone();
         let (commands, incoming) = mpsc::channel();
@@ -213,6 +237,10 @@ impl Runtime {
             .name(format!("lucent-js-{}", link.id()))
             .spawn(move || {
                 let _dispatch = tracing::dispatcher::set_default(&dispatch);
+                let mut exit = Exit {
+                    finished: Some(finished),
+                    exited,
+                };
                 let interrupt = thread_interrupt;
                 let watchdog_interrupt = interrupt.clone();
                 let watchdog_dispatch = dispatch.clone();
@@ -226,7 +254,7 @@ impl Runtime {
                     Ok(watchdog) => watchdog,
                     Err(error) => {
                         interrupt.shut_down();
-                        let _ = finished.send(Err(error.into()));
+                        exit.send(Err(error.into()));
                         return;
                     }
                 };
@@ -234,7 +262,15 @@ impl Runtime {
                     link.set_waker(Waker::from(wake.clone()));
                     let bundle = if bot { Bundle::Bot } else { Bundle::Script };
                     let engine = Engine::new(link, interrupt.clone(), bundle)?;
-                    run(engine, execution, &incoming, &wake, &interrupt, &ready)
+                    run(
+                        engine,
+                        execution,
+                        &incoming,
+                        &wake,
+                        &interrupt,
+                        &ready,
+                        &thread_turns,
+                    )
                 })();
                 if bot
                     && let Err(error) = &result
@@ -242,7 +278,7 @@ impl Runtime {
                 {
                     tracing::error!(%error, "bot runtime failed");
                 }
-                let _ = finished.send(result);
+                exit.send(result);
                 interrupt.shut_down();
                 let _ = watchdog.join();
             })?;
@@ -251,6 +287,7 @@ impl Runtime {
             interrupt,
             thread: Some(thread),
             terminal,
+            turns,
         };
         if boot.recv().is_err() {
             return Err(runtime
@@ -291,6 +328,24 @@ impl Runtime {
     }
 }
 
+struct Exit {
+    finished: Option<mpsc::Sender<Result<(), RuntimeError>>>,
+    exited: Waker,
+}
+impl Exit {
+    fn send(&mut self, result: Result<(), RuntimeError>) {
+        if let Some(finished) = self.finished.take() {
+            let _ = finished.send(result);
+        }
+    }
+}
+impl Drop for Exit {
+    fn drop(&mut self) {
+        self.finished = None;
+        self.exited.wake_by_ref();
+    }
+}
+
 impl Drop for Runtime {
     fn drop(&mut self) {
         self.interrupt.shut_down();
@@ -308,6 +363,7 @@ fn run(
     wake: &EventWake,
     interrupt: &Arc<Interrupt>,
     ready: &mpsc::SyncSender<()>,
+    turns: &AtomicU64,
 ) -> Result<(), RuntimeError> {
     if matches!(execution, Execution::StartScript { .. }) {
         interrupt.prepare_script();
@@ -373,6 +429,7 @@ fn run(
             Some(Stop::Shutdown) => return Ok(()),
         }
         let deadline = turn?;
+        turns.fetch_add(1, Ordering::Relaxed);
         if let Some(ready) = ready.take() {
             let _ = ready.send(());
             if let Execution::StartScript {
@@ -434,6 +491,59 @@ mod tests {
     use lucent_host::bridge::{Event, ScriptEvent, Value};
     use lucent_protocol::{event::ProjectionEvent, operation::OperationAnswer};
     use serde_json::json;
+
+    struct NotifyEnd(mpsc::Sender<()>);
+    impl Wake for NotifyEnd {
+        fn wake(self: Arc<Self>) {
+            let _ = self.0.send(());
+        }
+    }
+
+    #[test]
+    fn a_bot_wakes_its_owner_after_it_ends() {
+        let host = lucent_host::testing::headless_host();
+        let (session, link) =
+            lucent_host::testing::start_probe(&host, lucent_host::testing::ProbeMovie::new());
+        let (notify, wake) = mpsc::channel();
+        let bot = Bot::spawn(link, Waker::from(Arc::new(NotifyEnd(notify)))).unwrap();
+        drop(session);
+        wake.recv_timeout(Duration::from_secs(15)).unwrap();
+        assert!(matches!(
+            bot.wait(Duration::ZERO),
+            Err(RuntimeError::Stopped)
+        ));
+    }
+
+    #[test]
+    fn bot_turns_rise_while_it_runs() {
+        let host = lucent_host::testing::headless_host();
+        let (mut session, observer) =
+            lucent_host::testing::start_probe(&host, lucent_host::testing::ProbeMovie::new());
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        let first = bot.turns();
+        observer
+            .call_loader(
+                "probe.emit",
+                vec![
+                    Value::String("onDebug".into()),
+                    Value::String("turn".into()),
+                ],
+            )
+            .recv_timeout(Duration::from_secs(15))
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while bot.turns() <= first {
+            assert!(
+                Instant::now() < deadline,
+                "bot did not complete another turn"
+            );
+            thread::yield_now();
+        }
+        assert!(matches!(
+            bot.wait(Duration::ZERO),
+            Err(RuntimeError::Timeout)
+        ));
+    }
 
     #[test]
     fn overflow_preserves_answers_and_zones_already_read_in_the_batch() {
