@@ -970,6 +970,75 @@ fn settings_policy_invalid_reapply_reply_warns_once_and_retries() {
     }
 }
 
+#[cfg(feature = "testing")]
+#[test]
+fn failed_auto_zone_walks_leave_the_bot_ready_for_the_next_zone() {
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let host = testing::headless_host();
+    let (mut session, observer) =
+        testing::start_probe(&host, common::ready_movie().recording("player.walkTo"));
+    become_ready(&observer);
+    enter_map(&observer, "ledgermayne");
+    observer
+        .command(
+            serde_json::from_value(json!({
+                "kind":"patchAutoZone","patch":{"enabled":true,"map":"ledgermayne"}
+            }))
+            .unwrap(),
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    bot.eval(
+        "fail-walk.js",
+        r#"
+        const swf = __host.swf;
+        globalThis.walkAttempts = 0;
+        __host.swf = (method, args) => {
+            if (method === "player.walkTo") {
+                walkAttempts++;
+                throw new Error("temporary walk failure");
+            }
+            return swf(method, args);
+        };
+        globalThis.restoreWalk = () => { __host.swf = swf; };
+        null;
+        "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":"A"}}));
+    let attempts = bot
+        .eval(
+            "wait-for-walk.js",
+            "new Promise(resolve => setTimeout(() => resolve(walkAttempts), 700));",
+        )
+        .wait::<usize>(TIMEOUT)
+        .unwrap();
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
+    bot.eval("restore-walk.js", "restoreWalk(); null;")
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+    drain(&observer);
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":"B"}}));
+    let call = next_call(&observer, "player.walkTo");
+    assert!(matches!(call.get(1), Some(Value::Number(x)) if (727.0..=852.0).contains(x)));
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
+    assert_eq!(
+        attempts, 1,
+        "a failed loader walk must finish without retrying"
+    );
+    assert!(logs.messages(tracing::Level::WARN).is_empty());
+}
+
 #[test]
 fn auto_zone_follows_a_script_toggle_through_kills() {
     let host = testing::headless_host();
