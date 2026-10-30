@@ -52,15 +52,68 @@ pub enum Error {
     CommandDecode { callback: String, reason: String },
 }
 
-pub struct Pending<T>(mpsc::Receiver<Result<T, Error>>);
+pub struct Pending<T> {
+    receiver: mpsc::Receiver<Result<T, Error>>,
+    waker: Arc<Mutex<Option<Waker>>>,
+}
+
+pub(crate) struct Reply<T> {
+    sender: Option<mpsc::Sender<Result<T, Error>>>,
+    waker: Arc<Mutex<Option<Waker>>>,
+}
+
+impl<T> Reply<T> {
+    pub(crate) fn send(
+        mut self,
+        result: Result<T, Error>,
+    ) -> Result<(), mpsc::SendError<Result<T, Error>>> {
+        let result = self.sender.take().unwrap().send(result);
+        self.wake();
+        result
+    }
+
+    fn wake(&self) {
+        let waker = self.waker.lock().unwrap().clone();
+        if let Some(waker) = waker {
+            waker.wake();
+        }
+    }
+}
+
+impl<T> Drop for Reply<T> {
+    fn drop(&mut self) {
+        if self.sender.take().is_some() {
+            self.wake();
+        }
+    }
+}
 
 pub type PendingCall = Pending<Value>;
 pub type PendingRead<T> = Pending<T>;
 
 impl<T> Pending<T> {
-    pub(crate) fn channel() -> (mpsc::Sender<Result<T, Error>>, Self) {
+    pub(crate) fn channel() -> (Reply<T>, Self) {
         let (sender, receiver) = mpsc::channel();
-        (sender, Self(receiver))
+        let waker = Arc::new(Mutex::new(None));
+        (
+            Reply {
+                sender: Some(sender),
+                waker: waker.clone(),
+            },
+            Self { receiver, waker },
+        )
+    }
+
+    pub fn set_waker(&self, waker: Waker) {
+        *self.waker.lock().unwrap() = Some(waker);
+    }
+
+    pub fn try_recv(&self) -> Option<Result<T, Error>> {
+        match self.receiver.try_recv() {
+            Ok(result) => Some(result),
+            Err(mpsc::TryRecvError::Empty) => None,
+            Err(mpsc::TryRecvError::Disconnected) => Some(Err(Error::Stopped)),
+        }
     }
 
     pub(crate) fn stopped() -> Self {
@@ -69,14 +122,14 @@ impl<T> Pending<T> {
 
     /// A timeout does not cancel the request. Keep using this reply to receive its result.
     pub fn recv_timeout(&self, timeout: Duration) -> Result<T, Error> {
-        self.0.recv_timeout(timeout).map_err(receive_error)?
+        self.receiver.recv_timeout(timeout).map_err(receive_error)?
     }
 }
 
 pub(crate) struct Call {
     name: String,
     args: Vec<Value>,
-    reply: mpsc::Sender<Result<Value, Error>>,
+    reply: Reply<Value>,
 }
 
 impl Call {
@@ -367,6 +420,50 @@ mod tests {
             events.set_waker(Waker::from(self.clone()));
             self.seen.send(event).unwrap();
         }
+    }
+
+    struct ReplyWake {
+        pending: Weak<Mutex<Pending<u32>>>,
+        seen: mpsc::Sender<Option<Result<u32, Error>>>,
+    }
+    impl Wake for ReplyWake {
+        fn wake(self: Arc<Self>) {
+            let pending = self.pending.upgrade().unwrap();
+            let pending = pending.lock().unwrap();
+            self.seen.send(pending.try_recv()).unwrap();
+            pending.set_waker(Waker::from(self.clone()));
+        }
+    }
+
+    #[test]
+    fn replies_and_disconnections_wake_after_their_result_is_visible() {
+        for disconnected in [false, true] {
+            let (reply, pending) = Pending::channel();
+            let pending = Arc::new(Mutex::new(pending));
+            let (sender, seen) = mpsc::channel();
+            pending
+                .lock()
+                .unwrap()
+                .set_waker(Waker::from(Arc::new(ReplyWake {
+                    pending: Arc::downgrade(&pending),
+                    seen: sender,
+                })));
+            if disconnected {
+                drop(reply);
+                assert_eq!(seen.try_recv().unwrap(), Some(Err(Error::Stopped)));
+            } else {
+                reply.send(Ok(7)).unwrap();
+                assert_eq!(seen.try_recv().unwrap(), Some(Ok(7)));
+            }
+        }
+    }
+
+    #[test]
+    fn a_reply_received_before_waker_registration_is_still_available() {
+        let (reply, pending) = Pending::channel();
+        reply.send(Ok(7)).unwrap();
+        pending.set_waker(Waker::noop().clone());
+        assert_eq!(pending.try_recv(), Some(Ok(7)));
     }
 
     #[test]

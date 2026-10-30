@@ -1,3 +1,4 @@
+pub mod automation;
 pub mod bridge;
 pub mod library;
 mod player;
@@ -11,7 +12,8 @@ pub use player::view::{
     Ime, Key, KeyCode, Modifiers, MouseButton, NamedKey, Point, ViewEvent, Viewport, WheelDelta,
 };
 pub use ruffle_render_wgpu::wgpu;
-pub use sessions::{Host, HostError, ScriptLink, Session};
+pub use sessions::reap;
+pub use sessions::{Host, HostError, PlayerStatus, ScriptLink, Session};
 
 #[cfg(feature = "testing")]
 pub mod testing;

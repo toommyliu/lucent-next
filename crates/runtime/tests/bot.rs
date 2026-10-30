@@ -102,19 +102,6 @@ fn drain(link: &ScriptLink) {
 }
 
 #[cfg(feature = "testing")]
-fn wait_for_recovery(logs: &common::logs::Logs, message: &str) {
-    let deadline = Instant::now() + TIMEOUT;
-    while !logs
-        .messages(tracing::Level::INFO)
-        .iter()
-        .any(|text| text == message)
-    {
-        assert!(Instant::now() < deadline, "did not receive {message}");
-        std::thread::sleep(Duration::from_millis(1));
-    }
-}
-
-#[cfg(feature = "testing")]
 #[test]
 fn malformed_packets_do_not_stop_bot_event_delivery() {
     let host = testing::headless_host();
@@ -203,10 +190,6 @@ fn script_kills_never_restart_the_bot() {
     bot.eval("identity.js", "globalThis.identity = { turns: 0 }; null")
         .wait::<()>(TIMEOUT)
         .unwrap();
-    assert_eq!(
-        next_call(&observer, "settings.setWalkSpeed")[1],
-        Value::Number(30.0)
-    );
     for _index in 0..3 {
         let run = common::start(
             &mut session,
@@ -229,73 +212,7 @@ fn script_kills_never_restart_the_bot() {
             _index + 1
         );
         drain(&observer);
-        assert_eq!(
-            next_call(&observer, "settings.setWalkSpeed")[1],
-            Value::Number(30.0)
-        );
     }
-}
-
-#[test]
-fn the_settings_policy_reapplies_through_the_host() {
-    let (_host, mut session, observer) = start();
-    drain(&observer);
-    let _bot = Bot::start(session.attach().unwrap()).unwrap();
-    assert_eq!(
-        next_call(&observer, "settings.setWalkSpeed")[1],
-        Value::Number(30.0)
-    );
-    update(&observer, json!({"walkSpeed":45}));
-    drain(&observer);
-    let began = Instant::now();
-    assert_eq!(
-        common::await_event(&observer, "onProbeCall", None).args,
-        vec![
-            Value::String("settings.enemyMagnet".into()),
-            Value::Undefined
-        ]
-    );
-    assert_eq!(
-        next_call(&observer, "settings.setWalkSpeed")[1],
-        Value::Number(45.0)
-    );
-    assert!(began.elapsed() < Duration::from_millis(1500));
-    update(&observer, json!({"enemyMagnetEnabled":false}));
-    drain(&observer);
-    let until = Instant::now() + Duration::from_millis(1200);
-    while Instant::now() < until {
-        let event = common::await_event(&observer, "onProbeCall", None);
-        assert_ne!(
-            event.args.first(),
-            Some(&Value::String("settings.enemyMagnet".into()))
-        );
-    }
-}
-
-#[test]
-fn a_player_restart_stops_the_bot_and_a_new_bot_reads_the_host_settings() {
-    let (_host, mut session, observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
-    session.restart(testing::headless_surface()).unwrap();
-    assert!(matches!(bot.wait(TIMEOUT), Err(RuntimeError::Stopped)));
-    drop(bot);
-    drop(observer);
-    let observer = session.attach().unwrap();
-    session.send(lucent_host::ViewEvent::Resized(
-        lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
-    ));
-    testing::wait_loaded(&observer);
-    become_ready(&observer);
-    drain(&observer);
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
-    assert!(matches!(
-        bot.wait(Duration::ZERO),
-        Err(RuntimeError::Timeout)
-    ));
-    assert_eq!(
-        next_call(&observer, "settings.setWalkSpeed")[1],
-        Value::Number(30.0)
-    );
 }
 
 #[cfg(feature = "testing")]
@@ -338,10 +255,6 @@ fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
         );
         drain(&observer);
         let _replacement = Bot::start(session.attach().unwrap()).unwrap();
-        assert_eq!(
-            next_call(&observer, "settings.setWalkSpeed")[1],
-            Value::Number(30.0)
-        );
     }
 }
 
@@ -387,7 +300,7 @@ fn only_scripts_react_to_counter_attacks() {
     );
     become_ready(&observer);
     update(&observer, json!({"antiCounterEnabled":true}));
-    let _bot = Bot::start(session.attach().unwrap()).unwrap();
+    let _supervisor = lucent_runtime::Supervisor::start(&mut session, None).unwrap();
     drain(&observer);
     let counter = || {
         observer.call_loader("probe.emit", vec![
@@ -429,8 +342,7 @@ fn assert_only_scripts_request_monster_drops(local_move: bool) {
             .recording("settings.setWalkSpeed"),
     );
     become_ready(&observer);
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
+    let _supervisor = lucent_runtime::Supervisor::start(&mut session, None).unwrap();
     drain(&observer);
     let emit = |packet| {
         observer
@@ -466,10 +378,6 @@ fn assert_only_scripts_request_monster_drops(local_move: bool) {
             "bot requested monster drops, local_move={local_move}"
         );
     }
-    assert!(matches!(
-        bot.wait(Duration::ZERO),
-        Err(RuntimeError::Timeout)
-    ));
     let run = common::yielding(&mut session);
     if local_move {
         emit(location);
@@ -496,61 +404,6 @@ fn only_scripts_request_monster_drops_on_join_map() {
 #[test]
 fn only_scripts_request_monster_drops_on_player_location() {
     assert_only_scripts_request_monster_drops(true);
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn failed_settings_ticks_warn_and_retry() {
-    for boundary in ["command", "read"] {
-        let logs = common::logs::Logs::default();
-        let dispatch = logs.dispatch();
-        let _guard = tracing::dispatcher::set_default(&dispatch);
-        let (_host, mut session, observer) = start();
-        let bot = Bot::start(session.attach().unwrap()).unwrap();
-        next_call(&observer, "settings.setWalkSpeed");
-        bot.eval(
-            "fail-host.js",
-            format!(
-                r#"
-            globalThis.attempts = [];
-            const original = __host.{boundary};
-            let failures = 2;
-            __host.{boundary} = function (json) {{
-                const input = JSON.parse(json);
-                if (input.kind === "readiness" || input.kind === "reapplySettings") {{
-                    attempts.push(input);
-                    if (failures-- > 0) throw new Error("temporary host failure");
-                }}
-                return original(json);
-            }};
-            null;
-        "#
-            ),
-        )
-        .wait::<()>(TIMEOUT)
-        .unwrap();
-        wait_for_recovery(&logs, "settings policy recovered");
-        let warnings = logs.messages(tracing::Level::WARN);
-        assert!(
-            warnings
-                .iter()
-                .any(|text| text.contains("settings") && text.contains("temporary host failure")),
-            "{boundary}: {warnings:?}"
-        );
-        assert_eq!(
-            next_call(&observer, "settings.setWalkSpeed")[1],
-            Value::Number(30.0)
-        );
-        let attempts: usize = bot
-            .eval("attempts.js", "attempts.length")
-            .wait(TIMEOUT)
-            .unwrap();
-        assert!(attempts > 2, "{boundary}: only {attempts} attempts");
-        assert!(matches!(
-            bot.wait(Duration::ZERO),
-            Err(RuntimeError::Timeout)
-        ));
-    }
 }
 
 #[cfg(feature = "testing")]
@@ -603,426 +456,6 @@ fn overflow_logs_identify_the_runtime() {
             .iter()
             .any(|text| text == "script events overflowed and were lost")
     );
-}
-
-#[test]
-fn walk_speed_resends_never_go_backwards() {
-    let (_host, mut session, observer) = start();
-    update(&observer, json!({"enemyMagnetEnabled":false}));
-    drain(&observer);
-    let _bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
-    let writer = session.attach().unwrap();
-    std::thread::scope(|scope| {
-        scope.spawn(move || {
-            for speed in 31..=530 {
-                update(&writer, json!({"walkSpeed":speed}));
-                drain(&writer);
-                std::thread::sleep(Duration::from_millis(4));
-            }
-        });
-        let mut previous = 30.0;
-        let mut resends = 0;
-        while previous < 530.0 || resends == 0 {
-            let call = next_call(&observer, "settings.setWalkSpeed");
-            let Value::Number(speed) = call[1] else {
-                panic!("missing walk speed")
-            };
-            assert!(
-                speed >= previous,
-                "walk speed went backwards from {previous} to {speed}"
-            );
-            resends += usize::from(speed == previous);
-            previous = speed;
-        }
-        assert_eq!(previous, 530.0);
-    });
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn settings_policy_host_failures_retry_once_per_streak() {
-    for boundary in ["read", "swf", "command"] {
-        let logs = common::logs::Logs::default();
-        let dispatch = logs.dispatch();
-        let _guard = tracing::dispatcher::set_default(&dispatch);
-        let (_host, mut session, observer) = start();
-        let bot = Bot::start(session.attach().unwrap()).unwrap();
-        next_call(&observer, "settings.setWalkSpeed");
-        bot.eval(
-            "fail-boundary.js",
-            format!(
-                r#"
-                globalThis.failures = 0;
-                const original = __host.{boundary};
-                __host.{boundary} = (...args) => {{
-                    if (++failures <= 3) throw new SyntaxError("host link unavailable");
-                    return original(...args);
-                }};
-                new Promise(resolve => {{
-                    const log = __host.log;
-                    __host.log = (level, text) => {{
-                        log(level, text);
-                        if (level === "info" && text === "settings policy recovered") {{
-                            __host.log = log;
-                            resolve(null);
-                        }}
-                    }};
-                }});
-                "#
-            ),
-        )
-        .wait::<()>(TIMEOUT)
-        .unwrap();
-        let warnings = logs.messages(tracing::Level::WARN);
-        assert_eq!(
-            warnings
-                .iter()
-                .filter(|text| text.contains("settings policy tick failed"))
-                .count(),
-            1,
-            "{boundary}: {warnings:?}"
-        );
-        let expected_line = if boundary == "read" {
-            "settings policy tick failed SyntaxError: host link unavailable"
-        } else {
-            "[cause]: SyntaxError: host link unavailable"
-        };
-        assert!(
-            warnings[0].lines().any(|line| line.trim() == expected_line),
-            "{warnings:?}"
-        );
-        let recovered = logs.messages(tracing::Level::INFO);
-        assert_eq!(
-            recovered
-                .iter()
-                .filter(|text| text.contains("settings policy recovered"))
-                .count(),
-            1,
-            "{boundary}: {recovered:?}"
-        );
-        assert!(
-            bot.eval("attempts.js", "failures")
-                .wait::<u32>(TIMEOUT)
-                .unwrap()
-                > 3
-        );
-        drain(&observer);
-        assert_eq!(
-            next_call(&observer, "settings.setWalkSpeed")[1],
-            Value::Number(30.0)
-        );
-        assert!(matches!(
-            bot.wait(Duration::ZERO),
-            Err(RuntimeError::Timeout)
-        ));
-    }
-}
-
-#[cfg(feature = "testing")]
-fn assert_policy_retries(source: &str, expected_line: &str) {
-    let logs = common::logs::Logs::default();
-    let dispatch = logs.dispatch();
-    let _guard = tracing::dispatcher::set_default(&dispatch);
-    let (_host, mut session, observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
-    bot.eval("break-policy.js", source)
-        .wait::<()>(TIMEOUT)
-        .unwrap();
-    bot.eval(
-        "observe-failures.js",
-        r#"new Promise(resolve => {
-            const check = () => attempts >= 3 ? resolve(null) : setTimeout(check, 1);
-            check();
-        });"#,
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
-    let warnings = logs.messages(tracing::Level::WARN);
-    assert_eq!(warnings.len(), 1, "{warnings:?}");
-    assert!(
-        warnings[0].lines().any(|line| line.trim() == expected_line),
-        "expected {expected_line:?} in {warnings:?}"
-    );
-    assert!(warnings[0].lines().count() > 1, "{warnings:?}");
-    assert!(logs.messages(tracing::Level::INFO).is_empty());
-    assert!(
-        bot.eval("attempts.js", "attempts")
-            .wait::<u32>(TIMEOUT)
-            .unwrap()
-            >= 3
-    );
-    bot.eval("restore-policy.js", "restore(); null;")
-        .wait::<()>(TIMEOUT)
-        .unwrap();
-    drain(&observer);
-    assert_eq!(
-        next_call(&observer, "settings.setWalkSpeed")[1],
-        Value::Number(30.0)
-    );
-    wait_for_recovery(&logs, "settings policy recovered");
-    assert_eq!(
-        logs.messages(tracing::Level::INFO),
-        vec!["settings policy recovered"]
-    );
-    assert_eq!(logs.messages(tracing::Level::WARN), warnings);
-    assert!(matches!(
-        bot.wait(Duration::ZERO),
-        Err(RuntimeError::Timeout)
-    ));
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn settings_policy_code_errors_warn_once_and_retry() {
-    assert_policy_retries(
-        r#"
-        globalThis.attempts = 0;
-        const command = __host.command;
-        __host.command = undefined;
-        const stringify = JSON.stringify;
-        JSON.stringify = value => {
-            if (value.kind === "refreshLoggedIn" || value.kind === "reapplySettings") attempts++;
-            return stringify(value);
-        };
-        globalThis.restore = () => {
-            __host.command = command;
-            JSON.stringify = stringify;
-        };
-        null;
-        "#,
-        "settings policy tick failed Error: Failed reapplySettings",
-    );
-    assert_policy_retries(
-        r#"
-        globalThis.attempts = 0;
-        const stringify = JSON.stringify;
-        JSON.stringify = value => {
-            if (value.kind === "reapplySettings") {
-                attempts++;
-                throw new Error("broken policy serialization");
-            }
-            return stringify(value);
-        };
-        globalThis.restore = () => { JSON.stringify = stringify; };
-        null;
-        "#,
-        "[cause]: Error: broken policy serialization",
-    );
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn settings_policy_malformed_host_replies_warn_once_and_retry() {
-    for (boundary, reply, expected_line) in [
-        (
-            "read",
-            "not json",
-            "settings policy tick failed SyntaxError: Unexpected token 'o', \"not json\" is not valid JSON",
-        ),
-        (
-            "read",
-            "{}",
-            "settings policy tick failed TypeError: Cannot read properties of undefined (reading 'length')",
-        ),
-        (
-            "swf",
-            "not json",
-            "[cause]: SyntaxError: Unexpected token 'o', \"not json\" is not valid JSON",
-        ),
-        ("swf", r#""true""#, "[cause]: SchemaError: Expected boolean"),
-        (
-            "command",
-            "not json",
-            "[cause]: SyntaxError: Unexpected token 'o', \"not json\" is not valid JSON",
-        ),
-    ] {
-        assert_policy_retries(
-            &format!(
-                r#"
-                globalThis.attempts = 0;
-                const original = __host.{boundary};
-                __host.{boundary} = (...args) => {{ attempts++; return {}; }};
-                globalThis.restore = () => {{ __host.{boundary} = original; }};
-                null;
-                "#,
-                serde_json::to_string(reply).unwrap()
-            ),
-            expected_line,
-        );
-    }
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn settings_policy_uses_player_readiness() {
-    let (_host, mut session, observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
-    bot.eval(
-        "not-logged-in.js",
-        r#"
-        globalThis.reapplications = 0;
-        globalThis.readinessChecks = 0;
-        const command = __host.command;
-        __host.command = json => {
-            const input = JSON.parse(json);
-            if (input.kind === "refreshLoggedIn") { readinessChecks++; return "false"; }
-            if (input.kind === "reapplySettings") reapplications++;
-            return command(json);
-        };
-        new Promise(resolve => {
-            const check = () => readinessChecks >= 3 ? resolve(null) : setTimeout(check, 1);
-            check();
-        });
-    "#,
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
-    assert_eq!(
-        bot.eval("count.js", "reapplications")
-            .wait::<u32>(TIMEOUT)
-            .unwrap(),
-        0
-    );
-    bot.eval("ready-again.js", "__host.command = command; null;")
-        .wait::<()>(TIMEOUT)
-        .unwrap();
-    drain(&observer);
-    assert_eq!(
-        next_call(&observer, "settings.setWalkSpeed")[1],
-        Value::Number(30.0)
-    );
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn settings_policy_recovery_waits_for_every_failing_loop() {
-    let logs = common::logs::Logs::default();
-    let dispatch = logs.dispatch();
-    let _guard = tracing::dispatcher::set_default(&dispatch);
-    let (_host, mut session, observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
-    bot.eval(
-        "fail-full-ticks.js",
-        r#"
-        globalThis.fullFailures = 0;
-        globalThis.actionFailures = 0;
-        globalThis.actionsRecovered = false;
-        const command = __host.command;
-        __host.command = json => {
-            const input = JSON.parse(json);
-            if (input.kind === "reapplySettings" && !input.actionsOnly) {
-                fullFailures++;
-                throw new Error("full reapply unavailable");
-            }
-            if (input.kind === "reapplySettings" && !actionsRecovered) {
-                actionFailures++;
-                throw new Error("actions reapply unavailable");
-            }
-            return command(json);
-        };
-        new Promise(resolve => {
-            const check = () => fullFailures >= 3 && actionFailures >= 3
-                ? resolve(null) : setTimeout(check, 10);
-            check();
-        });
-    "#,
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
-    assert_eq!(
-        bot.eval("failures.js", "fullFailures")
-            .wait::<u32>(TIMEOUT)
-            .unwrap(),
-        3
-    );
-    let warnings = logs.messages(tracing::Level::WARN);
-    let recoveries = logs.messages(tracing::Level::INFO);
-    assert_eq!(
-        (
-            warnings
-                .iter()
-                .filter(|text| text.contains("settings policy tick failed"))
-                .count(),
-            recoveries
-                .iter()
-                .filter(|text| text.contains("settings policy recovered"))
-                .count()
-        ),
-        (1, 0),
-        "warnings: {warnings:?}, recoveries: {recoveries:?}"
-    );
-    drain(&observer);
-    bot.eval("recover-actions.js", "actionsRecovered = true; null;")
-        .wait::<()>(TIMEOUT)
-        .unwrap();
-    next_call(&observer, "settings.enemyMagnet");
-    assert_eq!(logs.messages(tracing::Level::WARN), warnings);
-    assert!(logs.messages(tracing::Level::INFO).is_empty());
-    bot.eval("restore-command.js", "__host.command = command; null;")
-        .wait::<()>(TIMEOUT)
-        .unwrap();
-    drain(&observer);
-    assert_eq!(
-        next_call(&observer, "settings.setWalkSpeed")[1],
-        Value::Number(30.0)
-    );
-    wait_for_recovery(&logs, "settings policy recovered");
-    assert_eq!(
-        logs.messages(tracing::Level::INFO)
-            .iter()
-            .filter(|text| text.contains("settings policy recovered"))
-            .count(),
-        1
-    );
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn settings_policy_missing_loader_booleans_warn_once_and_retry() {
-    for value in ["undefined", "null"] {
-        assert_policy_retries(
-            &format!(
-                r#"
-                globalThis.attempts = 0;
-                const swf = __host.swf;
-                __host.swf = () => {{ attempts++; return {value}; }};
-                globalThis.restore = () => {{ __host.swf = swf; }};
-                null;
-                "#
-            ),
-            "[cause]: SchemaError: Expected boolean",
-        );
-    }
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn settings_policy_invalid_reapply_reply_warns_once_and_retries() {
-    for reply in ["false", "{}"] {
-        assert_policy_retries(
-            &format!(
-                r#"
-                globalThis.attempts = 0;
-                const command = __host.command;
-                __host.command = json => {{
-                    if (JSON.parse(json).kind === "reapplySettings") {{
-                        attempts++;
-                        return {reply};
-                    }}
-                    return command(json);
-                }};
-                globalThis.restore = () => {{ __host.command = command; }};
-                null;
-                "#,
-                reply = serde_json::to_string(reply).unwrap()
-            ),
-            "settings policy tick failed Error: Invalid reapplySettings reply",
-        );
-    }
 }
 
 #[cfg(feature = "testing")]
@@ -1295,7 +728,7 @@ fn auto_zone_overflow_host_failures_retry_and_warn_once_per_streak() {
         __host.command(JSON.stringify({kind:"patchAutoZone",patch:{enabled:true,map:"moreskulls"}}));
         null;
     "#).wait::<()>(TIMEOUT).unwrap();
-    wait_for_recovery(&logs, "auto zone host read recovered");
+    logs.wait_for(tracing::Level::INFO, "auto zone host read recovered");
     assert_eq!(
         bot.eval("read-attempts.js", "autoZoneReads")
             .wait::<usize>(TIMEOUT)
@@ -1364,7 +797,7 @@ fn malformed_auto_zone_overflow_replies_retry_and_recover() {
         )
         .wait::<()>(TIMEOUT)
         .unwrap();
-        wait_for_recovery(&logs, "auto zone host read recovered");
+        logs.wait_for(tracing::Level::INFO, "auto zone host read recovered");
         assert_eq!(
             bot.eval("attempts.js", "autoZoneReads")
                 .wait::<u32>(TIMEOUT)
@@ -1433,7 +866,7 @@ fn auto_zone_policy_defects_retry_and_recover() {
     )
     .wait::<()>(TIMEOUT)
     .unwrap();
-    wait_for_recovery(&logs, "auto zone recovered");
+    logs.wait_for(tracing::Level::INFO, "auto zone recovered");
     assert_eq!(
         bot.eval("attempts.js", "configAttempts")
             .wait::<u32>(TIMEOUT)
@@ -1650,9 +1083,8 @@ fn relogin_boundary_failures_fall_back_to_cached_credentials() {
     let logs = common::logs::Logs::default();
     let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
-    let (_host, mut session, observer) = start();
+    let (_host, mut session, _observer) = start();
     let bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
     bot.eval("fail-capture.js", r#"
         const command = __host.command;
         let failures = 2;
@@ -1700,9 +1132,8 @@ fn relogin_reply_errors_allow_the_next_capture() {
         let logs = common::logs::Logs::default();
         let dispatch = logs.dispatch();
         let _guard = tracing::dispatcher::set_default(&dispatch);
-        let (_host, mut session, observer) = start();
+        let (_host, mut session, _observer) = start();
         let bot = Bot::start(session.attach().unwrap()).unwrap();
-        next_call(&observer, "settings.setWalkSpeed");
         bot.eval("malformed-capture.js", format!(r#"
             const command = __host.command;
             let failures = 2;
@@ -1752,9 +1183,8 @@ fn relogin_code_failures_fail_the_ask_and_allow_the_next_setter() {
     let logs = common::logs::Logs::default();
     let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
-    let (_host, mut session, observer) = start();
+    let (_host, mut session, _observer) = start();
     let bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
     bot.eval(
         "break-relogin.js",
         r#"
@@ -1918,9 +1348,8 @@ fn failed_logout_commands_back_off() {
 #[cfg(feature = "testing")]
 fn assert_reconnect_uses_cached_auth(capture_on_reconnect: bool) {
     for cached_logged_in in [false, true] {
-        let (_host, mut session, observer) = start();
+        let (_host, mut session, _observer) = start();
         let bot = Bot::start(session.attach().unwrap()).unwrap();
-        next_call(&observer, "settings.setWalkSpeed");
         bot.eval("prepare-reconnect.js", r#"
             const command = __host.command;
             const read = __host.read;
@@ -2046,9 +1475,8 @@ fn assert_reconnect_uses_cached_auth(capture_on_reconnect: bool) {
 #[cfg(feature = "testing")]
 #[test]
 fn reconnect_reaches_armed_when_logged_in_refresh_keeps_throwing() {
-    let (_host, mut session, observer) = start();
+    let (_host, mut session, _observer) = start();
     let bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
     let run = common::start(
         &mut session,
         common::loose(&[(

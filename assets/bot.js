@@ -4888,7 +4888,6 @@ ${prefix}}`;
   }, "mergeAllEffect");
   var mergeAll2 = /* @__PURE__ */ __name((...layers) => fromBuild((memoMap, scope3) => mergeAllEffect(layers, memoMap, scope3)), "mergeAll");
   var provideWith = /* @__PURE__ */ __name((self, that, f) => fromBuild((memoMap, scope3) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope3) : that.build(memoMap, scope3), (context3) => self.build(memoMap, scope3).pipe(provideContext(context3), map3((merged) => f(merged, context3))))), "provideWith");
-  var provide2 = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, identity));
   var provideMerge = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, (self2, that2) => merge(that2, self2)));
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Cause.js
@@ -5303,30 +5302,30 @@ ${prefix}}`;
         return close(self.scope, void_2);
       }),
       runFork(effect2, options2) {
-        return self.cachedContext === void 0 ? runFork2(provide3(self, effect2), mergeRunOptions(options2)) : runForkWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
+        return self.cachedContext === void 0 ? runFork2(provide2(self, effect2), mergeRunOptions(options2)) : runForkWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
       },
       runCallback(effect2, options2) {
-        return self.cachedContext === void 0 ? runCallback2(provide3(self, effect2), mergeRunOptions(options2)) : runCallbackWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
+        return self.cachedContext === void 0 ? runCallback2(provide2(self, effect2), mergeRunOptions(options2)) : runCallbackWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
       },
       runSyncExit(effect2) {
-        return self.cachedContext === void 0 ? runSyncExit2(provide3(self, effect2)) : runSyncExitWith2(self.cachedContext)(effect2);
+        return self.cachedContext === void 0 ? runSyncExit2(provide2(self, effect2)) : runSyncExitWith2(self.cachedContext)(effect2);
       },
       runSync(effect2) {
-        return self.cachedContext === void 0 ? runSync2(provide3(self, effect2)) : runSyncWith2(self.cachedContext)(effect2);
+        return self.cachedContext === void 0 ? runSync2(provide2(self, effect2)) : runSyncWith2(self.cachedContext)(effect2);
       },
       runPromiseExit(effect2, options2) {
-        return self.cachedContext === void 0 ? runPromiseExit2(provide3(self, effect2), mergeRunOptions(options2)) : runPromiseExitWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
+        return self.cachedContext === void 0 ? runPromiseExit2(provide2(self, effect2), mergeRunOptions(options2)) : runPromiseExitWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
       },
       runPromise(effect2, options2) {
-        return self.cachedContext === void 0 ? runPromise2(provide3(self, effect2), mergeRunOptions(options2)) : runPromiseWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
+        return self.cachedContext === void 0 ? runPromise2(provide2(self, effect2), mergeRunOptions(options2)) : runPromiseWith2(self.cachedContext)(effect2, mergeRunOptions(options2));
       }
     };
     return self;
   }, "make");
-  function provide3(managed, effect2) {
+  function provide2(managed, effect2) {
     return flatMap3(managed.contextEffect, (context3) => provideContext2(effect2, context3));
   }
-  __name(provide3, "provide");
+  __name(provide2, "provide");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableHashMap.js
   var TypeId9 = "~effect/MutableHashMap";
@@ -6184,24 +6183,24 @@ ${prefix}}`;
      * differently when encoding. `undefined` reuses `run`.
      */
     encodingRun;
-    constructor(typeParameters, run4, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
+    constructor(typeParameters, run3, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
       super(annotations, checks, encoding, context3);
       this.typeParameters = typeParameters;
-      this.run = run4;
+      this.run = run3;
       this.encodingChecks = encodingChecks;
       this.encodingRun = encodingRun;
     }
     /** @internal */
     getParser() {
-      let run4;
+      let run3;
       return (input, options) => {
         if (input === missing) return missingExit;
-        return (run4 ??= this.run(this.typeParameters))(input, this, options);
+        return (run3 ??= this.run(this.typeParameters))(input, this, options);
       };
     }
-    _rebuild(recur, checks, encodingChecks, run4, encodingRun) {
+    _rebuild(recur, checks, encodingChecks, run3, encodingRun) {
       const tps = mapOrSame(this.typeParameters, recur);
-      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run4 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run4, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
+      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run3 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run3, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
     }
     /** @internal */
     recur(recur) {
@@ -7359,9 +7358,9 @@ ${prefix}}`;
      * Whether the parsing process should be aborted after this check has failed.
      */
     aborted;
-    constructor(run4, annotations = void 0, aborted = false) {
+    constructor(run3, annotations = void 0, aborted = false) {
       super();
-      this.run = run4;
+      this.run = run3;
       this.annotations = annotations;
       this.aborted = aborted;
     }
@@ -8279,8 +8278,8 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Schema.js
   function declareConstructor() {
-    return (typeParameters, run4, annotations) => {
-      return make10(new Declaration(typeParameters.map(getAST), (typeParameters2) => run4(typeParameters2.map((ast) => make10(ast))), annotations));
+    return (typeParameters, run3, annotations) => {
+      return make10(new Declaration(typeParameters.map(getAST), (typeParameters2) => run3(typeParameters2.map((ast) => make10(ast))), annotations));
     };
   }
   __name(declareConstructor, "declareConstructor");
@@ -15884,12 +15883,6 @@ ${prefix}}`;
       );
     });
   }, "makeRetryAttempt");
-  var makeRetryLoop = /* @__PURE__ */ __name((name) => {
-    const retry4 = makeRetryAttempt(name);
-    return (tick, interval) => forever3(
-      retry4(tick, interval).pipe(andThen2(sleep2(interval)))
-    );
-  }, "makeRetryLoop");
 
   // packages/runtime/src/game/automation/AutoZone.ts
   var AutoZoneSupportedMap = Literals([
@@ -16136,33 +16129,6 @@ ${prefix}}`;
       }));
     })
   );
-
-  // packages/runtime/src/game/automation/SettingsPolicy.ts
-  var run3 = gen2(function* () {
-    const api = yield* Api;
-    const host4 = yield* HostState;
-    const diagnostics2 = yield* DiagnosticSink;
-    const repeat4 = makeRetryLoop("settings policy");
-    const tick = /* @__PURE__ */ __name((actionsOnly) => gen2(function* () {
-      if (!(yield* api.player.isReady())) return;
-      const result3 = yield* host4.command({ kind: "reapplySettings", actionsOnly });
-      if (isNone2(result3)) {
-        return yield* die3(new Error("Failed reapplySettings", {
-          cause: diagnostics2.takeCause?.("reapplySettings")
-        }));
-      }
-      if (result3.value !== null) {
-        return yield* die3(new Error("Invalid reapplySettings reply"));
-      }
-    }), "tick");
-    yield* all2(
-      [
-        repeat4(() => tick(false), "1 second"),
-        repeat4(() => tick(true), "500 millis")
-      ],
-      { concurrency: "unbounded", discard: true }
-    );
-  });
 
   // packages/runtime/src/game/automation/autoReloginConfig.ts
   var defaultAutoReloginDelay = 3e3;
@@ -17028,44 +16994,13 @@ ${prefix}}`;
   });
 
   // packages/runtime/src/bot.ts
-  var causes = /* @__PURE__ */ new Map();
-  var takeCause = /* @__PURE__ */ __name((operation) => {
-    const cause = causes.get(operation);
-    causes.delete(operation);
-    return cause;
-  }, "takeCause");
-  var diagnostics = succeed6(DiagnosticSink, {
-    report: /* @__PURE__ */ __name((_phase, operation, cause) => {
-      if (operation === "world.isLoaded" || operation === "player.isLoaded" || operation === "reapplySettings") {
-        causes.set(operation, cause);
-      }
-    }, "report"),
-    takeCause
-  });
-  var requireResult = /* @__PURE__ */ __name((operation) => (result3) => {
-    const cause = takeCause(operation);
-    return isNone2(result3) ? die3(new Error(`Failed ${operation}`, { cause })) : void_3;
-  }, "requireResult");
-  var readinessBridge = effect(
-    Bridge,
-    map5(Bridge, (bridge) => ({
-      ...bridge,
-      invoke: /* @__PURE__ */ __name((method, args2, schema) => bridge.invoke(method, args2, schema).pipe(
-        tap3(
-          (result3) => method === "world.isLoaded" || method === "player.isLoaded" ? requireResult(method)(result3) : void_3
-        )
-      ), "invoke")
-    }))
-  );
-  var apiLayer = layer5.pipe(provide2(readinessBridge));
   var gateway = layer2.pipe(provideMerge(layer));
   var host3 = layer3.pipe(provideMerge(gateway));
-  var services = apiLayer.pipe(provideMerge(host3));
+  var services = layer5.pipe(provideMerge(host3));
   var botLayer = effectDiscard(
     flatMap3(Gateway, (gateway2) => gateway2.start())
-  ).pipe(provideMerge(services), provideMerge(diagnostics));
+  ).pipe(provideMerge(services));
   var runtime2 = make6(mergeAll2(layer6, botRelogin).pipe(provideMerge(botLayer)));
   runtime2.runSync(void_3);
-  runtime2.runPromise(run3);
   Object.assign(globalThis, { __lucent: Object.freeze({ turn, wake }) });
 })();
