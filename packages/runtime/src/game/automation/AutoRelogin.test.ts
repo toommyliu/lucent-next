@@ -151,6 +151,41 @@ describe("AutoRelogin", () => {
       }),
   );
 
+  it.effect("starts the capture watcher when credential refresh fails with an empty cache", () =>
+    Effect.gen(function* () {
+      const username = yield* Ref.make("");
+      const password = yield* Ref.make("");
+      let loginCalls = 0;
+      const autoRelogin = yield* makeFeature(apiWith({
+        auth: {
+          getUsername: () => Effect.die("player restarting"),
+          getPassword: () => Effect.die("player restarting"),
+          getCached: () => Effect.gen(function* () {
+            return {
+              loggedIn: false,
+              username: yield* Ref.get(username),
+              password: yield* Ref.get(password),
+              servers: [],
+            };
+          }),
+          login: () => Effect.sync(() => { loginCalls++; return true; }),
+        },
+      }));
+
+      expect(yield* autoRelogin.setEnabled(true)).toEqual({
+        enabled: true, captured: false, delayMs: 3000, attempting: false, waitingDelay: false,
+      });
+      yield* Ref.set(username, "Hero");
+      yield* Ref.set(password, "pw");
+      yield* advance("5 seconds");
+
+      expect(yield* autoRelogin.getState()).toEqual({
+        enabled: true, captured: true, username: "Hero", delayMs: 3000, attempting: false, waitingDelay: false,
+      });
+      expect(loginCalls).toBe(0);
+    }),
+  );
+
   it.effect("orchestrates login, server selection, and player readiness", () =>
     Effect.gen(function* () {
       const ready = yield* Ref.make(false);

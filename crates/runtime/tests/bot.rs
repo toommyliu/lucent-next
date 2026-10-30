@@ -1543,6 +1543,66 @@ fn relogin_setters_publish_sanitized_records_before_they_answer() {
 
 #[cfg(feature = "testing")]
 #[test]
+fn set_enabled_captures_cached_credentials_when_refresh_fails() {
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        common::ready_movie()
+            .constant("auth.getUsername", json!("player-a"))
+            .constant("auth.getPassword", json!("secret")),
+    );
+    become_ready(&observer);
+    observer
+        .command(Command::RefreshCredentials {})
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    bot.eval(
+        "fail-credential-refresh.js",
+        r#"
+        const command = __host.command;
+        __host.command = json => {
+            if (JSON.parse(json).kind === "refreshCredentials") throw new Error("player restarting");
+            return command(json);
+        };
+        null;
+    "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    let run = common::start(
+        &mut session,
+        common::loose(&[(
+            "enable.js",
+            r#"
+        import * as relogin from "lucent/autorelogin";
+        export default function* () {
+            const state = yield* relogin.setEnabled(true);
+            if (state.enabled !== true || state.captured !== true || state.username !== "player-a"
+                || state.attempting !== false || state.waitingDelay !== false || state.delayMs !== 3000) {
+                throw new Error(JSON.stringify(state));
+            }
+            const read = yield* relogin.getState();
+            if (JSON.stringify(read) !== JSON.stringify(state)) throw new Error(JSON.stringify({ state, read }));
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        lucent_protocol::script::ScriptOutcome::Completed
+    );
+    let records = session.auto_relogin();
+    assert!(records.config.enabled);
+    assert!(records.status.captured);
+    assert_eq!(records.status.username.as_deref(), Some("player-a"));
+    assert_eq!(records.status.last_error, None);
+    assert_eq!(session.pending_ask_count(), 0);
+}
+
+#[cfg(feature = "testing")]
+#[test]
 fn relogin_boundary_failures_answer_once_and_allow_the_next_capture() {
     let logs = common::logs::Logs::default();
     let dispatch = logs.dispatch();
