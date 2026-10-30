@@ -25,48 +25,14 @@ pub fn package(dir: &str, entry: &str, extra: &[(&str, &str)]) -> Script {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../script-packages")
         .join(dir);
-    let manifest: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("package.json")).unwrap()).unwrap();
-    let name = manifest["name"].as_str().unwrap();
-    let mut modules = BTreeMap::new();
-    fn read(root: &Path, dir: &Path, name: &str, modules: &mut BTreeMap<ModulePath, String>) {
-        for file in std::fs::read_dir(dir).unwrap() {
-            let path = file.unwrap().path();
-            if path.is_dir() {
-                read(root, &path, name, modules);
-            } else if path.extension().is_some_and(|ext| ext == "js") {
-                modules.insert(
-                    ModulePath::in_package(
-                        name,
-                        path.strip_prefix(root)
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .replace('\\', "/"),
-                    )
-                    .unwrap(),
-                    std::fs::read_to_string(path).unwrap(),
-                );
-            }
-        }
-    }
-    read(&dir, &dir, name, &mut modules);
+    let mut package = lucent_host::library::Package::read(&dir).unwrap();
     for (path, source) in extra {
-        modules.insert(
-            ModulePath::in_package(name, *path).unwrap(),
+        package.modules.insert(
+            ModulePath::in_package(&package.name, *path).unwrap(),
             (*source).into(),
         );
     }
-    Script::new(
-        ModulePath::in_package(name, entry).unwrap(),
-        modules,
-        [(
-            name.into(),
-            ModulePath::in_package(name, manifest["main"].as_str().unwrap()).unwrap(),
-        )]
-        .into(),
-    )
-    .unwrap()
+    package.script(entry).unwrap()
 }
 
 pub fn ready_movie() -> ProbeMovie {
@@ -128,6 +94,27 @@ pub fn ready(runtime: &Runtime) {
         )
         .wait::<()>(TIMEOUT)
         .unwrap();
+}
+
+pub fn log_in(link: &lucent_host::ScriptLink) {
+    use lucent_protocol::bridge::Value;
+    for packet in [
+        json!({"type":"json","dataObj":{"cmd":"loadInventoryBig",
+            "items":[{"ItemID":5586,"sName":"Elders Blood","sType":"Item","iQty":20,"iStk":20}],
+            "hitems":[{"ItemID":2,"sName":"Home","sType":"House","bEquip":1}]}}),
+        json!({"type":"json","dataObj":{"cmd":"moveToArea","areaId":1,"areaName":"buyhouse-1",
+            "uoBranch":[{"entID":7,"uoName":"player-a","intHP":100,"intHPMax":100}]}}),
+    ] {
+        link.call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onExtensionResponse".into()),
+                Value::String(packet.to_string()),
+            ],
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    }
 }
 
 pub fn start(

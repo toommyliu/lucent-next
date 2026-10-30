@@ -8,6 +8,7 @@ use gpui::{
     WindowHandle, WindowOptions, div, px, rgb, size,
 };
 use lucent_host::Host;
+use lucent_runtime::ScriptRequest;
 
 use player_view::{PlayerView, PlayerViewError};
 
@@ -15,7 +16,11 @@ const WINDOW_WIDTH: f32 = 1024.;
 const WINDOW_HEIGHT: f32 = 798.;
 const TAB_STRIP_HEIGHT: f32 = 30.;
 
-pub fn open(host: &Host, cx: &mut App) -> anyhow::Result<WindowHandle<GameWindow>> {
+pub fn open(
+    host: &Host,
+    script: Option<ScriptRequest>,
+    cx: &mut App,
+) -> anyhow::Result<WindowHandle<GameWindow>> {
     let options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
             None,
@@ -31,7 +36,7 @@ pub fn open(host: &Host, cx: &mut App) -> anyhow::Result<WindowHandle<GameWindow
         ..Default::default()
     };
     cx.open_window(options, |window, cx| {
-        cx.new(|cx| GameWindow::new(host, window, cx))
+        cx.new(|cx| GameWindow::new(host, script, window, cx))
     })
 }
 
@@ -40,8 +45,13 @@ pub struct GameWindow {
 }
 
 impl GameWindow {
-    fn new(host: &Host, window: &mut Window, cx: &mut Context<Self>) -> GameWindow {
-        let player = PlayerView::new(host, window, cx);
+    fn new(
+        host: &Host,
+        script: Option<ScriptRequest>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> GameWindow {
+        let player = PlayerView::new(host, script, window, cx);
         match &player {
             Ok(view) => window.focus(&view.focus_handle(cx), cx),
             Err(error) => tracing::error!(%error, "no player view"),

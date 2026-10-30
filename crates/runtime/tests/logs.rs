@@ -1,7 +1,7 @@
 #![cfg(feature = "testing")]
 
-#[path = "common/logs.rs"]
-mod logs;
+mod common;
+use common::logs;
 
 use std::{thread, time::Duration};
 

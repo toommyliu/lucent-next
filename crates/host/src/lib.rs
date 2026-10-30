@@ -1,4 +1,5 @@
 pub mod bridge;
+pub mod library;
 mod player;
 pub mod projection;
 mod sessions;
