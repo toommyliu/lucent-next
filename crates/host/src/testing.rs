@@ -78,12 +78,16 @@ impl ProbeMovie {
     }
 
     pub fn constant(mut self, name: impl Into<String>, value: serde_json::Value) -> Self {
-        self.constants.push((name.into(), value));
+        let name = name.into();
+        self.replies.retain(|(method, _)| method != &name);
+        self.constants.push((name, value));
         self
     }
 
     pub fn throwing(mut self, name: impl Into<String>, message: impl Into<String>) -> Self {
-        self.throws.push((name.into(), message.into()));
+        let name = name.into();
+        self.replies.retain(|(method, _)| method != &name);
+        self.throws.push((name, message.into()));
         self
     }
 
@@ -106,6 +110,7 @@ impl ProbeMovie {
         let name = name.into();
         self.raises.retain(|(method, ..)| method != &name);
         self.sequences.retain(|(method, _)| method != &name);
+        self.replies.retain(|(method, _)| method != &name);
         self.raises
             .push((name, event.into(), payload.into(), count));
         self
@@ -119,6 +124,7 @@ impl ProbeMovie {
         let name = name.into();
         self.raises.retain(|(method, ..)| method != &name);
         self.sequences.retain(|(method, _)| method != &name);
+        self.replies.retain(|(method, _)| method != &name);
         self.sequences.push((name, events.into_iter().collect()));
         self
     }
