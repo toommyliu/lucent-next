@@ -225,23 +225,6 @@ fn a_player_restart_stops_the_bot_and_a_new_bot_reads_the_host_settings() {
 #[cfg(feature = "testing")]
 #[test]
 fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
-    use tracing_subscriber::prelude::*;
-    struct Errors(Arc<AtomicUsize>);
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Errors {
-        fn on_event(
-            &self,
-            event: &tracing::Event<'_>,
-            _: tracing_subscriber::layer::Context<'_, S>,
-        ) {
-            if *event.metadata().level() == tracing::Level::ERROR {
-                self.0.fetch_add(1, Ordering::Relaxed);
-            }
-        }
-    }
     for (source, expected) in [
         ("while (true) {}", Kill::Watchdog),
         (
@@ -249,9 +232,8 @@ fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
             Kill::HeapLimit,
         ),
     ] {
-        let errors = Arc::new(AtomicUsize::new(0));
-        let dispatch =
-            tracing::Dispatch::new(tracing_subscriber::registry().with(Errors(errors.clone())));
+        let logs = common::logs::Logs::default();
+        let dispatch = logs.dispatch();
         let _guard = tracing::dispatcher::set_default(&dispatch);
         let (_host, mut session, observer) = start();
         let bot = Bot::start(session.attach().unwrap()).unwrap();
@@ -274,7 +256,10 @@ fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
             Err(RuntimeError::Stopped)
         ));
         drop(bot);
-        assert_eq!(errors.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            logs.messages(tracing::Level::ERROR),
+            vec!["bot runtime failed"]
+        );
         drain(&observer);
         let _replacement = Bot::start(session.attach().unwrap()).unwrap();
         assert_eq!(

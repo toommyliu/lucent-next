@@ -375,40 +375,8 @@ fn an_explicit_kill_ends_a_script_and_a_fresh_run_completes() {
 
 #[test]
 fn event_overflow_finishes_script_cleanup_before_reporting_loss() {
-    use std::sync::{Arc, Mutex};
-    use tracing_subscriber::prelude::*;
-    #[derive(Clone)]
-    struct Cleanup(Arc<Mutex<bool>>);
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Cleanup {
-        fn on_event(
-            &self,
-            event: &tracing::Event<'_>,
-            _: tracing_subscriber::layer::Context<'_, S>,
-        ) {
-            struct Message(bool);
-            impl tracing::field::Visit for Message {
-                fn record_debug(
-                    &mut self,
-                    field: &tracing::field::Field,
-                    value: &dyn std::fmt::Debug,
-                ) {
-                    if field.name() == "message"
-                        && format!("{value:?}").contains("overflow cleanup")
-                    {
-                        self.0 = true;
-                    }
-                }
-            }
-            let mut message = Message(false);
-            event.record(&mut message);
-            if message.0 {
-                *self.0.lock().unwrap() = true;
-            }
-        }
-    }
-    let cleaned = Arc::new(Mutex::new(false));
-    let subscriber = tracing_subscriber::registry().with(Cleanup(cleaned.clone()));
-    let dispatch = tracing::Dispatch::new(subscriber);
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
     let host = lucent_host::testing::headless_host();
     let (mut session, link) = lucent_host::testing::start_probe(
@@ -444,7 +412,11 @@ fn event_overflow_finishes_script_cleanup_before_reporting_loss() {
         matches!(outcome, Err(RuntimeError::EventsLost)),
         "{outcome:?}"
     );
-    assert!(*cleaned.lock().unwrap());
+    assert!(
+        logs.messages(tracing::Level::INFO)
+            .iter()
+            .any(|text| text.contains("overflow cleanup"))
+    );
     drop(run);
     ready(&setup);
     completed(&mut session);

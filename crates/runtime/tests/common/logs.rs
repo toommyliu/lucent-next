@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Once};
 use tracing_subscriber::prelude::*;
 
 #[derive(Clone, Default)]
@@ -25,6 +25,10 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Logs {
 
 impl Logs {
     pub fn dispatch(&self) -> tracing::Dispatch {
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            tracing::subscriber::set_global_default(tracing_subscriber::registry()).unwrap();
+        });
         tracing::Dispatch::new(tracing_subscriber::registry().with(self.clone()))
     }
 
