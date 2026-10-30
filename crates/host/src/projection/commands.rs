@@ -154,18 +154,15 @@ pub(crate) fn install_login(
     Some(previous)
 }
 
-fn credential(answer: Option<Value>) -> Result<Option<String>, Error> {
-    let Some(answer) = answer else {
-        return Ok(None);
-    };
+fn credential(answer: Value) -> Result<Option<String>, Error> {
     let raw: String = decode("flash.getGameObjectS", answer)?;
     serde_json::from_str(&raw).map_err(|error| decode_error("flash.getGameObjectS", error))
 }
 
 pub(crate) fn refresh_credentials(
     projection: &mut Projection,
-    username: Option<Value>,
-    password: Option<Value>,
+    username: Value,
+    password: Value,
 ) -> Result<CredentialsSnapshot, Error> {
     let username = credential(username)?
         .map(|value| trim_js(&value).to_owned())
@@ -182,11 +179,11 @@ pub(crate) fn refresh_credentials(
 
 pub(crate) fn refresh_servers(
     projection: &mut Projection,
-    answer: Option<Value>,
+    answer: Value,
 ) -> Result<Vec<ServerSnapshot>, Error> {
-    let Some(answer) = answer.filter(|answer| !answer.is_null()) else {
+    if answer.is_null() {
         return Ok(projection.auth.snapshot().servers);
-    };
+    }
     let servers = decode_servers(&answer)
         .ok_or_else(|| decode_error("auth.getServers", "expected an array of server payloads"))?;
     let output = servers
@@ -200,13 +197,8 @@ pub(crate) fn refresh_servers(
     Ok(output)
 }
 
-pub(crate) fn refresh_logged_in(
-    projection: &mut Projection,
-    answer: Option<Value>,
-) -> Result<bool, Error> {
-    if let Some(answer) = answer {
-        projection.auth.logged_in = decode("auth.isLoggedIn", answer)?;
-    }
+pub(crate) fn refresh_logged_in(projection: &mut Projection, answer: Value) -> Result<bool, Error> {
+    projection.auth.logged_in = decode("auth.isLoggedIn", answer)?;
     Ok(projection.auth.logged_in)
 }
 
@@ -271,8 +263,8 @@ mod tests {
     #[test]
     fn malformed_answers_leave_previously_committed_state_intact() {
         let mut projection = Projection::default();
-        refresh_servers(&mut projection, Some(json!([{"sName": "Artix"}]))).unwrap();
-        assert!(refresh_servers(&mut projection, Some(json!([{"sName": "Yorumi"}, {}]))).is_err());
+        refresh_servers(&mut projection, json!([{"sName": "Artix"}])).unwrap();
+        assert!(refresh_servers(&mut projection, json!([{"sName": "Yorumi"}, {}])).is_err());
         assert_eq!(
             projection
                 .auth
@@ -285,14 +277,7 @@ mod tests {
         );
         assert!(refresh_accepted_quests(&mut projection, json!([10, "bad"])).is_err());
         assert_eq!(projection.quests.accepted_ids(), Vec::<f64>::new());
-        assert!(
-            refresh_credentials(
-                &mut projection,
-                Some(json!("\"new-name\"")),
-                Some(json!("{}"))
-            )
-            .is_err()
-        );
+        assert!(refresh_credentials(&mut projection, json!("\"new-name\""), json!("{}")).is_err());
         assert_eq!(projection.auth.username, "");
         assert_eq!(projection.auth.password, "");
         assert!(

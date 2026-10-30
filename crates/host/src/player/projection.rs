@@ -42,7 +42,7 @@ impl Running {
             }
             if ready && !self.settings_applied {
                 self.settings_applied = true;
-                self.reapply_settings(false);
+                let _ = self.reapply_settings(false);
             }
             if invalidated {
                 self.publish(ScriptEvent::Invalidated);
@@ -183,6 +183,7 @@ mod tests {
                 settings: Default::default(),
                 auto_zone: Default::default(),
                 settings_applied: false,
+                rejected_settings: Default::default(),
                 operation_packets: Default::default(),
                 loader_events,
                 script_events: vec![(crate::sessions::AttachmentId(0), producer)],

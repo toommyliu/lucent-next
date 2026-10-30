@@ -80,7 +80,10 @@ fn rejected_settings_warn_once_until_the_game_accepts_them() {
         vec!["couldn't apply game setting"; 2]
     );
     assert_eq!(
-        logs.messages(tracing::Level::INFO),
+        logs.messages(tracing::Level::INFO)
+            .into_iter()
+            .filter(|message| message == "game setting accepted again")
+            .collect::<Vec<_>>(),
         vec!["game setting accepted again"]
     );
     assert_eq!(

@@ -35,6 +35,13 @@ fn next(link: &ScriptLink) -> ScriptEvent {
 }
 
 fn next_for(link: &ScriptLink, timeout: Duration) -> ScriptEvent {
+    try_next_for(link, timeout).unwrap()
+}
+
+fn try_next_for(
+    link: &ScriptLink,
+    timeout: Duration,
+) -> Result<ScriptEvent, lucent_host::bridge::Error> {
     struct Wake(std::thread::Thread);
     impl std::task::Wake for Wake {
         fn wake(self: std::sync::Arc<Self>) {
@@ -46,8 +53,8 @@ fn next_for(link: &ScriptLink, timeout: Duration) -> ScriptEvent {
     ))));
     let deadline = Instant::now() + timeout;
     loop {
-        match link.try_event().unwrap() {
-            Some(event) => return event,
+        match link.try_event()? {
+            Some(event) => return Ok(event),
             None => {
                 let remaining = deadline.saturating_duration_since(Instant::now());
                 assert!(!remaining.is_zero(), "no event within {timeout:?}");
@@ -62,7 +69,7 @@ fn operation_result(link: &ScriptLink, id: u64) -> Result<bool, lucent_host::bri
         if let ScriptEvent::Operation {
             id: current,
             answer,
-        } = next_for(link, deadline.saturating_duration_since(Instant::now()))
+        } = try_next_for(link, deadline.saturating_duration_since(Instant::now()))?
         {
             assert_eq!(current, id);
             return answer.map(|OperationAnswer::AcceptDrop(value)| value);
@@ -475,4 +482,22 @@ fn a_drop_accept_rejects_a_malformed_reply_but_keeps_a_decline_as_false() {
         let id = accept(&link);
         assert_eq!(operation_result(&link, id), expected);
     }
+}
+
+#[test]
+fn a_drop_accept_propagates_a_malformed_logged_in_reply() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(
+        &host,
+        ProbeMovie::new().constant("auth.isLoggedIn", json!("yes")),
+    );
+    drop_item(&link, "Item", false);
+    let id = accept(&link);
+    assert_eq!(
+        operation_result(&link, id),
+        Err(lucent_host::bridge::Error::CommandDecode {
+            callback: "auth.isLoggedIn".into(),
+            reason: "invalid type: string \"yes\", expected a boolean".into(),
+        })
+    );
 }

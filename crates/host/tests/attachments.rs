@@ -122,7 +122,7 @@ fn replies_belong_to_their_calling_link() {
         third
             .command(lucent_protocol::command::Command::RefreshLoggedIn {})
             .recv_timeout(TIMEOUT),
-        Ok("false".into())
+        Err(Error::Unavailable("auth.isLoggedIn".into()))
     );
     assert_eq!(
         third
