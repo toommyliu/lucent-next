@@ -60,9 +60,6 @@ describe("unavailable host services", () => {
       expect(yield* failure(environment.addQuest(802))).toBe(
         "Environment addQuest failed.",
       );
-      expect(yield* failure(services.autoRelogin.isEnabled())).toBe(
-        "The autoRelogin service is not available yet.",
-      );
       expect(yield* failure(files.readText("farm.txt"))).toBe(
         "Filesystem read-text failed at farm.txt: unavailable.",
       );

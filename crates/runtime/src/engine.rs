@@ -77,6 +77,17 @@ impl Engine {
                 ("read", v8::Function::new(scope, host_read)),
                 ("command", v8::Function::new(scope, host_command)),
                 ("operate", v8::Function::new(scope, host_operate)),
+                ("ask", v8::Function::new(scope, host_ask)),
+                ("cancelAsk", v8::Function::new(scope, host_cancel_ask)),
+                (
+                    "isAskPending",
+                    v8::Function::new(scope, host_is_ask_pending),
+                ),
+                ("answer", v8::Function::new(scope, host_answer)),
+                (
+                    "publishAutoRelogin",
+                    v8::Function::new(scope, host_publish_auto_relogin),
+                ),
                 ("now", v8::Function::new(scope, host_now)),
                 ("log", v8::Function::new(scope, host_log)),
             ] {
@@ -653,6 +664,95 @@ fn host_read(
         &json,
     )
     .map(Some);
+    return_reply(scope, reply, result);
+}
+
+fn host_ask(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    reply: v8::ReturnValue<v8::Value>,
+) {
+    let Some(json) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let json = json.to_rust_string_lossy(scope);
+    let link = scope.get_slot::<ScriptLink>().unwrap();
+    let result = (|| -> Result<Option<String>, String> {
+        let payload = serde_json::from_str(&json).map_err(|error| format!("{error}"))?;
+        link.ask(payload)
+            .map(|id| Some(id.to_string()))
+            .map_err(|error| error.to_string())
+    })();
+    return_reply(scope, reply, result);
+}
+fn host_is_ask_pending(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    mut reply: v8::ReturnValue<v8::Value>,
+) {
+    let Some(id) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let id = id.to_rust_string_lossy(scope).parse::<u64>();
+    let pending = id.is_ok_and(|id| scope.get_slot::<ScriptLink>().unwrap().is_ask_pending(id));
+    reply.set_bool(pending);
+}
+fn host_cancel_ask(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    reply: v8::ReturnValue<v8::Value>,
+) {
+    let Some(json) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let json = json.to_rust_string_lossy(scope);
+    let link = scope.get_slot::<ScriptLink>().unwrap();
+    let result = (|| -> Result<Option<String>, String> {
+        let id = json.parse::<u64>().map_err(|error| error.to_string())?;
+        link.cancel_ask(id);
+        Ok(None)
+    })();
+    return_reply(scope, reply, result);
+}
+fn host_answer(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    reply: v8::ReturnValue<v8::Value>,
+) {
+    let Some(json) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let json = json.to_rust_string_lossy(scope);
+    let link = scope.get_slot::<ScriptLink>().unwrap();
+    let result = (|| -> Result<Option<String>, String> {
+        let (id, answer, error): (
+            String,
+            serde_json::Value,
+            Option<lucent_host::bridge::BotRequestError>,
+        ) = serde_json::from_str(&json).map_err(|error| error.to_string())?;
+        let id = id.parse::<u64>().map_err(|error| error.to_string())?;
+        link.answer(id, error.map_or(Ok(answer), |error| Err(error.into())))
+            .map(|_| None)
+            .map_err(|error| error.to_string())
+    })();
+    return_reply(scope, reply, result);
+}
+fn host_publish_auto_relogin(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    reply: v8::ReturnValue<v8::Value>,
+) {
+    let Some(json) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let json = json.to_rust_string_lossy(scope);
+    let link = scope.get_slot::<ScriptLink>().unwrap();
+    let result = (|| -> Result<Option<String>, String> {
+        let records = serde_json::from_str(&json).map_err(|error| format!("{error}"))?;
+        link.publish_auto_relogin(records)
+            .map(|_| None)
+            .map_err(|error| error.to_string())
+    })();
     return_reply(scope, reply, result);
 }
 

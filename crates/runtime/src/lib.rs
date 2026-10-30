@@ -122,6 +122,8 @@ pub struct Bot(Runtime);
 
 impl Bot {
     pub fn start(link: ScriptLink) -> Result<Self, RuntimeError> {
+        link.claim_bot()
+            .map_err(|error| RuntimeError::JavaScript(error.to_string()))?;
         Runtime::spawn(link, Execution::Bot).map(Self)
     }
 

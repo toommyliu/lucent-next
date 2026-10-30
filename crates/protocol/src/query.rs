@@ -72,6 +72,7 @@ macro_rules! queries {
 }
 
 queries! {
+    AutoRelogin {} => crate::auto_relogin::AutoReloginRecords,
     AutoZone {} => AutoZoneConfig,
     Settings {} => GameSettings,
     Map {} => MapState,

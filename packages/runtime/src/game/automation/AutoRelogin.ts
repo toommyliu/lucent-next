@@ -1,10 +1,10 @@
+import type { AutoReloginConfig, AutoReloginRecords } from "@lucent/game/protocol";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberMap from "effect/FiberMap";
-import * as EffectNumber from "effect/Number";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
@@ -14,6 +14,11 @@ import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import type * as FiberMapType from "effect/FiberMap";
 
+import { defaultAutoReloginDelay as defaultDelay, normalizeAutoReloginDelay } from "./autoReloginConfig";
+export { normalizeAutoReloginDelay } from "./autoReloginConfig";
+
+import { makeRetryAttempt } from "./retryLoop";
+import { publicReloginState } from "../../host/autoRelogin";
 import type { ApiService } from "../flash/api/Api";
 
 export interface AutoReloginApi {
@@ -71,17 +76,7 @@ export class AutoReloginLoginError extends Data.TaggedError(
   }
 }
 
-type ReloginPhase =
-  | { readonly tag: "armed" }
-  | { readonly tag: "awaiting-session" }
-  | { readonly tag: "awaiting-player-ready" }
-  | { readonly tag: "awaiting-server-select" }
-  | { readonly delayMs: number; readonly tag: "backoff" }
-  | { readonly tag: "failed" }
-  | { readonly tag: "logging-in" }
-  | { readonly tag: "selecting-server" }
-  | { readonly tag: "waiting-delay" }
-  | { readonly tag: "waiting-kick" };
+type ReloginPhase = AutoReloginRecords["status"]["phase"];
 
 interface State {
   attemptsRemaining: number | undefined;
@@ -119,7 +114,6 @@ const captureWatcherKey = "auto-relogin-capture";
 const readyWatcherKey = "auto-relogin-ready";
 const captureInterval = "5 seconds";
 const maximumRetries = 3;
-const defaultDelay = 3_000;
 const readinessPollInterval = "500 millis";
 const playerReadyTimeout = "10 seconds";
 const serverSelectTimeout = "15 seconds";
@@ -130,11 +124,6 @@ const noopObserver: LoginObserver = {
   failure: () => Effect.void,
   phase: () => Effect.void,
 };
-
-export const normalizeAutoReloginDelay = (delayMs: number): number =>
-  Number.isFinite(delayMs)
-    ? EffectNumber.clamp({ minimum: 0, maximum: 300_000 })(delayMs)
-    : defaultDelay;
 
 const normalizeAutoReloginServer = (
   server: string | undefined,
@@ -152,29 +141,6 @@ const normalizeAutoReloginServer = (
     )?.name ?? requested
   );
 };
-
-const attemptingPhases = new Set<ReloginPhase["tag"]>([
-  "awaiting-player-ready",
-  "awaiting-server-select",
-  "backoff",
-  "logging-in",
-  "selecting-server",
-]);
-
-const publicState = (state: State): AutoReloginState => ({
-  attempting: attemptingPhases.has(state.phase.tag),
-  captured: state.username !== undefined && state.password !== undefined,
-  delayMs: state.delayMs,
-  enabled: state.enabled,
-  waitingDelay:
-    state.phase.tag === "waiting-delay" || state.phase.tag === "waiting-kick",
-  ...(state.attemptsRemaining === undefined
-    ? {}
-    : { attemptsRemaining: state.attemptsRemaining }),
-  ...(state.lastError === undefined ? {} : { lastError: state.lastError }),
-  ...(state.server === undefined ? {} : { server: state.server }),
-  ...(state.username === undefined ? {} : { username: state.username }),
-});
 
 const formatErrorDetail = (detail: string): string => {
   const trimmed = detail.trim();
@@ -200,27 +166,35 @@ const lifecycle = (
 export const makeAutoRelogin = Effect.fnUntraced(function* (
   api: AutoReloginApi,
   fibers: FiberMapType.FiberMap<string>,
+  config?: AutoReloginConfig,
+  retry: ReturnType<typeof makeRetryAttempt> = makeRetryAttempt("auto relogin"),
 ) {
+  const supervise = <A, E, R>(effect: Effect.Effect<A, E, R>, interval: Duration.Input = 500) => retry(() => effect, interval);
   const state = yield* SubscriptionRef.make<State>({
     attemptsRemaining: undefined,
-    delayMs: defaultDelay,
-    enabled: false,
+    delayMs: config?.delayMs ?? defaultDelay,
+    enabled: config?.enabled ?? false,
     generation: 0,
     lastError: undefined,
     password: undefined,
     phase: { tag: "armed" },
-    server: undefined,
+    server: config?.server ?? undefined,
     username: undefined,
   });
   const loginPermit = yield* Semaphore.make(1);
   const explicitRuns = yield* Ref.make(0);
 
-  const getState = () =>
-    SubscriptionRef.get(state).pipe(Effect.map(publicState));
-  const changes = SubscriptionRef.changes(state).pipe(Stream.map(publicState));
+  const records = (current: State): AutoReloginRecords => ({
+    config: { enabled: current.enabled, delayMs: current.delayMs, server: current.server ?? null },
+    status: { phase: current.phase, attemptsRemaining: current.attemptsRemaining ?? null, lastError: current.lastError ?? null, captured: current.username !== undefined && current.password !== undefined, username: current.username ?? null },
+  });
+  const getRecords = () => SubscriptionRef.get(state).pipe(Effect.map(records));
+  const recordChanges = SubscriptionRef.changes(state).pipe(Stream.map(records));
+  const getState = () => getRecords().pipe(Effect.map(publicReloginState));
+  const changes = recordChanges.pipe(Stream.map(publicReloginState));
 
   const isPlayerReady = () =>
-    api.player.isReady().pipe(Effect.catchCause(() => Effect.succeed(false)));
+    api.player.isReady().pipe(Effect.catchCause(cause => Cause.hasInterrupts(cause) ? Effect.failCause(cause) : Effect.succeed(false)));
 
   const waitUntilPlayerReady = () =>
     Effect.repeat(isPlayerReady(), {
@@ -234,12 +208,15 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       Effect.map(Option.isSome),
     );
 
-  const racePlayerReady = <A>(effect: Effect.Effect<A>) =>
-    Effect.race(
+  const racePlayerReady = <A>(effect: Effect.Effect<A>, timeout: Duration.Input, fallback: A) =>
+    Effect.raceFirst(
       effect.pipe(
         Effect.map((value) => ({ tag: "completed" as const, value })),
       ),
       waitUntilPlayerReady().pipe(Effect.as({ tag: "ready" as const })),
+    ).pipe(
+      Effect.timeoutOption(timeout),
+      Effect.map(Option.getOrElse(() => ({ tag: "completed" as const, value: fallback }))),
     );
 
   const updateCurrentGeneration = (
@@ -252,7 +229,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         : current,
     );
 
-  const captureIfMissing = Effect.gen(function* () {
+  const captureIfMissing = () => Effect.gen(function* () {
     const current = yield* SubscriptionRef.get(state);
     if (!current.enabled) return true;
     if (current.username !== undefined && current.password !== undefined) {
@@ -312,18 +289,19 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       captureWatcherKey,
       Effect.sleep(captureInterval).pipe(
         Effect.andThen(
-          Effect.repeat(captureIfMissing, {
+          Effect.repeat(supervise(captureIfMissing(), captureInterval), {
             schedule: Schedule.spaced(captureInterval),
             until: (captured) => captured,
           }),
         ),
         Effect.asVoid,
+        supervise,
       ),
     ).pipe(Effect.asVoid);
 
   const markReadySuccess = Effect.gen(function* () {
     if (!(yield* isPlayerReady())) return false;
-    yield* captureIfMissing;
+    yield* captureIfMissing();
     yield* SubscriptionRef.update(
       state,
       (current): State =>
@@ -387,6 +365,15 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
     resumeAtServerSelect = false,
   ): Effect.Effect<AutoReloginLoginResult, AutoReloginAttemptError> => {
     let requiresFreshServerList = false;
+    const logout = (attemptsRemaining: number) => api.auth.logout().pipe(
+      Effect.flatMap((result) => Option.isNone(result)
+        ? failAttempt("Logout could not be submitted", true, "login", attemptsRemaining)
+        : Effect.void),
+      Effect.timeoutOrElse({ duration: serverSelectTimeout, orElse: () => Effect.die("Logout timed out") }),
+      Effect.catchCause((cause) => Cause.hasInterrupts(cause)
+        ? Effect.failCause(cause)
+        : failAttempt("Logout could not be submitted", true, "login", attemptsRemaining)),
+    );
     const completePlayerConnection = (attemptsRemaining: number) =>
       Effect.gen(function* () {
         yield* observer.phase({ tag: "awaiting-player-ready" });
@@ -396,7 +383,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         }
         // Recheck at the timeout boundary before a retry logs the player out.
         if (yield* isPlayerReady()) return { status: "ready" as const };
-        yield* api.auth.logout();
+        yield* logout(attemptsRemaining);
         return yield* failAttempt(
           "Player did not become ready",
           true,
@@ -445,7 +432,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
 
         if (yield* isPlayerReady()) return { status: "ready" as const };
         const login = yield* racePlayerReady(
-          api.auth.login(request.username, request.password),
+          api.auth.login(request.username, request.password), "80 seconds", false,
         );
         if (login.tag === "ready") return { status: "ready" as const };
         const submitted = login.value;
@@ -506,7 +493,9 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       if (server === undefined) return { status: "server-select" as const };
       yield* observer.phase({ tag: "selecting-server" });
       yield* lifecycle(request, "connect", attemptsRemaining);
-      const selection = yield* racePlayerReady(api.auth.connectTo(server));
+      const selection = yield* racePlayerReady(api.auth.connectTo(server), serverSelectTimeout, {
+        status: "not-ready", retryable: true, message: "Server selection timed out",
+      });
       if (selection.tag === "ready") return { status: "ready" as const };
       const selected = selection.value;
       if (selected.status !== "connected") {
@@ -517,7 +506,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         if (selected.status === "full") {
           // A fresh login reloads AQW's server list before the scheduled retry.
           requiresFreshServerList = true;
-          yield* api.auth.logout();
+          yield* logout(attemptsRemaining);
         }
         return yield* failAttempt(
           selected.message,
@@ -696,23 +685,13 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         lastError: failure.detail,
         phase: { tag: "failed" },
       }));
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.void
-          : Effect.logError("Unexpected auto relogin failure", cause).pipe(
-              Effect.annotateLogs({ component: "auto-relogin" }),
-              Effect.andThen(
-                updateCurrentGeneration(generation, (current) => ({
-                  ...current,
-                  attemptsRemaining: undefined,
-                  lastError: "Auto relogin failed unexpectedly.",
-                  phase: { tag: "failed" },
-                })),
-              ),
-            ),
-      ),
-    );
+    }).pipe(Effect.catchCause(cause => Cause.hasInterrupts(cause)
+      ? Effect.failCause(cause)
+      : Effect.sync(() => console.error("Unexpected auto relogin failure", Cause.pretty(cause))).pipe(
+          Effect.andThen(updateCurrentGeneration(generation, current => ({
+            ...current, attemptsRemaining: undefined, lastError: "Auto relogin failed unexpectedly.", phase: { tag: "failed" },
+          }))),
+        )));
 
   const startRecovery = (skipDelay = false, resumeAtServerSelect = false) =>
     Effect.gen(function* () {
@@ -758,6 +737,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
             : Effect.void,
         ),
         Effect.asVoid,
+        supervise,
       ),
     ).pipe(Effect.asVoid);
 
@@ -832,7 +812,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         );
       }
 
-      yield* captureIfMissing;
+      yield* captureIfMissing();
       if (yield* isPlayerReady()) {
         yield* markReadySuccess;
       } else {
@@ -916,9 +896,10 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       return yield* getState();
     });
 
+  let connectionFailing = false;
   const disposeConnection = yield* api.events.on(
     { type: "connection" },
-    (event) => {
+    (event) => Effect.suspend(() => {
       if (event.type !== "connection") return Effect.void;
       if (
         event.status === "OnConnectionLost" ||
@@ -937,10 +918,18 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       }
       if (event.status === "OnConnection") {
         // isReady is a query; connection starts the bounded readiness watcher.
-        return captureIfMissing.pipe(Effect.andThen(watchForReady()));
+        return captureIfMissing().pipe(Effect.andThen(watchForReady()));
       }
       return Effect.void;
-    },
+    }).pipe(
+      Effect.tap(() => Effect.sync(() => { connectionFailing = false; })),
+      Effect.catchCause((cause) => Cause.hasInterrupts(cause)
+        ? Effect.failCause(cause)
+        : Effect.sync(() => {
+            if (!connectionFailing) console.warn("auto relogin connection handler failed", Cause.pretty(cause));
+            connectionFailing = true;
+          })),
+    ),
   );
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
@@ -950,6 +939,8 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
 
   return {
     changes,
+    getRecords,
+    recordChanges,
     getDelayMs,
     getServer,
     getState,

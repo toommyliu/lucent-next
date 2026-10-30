@@ -4,6 +4,7 @@ import * as Layer from "effect/Layer";
 import { makeDiagnostic, type DiagnosticPhase } from "../contract/Diagnostic";
 
 export interface DiagnosticSinkService {
+  readonly takeCause?: (operation: string) => unknown;
   readonly report: (
     phase: DiagnosticPhase,
     operation: string,

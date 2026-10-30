@@ -1,3 +1,4 @@
+pub mod asks;
 mod link;
 pub(crate) mod operations;
 pub use link::ScriptLink;
@@ -6,7 +7,13 @@ use lucent_protocol::auto_zone::AutoZoneConfig;
 use lucent_protocol::settings::GameSettings;
 use parking_lot::RwLock;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Records {
+    settings: Arc<RwLock<GameSettings>>,
+    auto_zone: Arc<RwLock<AutoZoneConfig>>,
+    auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct AttachmentId(pub(crate) u64);
 
 use std::sync::Arc;
@@ -83,7 +90,10 @@ impl Host {
             auto_zone.clone(),
         )?;
         let operations = operations::Operations::start(id).map_err(HostError::OperationThread)?;
+        let asks = asks::Router::start(id).map_err(HostError::OperationThread)?;
         Ok(Session {
+            asks,
+            auto_relogin: Arc::default(),
             next_attachment: 0,
             operations,
             player: Some(player),
@@ -124,6 +134,8 @@ impl Host {
 }
 
 pub struct Session {
+    asks: asks::Router,
+    auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
     player: Option<player::Handle>,
     next_attachment: u64,
     operations: operations::Operations,
@@ -177,6 +189,15 @@ impl Session {
         }
     }
 
+    pub fn auto_relogin(&self) -> lucent_protocol::auto_relogin::AutoReloginRecords {
+        self.auto_relogin.read().clone()
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn pending_ask_count(&self) -> usize {
+        self.asks.shared.count()
+    }
+
     pub fn attach(&mut self) -> Option<ScriptLink> {
         let player = self.player.as_ref()?;
         let attachment = AttachmentId(self.next_attachment);
@@ -187,12 +208,16 @@ impl Session {
         let inbox = player.inbox.clone();
         let (producer, events) = script_events(EVENT_CAPACITY);
         inbox.post(player::Msg::Attach(attachment, producer));
+        self.asks.shared.attach(attachment);
         Some(ScriptLink::new(
             self.id,
             attachment,
             events,
-            self.settings.clone(),
-            self.auto_zone.clone(),
+            Records {
+                settings: self.settings.clone(),
+                auto_zone: self.auto_zone.clone(),
+                auto_relogin: self.auto_relogin.clone(),
+            },
             operations::Endpoint {
                 inbox,
                 projection: player.projection.clone(),
@@ -200,6 +225,7 @@ impl Session {
                 packets: player.operation_packets.clone(),
             },
             self.operations.sender.clone(),
+            self.asks.shared.clone(),
         ))
     }
 
@@ -214,6 +240,8 @@ impl Session {
     }
 
     pub fn restart(&mut self, surface: Surface) -> Result<(), HostError> {
+        self.asks = asks::Router::start(self.id).map_err(HostError::OperationThread)?;
+        self.auto_relogin.write().status = Default::default();
         self.player = None;
         self.surface = surface;
         let player = self.host.spawn_player(

@@ -1,3 +1,5 @@
+import * as Effect from "effect/Effect";
+
 import type {
   ScriptAuthApi,
   ScriptBankApi,
@@ -37,7 +39,7 @@ export const makeScriptPublicServices = (
     isServerSelectReady: services.auth.isServerSelectReady,
     isTemporarilyKicked: services.auth.isTemporarilyKicked,
     login: services.auth.login,
-    logout: services.auth.logout,
+    logout: () => services.auth.logout().pipe(Effect.asVoid),
   }),
   bank: Object.freeze({
     contains: services.bank.contains,

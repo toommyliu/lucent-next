@@ -274,6 +274,10 @@ mod tests {
                 },
             }))
             .unwrap();
+        assert!(matches!(
+            inbox.recv_timeout(Duration::from_secs(1)).unwrap(),
+            Msg::OperationAnswer(_, ScriptEvent::OperationStarted { id: 42 })
+        ));
         let Msg::Command(_, reply) = inbox.recv_timeout(Duration::from_secs(1)).unwrap() else {
             panic!("expected login refresh");
         };
@@ -773,7 +777,7 @@ mod tests {
             let (mut running, bridge, events) = running(32, 64);
             running.projection.write().auth.username = "player-a".into();
             let mut sessions = vec![];
-            let mut drain = |sessions: &mut Vec<ProjectionEvent>| {
+            let drain = |sessions: &mut Vec<ProjectionEvent>| {
                 while let Some(event) = events.try_recv().unwrap() {
                     if let ScriptEvent::Loader { projected, .. } = event {
                         sessions.extend(projected.into_iter().filter(|event| {

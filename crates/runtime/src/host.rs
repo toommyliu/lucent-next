@@ -95,6 +95,20 @@ fn wait<T>(pending: Pending<T>, interrupt: &Interrupt) -> Result<T, String> {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub(crate) enum Item {
     EventsLost,
+    Ask {
+        id: String,
+        #[serde(rename = "askedBy")]
+        asked_by: String,
+        payload: serde_json::Value,
+    },
+    Answer {
+        id: String,
+        answer: Option<serde_json::Value>,
+        error: Option<String>,
+    },
+    OperationStarted {
+        id: String,
+    },
     AutoZone {
         config: lucent_protocol::auto_zone::AutoZoneConfig,
     },
@@ -114,6 +128,24 @@ pub(crate) enum Item {
 impl From<ScriptEvent> for Item {
     fn from(event: ScriptEvent) -> Self {
         match event {
+            ScriptEvent::Ask { request } => Item::Ask {
+                id: request.id.to_string(),
+                asked_by: request.asked_by.to_string(),
+                payload: request.payload,
+            },
+            ScriptEvent::Answer { id, answer } => match answer {
+                Ok(answer) => Item::Answer {
+                    id: id.to_string(),
+                    answer: Some(answer),
+                    error: None,
+                },
+                Err(error) => Item::Answer {
+                    id: id.to_string(),
+                    answer: None,
+                    error: Some(error.to_string()),
+                },
+            },
+            ScriptEvent::OperationStarted { id } => Item::OperationStarted { id: id.to_string() },
             ScriptEvent::AutoZoneChanged { config } => Item::AutoZone { config },
             ScriptEvent::Loader { event, projected } => Item::Loader {
                 name: event.name,
