@@ -10,7 +10,7 @@ pub use lucent_protocol::bridge::{Event, Value};
 use lucent_protocol::event::ProjectionEvent;
 use ruffle_core::Player;
 use ruffle_core::context::UpdateContext;
-use ruffle_core::external::{ExternalInterfaceProvider, Value as ExternalValue};
+use ruffle_core::external::{CallbackError, ExternalInterfaceProvider, Value as ExternalValue};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
@@ -38,6 +38,8 @@ pub enum Error {
     NotReady,
     #[error("the loader has not registered callback {0}")]
     Unavailable(String),
+    #[error("loader callback {callback} cannot run before the AVM1 root is ready")]
+    LoaderNotReady { callback: String },
     #[error("loader callback {callback} threw: {message}")]
     LoaderThrew { callback: String, message: String },
     #[error("timed out waiting for the player")]
@@ -99,11 +101,22 @@ impl Call {
 pub(crate) fn invoke(player: &mut Player, name: &str, args: Vec<Value>) -> Result<Value, Error> {
     player.mutate_with_update_context(|context| {
         match context.external_interface.get_callback(name) {
-            Some(callback) => Ok(from_external(callback.call(
-                context,
-                name,
-                args.into_iter().map(into_external),
-            ))),
+            Some(callback) => callback
+                .call_result(context, name, args.into_iter().map(into_external))
+                .map(from_external)
+                .map_err(|error| match error {
+                    CallbackError::NotReady => Error::LoaderNotReady {
+                        callback: name.into(),
+                    },
+                    CallbackError::Thrown(message) => Error::LoaderThrew {
+                        callback: name.into(),
+                        message,
+                    },
+                    CallbackError::ReplyConversion(reason) => Error::CommandDecode {
+                        callback: name.into(),
+                        reason,
+                    },
+                }),
             None => Err(Error::Unavailable(name.to_owned())),
         }
     })
