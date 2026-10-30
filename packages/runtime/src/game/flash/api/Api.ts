@@ -4,11 +4,9 @@ import * as Layer from "effect/Layer";
 
 import { Bridge } from "../bridge/Bridge";
 import { Gateway } from "../bridge/Gateway";
-import { isProjectionEvent } from "../contract/Event";
 import { HostState } from "../state/HostState";
 import { makeAuth } from "./Auth";
 import { makeAntiCounter } from "./internal/AntiCounter";
-import { makeSessionEvents } from "./internal/SessionEvents";
 import { makeBank } from "./Bank";
 import { makeCombat } from "./Combat";
 import { makeDrops } from "./Drops";
@@ -47,10 +45,6 @@ const makeApiServices = Effect.gen(function* () {
   const monsters = monsterServices.api;
   const players = makePlayers(host);
   const player = makePlayer(bridge, host, auth, inventory, map, wait);
-  const sessionEvents = yield* makeSessionEvents(
-    wait.until(player.isReady()).pipe(Effect.asVoid),
-    gateway.publishEvent,
-  );
   const projectionReadiness = makeProjectionReadiness(host);
   const quests = makeQuests(bridge, host, wait);
   const settings = makeSettings(host);
@@ -72,13 +66,7 @@ const makeApiServices = Effect.gen(function* () {
     tempInventory,
     wait,
   );
-  yield* gateway.start((event) =>
-    isProjectionEvent(event)
-      ? antiCounter.handleEvent(event)
-      : sessionEvents
-          .handleRuntimeEvent(event)
-          .pipe(Effect.andThen(antiCounter.handleEvent(event))),
-  );
+  yield* gateway.start(antiCounter.handleEvent);
 
   return {
     api: {

@@ -1,11 +1,81 @@
+mod common;
+
 use std::time::Duration;
 
 use lucent_host::testing::{self, ProbeMovie};
 use lucent_host::{ViewEvent, Viewport};
-use lucent_runtime::{Runtime, RuntimeError};
+use lucent_runtime::{Kill, Runtime, RuntimeError};
 use serde_json::{Value, json};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
+
+#[test]
+fn logout_reaches_a_runtime_rebuilt_on_a_logged_in_session() {
+    for rebuild in [false, true] {
+        let host = testing::headless_host();
+        let (_session, link) = testing::start_probe(&host, common::ready_movie());
+        let runtime = Runtime::start(link).unwrap();
+        runtime
+            .eval(
+                "connect.js",
+                r#"window.swf["probe.emit"]("onConnection", "OnConnection"); null"#,
+            )
+            .wait::<()>(TIMEOUT)
+            .unwrap();
+        common::ready(&runtime);
+        common::completed(&runtime);
+        runtime
+            .eval(
+                "settle.js",
+                "new Promise(resolve => setTimeout(() => resolve(null), 500))",
+            )
+            .wait::<()>(TIMEOUT)
+            .unwrap();
+
+        if rebuild {
+            assert!(matches!(
+                runtime
+                    .eval("runaway.js", "while (true) {}")
+                    .wait::<Value>(TIMEOUT),
+                Err(RuntimeError::Killed(Kill::Watchdog))
+            ));
+        }
+
+        let started = runtime.eval(
+            "listening.js",
+            "new Promise(resolve => { globalThis.listening = resolve; globalThis.logouts = 0; })",
+        );
+        let _run = runtime.run_script(
+            common::loose(&[(
+                "logout.js",
+                r#"
+                import * as api from "lucent/api";
+                import * as script from "lucent/script";
+                export default function* () {
+                    yield* api.events.on({ type: "logout" }, function* () {
+                        globalThis.logouts++;
+                    });
+                    globalThis.listening(yield* api.auth.isLoggedIn());
+                    yield* script.sleep("1 hour");
+                }
+                "#,
+            )]),
+            Default::default(),
+        );
+        assert!(started.wait::<bool>(TIMEOUT).unwrap());
+        let logouts: u32 = runtime
+            .eval(
+                "disconnect.js",
+                r#"
+                window.swf["probe.emit"]("onConnection", "OnConnectionLost");
+                new Promise(resolve => setTimeout(() => resolve(globalThis.logouts), 100));
+                "#,
+            )
+            .wait(TIMEOUT)
+            .unwrap();
+        assert_eq!(logouts, 1, "rebuild={rebuild}");
+    }
+}
 
 #[test]
 fn a_loader_callback_reaches_scripts_before_the_projection_events_it_produced() {

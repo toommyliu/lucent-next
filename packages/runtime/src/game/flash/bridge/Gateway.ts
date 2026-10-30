@@ -162,11 +162,6 @@ export const makeGateway = (target?: Window) =>
       }),
     );
 
-    const publishEvent = (event: ProjectionEvent) =>
-      Effect.sync(() =>
-        enqueue("publishEvent", { type: "projection", event }),
-      );
-
     const dispatch = (
       delivery: Delivery,
       handle: (event: Event) => Effect.Effect<void>,
@@ -250,7 +245,6 @@ export const makeGateway = (target?: Window) =>
       events: Stream.fromPubSub(events),
       packets: Stream.fromPubSub(packets),
       rawPackets: Stream.fromPubSub(rawPackets),
-      publishEvent,
       sendToClient,
       sendToServer,
       start,

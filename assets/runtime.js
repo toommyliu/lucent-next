@@ -169,7 +169,7 @@
       }
     }
   }, "format");
-  var log = /* @__PURE__ */ __name((level) => (...values2) => __host.log(level, values2.map(format).join(" ")), "log");
+  var log = /* @__PURE__ */ __name((level) => (...values) => __host.log(level, values.map(format).join(" ")), "log");
   var runtimeConsole = Object.freeze({
     log: log("info"),
     info: log("info"),
@@ -1365,17 +1365,17 @@ ${ind(d)}}`;
     [contAll]: options[contAll]
   }), "makePrimitiveProto");
   var makePrimitive = /* @__PURE__ */ __name((options) => {
-    const Proto4 = makePrimitiveProto(options);
+    const Proto3 = makePrimitiveProto(options);
     const PrimitiveImpl = /* @__PURE__ */ __name(function(value) {
       this[args] = value;
     }, "PrimitiveImpl");
-    PrimitiveImpl.prototype = Proto4;
+    PrimitiveImpl.prototype = Proto3;
     return function(value) {
       return new PrimitiveImpl(value);
     };
   }, "makePrimitive");
   var makeExit = /* @__PURE__ */ __name((options) => {
-    const Proto4 = {
+    const Proto3 = {
       [ExitTypeId]: ExitTypeId,
       _tag: options.op,
       get [options.prop]() {
@@ -1402,7 +1402,7 @@ ${ind(d)}}`;
     const ExitPrimitive = /* @__PURE__ */ __name(function(value) {
       this[args] = value;
     }, "ExitPrimitive");
-    ExitPrimitive.prototype = Proto4;
+    ExitPrimitive.prototype = Proto3;
     return function(value) {
       return new ExitPrimitive(value);
     };
@@ -2222,22 +2222,6 @@ ${ind(d)}}`;
     onSuccess
   }) => isFailure2(self) ? onFailure(self.failure) : onSuccess(self.success));
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Iterable.js
-  var constEmpty = {
-    [Symbol.iterator]() {
-      return constEmptyIterator;
-    }
-  };
-  var constEmptyIterator = {
-    next() {
-      return {
-        done: true,
-        value: void 0
-      };
-    }
-  };
-  var empty2 = /* @__PURE__ */ __name(() => constEmpty, "empty");
-
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Array.js
   var Array2 = globalThis.Array;
   var fromIterable = /* @__PURE__ */ __name((collection) => Array2.isArray(collection) ? collection : Array2.from(collection), "fromIterable");
@@ -2300,7 +2284,7 @@ ${ind(d)}}`;
     bucket.push(value);
     return true;
   }, "hashBucketsAdd");
-  var empty3 = /* @__PURE__ */ __name(() => [], "empty");
+  var empty2 = /* @__PURE__ */ __name(() => [], "empty");
   var of = /* @__PURE__ */ __name((a) => [a], "of");
   var map2 = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
   var dedupe = /* @__PURE__ */ __name((self) => {
@@ -2317,15 +2301,6 @@ ${ind(d)}}`;
     }
     return out;
   }, "dedupe");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Filter.js
-  var toPredicate = /* @__PURE__ */ __name((self) => (input) => !isFailure2(self(input)), "toPredicate");
-  var has = /* @__PURE__ */ __name((key) => (input) => input.has(key) ? succeed2(input) : fail2(input), "has");
-  var compose = /* @__PURE__ */ dual(2, (left, right) => (input) => {
-    const leftOut = left(input);
-    if (isFailure2(leftOut)) return leftOut;
-    return right(leftOut.success);
-  });
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Scheduler.js
   var Scheduler = /* @__PURE__ */ Reference("effect/Scheduler", {
@@ -3203,7 +3178,7 @@ ${prefix}}`;
   }));
   var fiberInterruptAll = /* @__PURE__ */ __name((fibers) => withFiber((parent) => {
     const annotations = fiberStackAnnotations(parent);
-    let fiberArr = empty3();
+    let fiberArr = empty2();
     for (const fiber2 of fibers) {
       fiber2.interruptUnsafe(parent.id, annotations);
       fiberArr.push(fiber2);
@@ -3283,7 +3258,7 @@ ${prefix}}`;
   var withFiberId = /* @__PURE__ */ __name((f) => withFiber((fiber2) => f(fiber2.id)), "withFiberId");
   var fiberId = /* @__PURE__ */ withFiberId(succeed3);
   var callbackOptions = /* @__PURE__ */ (function() {
-    const Proto4 = /* @__PURE__ */ makePrimitiveProto({
+    const Proto3 = /* @__PURE__ */ makePrimitiveProto({
       op: "Async",
       [evaluate](fiber2) {
         let resumed = false;
@@ -3318,7 +3293,7 @@ ${prefix}}`;
       this.register = register2;
       this.withSignal = withSignal;
     }, "AsyncImpl");
-    AsyncImpl.prototype = Proto4;
+    AsyncImpl.prototype = Proto3;
     return function(register2, withSignal) {
       return new AsyncImpl(register2, withSignal);
     };
@@ -3452,7 +3427,7 @@ ${prefix}}`;
     }
   }, "fromIteratorEagerUnsafe");
   var fromIteratorUnsafe = /* @__PURE__ */ (function() {
-    const Proto4 = /* @__PURE__ */ makePrimitiveProto({
+    const Proto3 = /* @__PURE__ */ makePrimitiveProto({
       op: "Iterator",
       [contA](value, fiber2) {
         const iter = this.iterator;
@@ -3476,7 +3451,7 @@ ${prefix}}`;
       this.iterator = iterator;
       this.initial = initial;
     }, "IteratorImpl");
-    IteratorImpl.prototype = Proto4;
+    IteratorImpl.prototype = Proto3;
     return function(iterator, initial) {
       return new IteratorImpl(iterator, initial);
     };
@@ -3570,10 +3545,9 @@ ${prefix}}`;
   var flatten3 = /* @__PURE__ */ __name((self) => flatMap2(self, identity), "flatten");
   var map3 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
   var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map3(self, f));
-  var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError2(self, f));
+  var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError(self, f));
   var exitInterrupt = /* @__PURE__ */ __name((fiberId3) => exitFailCause(causeInterrupt(fiberId3)), "exitInterrupt");
   var exitIsSuccess = /* @__PURE__ */ __name((self) => self._tag === "Success", "exitIsSuccess");
-  var exitIsFailure = /* @__PURE__ */ __name((self) => self._tag === "Failure", "exitIsFailure");
   var exitFilterCause = /* @__PURE__ */ __name((self) => self._tag === "Failure" ? succeed2(self.cause) : fail2(self), "exitFilterCause");
   var exitVoid = /* @__PURE__ */ exitSucceed(void 0);
   var exitMap = /* @__PURE__ */ dual(2, (self, f) => self._tag === "Success" ? exitSucceed(f(self.value)) : self);
@@ -3660,7 +3634,7 @@ ${prefix}}`;
     const pred = Array.isArray(k) ? (e) => hasProperty(e, "_tag") && k.includes(e._tag) : isTagged(k);
     return catchIf(self, pred, f, orElse);
   });
-  var mapError2 = /* @__PURE__ */ dual(2, (self, f) => catch_(self, (error) => failSync(() => f(error))));
+  var mapError = /* @__PURE__ */ dual(2, (self, f) => catch_(self, (error) => failSync(() => f(error))));
   var orDie = /* @__PURE__ */ __name((self) => catch_(self, die), "orDie");
   var result = /* @__PURE__ */ __name((self) => matchEager(self, {
     onFailure: fail2,
@@ -3682,7 +3656,7 @@ ${prefix}}`;
     return fiber2.succeedWith(continuationMarksStack ? handlers.onSuccess(value) : internalCall(() => handlers.onSuccess(value)));
   }, "matchSuccess");
   var makeMatch = /* @__PURE__ */ __name((op, onFailure) => {
-    const Proto4 = makePrimitiveProto({
+    const Proto3 = makePrimitiveProto({
       op,
       [evaluate]: evaluateCont,
       [contA]: matchSuccess,
@@ -3692,7 +3666,7 @@ ${prefix}}`;
       this[args] = self;
       this.payload = handlers;
     }, "MatchImpl");
-    MatchImpl2.prototype = Proto4;
+    MatchImpl2.prototype = Proto3;
     return MatchImpl2;
   }, "makeMatch");
   var MatchImpl = /* @__PURE__ */ makeMatch("Match", function(cause, fiber2) {
@@ -3856,7 +3830,7 @@ ${prefix}}`;
   var acquireRelease = /* @__PURE__ */ __name((acquire, release, options) => contextWith((context3) => uninterruptibleMask((restore) => flatMap2(scope, (scope3) => tap(options?.interruptible ? restore(acquire) : acquire, (a) => scopeAddFinalizerExit(scope3, (exit3) => provideContext(release(a, exit3), context3)))))), "acquireRelease");
   var addFinalizer = /* @__PURE__ */ __name((finalizer) => flatMap2(scope, (scope3) => contextWith((context3) => scopeAddFinalizerExit(scope3, (exit3) => provideContext(finalizer(exit3), context3)))), "addFinalizer");
   var OnExitImpl = /* @__PURE__ */ (function() {
-    const Proto4 = /* @__PURE__ */ makePrimitiveProto({
+    const Proto3 = /* @__PURE__ */ makePrimitiveProto({
       op: "OnExit",
       [evaluate](fiber2) {
         fiber2._stack.push(this);
@@ -3894,7 +3868,7 @@ ${prefix}}`;
       this.onExit = onExit4;
       this.interruptible = interruptible2;
     }, "OnExitImpl");
-    OnExitImpl2.prototype = Proto4;
+    OnExitImpl2.prototype = Proto3;
     return OnExitImpl2;
   })();
   var onExitPrimitive = /* @__PURE__ */ __name((effect2, onExit4, interruptible2) => new OnExitImpl(effect2, onExit4, interruptible2), "onExitPrimitive");
@@ -4772,7 +4746,6 @@ ${prefix}}`;
   var interrupt2 = exitInterrupt;
   var void_2 = exitVoid;
   var isSuccess3 = exitIsSuccess;
-  var isFailure3 = exitIsFailure;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Deferred.js
   var TypeId5 = "~effect/Deferred";
@@ -4822,7 +4795,6 @@ ${prefix}}`;
     }
     return true;
   }, "doneUnsafe");
-  var into = /* @__PURE__ */ dual(2, (self, deferred) => uninterruptibleMask((restore) => flatMap2(exit(restore(self)), (exit3) => done2(deferred, exit3))));
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/References.js
   var CurrentLogAnnotations2 = CurrentLogAnnotations;
@@ -4965,7 +4937,6 @@ ${prefix}}`;
   var map4 = causeMap;
   var squash = causeSquash;
   var hasDies2 = hasDies;
-  var filterInterruptors = causeFilterInterruptors;
   var pretty = causePretty;
   var isDone3 = isDone;
   var done3 = done;
@@ -5259,7 +5230,7 @@ ${prefix}}`;
   var catch_2 = catch_;
   var catchTag2 = catchTag;
   var catchCause2 = catchCause;
-  var mapError3 = mapError2;
+  var mapError2 = mapError;
   var orDie2 = orDie;
   var retry2 = retry;
   var timeoutOption2 = timeoutOption;
@@ -5328,8 +5299,6 @@ ${prefix}}`;
   var await_ = fiberAwait;
   var join = fiberJoin;
   var interrupt4 = fiberInterrupt;
-  var interruptAs = fiberInterruptAs;
-  var interruptAll = fiberInterruptAll;
   var runIn = fiberRunIn;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/ManagedRuntime.js
@@ -6084,24 +6053,24 @@ ${prefix}}`;
      * differently when encoding. `undefined` reuses `run`.
      */
     encodingRun;
-    constructor(typeParameters, run3, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
+    constructor(typeParameters, run2, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
       super(annotations, checks, encoding, context3);
       this.typeParameters = typeParameters;
-      this.run = run3;
+      this.run = run2;
       this.encodingChecks = encodingChecks;
       this.encodingRun = encodingRun;
     }
     /** @internal */
     getParser() {
-      let run3;
+      let run2;
       return (input, options) => {
         if (input === missing) return missingExit;
-        return (run3 ??= this.run(this.typeParameters))(input, this, options);
+        return (run2 ??= this.run(this.typeParameters))(input, this, options);
       };
     }
-    _rebuild(recur, checks, encodingChecks, run3, encodingRun) {
+    _rebuild(recur, checks, encodingChecks, run2, encodingRun) {
       const tps = mapOrSame(this.typeParameters, recur);
-      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run3 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run3, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
+      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run2 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run2, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
     }
     /** @internal */
     recur(recur) {
@@ -6733,7 +6702,7 @@ ${prefix}}`;
               }
             }
           } else if (parseIndexes) {
-            const keyPairs = empty3();
+            const keyPairs = empty2();
             for (let i = 0; i < indexCount; i++) {
               const index = indexes[i];
               const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record3) : getIndexSignatureKeys(record3, index.is.parameter, options));
@@ -7293,9 +7262,9 @@ ${prefix}}`;
      * Whether the parsing process should be aborted after this check has failed.
      */
     aborted;
-    constructor(run3, annotations = void 0, aborted = false) {
+    constructor(run2, annotations = void 0, aborted = false) {
       super();
-      this.run = run3;
+      this.run = run2;
       this.annotations = annotations;
       this.aborted = aborted;
     }
@@ -8259,11 +8228,11 @@ ${prefix}}`;
       } : {
         disableChecks: true
       } : options?.parseOptions ?? defaultParseOptions;
-      const make18 = entry.make;
-      if (make18 !== void 0 && input !== missing) {
+      const make17 = entry.make;
+      if (make17 !== void 0 && input !== missing) {
         let output;
         try {
-          output = make18(input, parseOptions);
+          output = make17(input, parseOptions);
         } catch (error) {
           getSchemaIssueOrThrow(die2(error), "Constructor adapter can only throw schema issues");
           throw error;
@@ -8350,8 +8319,8 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Schema.js
   var TypeId13 = TypeId12;
   function declareConstructor() {
-    return (typeParameters, run3, annotations) => {
-      return make9(new Declaration(typeParameters.map(getAST), (typeParameters2) => run3(typeParameters2.map((ast) => make9(ast))), annotations));
+    return (typeParameters, run2, annotations) => {
+      return make9(new Declaration(typeParameters.map(getAST), (typeParameters2) => run2(typeParameters2.map((ast) => make9(ast))), annotations));
     };
   }
   __name(declareConstructor, "declareConstructor");
@@ -9480,12 +9449,12 @@ ${prefix}}`;
       return resume(succeed7(self.ended.current.value));
     }
     const deferred = makeUnsafe2();
-    let set5 = self.subscribers.get(self.subscription);
-    if (!set5) {
-      set5 = /* @__PURE__ */ new Set();
-      self.subscribers.set(self.subscription, set5);
+    let set4 = self.subscribers.get(self.subscription);
+    if (!set4) {
+      set4 = /* @__PURE__ */ new Set();
+      self.subscribers.set(self.subscription, set4);
     }
-    set5.add(self.pollers);
+    set4.add(self.pollers);
     append2(self.pollers, deferred);
     self.strategy.completePollersUnsafe(self.pubsub, self.subscribers, self.subscription, self.pollers);
     if (deferred.effect) return resume(deferred.effect);
@@ -9497,16 +9466,16 @@ ${prefix}}`;
     if (!subscribers.has(subscription)) {
       subscribers.set(subscription, /* @__PURE__ */ new Set());
     }
-    const set5 = subscribers.get(subscription);
-    set5.add(pollers);
+    const set4 = subscribers.get(subscription);
+    set4.add(pollers);
   }, "addSubscribers");
   var removeSubscribers = /* @__PURE__ */ __name((subscribers, subscription, pollers) => {
     if (!subscribers.has(subscription)) {
       return;
     }
-    const set5 = subscribers.get(subscription);
-    set5.delete(pollers);
-    if (set5.size === 0) {
+    const set4 = subscribers.get(subscription);
+    set4.delete(pollers);
+    if (set4.size === 0) {
       subscribers.delete(subscription);
     }
   }, "removeSubscribers");
@@ -9600,14 +9569,14 @@ ${prefix}}`;
       if (this.unsubscribed) {
         return true;
       }
-      let empty6 = true;
+      let empty4 = true;
       let loop = true;
       while (loop) {
         if (this.subscriberHead === this.self.publisherTail) {
           loop = false;
         } else {
           if (this.subscriberHead.next.value !== AbsentValue) {
-            empty6 = false;
+            empty4 = false;
             loop = false;
           } else {
             this.subscriberHead = this.subscriberHead.next;
@@ -9615,7 +9584,7 @@ ${prefix}}`;
           }
         }
       }
-      return empty6;
+      return empty4;
     }
     size() {
       if (this.unsubscribed) {
@@ -10440,114 +10409,9 @@ ${prefix}}`;
   };
   var fromChannel = /* @__PURE__ */ __name((channel) => new Stream(channel), "fromChannel");
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableHashMap.js
-  var TypeId19 = "~effect/MutableHashMap";
-  var MutableHashMapProto = {
-    [TypeId19]: TypeId19,
-    [Symbol.iterator]() {
-      return this.backing[Symbol.iterator]();
-    },
-    toString() {
-      return `MutableHashMap(${format2(Array.from(this))})`;
-    },
-    toJSON() {
-      return {
-        _id: "MutableHashMap",
-        values: toJson(Array.from(this))
-      };
-    },
-    [NodeInspectSymbol]() {
-      return this.toJSON();
-    },
-    pipe() {
-      return pipeArguments(this, arguments);
-    }
-  };
-  var empty4 = /* @__PURE__ */ __name(() => {
-    const self = Object.create(MutableHashMapProto);
-    self.backing = /* @__PURE__ */ new Map();
-    self.buckets = /* @__PURE__ */ new Map();
-    return self;
-  }, "empty");
-  var get3 = /* @__PURE__ */ dual(2, (self, key) => {
-    if (self.backing.has(key)) {
-      return some2(self.backing.get(key));
-    } else if (isSimpleKey(key)) {
-      return none2();
-    }
-    const hash2 = hash(key);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      return none2();
-    }
-    return getFromBucket(self, bucket, key);
-  });
-  var isSimpleKey = /* @__PURE__ */ __name((u) => typeof u !== "object" && typeof u !== "function", "isSimpleKey");
-  var values = /* @__PURE__ */ __name((self) => self.backing.values(), "values");
-  var getFromBucket = /* @__PURE__ */ __name((self, bucket, key) => {
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      if (equals(key, bucket[i])) {
-        const refKey = bucket[i];
-        return some2(self.backing.get(refKey));
-      }
-    }
-    return none2();
-  }, "getFromBucket");
-  var has2 = /* @__PURE__ */ dual(2, (self, key) => isSome2(get3(self, key)));
-  var set2 = /* @__PURE__ */ dual(3, (self, key, value) => {
-    if (self.backing.has(key) || isSimpleKey(key)) {
-      self.backing.set(key, value);
-      return self;
-    }
-    const hash2 = hash(key);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      self.buckets.set(hash2, [key]);
-      self.backing.set(key, value);
-      return self;
-    }
-    let refKey = getRefKey(bucket, key);
-    if (refKey === void 0) {
-      bucket.push(key);
-      refKey = key;
-    }
-    self.backing.set(refKey, value);
-    return self;
-  });
-  var getRefKey = /* @__PURE__ */ __name((bucket, key) => {
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      if (equals(key, bucket[i])) {
-        return bucket[i];
-      }
-    }
-  }, "getRefKey");
-  var remove2 = /* @__PURE__ */ dual(2, (self, key_) => {
-    if (isSimpleKey(key_)) {
-      self.backing.delete(key_);
-      return self;
-    }
-    const hash2 = hash(key_);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      return self;
-    }
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      const bkey = bucket[i];
-      if (bkey === key_ || equals(key_, bkey)) {
-        self.backing.delete(bkey);
-        bucket.splice(i, 1);
-        break;
-      }
-    }
-    if (bucket.length === 0) {
-      self.buckets.delete(hash2);
-    }
-    return self;
-  });
-
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Stream.js
-  var TypeId20 = "~effect/Stream";
-  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId20), "isStream");
+  var TypeId19 = "~effect/Stream";
+  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId19), "isStream");
   var fromChannel2 = fromChannel;
   var toChannel = /* @__PURE__ */ __name((stream) => stream.channel, "toChannel");
   var fromQueue = /* @__PURE__ */ __name((queue) => fromChannel2(fromQueueArray(queue)), "fromQueue");
@@ -10914,9 +10778,6 @@ ${prefix}}`;
         }
       })
     );
-    const publishEvent = /* @__PURE__ */ __name((event) => sync2(
-      () => enqueue("publishEvent", { type: "projection", event })
-    ), "publishEvent");
     const dispatch = /* @__PURE__ */ __name((delivery, handle) => gen2(function* () {
       const event = delivery.type === "projection" ? delivery.event : runtimeEvent(delivery);
       if (event !== void 0) {
@@ -10971,7 +10832,6 @@ ${prefix}}`;
       events: fromPubSub(events),
       packets: fromPubSub(packets),
       rawPackets: fromPubSub(rawPackets),
-      publishEvent,
       sendToClient,
       sendToServer,
       start: start2,
@@ -10988,22 +10848,6 @@ ${prefix}}`;
     }
   };
   var layer2 = effect(Gateway, Gateway.make);
-
-  // packages/runtime/src/game/flash/contract/Event.ts
-  var isProjectionEvent = /* @__PURE__ */ __name((event) => event.type !== "connection" && event.type !== "debug", "isProjectionEvent");
-  var isScalar = /* @__PURE__ */ __name((value) => typeof value === "boolean" || typeof value === "number" || typeof value === "string", "isScalar");
-  var matchesEvent = /* @__PURE__ */ __name((event, selector) => {
-    if (selector === void 0) return true;
-    if (selector === null || typeof selector !== "object" || Array.isArray(selector)) {
-      return false;
-    }
-    const fields = Object.entries(selector);
-    if (!fields.some(([key]) => key === "type")) return false;
-    const record3 = event;
-    return fields.every(
-      ([key, value]) => isScalar(value) && record3[key] === value
-    );
-  }, "matchesEvent");
 
   // packages/game/src/model.ts
   var normalizeGameText = /* @__PURE__ */ __name((value) => value.trim().toLowerCase(), "normalizeGameText");
@@ -12457,200 +12301,6 @@ ${prefix}}`;
     };
   }, "makeAntiCounter");
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/FiberMap.js
-  var TypeId21 = "~effect/FiberMap";
-  var isFiberMap = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId21), "isFiberMap");
-  var Proto2 = {
-    [TypeId21]: TypeId21,
-    [Symbol.iterator]() {
-      if (this.state._tag === "Closed") {
-        return empty2();
-      }
-      return this.state.backing[Symbol.iterator]();
-    },
-    ...PipeInspectableProto,
-    toJSON() {
-      return {
-        _id: "FiberMap",
-        state: this.state
-      };
-    }
-  };
-  var makeUnsafe6 = /* @__PURE__ */ __name((backing, deferred) => {
-    const self = Object.create(Proto2);
-    self.state = {
-      _tag: "Open",
-      backing
-    };
-    self.deferred = deferred;
-    return self;
-  }, "makeUnsafe");
-  var make15 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe6(empty4(), makeUnsafe2())), (map8) => suspend2(() => {
-    const state = map8.state;
-    if (state._tag === "Closed") return void_3;
-    map8.state = {
-      _tag: "Closed"
-    };
-    return interruptAll(values(state.backing)).pipe(into(map8.deferred));
-  })), "make");
-  var internalFiberId = -1;
-  var isInternalInterruption = /* @__PURE__ */ toPredicate(/* @__PURE__ */ compose(filterInterruptors, /* @__PURE__ */ has(internalFiberId)));
-  var setUnsafe = /* @__PURE__ */ dual((args2) => isFiberMap(args2[0]), (self, key, fiber2, options) => {
-    if (self.state._tag === "Closed") {
-      fiber2.interruptUnsafe(internalFiberId);
-      return;
-    }
-    const previous = get3(self.state.backing, key);
-    if (previous._tag === "Some") {
-      if (previous.value === fiber2) {
-        return;
-      } else if (options?.onlyIfMissing === true) {
-        fiber2.interruptUnsafe(internalFiberId);
-        return;
-      }
-    }
-    set2(self.state.backing, key, fiber2);
-    if (previous._tag === "Some") {
-      previous.value.interruptUnsafe(internalFiberId);
-    }
-    fiber2.addObserver((exit3) => {
-      if (self.state._tag === "Closed") {
-        return;
-      }
-      const current = get3(self.state.backing, key);
-      if (isSome2(current) && fiber2 === current.value) {
-        remove2(self.state.backing, key);
-      }
-      if (isFailure3(exit3) && (options?.propagateInterruption === true ? !isInternalInterruption(exit3.cause) : !hasInterruptsOnly2(exit3.cause))) {
-        doneUnsafe(self.deferred, exit3);
-      }
-    });
-  });
-  var hasUnsafe = /* @__PURE__ */ dual(2, (self, key) => self.state._tag === "Closed" ? false : has2(self.state.backing, key));
-  var remove3 = /* @__PURE__ */ dual(2, (self, key) => suspend2(() => {
-    if (self.state._tag === "Closed") {
-      return void_3;
-    }
-    const fiber2 = get3(self.state.backing, key);
-    if (fiber2._tag === "None") {
-      return void_3;
-    }
-    return interruptAs(fiber2.value, internalFiberId);
-  }));
-  var constInterruptedFiber = /* @__PURE__ */ (function() {
-    let fiber2 = void 0;
-    return () => {
-      if (fiber2 === void 0) {
-        fiber2 = runFork2(interrupt3);
-      }
-      return fiber2;
-    };
-  })();
-  var run2 = /* @__PURE__ */ __name(function() {
-    const self = arguments[0];
-    if (isEffect2(arguments[2])) {
-      return runImpl(self, arguments[1], arguments[2], arguments[3]);
-    }
-    const key = arguments[1];
-    const options = arguments[2];
-    return (effect2) => runImpl(self, key, effect2, options);
-  }, "run");
-  var runImpl = /* @__PURE__ */ __name((self, key, effect2, options) => withFiber2((parent) => {
-    if (self.state._tag === "Closed") {
-      return interrupt3;
-    } else if (options?.onlyIfMissing === true && hasUnsafe(self, key)) {
-      return sync2(constInterruptedFiber);
-    }
-    const fiber2 = forkUnsafe(parent, effect2, options?.startImmediately ?? true, true);
-    setUnsafe(self, key, fiber2, options);
-    return succeed7(fiber2);
-  }), "runImpl");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Ref.js
-  var TypeId22 = "~effect/Ref";
-  var RefProto = {
-    [TypeId22]: {
-      _A: identity
-    },
-    ...PipeInspectableProto,
-    toJSON() {
-      return {
-        _id: "Ref",
-        ref: this.ref
-      };
-    }
-  };
-  var makeUnsafe7 = /* @__PURE__ */ __name((value) => {
-    const self = Object.create(RefProto);
-    self.ref = make11(value);
-    return self;
-  }, "makeUnsafe");
-  var make16 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe7(value)), "make");
-  var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
-  var set3 = /* @__PURE__ */ dual(2, (self, value) => sync2(() => set(self.ref, value)));
-  var getAndSet = /* @__PURE__ */ dual(2, (self, value) => sync2(() => {
-    const current = self.ref.current;
-    self.ref.current = value;
-    return current;
-  }));
-  var modify = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
-    const [b, a] = f(self.ref.current);
-    self.ref.current = a;
-    return b;
-  }));
-  var update = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
-    self.ref.current = f(self.ref.current);
-  }));
-  var updateAndGet = /* @__PURE__ */ dual(2, (self, f) => sync2(() => self.ref.current = f(self.ref.current)));
-
-  // packages/runtime/src/game/flash/api/internal/SessionEvents.ts
-  var readinessKey = "player-ready";
-  var makeSessionEvents = fn2("makeSessionEvents")(function* (awaitPlayerReady, publishEvent) {
-    const fibers = yield* make15();
-    const lifecycle = yield* make14(1);
-    const loggedIn = yield* make16(false);
-    const clearSession = lifecycle.withPermits(1)(set3(loggedIn, false));
-    const publishLogin = lifecycle.withPermits(1)(
-      gen2(function* () {
-        if (yield* get4(loggedIn)) return;
-        yield* publishEvent({ type: "login" });
-        yield* set3(loggedIn, true);
-      }).pipe(uninterruptible2)
-    );
-    const publishLogout = lifecycle.withPermits(1)(
-      gen2(function* () {
-        if (!(yield* getAndSet(loggedIn, false))) return;
-        yield* publishEvent({ type: "logout" });
-      }).pipe(uninterruptible2)
-    );
-    const cancelReadiness = remove3(fibers, readinessKey);
-    const handleRuntimeEvent = fn2("SessionEvents.handleRuntimeEvent")(
-      function* (event) {
-        if (event.type !== "connection") return;
-        switch (event.status) {
-          case "OnConnection":
-            yield* cancelReadiness;
-            yield* clearSession;
-            yield* run2(
-              fibers,
-              readinessKey,
-              awaitPlayerReady.pipe(andThen2(publishLogin))
-            );
-            return;
-          case "OnConnectionFailed":
-            yield* cancelReadiness;
-            yield* clearSession;
-            return;
-          case "OnConnectionLost":
-            yield* cancelReadiness;
-            yield* publishLogout;
-            return;
-        }
-      }
-    );
-    return { handleRuntimeEvent };
-  });
-
   // packages/runtime/src/game/flash/api/Bank.ts
   var TransferResponse = Struct({
     ItemID: PositiveWireInt,
@@ -12676,7 +12326,7 @@ ${prefix}}`;
         (hydrated) => hydrated ? readItems(host, "bank") : succeed7([])
       )
     ), "getAll");
-    const get6 = /* @__PURE__ */ __name((selector) => isHydrated(host, "bank").pipe(
+    const get5 = /* @__PURE__ */ __name((selector) => isHydrated(host, "bank").pipe(
       flatMap3(
         (hydrated) => hydrated ? readItem(host, "bank", selector) : succeed7(null)
       )
@@ -12724,7 +12374,7 @@ ${prefix}}`;
         return yield* wait.until(isOpen(), { timeout: "3 seconds" });
       })
     ), "open");
-    const contains = /* @__PURE__ */ __name((selector, quantity) => get6(selector).pipe(
+    const contains = /* @__PURE__ */ __name((selector, quantity) => get5(selector).pipe(
       map5(
         (item) => item !== null && item.quantity >= normalizeItemQuantity(quantity)
       )
@@ -12768,7 +12418,7 @@ ${prefix}}`;
     const withdraw = /* @__PURE__ */ __name((selector) => {
       return gen2(function* () {
         if (!(yield* load())) return false;
-        const bankItem = yield* get6(selector);
+        const bankItem = yield* get5(selector);
         if (bankItem === null) return false;
         if (!(yield* open())) return false;
         const canAccept = bankItem.houseItem ? houseCanAccept(bankItem.itemId, house) : inventory.canAccept(bankItem);
@@ -12808,7 +12458,7 @@ ${prefix}}`;
       return gen2(function* () {
         if (!(yield* open())) return false;
         const inventoryItem = yield* inventory.get(inventorySelector);
-        const bankItem = yield* get6(bankSelector);
+        const bankItem = yield* get5(bankSelector);
         if (inventoryItem === null || bankItem === null || inventoryItem.category === "Class" || inventoryItem.equipped) {
           return false;
         }
@@ -12858,7 +12508,7 @@ ${prefix}}`;
       contains,
       deposit,
       depositBatch,
-      get: get6,
+      get: get5,
       getAll,
       getAvailableSlots,
       getSlots,
@@ -13152,6 +12802,43 @@ ${prefix}}`;
   };
   var normalizeCombatProfile = /* @__PURE__ */ __name((value) => normalizeProfile(value, DEFAULT_COMBAT_PROFILE_ID) ?? genericProfile(), "normalizeCombatProfile");
 
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Ref.js
+  var TypeId20 = "~effect/Ref";
+  var RefProto = {
+    [TypeId20]: {
+      _A: identity
+    },
+    ...PipeInspectableProto,
+    toJSON() {
+      return {
+        _id: "Ref",
+        ref: this.ref
+      };
+    }
+  };
+  var makeUnsafe6 = /* @__PURE__ */ __name((value) => {
+    const self = Object.create(RefProto);
+    self.ref = make11(value);
+    return self;
+  }, "makeUnsafe");
+  var make15 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe6(value)), "make");
+  var get3 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
+  var set2 = /* @__PURE__ */ dual(2, (self, value) => sync2(() => set(self.ref, value)));
+  var getAndSet = /* @__PURE__ */ dual(2, (self, value) => sync2(() => {
+    const current = self.ref.current;
+    self.ref.current = value;
+    return current;
+  }));
+  var modify = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
+    const [b, a] = f(self.ref.current);
+    self.ref.current = a;
+    return b;
+  }));
+  var update = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
+    self.ref.current = f(self.ref.current);
+  }));
+  var updateAndGet = /* @__PURE__ */ dual(2, (self, f) => sync2(() => self.ref.current = f(self.ref.current)));
+
   // packages/runtime/src/game/combatProfiles.ts
   var makeCombatProfileRuntimeDeps = /* @__PURE__ */ __name((combat, player, players, skill5ItemId) => ({
     combat,
@@ -13159,13 +12846,13 @@ ${prefix}}`;
     players,
     ...skill5ItemId === void 0 ? {} : { skill5ItemId }
   }), "makeCombatProfileRuntimeDeps");
-  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map5(make16({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
+  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map5(make15({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
   var resetCombatProfileCursor = /* @__PURE__ */ __name((cursor) => update(cursor.state, (state) => ({
     index: 0,
     resetVersion: state.resetVersion + 1
   })), "resetCombatProfileCursor");
   var makeCombatProfileMessageTriggerState = /* @__PURE__ */ __name(() => gen2(function* () {
-    const state = yield* make16(/* @__PURE__ */ new Map());
+    const state = yield* make15(/* @__PURE__ */ new Map());
     const semaphore = yield* make14(1);
     return {
       semaphore,
@@ -13321,7 +13008,7 @@ ${prefix}}`;
           castTarget
         );
       }
-      const startState = yield* get4(cursor.state);
+      const startState = yield* get3(cursor.state);
       for (let offset = 0; offset < steps.length; offset += 1) {
         const stepIndex = (startState.index + offset) % steps.length;
         const step = steps[stepIndex];
@@ -13337,7 +13024,7 @@ ${prefix}}`;
         if (prepared === null) {
           continue;
         }
-        const resetVersionBeforeCast = (yield* get4(cursor.state)).resetVersion;
+        const resetVersionBeforeCast = (yield* get3(cursor.state)).resetVersion;
         const cast = yield* castPreparedCombatProfileStep(
           deps,
           step,
@@ -13366,7 +13053,7 @@ ${prefix}}`;
   var castCombatProfileMessageTrigger = /* @__PURE__ */ __name((deps, trigger, triggerIndex, event, state, now = Date.now()) => state.semaphore.withPermits(1)(
     gen2(function* () {
       const cooldownMs = trigger.cooldownMs ?? 0;
-      const lastCast = (yield* get4(state.state)).get(triggerIndex);
+      const lastCast = (yield* get3(state.state)).get(triggerIndex);
       if (lastCast !== void 0 && now - lastCast < cooldownMs) {
         return false;
       }
@@ -13476,7 +13163,7 @@ ${prefix}}`;
       const cursor = yield* makeCombatProfileCursor();
       const messageState = yield* makeCombatProfileMessageTriggerState();
       const actionGate = yield* make14(1);
-      const state = yield* make16({
+      const state = yield* make15({
         generation: 0,
         resetPending: false,
         target: void 0
@@ -13525,11 +13212,11 @@ ${prefix}}`;
               )) {
                 return;
               }
-              const observed = yield* get4(state);
+              const observed = yield* get3(state);
               if (observed.resetPending) return;
               yield* actionGate.withPermits(1)(
                 gen2(function* () {
-                  const current = yield* get4(state);
+                  const current = yield* get3(state);
                   if (current.resetPending || current.generation !== observed.generation) {
                     return;
                   }
@@ -13554,7 +13241,7 @@ ${prefix}}`;
                       return;
                     }
                   }
-                  const beforeCast = yield* get4(state);
+                  const beforeCast = yield* get3(state);
                   if (beforeCast.resetPending || beforeCast.generation !== observed.generation) {
                     return;
                   }
@@ -13580,7 +13267,7 @@ ${prefix}}`;
       }
       const resolveTarget = fn2("CombatProfileSession.resolveTarget")(
         function* (monsters) {
-          const initial = yield* get4(state);
+          const initial = yield* get3(state);
           if (initial.resetPending) return void 0;
           const allowFallback = options.allowTargetFallback ?? true;
           const active = initial.target;
@@ -13672,7 +13359,7 @@ ${prefix}}`;
           );
         }
       );
-      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get4(state).pipe(
+      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get3(state).pipe(
         map5(
           (current) => !current.resetPending && current.generation === lease.generation && current.target?.monsterMapId === lease.monster.monsterMapId
         )
@@ -13859,9 +13546,9 @@ ${prefix}}`;
     const decoded = decodeActionAcknowledgementsPayload(value);
     if (isNone2(decoded)) return [];
     const acknowledgements = [];
-    const append3 = /* @__PURE__ */ __name((values2, decode3) => {
-      if (!Array.isArray(values2)) return;
-      for (const entry of values2) {
+    const append3 = /* @__PURE__ */ __name((values, decode3) => {
+      if (!Array.isArray(values)) return;
+      for (const entry of values) {
         const acknowledgement = decode3(entry);
         if (acknowledgement !== void 0) acknowledgements.push(acknowledgement);
       }
@@ -14343,32 +14030,32 @@ ${prefix}}`;
     }
   }, "normalizeValue");
   var normalizeScriptInputValues = /* @__PURE__ */ __name((definition, rawValues = {}) => {
-    const values2 = {};
+    const values = {};
     for (const field2 of definition.fields) {
       const normalized = normalizeValue(field2, rawValues[field2.key]);
       if (normalized !== void 0) {
-        values2[field2.key] = normalized;
+        values[field2.key] = normalized;
         continue;
       }
       const fallback = defaultScriptInputValue(field2);
       if (fallback !== void 0) {
         const normalizedFallback = normalizeValue(field2, fallback);
         if (normalizedFallback !== void 0) {
-          values2[field2.key] = normalizedFallback;
+          values[field2.key] = normalizedFallback;
         }
       }
     }
-    return values2;
+    return values;
   }, "normalizeScriptInputValues");
-  var findMissingRequiredScriptInputs = /* @__PURE__ */ __name((definition, values2) => definition.fields.flatMap((field2) => {
-    if (field2.required !== true || !Object.hasOwn(values2, field2.key)) {
+  var findMissingRequiredScriptInputs = /* @__PURE__ */ __name((definition, values) => definition.fields.flatMap((field2) => {
+    if (field2.required !== true || !Object.hasOwn(values, field2.key)) {
       return field2.required === true ? [field2.key] : [];
     }
-    const value = values2[field2.key];
+    const value = values[field2.key];
     return field2.type === "multi-select" && (!Array.isArray(value) || value.length === 0) ? [field2.key] : [];
   }), "findMissingRequiredScriptInputs");
-  var validateScriptInputValues = /* @__PURE__ */ __name((definition, values2) => {
-    const normalized = normalizeScriptInputValues(definition, values2);
+  var validateScriptInputValues = /* @__PURE__ */ __name((definition, values) => {
+    const normalized = normalizeScriptInputValues(definition, values);
     const fieldKeys = findMissingRequiredScriptInputs(definition, normalized);
     return fieldKeys.length === 0 ? { status: "ok", values: normalized } : { fieldKeys, status: "missing-required", values: normalized };
   }, "validateScriptInputValues");
@@ -14622,7 +14309,7 @@ ${prefix}}`;
   var makeInventory = /* @__PURE__ */ __name((bridge, host, house, wait) => {
     const consumableEquipment = makeUnsafe5(1);
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "inventory"), "getAll");
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "inventory", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host, "inventory", selector), "get");
     const getSlots = fn2("Inventory.getSlots")(function* (pool = "bag") {
       if (!(yield* isHydrated(host, "inventory"))) return 0;
       return yield* bridge.invoke(slotMethods[pool], void 0, WireInt).pipe(map5(getOrElse(() => 0)));
@@ -14639,14 +14326,14 @@ ${prefix}}`;
         return true;
       }
       if (pool === "house") return (yield* house.getAvailableSlots()) > 0;
-      const current = yield* get6(item.itemId);
+      const current = yield* get5(item.itemId);
       if (replacing === void 0 && current !== null && current.quantity < (current.maxStack ?? 1)) {
         return true;
       }
       if (pool === "misc" && current !== null) return true;
       return (yield* getAvailableSlots(pool)) > 0;
     });
-    const contains = /* @__PURE__ */ __name((selector, quantity) => get6(selector).pipe(
+    const contains = /* @__PURE__ */ __name((selector, quantity) => get5(selector).pipe(
       map5(
         (item) => item !== null && item.quantity >= normalizeItemQuantity(quantity)
       )
@@ -14686,7 +14373,7 @@ ${prefix}}`;
       return wearPacket !== null && response?.success === true;
     });
     const wearEffect = fn2("Inventory.wear")(function* (selector) {
-      const item = yield* get6(selector);
+      const item = yield* get5(selector);
       if (item === null || !item.wearable) return false;
       if (item.worn) return true;
       if (!(yield* canUseMemberItem(item.memberOnly))) return false;
@@ -14728,7 +14415,7 @@ ${prefix}}`;
       map5(getOrElse(() => false))
     );
     const equipEffect = fn2("Inventory.equip")(function* (selector, options) {
-      const item = yield* get6(selector);
+      const item = yield* get5(selector);
       if (item === null) return false;
       if (item.category === "Item" && isDirectInventoryConsumable(item.link)) {
         return false;
@@ -14773,7 +14460,7 @@ ${prefix}}`;
     });
     const equip = /* @__PURE__ */ __name((selector, options) => equipEffect(selector, options), "equip");
     const use = fn2("Inventory.use")(function* (selector) {
-      const item = yield* get6(selector);
+      const item = yield* get5(selector);
       if (item === null || !isDirectInventoryUseItem(item.category, item.link)) {
         return false;
       }
@@ -14782,7 +14469,7 @@ ${prefix}}`;
       const sent = yield* bridge.invoke("inventory.use", [{ itemId: item.itemId }], Boolean3).pipe(map5(getOrElse(() => false)));
       if (!sent) return false;
       return yield* wait.until(
-        get6(item.itemId).pipe(
+        get5(item.itemId).pipe(
           map5(
             (current) => current === null || current.quantity < startingQuantity
           )
@@ -14827,7 +14514,7 @@ ${prefix}}`;
     ), "getAvailableSlots");
     const unequipConsumable = fn2("Inventory.unequipConsumable")(
       function* (selector) {
-        const item = yield* get6(selector);
+        const item = yield* get5(selector);
         if (item === null || item.category !== "Item") return false;
         const sent = yield* bridge.invoke(
           "inventory.unequipConsumable",
@@ -14836,7 +14523,7 @@ ${prefix}}`;
         ).pipe(map5(getOrElse(() => false)));
         if (!sent) return false;
         yield* host.command({ kind: "refreshEquippedConsumable" });
-        const current = yield* get6(item.itemId);
+        const current = yield* get5(item.itemId);
         return current?.equipped !== true;
       },
       consumableEquipment.withPermit,
@@ -14848,7 +14535,7 @@ ${prefix}}`;
       contains,
       equip,
       equipByEnhancement,
-      get: get6,
+      get: get5,
       getAll,
       getAvailableSlots,
       getSlots,
@@ -15413,12 +15100,12 @@ ${prefix}}`;
   var decodeAcceptResponse = decodeUnknownOption2(AcceptResponse);
   var makeDrops = fnUntraced2(function* (bridge, host, auth, wait) {
     const accepts = yield* make14(1);
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "drop", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host, "drop", selector), "get");
     const accept = /* @__PURE__ */ __name((selector) => {
       return accepts.withPermits(1)(
         gen2(function* () {
           if (!(yield* auth.isLoggedIn())) return false;
-          const drop = yield* get6(selector);
+          const drop = yield* get5(selector);
           if (drop === null) return false;
           const before = yield* all2({
             bank: itemQuantity(host, "bank", drop.itemId),
@@ -15453,7 +15140,7 @@ ${prefix}}`;
         })
       );
     }, "accept");
-    const contains = /* @__PURE__ */ __name((selector) => get6(selector).pipe(map5((drop) => drop !== null)), "contains");
+    const contains = /* @__PURE__ */ __name((selector) => get5(selector).pipe(map5((drop) => drop !== null)), "contains");
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "drop"), "getAll");
     const isCustomUiEnabled = /* @__PURE__ */ __name(() => bridge.invoke("drops.isUsingCustomDrops", void 0, Boolean3).pipe(map5(getOrElse(() => false))), "isCustomUiEnabled");
     const reject2 = /* @__PURE__ */ __name((selector) => gen2(function* () {
@@ -15466,13 +15153,29 @@ ${prefix}}`;
     return {
       accept,
       contains,
-      get: get6,
+      get: get5,
       getAll,
       isCustomUiEnabled,
       reject: reject2,
       toggleUi
     };
   });
+
+  // packages/runtime/src/game/flash/contract/Event.ts
+  var isProjectionEvent = /* @__PURE__ */ __name((event) => event.type !== "connection" && event.type !== "debug", "isProjectionEvent");
+  var isScalar = /* @__PURE__ */ __name((value) => typeof value === "boolean" || typeof value === "number" || typeof value === "string", "isScalar");
+  var matchesEvent = /* @__PURE__ */ __name((event, selector) => {
+    if (selector === void 0) return true;
+    if (selector === null || typeof selector !== "object" || Array.isArray(selector)) {
+      return false;
+    }
+    const fields = Object.entries(selector);
+    if (!fields.some(([key]) => key === "type")) return false;
+    const record3 = event;
+    return fields.every(
+      ([key, value]) => isScalar(value) && record3[key] === value
+    );
+  }, "matchesEvent");
 
   // packages/runtime/src/game/flash/api/Events.ts
   var makeEvents = fnUntraced2(function* (gateway, wait) {
@@ -15513,7 +15216,7 @@ ${prefix}}`;
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "house"), "getAll");
     const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("house.getSlots", void 0, WireInt).pipe(map5(getOrElse(() => 0))), "getSlots");
     const getUsedSlots = /* @__PURE__ */ __name(() => host.read({ kind: "items", container: "house" }).pipe(map5((items) => items.length)), "getUsedSlots");
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "house", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host, "house", selector), "get");
     const getAvailableSlots = /* @__PURE__ */ __name(() => zipWith2(
       getSlots(),
       getUsedSlots(),
@@ -15521,7 +15224,7 @@ ${prefix}}`;
     ), "getAvailableSlots");
     return {
       contains,
-      get: get6,
+      get: get5,
       getAll,
       getAvailableSlots,
       getSlots,
@@ -15734,7 +15437,7 @@ ${prefix}}`;
         )
       );
     }, "reread");
-    const get6 = /* @__PURE__ */ __name((selector) => getProjected(selector).pipe(
+    const get5 = /* @__PURE__ */ __name((selector) => getProjected(selector).pipe(
       flatMap3(
         (monster) => monster === null ? succeed7(null) : ensureDrops(monster).pipe(
           andThen2(readMonster(monster.monsterMapId))
@@ -15760,7 +15463,7 @@ ${prefix}}`;
     ), "isAvailable");
     return {
       api: {
-        get: get6,
+        get: get5,
         getAll,
         getAvailable,
         isAvailable
@@ -15981,7 +15684,7 @@ ${prefix}}`;
   }), "toOutfit");
   var makePlayer = /* @__PURE__ */ __name((bridge, host, auth, inventory, map8, wait) => {
     const read = /* @__PURE__ */ __name((method, schema, fallback) => bridge.invoke(method, void 0, schema).pipe(map5(getOrElse(() => fallback))), "read");
-    const get6 = /* @__PURE__ */ __name(() => host.read({ kind: "me" }).pipe(
+    const get5 = /* @__PURE__ */ __name(() => host.read({ kind: "me" }).pipe(
       map5((player) => player === null ? null : toLivePlayer(player))
     ), "get");
     const readLocation = /* @__PURE__ */ __name((projected, method) => projected !== "" ? succeed7(projected) : map8.isLoaded().pipe(
@@ -15989,7 +15692,7 @@ ${prefix}}`;
         (loaded) => loaded ? read(method, String4, "") : succeed7("")
       )
     ), "readLocation");
-    const getAuras = /* @__PURE__ */ __name((options) => get6().pipe(
+    const getAuras = /* @__PURE__ */ __name((options) => get5().pipe(
       map5(
         (player) => (player?.auras ?? []).filter(
           (aura) => options?.kind === void 0 || aura.kind === options.kind
@@ -16077,7 +15780,7 @@ ${prefix}}`;
       getAll: getOutfits,
       wear: wearOutfit
     };
-    const getCell = /* @__PURE__ */ __name(() => get6().pipe(
+    const getCell = /* @__PURE__ */ __name(() => get5().pipe(
       flatMap3(
         (current) => readLocation(current?.cell ?? "", "player.getCell")
       )
@@ -16094,18 +15797,18 @@ ${prefix}}`;
     });
     const getGender = /* @__PURE__ */ __name(() => read("player.getGender", String4, ""), "getGender");
     const getGold = /* @__PURE__ */ __name(() => read("player.getGold", WireInt, 0), "getGold");
-    const getHp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.hp ?? 0)), "getHp");
-    const getLevel = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.level ?? 0)), "getLevel");
-    const getMaxHp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.maxHp ?? 0)), "getMaxHp");
-    const getMaxMp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.maxMp ?? 0)), "getMaxMp");
-    const getMp = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.mp ?? 0)), "getMp");
-    const getPad = /* @__PURE__ */ __name(() => get6().pipe(
+    const getHp = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.hp ?? 0)), "getHp");
+    const getLevel = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.level ?? 0)), "getLevel");
+    const getMaxHp = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.maxHp ?? 0)), "getMaxHp");
+    const getMaxMp = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.maxMp ?? 0)), "getMaxMp");
+    const getMp = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.mp ?? 0)), "getMp");
+    const getPad = /* @__PURE__ */ __name(() => get5().pipe(
       flatMap3(
         (current) => readLocation(current?.pad ?? "", "player.getPad")
       )
     ), "getPad");
-    const getState = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.state ?? EntityState.Idle)), "getState");
-    const getPosition = /* @__PURE__ */ __name(() => get6().pipe(
+    const getState = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.state ?? EntityState.Idle)), "getState");
+    const getPosition = /* @__PURE__ */ __name(() => get5().pipe(
       map5((current) => ({
         ...current?.position ?? { x: 0, y: 0 }
       }))
@@ -16115,8 +15818,8 @@ ${prefix}}`;
       return username === "" ? void_3 : bridge.invoke("player.goToPlayer", [username], Void2).pipe(asVoid2);
     }, "goToPlayer");
     const hasActiveBoost = /* @__PURE__ */ __name((boostType) => bridge.invoke("player.hasActiveBoost", [boostType], Boolean3).pipe(map5(getOrElse(() => false))), "hasActiveBoost");
-    const isAfk = /* @__PURE__ */ __name(() => get6().pipe(map5((current) => current?.afk ?? false)), "isAfk");
-    const isAlive = /* @__PURE__ */ __name(() => get6().pipe(
+    const isAfk = /* @__PURE__ */ __name(() => get5().pipe(map5((current) => current?.afk ?? false)), "isAfk");
+    const isAlive = /* @__PURE__ */ __name(() => get5().pipe(
       flatMap3(
         (current) => current !== null ? succeed7(current.alive) : all2([
           read("player.getHp", WireInt, 0),
@@ -16246,7 +15949,7 @@ ${prefix}}`;
       return yield* jumpToCell(targetCell, pad);
     }), "joinMap");
     const rest = /* @__PURE__ */ __name((options) => gen2(function* () {
-      const current = yield* get6();
+      const current = yield* get5();
       if (current !== null && current.hp >= current.maxHp && current.mp >= current.maxMp)
         return true;
       if (!(yield* wait.forGameAction("rest"))) return false;
@@ -16256,7 +15959,7 @@ ${prefix}}`;
         return false;
       if (options?.waitUntilFull !== true) return true;
       return yield* wait.until(
-        get6().pipe(
+        get5().pipe(
           map5(
             (player) => player !== null && player.hp >= player.maxHp && player.mp >= player.maxMp
           )
@@ -16273,7 +15976,7 @@ ${prefix}}`;
       const started = yield* bridge.invoke("player.walkTo", args2, Boolean3).pipe(map5(getOrElse(() => false)));
       if (!started) return false;
       return yield* wait.until(
-        get6().pipe(
+        get5().pipe(
           map5(
             (current) => current?.position.x === targetX && current.position.y === targetY
           )
@@ -16285,7 +15988,7 @@ ${prefix}}`;
       auras,
       exitCombat,
       factions,
-      get: get6,
+      get: get5,
       getCell,
       getClassName,
       getClassRank,
@@ -16315,7 +16018,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/Players.ts
   var makePlayers = /* @__PURE__ */ __name((host) => {
-    const get6 = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host.read({ kind: "player", selector }).pipe(
+    const get5 = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host.read({ kind: "player", selector }).pipe(
       map5(
         (player) => player === null ? null : toLivePlayer(player)
       )
@@ -16325,7 +16028,7 @@ ${prefix}}`;
       map5((player) => player === null ? null : toLivePlayer(player))
     ), "getMe");
     return {
-      get: get6,
+      get: get5,
       getAll,
       getMe
     };
@@ -16474,7 +16177,7 @@ ${prefix}}`;
         return event !== null;
       });
     }, "complete");
-    const get6 = /* @__PURE__ */ __name((questId) => {
+    const get5 = /* @__PURE__ */ __name((questId) => {
       if (!isQuestId(questId)) return succeed7(null);
       return read(questId).pipe(
         flatMap3(
@@ -16502,7 +16205,7 @@ ${prefix}}`;
       acceptBatch,
       canComplete,
       complete,
-      get: get6,
+      get: get5,
       getAccepted,
       getAll,
       getMaxTurnIns,
@@ -16515,7 +16218,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/Settings.ts
   var makeSettings = /* @__PURE__ */ __name((host) => {
-    const get6 = /* @__PURE__ */ __name(() => host.read({ kind: "settings" }), "get");
+    const get5 = /* @__PURE__ */ __name(() => host.read({ kind: "settings" }), "get");
     return {
       apply: /* @__PURE__ */ __name((patch) => gen2(function* () {
         for (const field2 of ["frameRate", "walkSpeed"]) {
@@ -16528,8 +16231,8 @@ ${prefix}}`;
           return yield* die3(new Error("host rejected settings patch"));
         }
       }), "apply"),
-      get: get6,
-      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get6().pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled"),
+      get: get5,
+      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get5().pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled"),
       reapply: /* @__PURE__ */ __name(() => host.command({ kind: "reapplySettings", actionsOnly: false }).pipe(asVoid2), "reapply"),
       reapplyActions: /* @__PURE__ */ __name(() => host.command({ kind: "reapplySettings", actionsOnly: true }).pipe(asVoid2), "reapplyActions")
     };
@@ -16551,7 +16254,7 @@ ${prefix}}`;
   var isShopId = /* @__PURE__ */ __name((shopId) => Number.isSafeInteger(shopId) && shopId > 0, "isShopId");
   var selectorFor = /* @__PURE__ */ __name((item) => item.shopItemId === void 0 ? { itemId: item.itemId } : { shopItemId: item.shopItemId }, "selectorFor");
   var makeShops = /* @__PURE__ */ __name((bridge, host, inventory, wait) => {
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "shop", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host, "shop", selector), "get");
     const getCurrent = /* @__PURE__ */ __name(() => host.read({ kind: "shop" }).pipe(map5((shop) => shop === null ? null : toLiveShop(shop))), "getCurrent");
     const isOpen = /* @__PURE__ */ __name((shopId) => {
       if (shopId !== void 0 && !isShopId(shopId)) {
@@ -16646,7 +16349,7 @@ ${prefix}}`;
         return shop?.id === shopId && open;
       });
     }, "load");
-    const canBuy = /* @__PURE__ */ __name((selector, options) => get6(selector).pipe(
+    const canBuy = /* @__PURE__ */ __name((selector, options) => get5(selector).pipe(
       flatMap3(
         (item) => item === null ? succeed7(false) : bridge.invoke(
           "shops.canBuyItem",
@@ -16655,7 +16358,7 @@ ${prefix}}`;
         ).pipe(map5(getOrElse(() => false)))
       )
     ), "canBuy");
-    const buy = /* @__PURE__ */ __name((selector, options) => get6(selector).pipe(
+    const buy = /* @__PURE__ */ __name((selector, options) => get5(selector).pipe(
       flatMap3((item) => {
         if (item === null) return succeed7(false);
         const requested = normalizeItemQuantity(options?.quantity);
@@ -16726,7 +16429,7 @@ ${prefix}}`;
       );
     }, "sell");
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "shop"), "getAll");
-    const getMaxBuyQuantity = /* @__PURE__ */ __name((selector) => get6(selector).pipe(
+    const getMaxBuyQuantity = /* @__PURE__ */ __name((selector) => get5(selector).pipe(
       flatMap3(
         (item) => item === null ? succeed7(0) : bridge.invoke("shops.getMaxBuyQuantity", [selectorFor(item)], WireInt).pipe(map5(getOrElse(() => 0)))
       )
@@ -16753,7 +16456,7 @@ ${prefix}}`;
       buy,
       canBuy,
       close: close2,
-      get: get6,
+      get: get5,
       getAll,
       getCurrent,
       getMaxBuyQuantity,
@@ -16771,11 +16474,11 @@ ${prefix}}`;
     const contains = /* @__PURE__ */ __name((selector, quantity) => itemQuantity(host, "temporary", selector).pipe(
       map5((owned) => owned >= normalizeItemQuantity(quantity))
     ), "contains");
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host, "temporary", selector), "get");
+    const get5 = /* @__PURE__ */ __name((selector) => readItem(host, "temporary", selector), "get");
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "temporary"), "getAll");
     return {
       contains,
-      get: get6,
+      get: get5,
       getAll
     };
   }, "makeTempInventory");
@@ -16897,10 +16600,6 @@ ${prefix}}`;
     const monsters = monsterServices.api;
     const players = makePlayers(host);
     const player = makePlayer(bridge, host, auth, inventory, map8, wait);
-    const sessionEvents = yield* makeSessionEvents(
-      wait.until(player.isReady()).pipe(asVoid2),
-      gateway.publishEvent
-    );
     const projectionReadiness = makeProjectionReadiness(host);
     const quests = makeQuests(bridge, host, wait);
     const settings = makeSettings(host);
@@ -16922,9 +16621,7 @@ ${prefix}}`;
       tempInventory,
       wait
     );
-    yield* gateway.start(
-      (event) => isProjectionEvent(event) ? antiCounter.handleEvent(event) : sessionEvents.handleRuntimeEvent(event).pipe(andThen2(antiCounter.handleEvent(event)))
-    );
+    yield* gateway.start(antiCounter.handleEvent);
     return {
       api: {
         auth,
@@ -16973,10 +16670,10 @@ ${prefix}}`;
   var apiLayer = layer4.pipe(provideMerge(hostLayer));
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
-  var TypeId23 = "~effect/SubscriptionRef";
-  var Proto3 = {
+  var TypeId21 = "~effect/SubscriptionRef";
+  var Proto2 = {
     ...PipeInspectableProto,
-    [TypeId23]: {
+    [TypeId21]: {
       _A: identity
     },
     toJSON() {
@@ -16986,10 +16683,10 @@ ${prefix}}`;
       };
     }
   };
-  var make17 = /* @__PURE__ */ __name((value) => map5(unbounded({
+  var make16 = /* @__PURE__ */ __name((value) => map5(unbounded({
     replay: 1
   }), (pubsub) => {
-    const self = Object.create(Proto3);
+    const self = Object.create(Proto2);
     self.semaphore = makeUnsafe5(1);
     self.value = value;
     self.pubsub = pubsub;
@@ -16997,15 +16694,15 @@ ${prefix}}`;
     return self;
   }), "make");
   var changes = /* @__PURE__ */ __name((self) => fromPubSub(self.pubsub), "changes");
-  var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
-  var setUnsafe2 = /* @__PURE__ */ __name((self, value) => {
+  var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
+  var setUnsafe = /* @__PURE__ */ __name((self, value) => {
     self.value = value;
     publishUnsafe(self.pubsub, value);
   }, "setUnsafe");
-  var set4 = /* @__PURE__ */ dual(2, (self, value) => self.semaphore.withPermit(sync2(() => setUnsafe2(self, value))));
+  var set3 = /* @__PURE__ */ dual(2, (self, value) => self.semaphore.withPermit(sync2(() => setUnsafe(self, value))));
   var updateAndGet2 = /* @__PURE__ */ dual(2, (self, update2) => self.semaphore.withPermit(sync2(() => {
     const newValue = update2(self.value);
-    setUnsafe2(self, newValue);
+    setUnsafe(self, newValue);
     return newValue;
   })));
 
@@ -17129,22 +16826,22 @@ ${prefix}}`;
     const scope3 = yield* scope2;
     const runFork3 = runForkWith2(yield* context2());
     const queue = yield* unbounded2();
-    const activeRef = yield* make16(null);
-    const currentRef = yield* make17(
+    const activeRef = yield* make15(null);
+    const currentRef = yield* make16(
       null
     );
-    const nextIdRef = yield* make16(0);
+    const nextIdRef = yield* make15(0);
     const clearActive = /* @__PURE__ */ __name((pending) => gen2(function* () {
-      const active = yield* get4(activeRef);
+      const active = yield* get3(activeRef);
       if (active !== pending) return;
-      yield* set3(activeRef, null);
-      yield* set4(currentRef, null);
+      yield* set2(activeRef, null);
+      yield* set3(currentRef, null);
     }), "clearActive");
     const processNext = fn2("ScriptDialogs.processNext")(function* () {
       const pending = yield* take3(queue);
       if (yield* isDone2(pending.canceled)) return;
-      yield* set3(activeRef, pending);
-      yield* set4(currentRef, snapshotRequest(pending.request));
+      yield* set2(activeRef, pending);
+      yield* set3(currentRef, snapshotRequest(pending.request));
       yield* raceFirst2(
         _await(pending.response).pipe(asVoid2),
         _await(pending.canceled)
@@ -17192,7 +16889,7 @@ ${prefix}}`;
       return response.value;
     }), "prompt");
     const respond = /* @__PURE__ */ __name((response) => gen2(function* () {
-      const active = yield* get4(activeRef);
+      const active = yield* get3(activeRef);
       if (active === null || !responseMatchesRequest(active.request, response)) {
         return false;
       }
@@ -17211,7 +16908,7 @@ ${prefix}}`;
       beep: /* @__PURE__ */ __name((times) => sync2(() => playBeep(times)), "beep"),
       alert,
       confirm,
-      getCurrent: /* @__PURE__ */ __name(() => get5(currentRef).pipe(map5(snapshotCurrent)), "getCurrent"),
+      getCurrent: /* @__PURE__ */ __name(() => get4(currentRef).pipe(map5(snapshotCurrent)), "getCurrent"),
       onCurrent,
       prompt,
       respond
@@ -17342,7 +17039,7 @@ ${prefix}}`;
     const definition = yield* decodeUnknownEffect2(
       ScriptInputsDefinitionSchema
     )(inputs).pipe(
-      mapError3(
+      mapError2(
         (cause) => new ScriptLoadError({
           detail: `${name} has an invalid inputs export.`,
           cause
@@ -17420,9 +17117,9 @@ ${prefix}}`;
     safeStartStop: options.safeStartStop
   }), "snapshotScriptRuntimeOptions");
   var snapshotScriptInputValue = /* @__PURE__ */ __name((value) => Array.isArray(value) ? [...value] : value, "snapshotScriptInputValue");
-  var snapshotScriptInputValues = /* @__PURE__ */ __name((values2) => {
+  var snapshotScriptInputValues = /* @__PURE__ */ __name((values) => {
     const snapshot = {};
-    for (const [key, value] of Object.entries(values2)) {
+    for (const [key, value] of Object.entries(values)) {
       snapshot[key] = snapshotScriptInputValue(value);
     }
     return snapshot;
@@ -17445,13 +17142,13 @@ ${prefix}}`;
         }), "get"),
         getAll: /* @__PURE__ */ __name(() => sync2(() => snapshotScriptInputValues(options.getInputValues())), "getAll")
       }),
-      log: /* @__PURE__ */ __name((...values2) => sync2(() => options.log(...values2)), "log"),
+      log: /* @__PURE__ */ __name((...values) => sync2(() => options.log(...values)), "log"),
       options: Object.freeze({
         get: options.getOptions,
         reset: /* @__PURE__ */ __name(() => options.setOptions(() => DEFAULT_SCRIPT_RUNTIME_OPTIONS).pipe(asVoid2), "reset"),
         update: fn2("ScriptRuntime.options.update")(function* (patch) {
           const decoded = yield* decodeOptionsPatch(patch).pipe(
-            mapError3(
+            mapError2(
               (cause) => new ScriptExecutionError({
                 cause,
                 detail: "script.options.update requires valid runtime options."
@@ -17699,7 +17396,7 @@ ${prefix}}`;
   }), "toEnvironmentSnapshot");
   var exposeMutation = /* @__PURE__ */ __name((operation, effect2) => effect2.pipe(
     map5(toEnvironmentSnapshot),
-    mapError3(
+    mapError2(
       (cause) => new ScriptEnvironmentError({ cause, operation })
     )
   ), "exposeMutation");
@@ -18134,10 +17831,10 @@ ${prefix}}`;
     catch: catch_2,
     fail: fail5,
     flatMap: flatMap3,
-    forEach: /* @__PURE__ */ __name((values2, transform3) => forEach2(values2, transform3), "forEach"),
+    forEach: /* @__PURE__ */ __name((values, transform3) => forEach2(values, transform3), "forEach"),
     gen: gen2,
     map: map5,
-    mapError: mapError3,
+    mapError: mapError2,
     raceFirst: raceFirst2,
     sleep: sleep2,
     succeed: succeed7,
@@ -18346,8 +18043,8 @@ ${prefix}}`;
     }
     return parser(input, options);
   }, "decode");
-  var declare2 = /* @__PURE__ */ __name((run3) => declareConstructor()([], () => (input, _ast, options) => {
-    const result2 = run3(input, options);
+  var declare2 = /* @__PURE__ */ __name((run2) => declareConstructor()([], () => (input, _ast, options) => {
+    const result2 = run2(input, options);
     return isSuccess2(result2) ? succeed7(result2.success) : fail5(result2.failure);
   }), "declare");
   var field = /* @__PURE__ */ __name((definition, input, options) => {
@@ -18369,7 +18066,7 @@ ${prefix}}`;
       state.path.pop();
     }
   }, "child");
-  var container = /* @__PURE__ */ __name((input, options, run3) => {
+  var container = /* @__PURE__ */ __name((input, options, run2) => {
     const state = stateOf(options);
     if (state.depth >= state.maxDepth)
       return fail2(
@@ -18382,7 +18079,7 @@ ${prefix}}`;
     state.depth += 1;
     state.ancestors.add(input);
     try {
-      return run3();
+      return run2();
     } finally {
       state.depth -= 1;
       state.ancestors.delete(input);
@@ -18406,12 +18103,12 @@ ${prefix}}`;
     }
     return options?.message ?? fallback;
   }, "message");
-  var size2 = /* @__PURE__ */ __name((value, name = "length") => {
+  var size = /* @__PURE__ */ __name((value, name = "length") => {
     if (!Number.isSafeInteger(value) || value < 0)
       throw new SchemaUsageError(`${name} must be a nonnegative safe integer.`);
   }, "size");
   var positiveInteger = /* @__PURE__ */ __name((value, name) => {
-    size2(value, name);
+    size(value, name);
     if (value === 0)
       throw new SchemaUsageError(`${name} must be greater than zero.`);
   }, "positiveInteger");
@@ -18752,7 +18449,7 @@ ${prefix}}`;
       __name(this, "StringImpl");
     }
     min(length, options) {
-      size2(length);
+      size(length);
       return newString(
         this.constraint(
           (value) => value.length >= length,
@@ -18762,7 +18459,7 @@ ${prefix}}`;
       );
     }
     max(length, options) {
-      size2(length);
+      size(length);
       return newString(
         this.constraint(
           (value) => value.length <= length,
@@ -18772,7 +18469,7 @@ ${prefix}}`;
       );
     }
     length(length, options) {
-      size2(length);
+      size(length);
       return newString(
         this.constraint(
           (value) => value.length === length,
@@ -19002,15 +18699,15 @@ ${prefix}}`;
       __name(this, "EnumImpl");
     }
     values;
-    constructor(values2, options) {
-      if (!Array.isArray(values2) || values2.length === 0 || !values2.every(
+    constructor(values, options) {
+      if (!Array.isArray(values) || values.length === 0 || !values.every(
         (value) => typeof value === "string" || typeof value === "number"
       )) {
         throw new SchemaUsageError(
           "An enum needs a nonempty array of strings or numbers."
         );
       }
-      const copy3 = Object.freeze([...new Set(values2)]);
+      const copy3 = Object.freeze([...new Set(values)]);
       super({ ...primitive(Literals(copy3), options), literals: copy3 });
       this.values = copy3;
       Object.freeze(this);
@@ -19315,7 +19012,7 @@ ${prefix}}`;
       Object.freeze(this);
     }
     min(length, options) {
-      size2(length);
+      size(length);
       return new _ArrayImpl(
         this.element,
         void 0,
@@ -19327,7 +19024,7 @@ ${prefix}}`;
       );
     }
     max(length, options) {
-      size2(length);
+      size(length);
       return new _ArrayImpl(
         this.element,
         void 0,
@@ -19339,7 +19036,7 @@ ${prefix}}`;
       );
     }
     length(length, options) {
-      size2(length);
+      size(length);
       return new _ArrayImpl(
         this.element,
         void 0,
@@ -19357,9 +19054,9 @@ ${prefix}}`;
         this.element,
         void 0,
         this.constraint(
-          (values2) => {
+          (values) => {
             const keys = /* @__PURE__ */ new Set();
-            for (const value of values2) {
+            for (const value of values) {
               const key = selector === void 0 ? value : assertSync(selector(value));
               if (keys.has(key)) return false;
               keys.add(key);
@@ -19507,7 +19204,7 @@ ${prefix}}`;
       Object.freeze(this);
     }
     min(bound, options) {
-      size2(bound, "size");
+      size(bound, "size");
       return new _RecordImpl(
         this.key,
         this.value,
@@ -19520,7 +19217,7 @@ ${prefix}}`;
       );
     }
     max(bound, options) {
-      size2(bound, "size");
+      size(bound, "size");
       return new _RecordImpl(
         this.key,
         this.value,
@@ -19533,7 +19230,7 @@ ${prefix}}`;
       );
     }
     size(bound, options) {
-      size2(bound, "size");
+      size(bound, "size");
       return new _RecordImpl(
         this.key,
         this.value,
@@ -19758,7 +19455,7 @@ ${prefix}}`;
     undefined: /* @__PURE__ */ __name((options) => create(primitive(Undefined2, options)), "undefined"),
     unknown: /* @__PURE__ */ __name(() => create(baseDefinition(Unknown2)), "unknown"),
     never: /* @__PURE__ */ __name((options) => create(primitive(Never2, options)), "never"),
-    enum: /* @__PURE__ */ __name((values2, options) => new EnumImpl(values2, options), "enum"),
+    enum: /* @__PURE__ */ __name((values, options) => new EnumImpl(values, options), "enum"),
     object: /* @__PURE__ */ __name((fields, options) => new ObjectImpl(fields, "strip", options), "object"),
     array: /* @__PURE__ */ __name((element, options) => new ArrayImpl(element, options), "array"),
     tuple: /* @__PURE__ */ __name((elements, options) => new TupleImpl(elements, void 0, options), "tuple"),
@@ -20134,7 +19831,7 @@ ${prefix}}`;
     return failure2 === void 0 ? labels[key] : `${labels[key]} (${failure2})`;
   }).join(", "), "missingDetail");
   var makeScriptStartReadiness = /* @__PURE__ */ __name((services) => {
-    const get6 = fn2("ScriptStartReadiness.get")(
+    const get5 = fn2("ScriptStartReadiness.get")(
       function* () {
         const projections = yield* services.projectionReadiness.inspect().pipe(catchCause2(() => succeed7(null)));
         const resolvedProjections = projections ?? {
@@ -20189,7 +19886,7 @@ ${prefix}}`;
     );
     const awaitReady = fn2("ScriptStartReadiness.awaitReady")(function* (options = {}) {
       const ready = yield* services.wait.untilSome(
-        get6().pipe(
+        get5().pipe(
           map5(
             (snapshot2) => snapshot2.ready ? some2(snapshot2) : none2()
           )
@@ -20200,14 +19897,14 @@ ${prefix}}`;
         }
       );
       if (ready !== null) return ready;
-      const snapshot = yield* get6();
+      const snapshot = yield* get5();
       const detail = snapshot.missing.length === 0 ? "Scripts can only start after game readiness is stable." : `Scripts can only start after game readiness is complete. Missing: ${missingDetail(snapshot)}.`;
       return yield* new ScriptNotReadyError({
         detail,
         missing: [...snapshot.missing]
       });
     });
-    return { awaitReady, get: get6 };
+    return { awaitReady, get: get5 };
   }, "makeScriptStartReadiness");
 
   // packages/runtime/src/game/scripting/ScriptRunner.ts
@@ -20305,17 +20002,17 @@ ${prefix}}`;
   }), "logScriptFailureCause");
   var isConnectionLoss = /* @__PURE__ */ __name((event) => event.type === "connection" && (event.status === "OnConnectionLost" || event.status === "OnConnectionFailed"), "isConnectionLoss");
   var makeScriptOptions = fnUntraced2(function* () {
-    const optionsRef = yield* make17(
+    const optionsRef = yield* make16(
       snapshotScriptRuntimeOptions(DEFAULT_SCRIPT_RUNTIME_OPTIONS)
     );
-    const accountUsernameRef = yield* make16("");
-    const getOptions = /* @__PURE__ */ __name(() => get5(optionsRef).pipe(
+    const accountUsernameRef = yield* make15("");
+    const getOptions = /* @__PURE__ */ __name(() => get4(optionsRef).pipe(
       map5(snapshotScriptRuntimeOptions)
     ), "getOptions");
     const bindAccount = /* @__PURE__ */ __name((username) => gen2(function* () {
       const normalized = normalizeUsername(username);
       if ((yield* getAndSet(accountUsernameRef, normalized)) !== normalized)
-        yield* set4(
+        yield* set3(
           optionsRef,
           snapshotScriptRuntimeOptions(DEFAULT_SCRIPT_RUNTIME_OPTIONS)
         );
@@ -20352,21 +20049,21 @@ ${prefix}}`;
         wait
       });
       const services = makeScriptRuntimeServices(api2, army, environment);
-      const activeRef = yield* make16(null);
+      const activeRef = yield* make15(null);
       const lifecycleGate = yield* make14(1);
-      const latestCommandIdRef = yield* make16(0);
-      const nextIdRef = yield* make16(0);
-      const pendingFinalizationRef = yield* make16(
+      const latestCommandIdRef = yield* make15(0);
+      const nextIdRef = yield* make15(0);
+      const pendingFinalizationRef = yield* make15(
         null
       );
-      const pendingRestartRef = yield* make16(null);
-      const startingRef = yield* make16(null);
+      const pendingRestartRef = yield* make15(null);
+      const startingRef = yield* make15(null);
       const { optionsRef, bindAccount, getOptions, setOptions } = yield* makeScriptOptions();
-      const statusRef = yield* make17({
+      const statusRef = yield* make16({
         state: "idle"
       });
-      const getStatus = /* @__PURE__ */ __name(() => get5(statusRef).pipe(map5(snapshotStatus)), "getStatus");
-      const setStatus = /* @__PURE__ */ __name((status) => set4(statusRef, snapshotStatus(status)), "setStatus");
+      const getStatus = /* @__PURE__ */ __name(() => get4(statusRef).pipe(map5(snapshotStatus)), "getStatus");
+      const setStatus = /* @__PURE__ */ __name((status) => set3(statusRef, snapshotStatus(status)), "setStatus");
       const observe = /* @__PURE__ */ __name((changes2, snapshot, listener) => changes2.pipe(
         runForEach2(
           (value) => sync2(() => listener(snapshot(value)))
@@ -20389,12 +20086,12 @@ ${prefix}}`;
         function* (id, done4, terminal, finalization) {
           yield* lifecycleGate.withPermit(
             gen2(function* () {
-              const pending = yield* get4(pendingFinalizationRef);
+              const pending = yield* get3(pendingFinalizationRef);
               if (pending?.id !== id || pending.done !== done4) {
                 yield* succeed5(done4, yield* getStatus());
                 return;
               }
-              yield* set3(pendingFinalizationRef, null);
+              yield* set2(pendingFinalizationRef, null);
               yield* setStatus(finalization.status);
               yield* succeed5(done4, snapshotStatus(finalization.status));
               if (finalization.outcome !== void 0) {
@@ -20428,8 +20125,8 @@ ${prefix}}`;
           return yield* uninterruptible2(
             gen2(function* () {
               const done4 = yield* make5();
-              yield* set3(activeRef, null);
-              yield* set3(pendingFinalizationRef, { done: done4, id: active.id });
+              yield* set2(activeRef, null);
+              yield* set2(pendingFinalizationRef, { done: done4, id: active.id });
               if (options.intermediateStatus !== void 0) {
                 yield* setStatus(options.intermediateStatus);
               }
@@ -20452,7 +20149,7 @@ ${prefix}}`;
       );
       const cancelPendingRestart = fn2("ScriptRunner.cancelPendingRestart")(
         function* (reason) {
-          const pending = yield* get4(pendingRestartRef);
+          const pending = yield* get3(pendingRestartRef);
           if (pending !== null) {
             yield* succeed5(
               pending.cancel,
@@ -20467,7 +20164,7 @@ ${prefix}}`;
         const result2 = yield* lifecycleGate.withPermit(
           gen2(function* () {
             const restart = yield* cancelPendingRestart(reason);
-            const starting = yield* get4(startingRef);
+            const starting = yield* get3(startingRef);
             if (starting !== null) {
               yield* succeed5(
                 starting.cancel,
@@ -20478,14 +20175,14 @@ ${prefix}}`;
                 kind: "waiting"
               };
             }
-            const pending = yield* get4(pendingFinalizationRef);
+            const pending = yield* get3(pendingFinalizationRef);
             if (pending !== null) {
               return {
                 done: restart?.done ?? pending.done,
                 kind: "waiting"
               };
             }
-            const active = yield* get4(activeRef);
+            const active = yield* get3(activeRef);
             if (active === null) {
               if (restart !== null) {
                 return { done: restart.done, kind: "waiting" };
@@ -20516,10 +20213,10 @@ ${prefix}}`;
       const finishIfActive = fn2("ScriptRunner.finishIfActive")(function* (id, options) {
         const done4 = yield* lifecycleGate.withPermit(
           gen2(function* () {
-            if ((yield* get4(pendingFinalizationRef)) !== null) {
+            if ((yield* get3(pendingFinalizationRef)) !== null) {
               return null;
             }
-            const active = yield* get4(activeRef);
+            const active = yield* get3(activeRef);
             return active?.id === id ? yield* beginFinalization(active, {
               awaitFiber: false,
               ...options.beforeComplete === void 0 ? {} : { beforeComplete: options.beforeComplete },
@@ -20539,10 +20236,10 @@ ${prefix}}`;
           const detailsText = causeDetailsText(cause);
           const done4 = yield* lifecycleGate.withPermit(
             gen2(function* () {
-              if ((yield* get4(pendingFinalizationRef)) !== null) {
+              if ((yield* get3(pendingFinalizationRef)) !== null) {
                 return null;
               }
-              const active = yield* get4(activeRef);
+              const active = yield* get3(activeRef);
               if (active?.id !== id) return null;
               return yield* beginFinalization(active, {
                 awaitFiber: true,
@@ -20574,7 +20271,7 @@ ${prefix}}`;
         map: map8,
         packet,
         player,
-        roomPolicy: get5(optionsRef).pipe(
+        roomPolicy: get4(optionsRef).pipe(
           map5((options) => snapshotRoomPolicy(options.roomPolicy))
         ),
         wait
@@ -20584,7 +20281,7 @@ ${prefix}}`;
           const iterator = main();
           return yield* iterator;
         }).pipe(asVoid2),
-        get5(optionsRef).pipe(
+        get4(optionsRef).pipe(
           map5((options) => options.safeStartStop)
         ),
         moveToSafeMap
@@ -20648,10 +20345,10 @@ ${prefix}}`;
           return yield* lifecycleGate.withPermit(
             uninterruptible2(
               gen2(function* () {
-                const current = yield* get4(startingRef);
+                const current = yield* get3(startingRef);
                 const authoritative = current?.id === starting.id && current.done === starting.done ? status : yield* getStatus();
                 if (current?.id === starting.id && current.done === starting.done) {
-                  yield* set3(startingRef, null);
+                  yield* set2(startingRef, null);
                   yield* setStatus(status);
                 }
                 yield* succeed5(starting.done, snapshotStatus(status));
@@ -20706,7 +20403,7 @@ ${prefix}}`;
             dialogs,
             getOptions,
             getInputValues: /* @__PURE__ */ __name(() => inputValues, "getInputValues"),
-            log: /* @__PURE__ */ __name((...values2) => console.log("[script]", ...values2), "log"),
+            log: /* @__PURE__ */ __name((...values) => console.log("[script]", ...values), "log"),
             scope: scriptScope,
             setOptions,
             source: { sourceName: statusName(source) }
@@ -20719,7 +20416,7 @@ ${prefix}}`;
             failCause: /* @__PURE__ */ __name((cause) => failActiveCause(starting.id, cause), "failCause"),
             fileSystem: makeScriptFileSystemApi(fileSystemBridge, scriptScope),
             http,
-            roomPolicy: get5(optionsRef).pipe(
+            roomPolicy: get4(optionsRef).pipe(
               map5((options) => snapshotRoomPolicy(options.roomPolicy))
             ),
             scope: scriptScope,
@@ -20760,23 +20457,23 @@ ${prefix}}`;
           const committed = yield* lifecycleGate.withPermit(
             uninterruptible2(
               gen2(function* () {
-                const current = yield* get4(startingRef);
-                const latestCommandId = yield* get4(latestCommandIdRef);
+                const current = yield* get3(startingRef);
+                const latestCommandId = yield* get3(latestCommandIdRef);
                 const cancelled = yield* isDone2(starting.cancel);
                 const restartCancelled = starting.restart !== void 0 && (yield* isDone2(starting.restart.cancel));
-                const currentRestart = yield* get4(pendingRestartRef);
+                const currentRestart = yield* get3(pendingRestartRef);
                 if (current?.id !== starting.id || current.done !== starting.done || latestCommandId !== starting.commandId || cancelled || restartCancelled || starting.restart !== void 0 && currentRestart !== starting.restart) {
                   return false;
                 }
                 yield* sync2(() => {
                   activated = true;
                 });
-                yield* set3(startingRef, null);
-                yield* set3(activeRef, active);
+                yield* set2(startingRef, null);
+                yield* set2(activeRef, active);
                 yield* setStatus(status2);
                 yield* succeed5(release, void 0);
                 if (starting.restart !== void 0) {
-                  yield* set3(pendingRestartRef, null);
+                  yield* set2(pendingRestartRef, null);
                   yield* succeed5(
                     starting.restart.done,
                     snapshotStatus(status2)
@@ -20850,7 +20547,7 @@ ${prefix}}`;
               ...restart === void 0 ? {} : { restart },
               terminal
             };
-            yield* set3(startingRef, starting);
+            yield* set2(startingRef, starting);
             yield* setStatus({
               name: starting.name,
               startedAt: nowIso(),
@@ -20866,10 +20563,10 @@ ${prefix}}`;
       )(function* (pending, status) {
         yield* lifecycleGate.withPermit(
           gen2(function* () {
-            const current = yield* get4(pendingRestartRef);
+            const current = yield* get3(pendingRestartRef);
             const authoritative = current === pending ? status : yield* getStatus();
             if (current === pending) {
-              yield* set3(pendingRestartRef, null);
+              yield* set2(pendingRestartRef, null);
               yield* setStatus(status);
             }
             yield* succeed5(pending.done, snapshotStatus(authoritative));
@@ -20892,7 +20589,7 @@ ${prefix}}`;
       )(function* (pending) {
         return (yield* wait.untilSome(
           gen2(function* () {
-            const options = yield* get5(optionsRef);
+            const options = yield* get4(optionsRef);
             if (!options.restartAfterReconnect) {
               return some2({ kind: "disabled" });
             }
@@ -20909,9 +20606,9 @@ ${prefix}}`;
         function* (pending) {
           const result2 = yield* lifecycleGate.withPermit(
             gen2(function* () {
-              const current = yield* get4(pendingRestartRef);
-              const latestCommandId = yield* get4(latestCommandIdRef);
-              const options = yield* get5(optionsRef);
+              const current = yield* get3(pendingRestartRef);
+              const latestCommandId = yield* get3(latestCommandIdRef);
+              const options = yield* get4(optionsRef);
               if (current !== pending || latestCommandId !== pending.commandId || !options.restartAfterReconnect) {
                 const status2 = yield* getStatus();
                 if (current === pending) {
@@ -20919,7 +20616,7 @@ ${prefix}}`;
                     state: "stopped",
                     stoppedAt: nowIso()
                   };
-                  yield* set3(pendingRestartRef, null);
+                  yield* set2(pendingRestartRef, null);
                   yield* setStatus(stopped);
                   return { kind: "settled", status: stopped };
                 }
@@ -20981,7 +20678,7 @@ ${prefix}}`;
             gen2(function* () {
               const result2 = yield* lifecycleGate.withPermit(
                 gen2(function* () {
-                  const starting = yield* get4(startingRef);
+                  const starting = yield* get3(startingRef);
                   if (starting?.id === id) {
                     yield* succeed5(starting.cancel, {
                       reason: "Connection lost",
@@ -20989,12 +20686,12 @@ ${prefix}}`;
                     });
                     return null;
                   }
-                  if ((yield* get4(pendingFinalizationRef)) !== null) {
+                  if ((yield* get3(pendingFinalizationRef)) !== null) {
                     return null;
                   }
-                  const active = yield* get4(activeRef);
+                  const active = yield* get3(activeRef);
                   if (active?.id !== id) return null;
-                  const options = yield* get5(optionsRef);
+                  const options = yield* get4(optionsRef);
                   const shouldRestart = options.restartAfterReconnect && active.username !== "";
                   const disconnectedAt = nowIso();
                   const restart = shouldRestart ? {
@@ -21010,7 +20707,7 @@ ${prefix}}`;
                     username: active.username
                   } : null;
                   if (restart !== null) {
-                    yield* set3(pendingRestartRef, restart);
+                    yield* set2(pendingRestartRef, restart);
                   }
                   const finalized = yield* beginFinalization(active, {
                     awaitFiber: true,
@@ -21067,7 +20764,7 @@ ${prefix}}`;
           while (true) {
             const result2 = yield* lifecycleGate.withPermit(
               gen2(function* () {
-                if ((yield* get4(latestCommandIdRef)) !== commandId) {
+                if ((yield* get3(latestCommandIdRef)) !== commandId) {
                   const status2 = {
                     reason: "Replaced by another script",
                     state: "stopped",
@@ -21085,7 +20782,7 @@ ${prefix}}`;
                 const restart = yield* cancelPendingRestart(
                   "Replaced by another script"
                 );
-                const starting = yield* get4(startingRef);
+                const starting = yield* get3(startingRef);
                 if (starting !== null) {
                   yield* succeed5(starting.cancel, {
                     reason: "Replaced by another script"
@@ -21095,14 +20792,14 @@ ${prefix}}`;
                     kind: "waiting"
                   };
                 }
-                const pending = yield* get4(pendingFinalizationRef);
+                const pending = yield* get3(pendingFinalizationRef);
                 if (pending !== null) {
                   return {
                     done: restart?.done ?? pending.done,
                     kind: "waiting"
                   };
                 }
-                const active = yield* get4(activeRef);
+                const active = yield* get3(activeRef);
                 if (active !== null) {
                   const done4 = yield* beginFinalization(active, {
                     awaitFiber: true,
