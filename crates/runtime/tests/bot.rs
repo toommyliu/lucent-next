@@ -1592,64 +1592,105 @@ fn relogin_boundary_failures_warn_once_until_capture_recovers() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn malformed_relogin_replies_end_the_bot_with_their_error() {
+fn malformed_relogin_replies_warn_once_and_recover() {
     for reply in ["{}", "{"] {
+        let logs = common::logs::Logs::default();
+        let dispatch = logs.dispatch();
+        let _guard = tracing::dispatcher::set_default(&dispatch);
         let (_host, mut session, observer) = start();
         let bot = Bot::start(session.attach().unwrap()).unwrap();
         next_call(&observer, "settings.setWalkSpeed");
         bot.eval("malformed-capture.js", format!(r#"
             const command = __host.command;
-            __host.command = json => JSON.parse(json).kind === "refreshCredentials" ? {reply} : command(json);
+            let failures = 2;
+            __host.command = json => JSON.parse(json).kind === "refreshCredentials" && failures-- > 0 ? {reply} : command(json);
             null;
         "#, reply = serde_json::to_string(reply).unwrap())).wait::<()>(TIMEOUT).unwrap();
-        let _run = common::start(
+        let run = common::start(
             &mut session,
             common::loose(&[(
                 "capture.js",
                 r#"
             import * as relogin from "lucent/autorelogin";
-            export default function* () { yield* relogin.setEnabled(true); }
+            export default function* () {
+                if (!(yield* relogin.setEnabled(true)).captured) throw new Error("capture did not recover");
+            }
         "#,
             )]),
             Default::default(),
         );
-        let outcome = bot.wait(Duration::from_secs(2));
-        assert!(
-            matches!(&outcome, Err(RuntimeError::JavaScript(error)) if error.contains("SchemaError") || error.contains("JSON")),
-            "{outcome:?}"
+        assert_eq!(
+            run.wait(TIMEOUT).unwrap(),
+            lucent_protocol::script::ScriptOutcome::Completed
         );
+        let warnings: Vec<_> = logs
+            .messages(tracing::Level::WARN)
+            .into_iter()
+            .filter(|message| message.contains("auto relogin"))
+            .collect();
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(
+            warnings[0].contains("SchemaError") || warnings[0].contains("JSON"),
+            "{warnings:?}"
+        );
+        assert!(warnings[1].contains("recovered"));
+        assert!(matches!(
+            bot.wait(Duration::ZERO),
+            Err(RuntimeError::Timeout)
+        ));
     }
 }
 
 #[cfg(feature = "testing")]
 #[test]
-fn a_relogin_code_defect_ends_the_bot_with_its_error() {
+fn relogin_code_failures_retry_and_recover() {
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
     let (_host, mut session, observer) = start();
     let bot = Bot::start(session.attach().unwrap()).unwrap();
     next_call(&observer, "settings.setWalkSpeed");
     bot.eval(
         "break-relogin.js",
         r#"
-        String.prototype.trim = () => { throw new Error("relogin code defect"); };
+        const trim = String.prototype.trim;
+        let failures = 2;
+        String.prototype.trim = function () {
+            if (failures-- > 0) throw new Error("relogin code failure");
+            return trim.call(this);
+        };
         null;
     "#,
     )
     .wait::<()>(TIMEOUT)
     .unwrap();
-    let _run = common::start(
+    let run = common::start(
         &mut session,
         common::loose(&[(
             "server.js",
             r#"
         import * as relogin from "lucent/autorelogin";
-        export default function* () { yield* relogin.setServer("Artix"); }
+        export default function* () {
+            if ((yield* relogin.setServer("Artix")).server !== "Artix") throw new Error("wrong server");
+        }
     "#,
         )]),
         Default::default(),
     );
-    let outcome = bot.wait(Duration::from_secs(2));
-    assert!(
-        matches!(&outcome, Err(RuntimeError::JavaScript(error)) if error.contains("relogin code defect")),
-        "{outcome:?}"
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        lucent_protocol::script::ScriptOutcome::Completed
     );
+    let warnings: Vec<_> = logs
+        .messages(tracing::Level::WARN)
+        .into_iter()
+        .filter(|message| message.contains("auto relogin"))
+        .collect();
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert!(warnings[0].contains("relogin code failure"), "{warnings:?}");
+    assert!(warnings[1].contains("recovered"));
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
 }
