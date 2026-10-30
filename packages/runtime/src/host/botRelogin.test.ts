@@ -6,13 +6,8 @@ import { Api, type ApiService } from "../game/flash/api/Api";
 import { Gateway } from "../game/flash/bridge/Gateway";
 import { botRelogin } from "./botRelogin";
 
-vi.mock("./botReloginApi", () => ({
-  makeBotReloginApi: (api: ApiService) => api,
-  readReloginRecords: (host: typeof __host) => JSON.parse(host.read("{}")),
-}));
-
 const records = { config: { enabled: false, delayMs: 3000, server: null }, status: {
-  phase: { tag: "armed" }, captured: false, attemptsRemaining: null, lastError: null,
+  phase: { tag: "armed" }, captured: false, username: null, attemptsRemaining: null, lastError: null,
 } };
 let runtime: ManagedRuntime.ManagedRuntime<never, never> | undefined;
 afterEach(async () => { await runtime?.dispose(); vi.unstubAllGlobals(); });
@@ -21,7 +16,7 @@ const boot = async (getServers: ApiService["auth"]["getServers"]) => {
   const live = new Set<string>();
   vi.stubGlobal("window", {});
   vi.stubGlobal("__host", {
-    read: () => JSON.stringify(records), publishAutoRelogin: () => {},
+    read: () => JSON.stringify(records), publishAutoRelogin: vi.fn(),
     answer: (json: string) => answers.push(JSON.parse(json)),
     isAskPending: (id: string) => live.has(id),
   });
@@ -30,7 +25,7 @@ const boot = async (getServers: ApiService["auth"]["getServers"]) => {
     Layer.succeed(Api, api), Layer.succeed(Gateway, {} as never),
   ))));
   await runtime.runPromise(Effect.void);
-  await vi.waitFor(() => expect(window.onBotAsk).toBeTypeOf("function"));
+  await vi.waitFor(() => expect(__host.publishAutoRelogin).toHaveBeenCalled());
   const ask = (id: string, payload: unknown) => { live.add(id); window.onBotAsk!(id, payload); };
   return { answers, live, ask };
 };
@@ -75,4 +70,18 @@ it("answers a failed apply once and frees the slot for the next ask", async () =
   expect(answers[0]).toEqual(["bad", null, "The bot request failed"]);
   expect((answers[1]![1] as {delayMs:number}).delayMs).toBe(42);
   expect(applies).toBe(1);
+});
+
+it("uses the shared retry rule for background publication", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    await boot(() => Effect.succeed([]));
+    let attempts = 0;
+    __host.publishAutoRelogin = () => { if (++attempts <= 2) throw new Error("publication unavailable"); };
+    window.onAutoReloginEventsLost!();
+    await vi.waitFor(() => expect(attempts).toBe(3), { timeout: 1600 });
+    expect(warn.mock.calls).toEqual([["auto relogin tick failed", expect.stringContaining("publication unavailable")]]);
+    expect(info.mock.calls).toEqual([["auto relogin recovered"]]);
+  } finally { warn.mockRestore(); info.mockRestore(); }
 });

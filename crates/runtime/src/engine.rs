@@ -79,6 +79,10 @@ impl Engine {
                 ("operate", v8::Function::new(scope, host_operate)),
                 ("ask", v8::Function::new(scope, host_ask)),
                 ("cancelAsk", v8::Function::new(scope, host_cancel_ask)),
+                (
+                    "isAskPending",
+                    v8::Function::new(scope, host_is_ask_pending),
+                ),
                 ("answer", v8::Function::new(scope, host_answer)),
                 (
                     "publishAutoRelogin",
@@ -681,6 +685,18 @@ fn host_ask(
     })();
     return_reply(scope, reply, result);
 }
+fn host_is_ask_pending(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    mut reply: v8::ReturnValue<v8::Value>,
+) {
+    let Some(id) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let id = id.to_rust_string_lossy(scope).parse::<u64>();
+    let pending = id.is_ok_and(|id| scope.get_slot::<ScriptLink>().unwrap().is_ask_pending(id));
+    reply.set_bool(pending);
+}
 fn host_cancel_ask(
     scope: &mut v8::PinScope,
     args: v8::FunctionCallbackArguments,
@@ -714,7 +730,12 @@ fn host_answer(
         let id = id.parse::<u64>().map_err(|error| error.to_string())?;
         link.answer(
             id,
-            error.map_or(Ok(answer), |error| Err(EventError::Unavailable(error))),
+            error.map_or(Ok(answer), |error| {
+                Err(match error.as_str() {
+                    "The bot request queue is full" => EventError::BotQueueFull,
+                    _ => EventError::BotRequestFailed,
+                })
+            }),
         )
         .map(|_| None)
         .map_err(|error| error.to_string())

@@ -249,3 +249,21 @@ fn the_router_rejects_a_full_bot_mailbox_without_leaving_a_route() {
     drop(asker);
     assert_eq!(session.pending_ask_count(), 0);
 }
+
+#[test]
+fn only_the_current_bot_can_start_an_unexpired_ask() {
+    let host = testing::headless_host();
+    let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
+    let bot = session.attach().unwrap();
+    bot.claim_bot().unwrap();
+    let other = session.attach().unwrap();
+    let id = asker.ask(json!(7)).unwrap();
+    assert!(bot.is_ask_pending(id));
+    assert!(!other.is_ask_pending(id));
+    asker.cancel_ask(id);
+    assert!(!bot.is_ask_pending(id));
+    let id = asker.ask(json!(8)).unwrap();
+    std::thread::sleep(Duration::from_millis(5100));
+    assert!(!bot.is_ask_pending(id));
+    assert_eq!(session.pending_ask_count(), 0);
+}

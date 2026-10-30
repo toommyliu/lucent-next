@@ -1,4 +1,5 @@
 import type { AutoReloginConfig, AutoReloginRecords } from "@lucent/game/protocol";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
@@ -16,7 +17,7 @@ import type * as FiberMapType from "effect/FiberMap";
 import { defaultAutoReloginDelay as defaultDelay, normalizeAutoReloginDelay } from "./autoReloginConfig";
 export { normalizeAutoReloginDelay } from "./autoReloginConfig";
 
-import type { ReloginSupervisor } from "./AutoReloginFailureRule";
+import { makeRetryAttempt } from "./retryLoop";
 import type { ApiService } from "../flash/api/Api";
 
 export interface AutoReloginApi {
@@ -198,8 +199,9 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
   api: AutoReloginApi,
   fibers: FiberMapType.FiberMap<string>,
   config?: AutoReloginConfig,
-  supervise: ReloginSupervisor = (effect) => effect,
 ) {
+  const retry = makeRetryAttempt("auto relogin");
+  const supervise = <A, E, R>(effect: Effect.Effect<A, E, R>, interval: Duration.Input = 500) => retry(() => effect, interval);
   const state = yield* SubscriptionRef.make<State>({
     attemptsRemaining: undefined,
     delayMs: config?.delayMs ?? defaultDelay,
@@ -219,13 +221,13 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
   const changes = SubscriptionRef.changes(state).pipe(Stream.map(publicState));
   const records = (current: State): AutoReloginRecords => ({
     config: { enabled: current.enabled, delayMs: current.delayMs, server: current.server ?? null },
-    status: { phase: current.phase, attemptsRemaining: current.attemptsRemaining ?? null, lastError: current.lastError ?? null, captured: current.username !== undefined && current.password !== undefined },
+    status: { phase: current.phase, attemptsRemaining: current.attemptsRemaining ?? null, lastError: current.lastError ?? null, captured: current.username !== undefined && current.password !== undefined, username: current.username ?? null },
   });
   const getRecords = () => SubscriptionRef.get(state).pipe(Effect.map(records));
   const recordChanges = SubscriptionRef.changes(state).pipe(Stream.map(records));
 
   const isPlayerReady = () =>
-    api.player.isReady();
+    api.player.isReady().pipe(Effect.catchCause(cause => Cause.hasInterrupts(cause) ? Effect.failCause(cause) : Effect.succeed(false)));
 
   const waitUntilPlayerReady = () =>
     Effect.repeat(isPlayerReady(), {
@@ -702,7 +704,11 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         lastError: failure.detail,
         phase: { tag: "failed" },
       }));
-    }).pipe(supervise);
+    }).pipe(Effect.catchCause(cause => Cause.hasInterrupts(cause)
+      ? Effect.failCause(cause)
+      : updateCurrentGeneration(generation, current => ({
+          ...current, lastError: "Auto relogin failed unexpectedly.", phase: { tag: "failed" },
+        }))));
 
   const startRecovery = (skipDelay = false, resumeAtServerSelect = false) =>
     Effect.gen(function* () {

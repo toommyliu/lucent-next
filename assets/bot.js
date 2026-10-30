@@ -9673,6 +9673,10 @@ ${prefix}}`;
   var bounded = /* @__PURE__ */ __name((capacity) => make15({
     capacity
   }), "bounded");
+  var dropping = /* @__PURE__ */ __name((capacity) => make15({
+    capacity,
+    strategy: "dropping"
+  }), "dropping");
   var unbounded2 = /* @__PURE__ */ __name(() => make15(), "unbounded");
   var offer = /* @__PURE__ */ dual(2, (self, message) => suspend(() => offerUnsafe(self, message) ? exitTrue : self.state._tag === "Open" && self.strategy === "suspend" ? offerOrWait(self, message) : exitFalse));
   var offerUnsafe = /* @__PURE__ */ __name((self, message) => {
@@ -14296,6 +14300,13 @@ ${prefix}}`;
     if (answer !== null) pending2.resolve(answer);
     else pending2.reject(new Error(error ?? "The host operation failed"));
   }, "completeOperation");
+  var failOperations = /* @__PURE__ */ __name((cause) => {
+    for (const operation of operations.values()) {
+      clearTimeout(operation.timeout);
+      operation.reject(cause);
+    }
+    operations.clear();
+  }, "failOperations");
 
   // packages/runtime/src/game/flash/api/Drops.ts
   var makeDrops = fnUntraced2(function* (bridge, host4, auth) {
@@ -16221,7 +16232,9 @@ ${prefix}}`;
     step,
     ...message === void 0 ? {} : { message }
   }).pipe(catchCause2(() => void_3)) ?? void_3, "lifecycle");
-  var makeAutoRelogin = fnUntraced2(function* (api, fibers, config, supervise = (effect2) => effect2) {
+  var makeAutoRelogin = fnUntraced2(function* (api, fibers, config) {
+    const retry4 = makeRetryAttempt("auto relogin");
+    const supervise = /* @__PURE__ */ __name((effect2, interval = 500) => retry4(() => effect2, interval), "supervise");
     const state = yield* make16({
       attemptsRemaining: void 0,
       delayMs: config?.delayMs ?? defaultAutoReloginDelay,
@@ -16239,11 +16252,11 @@ ${prefix}}`;
     const changes2 = changes(state).pipe(map8(publicState));
     const records = /* @__PURE__ */ __name((current) => ({
       config: { enabled: current.enabled, delayMs: current.delayMs, server: current.server ?? null },
-      status: { phase: current.phase, attemptsRemaining: current.attemptsRemaining ?? null, lastError: current.lastError ?? null, captured: current.username !== void 0 && current.password !== void 0 }
+      status: { phase: current.phase, attemptsRemaining: current.attemptsRemaining ?? null, lastError: current.lastError ?? null, captured: current.username !== void 0 && current.password !== void 0, username: current.username ?? null }
     }), "records");
     const getRecords = /* @__PURE__ */ __name(() => get4(state).pipe(map5(records)), "getRecords");
     const recordChanges = changes(state).pipe(map8(records));
-    const isPlayerReady = /* @__PURE__ */ __name(() => api.player.isReady(), "isPlayerReady");
+    const isPlayerReady = /* @__PURE__ */ __name(() => api.player.isReady().pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : succeed7(false))), "isPlayerReady");
     const waitUntilPlayerReady = /* @__PURE__ */ __name(() => repeat2(isPlayerReady(), {
       schedule: spaced(readinessPollInterval),
       until: Boolean
@@ -16606,7 +16619,11 @@ ${prefix}}`;
         lastError: failure.detail,
         phase: { tag: "failed" }
       }));
-    }).pipe(supervise), "runBackground");
+    }).pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : updateCurrentGeneration(generation, (current) => ({
+      ...current,
+      lastError: "Auto relogin failed unexpectedly.",
+      phase: { tag: "failed" }
+    })))), "runBackground");
     const startRecovery = /* @__PURE__ */ __name((skipDelay = false, resumeAtServerSelect = false) => gen2(function* () {
       if ((yield* get5(explicitRuns)) > 0) return;
       const startedAt = yield* currentTimeMillis2;
@@ -16734,12 +16751,12 @@ ${prefix}}`;
       const nextServer = normalizeAutoReloginServer(server, servers);
       const shouldRetry = yield* modify(state, (current2) => {
         const changed = current2.server !== nextServer;
-        const retry4 = changed && current2.enabled && current2.phase.tag === "failed" && current2.username !== void 0 && current2.password !== void 0;
+        const retry5 = changed && current2.enabled && current2.phase.tag === "failed" && current2.username !== void 0 && current2.password !== void 0;
         return [
-          retry4,
+          retry5,
           {
             ...current2,
-            ...retry4 ? {
+            ...retry5 ? {
               attemptsRemaining: void 0,
               lastError: void 0,
               phase: { tag: "armed" }
@@ -16796,38 +16813,27 @@ ${prefix}}`;
     };
   });
 
-  // packages/runtime/src/game/automation/AutoReloginFailureRule.ts
-  var retryReloginTick = /* @__PURE__ */ __name((effect2, retryAfter = 500) => suspend2(() => {
-    let failed = false;
-    const tick = effect2.pipe(
-      tap3(() => sync2(() => {
-        if (failed) console.warn("auto relogin tick recovered");
-        failed = false;
-      })),
-      catchCause2((cause) => {
-        if (hasInterrupts2(cause)) return failCause4(cause);
-        return sync2(() => {
-          if (!failed) console.warn("auto relogin tick failed; retrying", pretty(cause));
-          failed = true;
-        }).pipe(andThen2(sleep2(retryAfter)), andThen2(tick));
-      })
-    );
-    return tick;
-  }), "retryReloginTick");
-
   // packages/runtime/src/host/asks.ts
   var pending = /* @__PURE__ */ new Map();
   var completeAsk = /* @__PURE__ */ __name((id, answer, error) => {
     const resolve3 = pending.get(id);
     pending.delete(id);
-    resolve3?.(answer, error);
+    resolve3?.complete(answer, error);
   }, "completeAsk");
+  var failAsks = /* @__PURE__ */ __name((cause) => {
+    for (const request of pending.values()) {
+      request.cancel();
+      request.complete(null, cause.message);
+    }
+    pending.clear();
+  }, "failAsks");
 
   // packages/runtime/src/host/autoRelogin.ts
   var publicReloginState = /* @__PURE__ */ __name(({ config, status }) => ({
     enabled: config.enabled,
     delayMs: config.delayMs,
     captured: status.captured,
+    ...status.username == null ? {} : { username: status.username },
     attempting: ["awaiting-player-ready", "awaiting-server-select", "backoff", "logging-in", "selecting-server"].includes(status.phase.tag),
     waitingDelay: status.phase.tag === "waiting-delay" || status.phase.tag === "waiting-kick",
     ...config.server === null ? {} : { server: config.server },
@@ -16835,28 +16841,16 @@ ${prefix}}`;
     ...status.lastError === null ? {} : { lastError: status.lastError }
   }), "publicReloginState");
 
-  // packages/runtime/src/host/botReloginApi.ts
-  var Server = Struct({
-    chat: Number6,
-    count: Number6,
-    language: String4,
-    max: Number6,
-    memberOnly: Boolean3,
-    name: String4,
-    online: Boolean3,
-    full: Boolean3
-  });
-  var Servers = ArraySchema(Server);
-  var Credentials2 = Struct({ username: String4, password: String4 });
-  var Readiness = Struct({
-    epoch: Number6,
-    failures: Record(String4, String4),
-    missing: ArraySchema(Literals(["houseInventory", "inventory", "map", "player"])),
-    state: Struct({ houseInventory: Boolean3, inventory: Boolean3, map: Boolean3, player: Boolean3 })
-  });
+  // packages/runtime/src/host/botRelogin.ts
+  var decodeRequest = decodeUnknownOption2(Union2([
+    Struct({ kind: Literal2("autoRelogin.setEnabled"), enabled: Boolean3 }),
+    Struct({ kind: Literal2("autoRelogin.setDelay"), delayMs: Number6 }),
+    Struct({ kind: Literal2("autoRelogin.setServer"), server: NullOr(String4) })
+  ]));
   var Records = Struct({
     config: Struct({ enabled: Boolean3, delayMs: Number6, server: NullOr(String4) }),
     status: Struct({
+      username: NullOr(String4),
       captured: Boolean3,
       attemptsRemaining: NullOr(Number6),
       lastError: NullOr(String4),
@@ -16867,78 +16861,17 @@ ${prefix}}`;
     })
   });
   var readReloginRecords = /* @__PURE__ */ __name((host4) => decodeUnknownSync(Records)(JSON.parse(host4.read('{"kind":"autoRelogin"}'))), "readReloginRecords");
-  var makeBotReloginApi = /* @__PURE__ */ __name((api, gateway2, native) => {
-    const call = /* @__PURE__ */ __name((method, args2) => sync2(() => {
-      const json = JSON.stringify(args2 ?? []);
-      const reply = native.swf(method, json);
-      return reply === void 0 ? void 0 : JSON.parse(reply);
-    }), "call");
-    const bridge = {
-      invoke: /* @__PURE__ */ __name((method, args2, schema) => call(method, args2).pipe(
-        flatMap3(decodeUnknownEffect2(schema)),
-        orDie2,
-        map5(some2)
-      ), "invoke"),
-      invokeJson: /* @__PURE__ */ __name((method, args2, schema) => call(method, args2).pipe(
-        map5((value) => typeof value === "string" ? JSON.parse(value) : value),
-        flatMap3(decodeUnknownEffect2(schema)),
-        orDie2,
-        map5(some2)
-      ), "invokeJson")
-    };
-    const host4 = {
-      read: /* @__PURE__ */ __name((query) => sync2(() => {
-        const json = JSON.stringify(query);
-        const value = JSON.parse(native.read(json));
-        if (query.kind !== "readiness") throw new Error(`Unexpected relogin query: ${query.kind}`);
-        return decodeUnknownSync(Readiness)(value);
-      }), "read"),
-      command: /* @__PURE__ */ __name((command) => sync2(() => {
-        const json = JSON.stringify(command);
-        const value = JSON.parse(native.command(json));
-        let decoded;
-        switch (command.kind) {
-          case "refreshCredentials":
-            decoded = decodeUnknownSync(Credentials2)(value);
-            break;
-          case "refreshServers":
-            decoded = decodeUnknownSync(Servers)(value);
-            break;
-          case "refreshLoggedIn":
-          case "login":
-            decoded = decodeUnknownSync(Boolean3)(value);
-            break;
-          case "logout":
-            decoded = decodeUnknownSync(Null2)(value);
-            break;
-          default:
-            throw new Error(`Unexpected relogin command: ${command.kind}`);
-        }
-        return some2(decoded);
-      }), "command")
-    };
-    const wait = makeWaitApi(bridge, gateway2);
-    const auth = makeAuth(bridge, host4, wait);
-    const map9 = makeMap(bridge, host4, wait);
-    return { auth, events: api.events, player: { isReady: makePlayerReadiness(host4, auth, map9, bridge) } };
-  }, "makeBotReloginApi");
-
-  // packages/runtime/src/host/botRelogin.ts
-  var decodeRequest = decodeUnknownOption2(Union2([
-    Struct({ kind: Literal2("autoRelogin.setEnabled"), enabled: Boolean3 }),
-    Struct({ kind: Literal2("autoRelogin.setDelay"), delayMs: Number6 }),
-    Struct({ kind: Literal2("autoRelogin.setServer"), server: NullOr(String4) })
-  ]));
   var botRelogin = effectDiscard(gen2(function* () {
     const host4 = __host;
-    const api = makeBotReloginApi(yield* Api, yield* Gateway, host4);
+    const api = yield* Api;
     const fibers = yield* make7();
     const ready = yield* make5();
-    const permit = yield* make14(1);
+    const queue = yield* dropping(1024);
     const runFork3 = runForkWith2(yield* context2());
-    const supervise = retryReloginTick;
+    const retry4 = makeRetryAttempt("auto relogin");
+    const supervise = /* @__PURE__ */ __name((effect2) => retry4(() => effect2, 500), "supervise");
     const launch = /* @__PURE__ */ __name((effect2) => {
-      runFork3(supervise(effect2));
+      runFork3(supervise(effect2).pipe(forkScoped2));
     }, "launch");
     const publish2 = /* @__PURE__ */ __name((records) => sync2(() => {
       const json = JSON.stringify(records);
@@ -16949,13 +16882,20 @@ ${prefix}}`;
       host4.answer(json);
     }), "answer");
     window.onBotAsk = (id, payload) => {
+      if (!offerUnsafe(queue, { id, payload })) {
+        host4.answer(JSON.stringify([id, null, "The bot request queue is full"]));
+      }
+    };
+    yield* forever3(gen2(function* () {
+      const { id, payload } = yield* take3(queue);
+      const relogin = yield* _await(ready);
+      if (!host4.isAskPending(id)) return;
       const request = decodeRequest(payload);
       if (isNone2(request)) {
-        launch(answer(id, null, "Invalid bot request"));
+        yield* answer(id, null, "Invalid bot request");
         return;
       }
-      const apply = gen2(function* () {
-        const relogin = yield* _await(ready);
+      yield* gen2(function* () {
         const input = request.value;
         switch (input.kind) {
           case "autoRelogin.setEnabled":
@@ -16971,9 +16911,8 @@ ${prefix}}`;
         const records = yield* relogin.getRecords();
         yield* publish2(records);
         yield* answer(id, publicReloginState(records), null);
-      });
-      launch(permit.withPermits(1)(supervise(apply)));
-    };
+      }).pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : answer(id, null, "The bot request failed")));
+    })).pipe(forkScoped2);
     window.onAutoReloginEventsLost = () => launch(gen2(function* () {
       yield* sync2(() => readReloginRecords(host4));
       const relogin = yield* _await(ready);
@@ -16981,7 +16920,7 @@ ${prefix}}`;
     }));
     yield* supervise(gen2(function* () {
       const stored = yield* sync2(() => readReloginRecords(host4));
-      const relogin = yield* makeAutoRelogin(api, fibers, stored.config, supervise);
+      const relogin = yield* makeAutoRelogin(api, fibers, stored.config);
       yield* succeed5(ready, relogin);
       launch(runForEach2(relogin.recordChanges, () => supervise(relogin.getRecords().pipe(flatMap3(publish2)))));
       if (stored.config.enabled) launch(relogin.setEnabled(true));
@@ -17027,6 +16966,9 @@ ${prefix}}`;
     const items = JSON.parse(itemsJson);
     const lost = items.some((item) => item.type === "eventslost");
     if (lost) {
+      const error = new Error("Host events were lost; pending requests failed");
+      failOperations(error);
+      failAsks(error);
       invoke(() => window.onHostEventsLost?.());
       invoke(() => window.onAutoReloginEventsLost?.());
     }

@@ -211,6 +211,13 @@
     if (answer !== null) pending2.resolve(answer);
     else pending2.reject(new Error(error ?? "The host operation failed"));
   }, "completeOperation");
+  var failOperations = /* @__PURE__ */ __name((cause) => {
+    for (const operation of operations.values()) {
+      clearTimeout(operation.timeout);
+      operation.reject(cause);
+    }
+    operations.clear();
+  }, "failOperations");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Pipeable.js
   var pipeArguments = /* @__PURE__ */ __name((self, args2) => {
@@ -5272,7 +5279,10 @@ ${prefix}}`;
   }, "serializePayload");
   var ask = /* @__PURE__ */ __name((payload, host3) => callback2((resume) => {
     const id = host3.ask(serializePayload(payload));
-    pending.set(id, (answer, error) => resume(error === null ? succeed7(answer) : die3(new Error(error))));
+    pending.set(id, {
+      complete: /* @__PURE__ */ __name((answer, error) => resume(error === null ? succeed7(answer) : die3(new Error(error))), "complete"),
+      cancel: /* @__PURE__ */ __name(() => host3.cancelAsk(id), "cancel")
+    });
     return sync2(() => {
       pending.delete(id);
       host3.cancelAsk(id);
@@ -5281,8 +5291,15 @@ ${prefix}}`;
   var completeAsk = /* @__PURE__ */ __name((id, answer, error) => {
     const resolve3 = pending.get(id);
     pending.delete(id);
-    resolve3?.(answer, error);
+    resolve3?.complete(answer, error);
   }, "completeAsk");
+  var failAsks = /* @__PURE__ */ __name((cause) => {
+    for (const request of pending.values()) {
+      request.cancel();
+      request.complete(null, cause.message);
+    }
+    pending.clear();
+  }, "failAsks");
 
   // packages/runtime/src/host/loop.ts
   var host2 = __host;
@@ -5323,6 +5340,9 @@ ${prefix}}`;
     const items = JSON.parse(itemsJson);
     const lost = items.some((item) => item.type === "eventslost");
     if (lost) {
+      const error = new Error("Host events were lost; pending requests failed");
+      failOperations(error);
+      failAsks(error);
       invoke(() => window.onHostEventsLost?.());
       invoke(() => window.onAutoReloginEventsLost?.());
     }
@@ -20962,6 +20982,7 @@ ${prefix}}`;
     enabled: config.enabled,
     delayMs: config.delayMs,
     captured: status.captured,
+    ...status.username == null ? {} : { username: status.username },
     attempting: ["awaiting-player-ready", "awaiting-server-select", "backoff", "logging-in", "selecting-server"].includes(status.phase.tag),
     waitingDelay: status.phase.tag === "waiting-delay" || status.phase.tag === "waiting-kick",
     ...config.server === null ? {} : { server: config.server },

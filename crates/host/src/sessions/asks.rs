@@ -201,12 +201,12 @@ impl Shared {
             {
                 return Err(Error::Stopped);
             }
-            let bot = state.bot.ok_or_else(|| Error::Unavailable("bot".into()))?;
+            let bot = state.bot.ok_or(Error::BotUnavailable)?;
             if state.routes.len() >= EVENT_CAPACITY
                 || state.links[&bot].items.len() >= EVENT_CAPACITY
                 || state.links[&bot].failed
             {
-                return Err(Error::Overflow);
+                return Err(Error::BotQueueFull);
             }
             state.next = state.next.checked_add(1).expect("ask IDs exhausted");
             let id = state.next;
@@ -271,6 +271,15 @@ impl Shared {
         wake(wakers);
         Ok(())
     }
+    pub(crate) fn is_pending(&self, bot: AttachmentId, id: u64) -> bool {
+        let state = self.state.lock();
+        !state.stopped
+            && state.bot == Some(bot)
+            && state
+                .routes
+                .get(&id)
+                .is_some_and(|route| route.bot == bot && route.deadline > Instant::now())
+    }
     pub(crate) fn cancel(&self, asker: AttachmentId, id: u64) {
         let mut state = self.state.lock();
         if state
@@ -296,7 +305,7 @@ impl Shared {
                         route.asked_by,
                         ScriptEvent::Answer {
                             id,
-                            answer: Err(Error::Stopped),
+                            answer: Err(Error::BotStopped),
                         },
                         &mut wakers,
                     );

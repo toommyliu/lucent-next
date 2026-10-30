@@ -42,6 +42,7 @@ pub struct AutoReloginStatus {
     pub attempts_remaining: Option<f64>,
     pub last_error: Option<String>,
     pub captured: bool,
+    pub username: Option<String>,
 }
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(deny_unknown_fields)]

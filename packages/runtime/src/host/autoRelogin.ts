@@ -10,6 +10,7 @@ export const publicReloginState = ({ config, status }: AutoReloginRecords): Auto
   enabled: config.enabled,
   delayMs: config.delayMs,
   captured: status.captured,
+  ...(status.username == null ? {} : { username: status.username }),
   attempting: ["awaiting-player-ready", "awaiting-server-select", "backoff", "logging-in", "selecting-server"].includes(status.phase.tag),
   waitingDelay: status.phase.tag === "waiting-delay" || status.phase.tag === "waiting-kick",
   ...(config.server === null ? {} : { server: config.server }),

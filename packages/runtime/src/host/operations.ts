@@ -39,3 +39,11 @@ export const completeOperation = (
   if (answer !== null) pending.resolve(answer);
   else pending.reject(new Error(error ?? "The host operation failed"));
 };
+
+export const failOperations = (cause: Error): void => {
+  for (const operation of operations.values()) {
+    clearTimeout(operation.timeout);
+    operation.reject(cause);
+  }
+  operations.clear();
+};

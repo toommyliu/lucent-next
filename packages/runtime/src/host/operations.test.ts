@@ -64,14 +64,20 @@ it("keeps queued accepts waiting beyond the execution deadline", async () => {
 });
 
 it("fails queued and running operations when their event stream overflows", async () => {
-  const host = { now: () => 0, operate: () => "queued-lost" };
+  const host = { now: () => 0, operate: () => "queued-lost", ask: () => "ask-lost", cancelAsk: vi.fn() };
   vi.stubGlobal("__host", host);
   vi.stubGlobal("window", {});
   const { turn } = await import("./loop");
+  const { ask } = await import("./asks");
+  let askError: unknown;
+  const asking = Effect.runPromise(ask({}, host)).catch(cause => { askError = cause; });
   let error: unknown;
   void operate({ kind: "acceptDrop", dropId: 1 } as never, host).catch(cause => { error = cause; });
   turn('[{"type":"eventslost"}]');
   await Promise.resolve();
+  await asking;
+  expect(String(askError)).toContain("Host events were lost; pending requests failed");
+  expect(host.cancelAsk).toHaveBeenCalledWith("ask-lost");
   expect(error).toBeInstanceOf(Error);
   expect((error as Error).message).toBe("Host events were lost; pending requests failed");
 });

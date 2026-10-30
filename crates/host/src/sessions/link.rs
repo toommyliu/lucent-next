@@ -91,6 +91,9 @@ impl ScriptLink {
         }
         self.asks.ask(self.attachment, payload)
     }
+    pub fn is_ask_pending(&self, id: u64) -> bool {
+        self.asks.is_pending(self.attachment, id)
+    }
     pub fn cancel_ask(&self, id: u64) {
         self.asks.cancel(self.attachment, id);
     }

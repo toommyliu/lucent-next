@@ -6,8 +6,8 @@ import type {
   ScriptOutcome,
 } from "@lucent/game/protocol";
 
-import { completeOperation, startOperation } from "./operations";
-import { completeAsk } from "./asks";
+import { completeOperation, startOperation, failOperations } from "./operations";
+import { completeAsk, failAsks } from "./asks";
 
 import type { ScriptSource } from "../game/scripting/ScriptRunner";
 
@@ -19,6 +19,7 @@ declare global {
     operate(operationJson: string): string;
     ask(payloadJson: string): string;
     cancelAsk(id: string): void;
+    isAskPending(id: string): boolean;
     answer(answerJson: string): void;
     publishAutoRelogin(recordsJson: string): void;
     now(): number;
@@ -123,7 +124,11 @@ export const turn = (itemsJson: string): string[] => {
   };
   const items = JSON.parse(itemsJson) as ScriptEvent[];
   const lost = items.some((item) => item.type === "eventslost");
-  if (lost) { invoke(() => window.onHostEventsLost?.()); invoke(() => window.onAutoReloginEventsLost?.()); }
+  if (lost) {
+    const error = new Error("Host events were lost; pending requests failed");
+    failOperations(error);
+    failAsks(error);
+    invoke(() => window.onHostEventsLost?.()); invoke(() => window.onAutoReloginEventsLost?.()); }
   for (const item of items) {
     if (item.type === "autorelogin") {
       if (!lost) invoke(() => window.onAutoReloginChanged?.(item.records));

@@ -16,6 +16,14 @@ use ruffle_core::external::{ExternalInterfaceProvider, Value as ExternalValue};
 pub enum Error {
     #[error("the player has stopped")]
     Stopped,
+    #[error("No bot is attached")]
+    BotUnavailable,
+    #[error("The bot has stopped")]
+    BotStopped,
+    #[error("The bot request queue is full")]
+    BotQueueFull,
+    #[error("The bot request failed")]
+    BotRequestFailed,
     #[error("the player has not received its first viewport")]
     NotReady,
     #[error("the loader has not registered callback {0}")]

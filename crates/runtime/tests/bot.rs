@@ -1531,6 +1531,7 @@ fn relogin_setters_publish_sanitized_records_before_they_answer() {
     let serialized = serde_json::to_string(&records).unwrap();
     assert!(serialized.contains("player-a"));
     assert!(!serialized.contains("password"));
+    assert!(!serialized.contains("secret"));
     assert_eq!(
         observer
             .query(lucent_protocol::query::Query::AutoRelogin {})
@@ -1542,7 +1543,7 @@ fn relogin_setters_publish_sanitized_records_before_they_answer() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn relogin_boundary_failures_warn_once_until_capture_recovers() {
+fn relogin_boundary_failures_answer_once_and_allow_the_next_capture() {
     let logs = common::logs::Logs::default();
     let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
@@ -1558,32 +1559,39 @@ fn relogin_boundary_failures_warn_once_until_capture_recovers() {
         };
         null;
     "#).wait::<()>(TIMEOUT).unwrap();
-    let run = common::start(
-        &mut session,
-        common::loose(&[(
-            "capture.js",
-            r#"
+    for attempt in 0..3 {
+        let run = common::start(
+            &mut session,
+            common::loose(&[(
+                "capture.js",
+                r#"
         import * as relogin from "lucent/autorelogin";
         export default function* () {
-            const state = yield* relogin.setEnabled(true);
-            if (!state.captured) throw new Error("capture did not recover");
+            if (!(yield* relogin.setEnabled(true)).captured) throw new Error("capture did not recover");
         }
     "#,
-        )]),
-        Default::default(),
-    );
-    assert_eq!(
-        run.wait(TIMEOUT).unwrap(),
-        lucent_protocol::script::ScriptOutcome::Completed
-    );
+            )]),
+            Default::default(),
+        );
+        let outcome = run.wait(TIMEOUT).unwrap();
+        if attempt < 2 {
+            assert!(
+                matches!(
+                    outcome,
+                    lucent_protocol::script::ScriptOutcome::Failed { .. }
+                ),
+                "{outcome:?}"
+            );
+        } else {
+            assert_eq!(outcome, lucent_protocol::script::ScriptOutcome::Completed);
+        }
+    }
     let warnings: Vec<_> = logs
         .messages(tracing::Level::WARN)
         .into_iter()
         .filter(|message| message.contains("auto relogin"))
         .collect();
-    assert_eq!(warnings.len(), 2, "{warnings:?}");
-    assert!(warnings[0].contains("failed"));
-    assert!(warnings[1].contains("recovered"));
+    assert!(warnings.is_empty(), "{warnings:?}");
     assert!(matches!(
         bot.wait(Duration::ZERO),
         Err(RuntimeError::Timeout)
@@ -1592,7 +1600,7 @@ fn relogin_boundary_failures_warn_once_until_capture_recovers() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn malformed_relogin_replies_warn_once_and_recover() {
+fn malformed_relogin_replies_fail_the_ask_and_allow_the_next_capture() {
     for reply in ["{}", "{"] {
         let logs = common::logs::Logs::default();
         let dispatch = logs.dispatch();
@@ -1606,34 +1614,39 @@ fn malformed_relogin_replies_warn_once_and_recover() {
             __host.command = json => JSON.parse(json).kind === "refreshCredentials" && failures-- > 0 ? {reply} : command(json);
             null;
         "#, reply = serde_json::to_string(reply).unwrap())).wait::<()>(TIMEOUT).unwrap();
-        let run = common::start(
-            &mut session,
-            common::loose(&[(
-                "capture.js",
-                r#"
+        for attempt in 0..3 {
+            let run = common::start(
+                &mut session,
+                common::loose(&[(
+                    "capture.js",
+                    r#"
             import * as relogin from "lucent/autorelogin";
             export default function* () {
-                if (!(yield* relogin.setEnabled(true)).captured) throw new Error("capture did not recover");
+                    if (!(yield* relogin.setEnabled(true)).captured) throw new Error("capture did not recover");
             }
         "#,
-            )]),
-            Default::default(),
-        );
-        assert_eq!(
-            run.wait(TIMEOUT).unwrap(),
-            lucent_protocol::script::ScriptOutcome::Completed
-        );
+                )]),
+                Default::default(),
+            );
+            let outcome = run.wait(TIMEOUT).unwrap();
+            if attempt < 2 {
+                assert!(
+                    matches!(
+                        outcome,
+                        lucent_protocol::script::ScriptOutcome::Failed { .. }
+                    ),
+                    "{outcome:?}"
+                );
+            } else {
+                assert_eq!(outcome, lucent_protocol::script::ScriptOutcome::Completed);
+            }
+        }
         let warnings: Vec<_> = logs
             .messages(tracing::Level::WARN)
             .into_iter()
             .filter(|message| message.contains("auto relogin"))
             .collect();
-        assert_eq!(warnings.len(), 2, "{warnings:?}");
-        assert!(
-            warnings[0].contains("SchemaError") || warnings[0].contains("JSON"),
-            "{warnings:?}"
-        );
-        assert!(warnings[1].contains("recovered"));
+        assert!(warnings.is_empty(), "{warnings:?}");
         assert!(matches!(
             bot.wait(Duration::ZERO),
             Err(RuntimeError::Timeout)
@@ -1643,7 +1656,7 @@ fn malformed_relogin_replies_warn_once_and_recover() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn relogin_code_failures_retry_and_recover() {
+fn relogin_code_failures_fail_the_ask_and_allow_the_next_setter() {
     let logs = common::logs::Logs::default();
     let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
@@ -1656,7 +1669,7 @@ fn relogin_code_failures_retry_and_recover() {
         const trim = String.prototype.trim;
         let failures = 2;
         String.prototype.trim = function () {
-            if (failures-- > 0) throw new Error("relogin code failure");
+            if (this.toString() === "  Artix  " && failures-- > 0) throw new Error("relogin code failure");
             return trim.call(this);
         };
         null;
@@ -1664,31 +1677,39 @@ fn relogin_code_failures_retry_and_recover() {
     )
     .wait::<()>(TIMEOUT)
     .unwrap();
-    let run = common::start(
-        &mut session,
-        common::loose(&[(
-            "server.js",
-            r#"
+    for attempt in 0..3 {
+        let run = common::start(
+            &mut session,
+            common::loose(&[(
+                "server.js",
+                r#"
         import * as relogin from "lucent/autorelogin";
         export default function* () {
-            if ((yield* relogin.setServer("Artix")).server !== "Artix") throw new Error("wrong server");
+            if ((yield* relogin.setServer("  Artix  ")).server !== "Artix") throw new Error("wrong server");
         }
     "#,
-        )]),
-        Default::default(),
-    );
-    assert_eq!(
-        run.wait(TIMEOUT).unwrap(),
-        lucent_protocol::script::ScriptOutcome::Completed
-    );
+            )]),
+            Default::default(),
+        );
+        let outcome = run.wait(TIMEOUT).unwrap();
+        if attempt < 2 {
+            assert!(
+                matches!(
+                    outcome,
+                    lucent_protocol::script::ScriptOutcome::Failed { .. }
+                ),
+                "{outcome:?}"
+            );
+        } else {
+            assert_eq!(outcome, lucent_protocol::script::ScriptOutcome::Completed);
+        }
+    }
     let warnings: Vec<_> = logs
         .messages(tracing::Level::WARN)
         .into_iter()
         .filter(|message| message.contains("auto relogin"))
         .collect();
-    assert_eq!(warnings.len(), 2, "{warnings:?}");
-    assert!(warnings[0].contains("relogin code failure"), "{warnings:?}");
-    assert!(warnings[1].contains("recovered"));
+    assert!(warnings.is_empty(), "{warnings:?}");
     assert!(matches!(
         bot.wait(Duration::ZERO),
         Err(RuntimeError::Timeout)

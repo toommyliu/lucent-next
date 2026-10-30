@@ -7,7 +7,6 @@ import * as Result from "effect/Result";
 import * as TestClock from "effect/testing/TestClock";
 
 import type { Event, EventSelector } from "../flash/contract/Event";
-import { retryReloginTick } from "./AutoReloginFailureRule";
 import { makeAutoRelogin } from "./AutoRelogin";
 import type { AutoReloginApi, AutoReloginLifecycleStep } from "./AutoRelogin";
 
@@ -516,7 +515,7 @@ it.effect("ends a faulty recovery without refilling consumed attempts", () => Ef
   const relogin = yield* makeAutoRelogin(apiWith({ events: { on: events.on }, auth: {
     login: () => Effect.sync(() => { attempts++; return false; }),
     isServerSelectReady: () => attempts === 1 ? Effect.die("unexpected recovery fault") : Effect.succeed(false),
-  } }), fibers, undefined, retryReloginTick);
+  } }), fibers);
   yield* relogin.setDelay(0);
   yield* relogin.setEnabled(true);
   yield* events.emit("OnConnectionLost");
@@ -524,7 +523,7 @@ it.effect("ends a faulty recovery without refilling consumed attempts", () => Ef
   expect(attempts).toBe(1);
   yield* advance("5 seconds");
   yield* advance("1 second");
-  expect(yield* relogin.getState()).toMatchObject({ lastError: "Auto relogin failed unexpectedly.", attempting: false });
+  expect(yield* relogin.getState()).toMatchObject({ lastError: "Auto relogin failed unexpectedly.", attempting: false, attemptsRemaining: 2 });
   expect((yield* relogin.getRecords()).status.phase).toEqual({ tag: "failed" });
   expect(attempts).toBe(1);
 }));

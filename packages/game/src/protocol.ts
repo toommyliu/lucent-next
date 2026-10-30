@@ -2,7 +2,7 @@
 
 export type AutoReloginConfig = { enabled: boolean, delayMs: number, server: string | null, };
 export type AutoReloginPhase = { "tag": "armed" } | { "tag": "awaiting-session" } | { "tag": "awaiting-player-ready" } | { "tag": "awaiting-server-select" } | { "tag": "backoff", delayMs: number, } | { "tag": "failed" } | { "tag": "logging-in" } | { "tag": "selecting-server" } | { "tag": "waiting-delay" } | { "tag": "waiting-kick" };
-export type AutoReloginStatus = { phase: AutoReloginPhase, attemptsRemaining: number | null, lastError: string | null, captured: boolean, };
+export type AutoReloginStatus = { phase: AutoReloginPhase, attemptsRemaining: number | null, lastError: string | null, captured: boolean, username: string | null, };
 export type AutoReloginRecords = { config: AutoReloginConfig, status: AutoReloginStatus, };
 export type AutoZoneMap = "ledgermayne" | "moreskulls" | "ultradage" | "darkcarnax" | "astralshrine" | "queeniona" | "magnumopus";
 export type AutoZoneConfig = { enabled: boolean, map: AutoZoneMap | null, };

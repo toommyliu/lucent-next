@@ -1,6 +1,9 @@
 import * as Effect from "effect/Effect";
 
-const pending = new Map<string, (answer: unknown, error: string | null) => void>();
+const pending = new Map<string, {
+  complete: (answer: unknown, error: string | null) => void;
+  cancel: () => void;
+}>();
 
 export const serializePayload = (payload: unknown): string => {
   const seen = new Set<object>();
@@ -30,7 +33,10 @@ export const serializePayload = (payload: unknown): string => {
 export const ask = (payload: unknown, host: Pick<typeof __host, "ask" | "cancelAsk">) =>
   Effect.callback<unknown>((resume) => {
     const id = host.ask(serializePayload(payload));
-    pending.set(id, (answer, error) => resume(error === null ? Effect.succeed(answer) : Effect.die(new Error(error))));
+    pending.set(id, {
+      complete: (answer, error) => resume(error === null ? Effect.succeed(answer) : Effect.die(new Error(error))),
+      cancel: () => host.cancelAsk(id),
+    });
     return Effect.sync(() => {
       pending.delete(id);
       host.cancelAsk(id);
@@ -40,5 +46,13 @@ export const ask = (payload: unknown, host: Pick<typeof __host, "ask" | "cancelA
 export const completeAsk = (id: string, answer: unknown, error: string | null): void => {
   const resolve = pending.get(id);
   pending.delete(id);
-  resolve?.(answer, error);
+  resolve?.complete(answer, error);
+};
+
+export const failAsks = (cause: Error): void => {
+  for (const request of pending.values()) {
+    request.cancel();
+    request.complete(null, cause.message);
+  }
+  pending.clear();
 };
