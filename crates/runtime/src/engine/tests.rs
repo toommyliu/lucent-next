@@ -47,10 +47,11 @@ fn a_trivial_scripts_first_turn_stays_below_half_the_watchdog_budget() {
         )
         .unwrap();
         let (reply, outcome) = mpsc::channel();
-        let began = Instant::now();
+        let cpu = crate::cpu_time::ThreadCpu::current().unwrap();
+        let began = cpu.elapsed().unwrap();
         engine.start(script, Default::default(), reply);
         engine.turn("[]").unwrap();
-        let elapsed = began.elapsed();
+        let elapsed = cpu.elapsed().unwrap() - began;
         match engine
             .evaluate("observed.js", "globalThis.loaded === true")
             .unwrap()
@@ -72,7 +73,7 @@ fn a_trivial_scripts_first_turn_stays_below_half_the_watchdog_budget() {
             ScriptOutcome::Completed
         );
         eprintln!(
-            "first_turn sample={sample} elapsed_ms={:.3}",
+            "first_turn sample={sample} cpu_ms={:.3}",
             elapsed.as_secs_f64() * 1000.0
         );
         assert!(elapsed < Duration::from_millis(100), "{elapsed:?}");

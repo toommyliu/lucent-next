@@ -11,6 +11,44 @@ use serde_json::json;
 
 use common::TIMEOUT;
 
+#[cfg(feature = "testing")]
+#[test]
+fn bot_turns_charge_cpu_time_and_allow_waiting_off_cpu() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, common::ready_movie());
+    let mut bot = Bot::start(link).unwrap();
+    assert_eq!(
+        bot.eval(
+            "wait.js",
+            "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300)",
+        )
+        .wait::<String>(TIMEOUT)
+        .unwrap(),
+        "timed-out"
+    );
+    assert!(matches!(
+        bot.eval(
+            "runaway.js",
+            "while (true) { try { while (true) {} } catch {} }"
+        )
+        .wait::<()>(TIMEOUT),
+        Err(RuntimeError::Killed(Kill::Watchdog))
+    ));
+    assert!(matches!(
+        bot.wait(TIMEOUT),
+        Err(RuntimeError::Killed(Kill::Watchdog))
+    ));
+    let cpu = bot.join_cpu_time().unwrap();
+    assert!(
+        cpu >= Duration::from_millis(200),
+        "stopped after {cpu:?} CPU"
+    );
+    assert!(
+        cpu < Duration::from_millis(250),
+        "stopped after {cpu:?} CPU"
+    );
+}
+
 fn start() -> (lucent_host::Host, Session, ScriptLink) {
     let host = testing::headless_host();
     let (session, link) = testing::start_probe(
