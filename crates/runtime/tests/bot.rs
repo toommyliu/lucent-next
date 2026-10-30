@@ -1263,3 +1263,42 @@ fn auto_zone_policy_defects_end_the_bot() {
         "{result:?}"
     );
 }
+
+#[test]
+fn auto_zone_moves_once_while_a_script_is_running() {
+    let host = testing::headless_host();
+    let (mut session, observer) =
+        testing::start_probe(&host, common::ready_movie().recording("player.walkTo"));
+    become_ready(&observer);
+    enter_map(&observer, "ledgermayne");
+    observer
+        .command(
+            serde_json::from_value(json!({
+                "kind":"patchAutoZone","patch":{"enabled":true,"map":"ledgermayne"}
+            }))
+            .unwrap(),
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    let run = common::yielding(&mut session);
+    drain(&observer);
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":"A"}}));
+    let call = next_call(&observer, "player.walkTo");
+    assert!(matches!(call.get(1), Some(Value::Number(x)) if (147.0..=276.0).contains(x)));
+    assert_eq!(
+        1 + walks_for(&observer, Duration::from_millis(1200)),
+        1,
+        "auto zone moved in more than one runtime"
+    );
+    assert!(matches!(
+        run.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
+    run.stop_script();
+    run.wait(TIMEOUT).unwrap();
+}
