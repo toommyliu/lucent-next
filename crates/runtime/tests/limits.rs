@@ -14,6 +14,38 @@ use serde_json::{Value, json};
 const TIMEOUT: Duration = Duration::from_secs(10);
 const STOP_LIMIT: Duration = Duration::from_millis(250);
 
+#[test]
+fn a_turn_waiting_off_cpu_keeps_its_cpu_budget() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+    assert_eq!(
+        runtime
+            .eval(
+                "wait.js",
+                "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300)",
+            )
+            .wait::<String>(TIMEOUT)
+            .unwrap(),
+        "timed-out"
+    );
+}
+
+#[test]
+fn a_turn_waiting_without_cpu_is_killed_by_the_wall_backstop() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+    let error = runtime
+        .eval(
+            "wait.js",
+            "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)",
+        )
+        .wait::<Value>(TIMEOUT)
+        .unwrap_err();
+    assert!(error.to_string().contains("wall-clock backstop"), "{error}");
+}
+
 fn stall_player(session: &Session) -> mpsc::Sender<()> {
     let (entered, stalled) = mpsc::channel();
     let (release, held) = mpsc::channel::<()>();
