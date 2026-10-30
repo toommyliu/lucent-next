@@ -5,7 +5,7 @@ import { callHost, HostBoundaryFailure } from "./HostCall";
 
 export const run = Effect.gen(function* () {
   const api = yield* Api;
-  let failing = false;
+  const failing = new Set<boolean>();
   const tick = (actionsOnly: boolean) =>
     Effect.gen(function* () {
       if (!(yield* api.player.isReady())) return;
@@ -21,15 +21,16 @@ export const run = Effect.gen(function* () {
     }).pipe(
       Effect.tap(() =>
         Effect.sync(() => {
-          if (failing) console.info("settings policy recovered");
-          failing = false;
+          if (failing.delete(actionsOnly) && failing.size === 0) {
+            console.info("settings policy recovered");
+          }
         }),
       ),
       Effect.catchDefect((error) => {
         if (!(error instanceof HostBoundaryFailure)) return Effect.die(error);
         return Effect.sync(() => {
-          if (!failing) console.warn("settings policy tick failed", error);
-          failing = true;
+          if (failing.size === 0) console.warn("settings policy tick failed", error);
+          failing.add(actionsOnly);
         });
       }),
     );

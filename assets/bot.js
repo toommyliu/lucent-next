@@ -15425,7 +15425,7 @@ ${prefix}}`;
   // packages/runtime/src/game/automation/SettingsPolicy.ts
   var run2 = gen2(function* () {
     const api = yield* Api;
-    let failing = false;
+    const failing = /* @__PURE__ */ new Set();
     const tick = /* @__PURE__ */ __name((actionsOnly) => gen2(function* () {
       if (!(yield* api.player.isReady())) return;
       yield* sync2(() => {
@@ -15440,15 +15440,16 @@ ${prefix}}`;
     }).pipe(
       tap2(
         () => sync2(() => {
-          if (failing) console.info("settings policy recovered");
-          failing = false;
+          if (failing.delete(actionsOnly) && failing.size === 0) {
+            console.info("settings policy recovered");
+          }
         })
       ),
       catchDefect2((error) => {
         if (!(error instanceof HostBoundaryFailure)) return die3(error);
         return sync2(() => {
-          if (!failing) console.warn("settings policy tick failed", error);
-          failing = true;
+          if (failing.size === 0) console.warn("settings policy tick failed", error);
+          failing.add(actionsOnly);
         });
       })
     ), "tick");
