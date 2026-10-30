@@ -502,29 +502,6 @@ fn walk_speed_resends_never_go_backwards() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn a_policy_defect_ends_the_bot_instead_of_silencing_a_tick() {
-    let (_host, mut session, observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
-    bot.eval(
-        "malformed-readiness.js",
-        r#"
-        const read = __host.read;
-        __host.read = query => JSON.parse(query).kind === "readiness" ? "{}" : read(query);
-        null;
-    "#,
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
-    let result = bot.wait(Duration::from_secs(2));
-    assert!(
-        matches!(&result, Err(RuntimeError::JavaScript(error)) if error == "SchemaError"),
-        "{result:?}"
-    );
-}
-
-#[cfg(feature = "testing")]
-#[test]
 fn settings_policy_host_failures_retry_once_per_streak() {
     for boundary in ["read", "swf", "command"] {
         let logs = common::logs::Logs::default();
@@ -590,60 +567,139 @@ fn settings_policy_host_failures_retry_once_per_streak() {
 }
 
 #[cfg(feature = "testing")]
-#[test]
-fn settings_policy_code_errors_are_terminal() {
-    for source in [
-        "__host.command = undefined; null;",
-        r#"
-        const stringify = JSON.stringify;
-        JSON.stringify = value => {
-            if (value.kind === "reapplySettings") throw new Error("broken policy serialization");
-            return stringify(value);
-        };
-        null;
-        "#,
-    ] {
-        let (_host, mut session, observer) = start();
-        let bot = Bot::start(session.attach().unwrap()).unwrap();
-        next_call(&observer, "settings.setWalkSpeed");
-        bot.eval("break-policy.js", source)
-            .wait::<()>(TIMEOUT)
-            .unwrap();
-        let result = bot.wait(Duration::from_secs(2));
-        assert!(
-            matches!(&result, Err(RuntimeError::JavaScript(error)) if
-            error.contains("function") || error.contains("broken policy serialization")),
-            "{result:?}"
-        );
-    }
+fn assert_policy_retries(source: &str, expected_line: &str) {
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let (_host, mut session, observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    next_call(&observer, "settings.setWalkSpeed");
+    bot.eval("break-policy.js", source)
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+    bot.eval(
+        "observe-failures.js",
+        "new Promise(resolve => setTimeout(() => resolve(null), 2200));",
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    let warnings = logs.messages(tracing::Level::WARN);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert_eq!(warnings[0].lines().next(), Some(expected_line));
+    assert!(warnings[0].lines().count() > 1, "{warnings:?}");
+    assert!(logs.messages(tracing::Level::INFO).is_empty());
+    assert!(
+        bot.eval("attempts.js", "attempts")
+            .wait::<u32>(TIMEOUT)
+            .unwrap()
+            >= 3
+    );
+    bot.eval("restore-policy.js", "restore(); null;")
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+    drain(&observer);
+    assert_eq!(
+        next_call(&observer, "settings.setWalkSpeed")[1],
+        Value::Number(30.0)
+    );
+    bot.eval(
+        "flush-recovery.js",
+        "new Promise(resolve => setTimeout(() => resolve(null), 20));",
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    assert_eq!(
+        logs.messages(tracing::Level::INFO),
+        vec!["settings policy recovered"]
+    );
+    assert_eq!(logs.messages(tracing::Level::WARN), warnings);
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
 }
 
 #[cfg(feature = "testing")]
 #[test]
-fn settings_policy_malformed_host_replies_are_terminal() {
-    for (boundary, reply) in [
-        ("read", "not json"),
-        ("read", r#"{"missing":""}"#),
-        ("swf", "not json"),
-        ("swf", r#""true""#),
-        ("command", "not json"),
+fn settings_policy_code_errors_warn_once_and_retry() {
+    assert_policy_retries(
+        r#"
+        globalThis.attempts = 0;
+        const command = __host.command;
+        __host.command = undefined;
+        const stringify = JSON.stringify;
+        JSON.stringify = value => {
+            if (value.kind === "refreshLoggedIn" || value.kind === "reapplySettings") attempts++;
+            return stringify(value);
+        };
+        globalThis.restore = () => {
+            __host.command = command;
+            JSON.stringify = stringify;
+        };
+        null;
+        "#,
+        "settings policy tick failed Error: Failed refreshLoggedIn",
+    );
+    assert_policy_retries(
+        r#"
+        globalThis.attempts = 0;
+        const stringify = JSON.stringify;
+        JSON.stringify = value => {
+            if (value.kind === "reapplySettings") {
+                attempts++;
+                throw new Error("broken policy serialization");
+            }
+            return stringify(value);
+        };
+        globalThis.restore = () => { JSON.stringify = stringify; };
+        null;
+        "#,
+        "settings policy tick failed Error: broken policy serialization",
+    );
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn settings_policy_malformed_host_replies_warn_once_and_retry() {
+    for (boundary, reply, expected_line) in [
+        (
+            "read",
+            "not json",
+            "settings policy tick failed SyntaxError: Unexpected token 'o', \"not json\" is not valid JSON",
+        ),
+        (
+            "read",
+            "{}",
+            "settings policy tick failed TypeError: Cannot read properties of undefined (reading 'length')",
+        ),
+        (
+            "swf",
+            "not json",
+            "settings policy tick failed Error: Failed world.isLoaded",
+        ),
+        (
+            "swf",
+            r#""true""#,
+            "settings policy tick failed Error: Failed world.isLoaded",
+        ),
+        (
+            "command",
+            "not json",
+            "settings policy tick failed Error: Failed refreshLoggedIn",
+        ),
     ] {
-        let (_host, mut session, observer) = start();
-        let bot = Bot::start(session.attach().unwrap()).unwrap();
-        next_call(&observer, "settings.setWalkSpeed");
-        bot.eval(
-            "malformed-host.js",
-            format!(
-                "__host.{boundary} = () => {}; null;",
+        assert_policy_retries(
+            &format!(
+                r#"
+                globalThis.attempts = 0;
+                const original = __host.{boundary};
+                __host.{boundary} = (...args) => {{ attempts++; return {}; }};
+                globalThis.restore = () => {{ __host.{boundary} = original; }};
+                null;
+                "#,
                 serde_json::to_string(reply).unwrap()
             ),
-        )
-        .wait::<()>(TIMEOUT)
-        .unwrap();
-        let result = bot.wait(Duration::from_secs(2));
-        assert!(
-            matches!(&result, Err(RuntimeError::JavaScript(_))),
-            "{boundary} returned {reply}: {result:?}"
+            expected_line,
         );
     }
 }
@@ -763,19 +819,19 @@ fn settings_policy_recovery_waits_for_the_failed_loop() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn settings_policy_missing_loader_booleans_are_terminal() {
-    let (_host, mut session, observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
-    next_call(&observer, "settings.setWalkSpeed");
-    bot.eval(
-        "missing-loader-result.js",
-        "__host.swf = () => undefined; null;",
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
-    let result = bot.wait(Duration::from_secs(2));
-    assert!(
-        matches!(&result, Err(RuntimeError::JavaScript(error)) if error == "SchemaError"),
-        "{result:?}"
-    );
+fn settings_policy_missing_loader_booleans_warn_once_and_retry() {
+    for value in ["undefined", "null"] {
+        assert_policy_retries(
+            &format!(
+                r#"
+                globalThis.attempts = 0;
+                const swf = __host.swf;
+                __host.swf = () => {{ attempts++; return {value}; }};
+                globalThis.restore = () => {{ __host.swf = swf; }};
+                null;
+                "#
+            ),
+            "settings policy tick failed Error: Failed world.isLoaded",
+        );
+    }
 }
