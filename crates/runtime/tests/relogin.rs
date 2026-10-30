@@ -111,16 +111,23 @@ fn killing_a_setter_during_capture_cannot_answer_a_later_run() {
     let mut policy = lucent_host::automation::ReloginPolicy::new(link, waker);
     let (entered, applying) = mpsc::channel();
     let (release, resume) = mpsc::channel();
+    let (capturing, capture_started) = mpsc::channel();
     let stopping = Arc::new(AtomicBool::new(false));
     let stopped = stopping.clone();
     let worker = std::thread::spawn(move || {
         let mut block = true;
+        let mut issued = false;
         while !stopped.load(Ordering::Acquire) {
             let deadline = policy.advance(std::time::Instant::now());
             if block {
                 entered.send(()).unwrap();
                 resume.recv_timeout(TIMEOUT).unwrap();
                 block = false;
+                continue;
+            }
+            if !issued {
+                capturing.send(()).unwrap();
+                issued = true;
             }
             let wait = deadline.map_or(TIMEOUT, |at| {
                 at.saturating_duration_since(std::time::Instant::now())
@@ -129,10 +136,22 @@ fn killing_a_setter_during_capture_cannot_answer_a_later_run() {
         }
     });
     applying.recv_timeout(TIMEOUT).unwrap();
-    let runtime = lucent_runtime::Runtime::start(session.attach().unwrap()).unwrap();
+    let runtime = common::start(
+        &mut session,
+        common::loose(&[(
+            "capture.js",
+            r#"
+        import * as relogin from "lucent/autorelogin";
+        export default function* () {
+            yield* relogin.setEnabled(true);
+            throw new Error("capture completed before the kill");
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
     let (requested, issued) = mpsc::channel();
     let (unblock, resume_player) = mpsc::channel();
-    let result = runtime.eval("capture.js",r#"globalThis.capture = __host.command('{"kind":"setAutoReloginEnabled","enabled":true}'); null;"#);
     let until = std::time::Instant::now() + TIMEOUT;
     while session.pending_relogin_count() == 0 {
         assert!(std::time::Instant::now() < until);
@@ -144,9 +163,12 @@ fn killing_a_setter_during_capture_cannot_answer_a_later_run() {
     });
     issued.recv_timeout(TIMEOUT).unwrap();
     release.send(()).unwrap();
+    capture_started.recv_timeout(TIMEOUT).unwrap();
+    assert!(session.auto_relogin().config.enabled);
+    assert!(!session.auto_relogin().status.captured);
     runtime.kill();
     assert!(matches!(
-        result.wait::<()>(TIMEOUT),
+        runtime.wait(TIMEOUT),
         Err(lucent_runtime::RuntimeError::Killed(_))
     ));
     drop(runtime);
@@ -166,6 +188,7 @@ fn killing_a_setter_during_capture_cannot_answer_a_later_run() {
         Default::default(),
     );
     assert_eq!(later.wait(TIMEOUT).unwrap(), ScriptOutcome::Completed);
+    assert!(session.auto_relogin().status.captured);
     stopping.store(true, Ordering::Release);
     observer
         .call_loader(

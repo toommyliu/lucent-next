@@ -220,6 +220,7 @@ impl Policy {
         }
     }
     fn armed(&mut self) {
+        self.fresh_login = false;
         self.records.status.phase = Phase::Armed;
         self.records.status.attempts_remaining = None;
         self.records.status.last_error = None;
@@ -519,6 +520,7 @@ impl Policy {
                         self.armed();
                     } else {
                         self.attempt = 0;
+                        self.fresh_login = false;
                         self.recovery = Recovery::Attempt { resume: true };
                         self.observe_at = Some(now);
                     }
@@ -597,7 +599,6 @@ impl Policy {
                 Recovery::Attempt { resume: false }
             }
             Recovery::Attempt { resume } => {
-                self.fresh_login = false;
                 self.records.status.attempts_remaining = Some(f64::from(3 - self.attempt));
                 self.records.status.last_error = None;
                 if resume && self.observed.select {
@@ -703,6 +704,7 @@ impl Policy {
                     self.records.status.phase = Phase::AwaitingPlayerReady;
                     Recovery::Player(now + Duration::from_secs(10))
                 } else if self.observed.select {
+                    self.fresh_login = false;
                     Recovery::Manual(now + Duration::from_millis(250))
                 } else if now >= expires {
                     self.fail("Login did not reach server selection", true, now);

@@ -89,7 +89,9 @@ impl ReloginHost for Host {
                 ("login", json!(true))
             }
             Command::Logout {} => {
-                self.select.set(false);
+                if self.failure("logout").is_none() {
+                    self.select.set(false);
+                }
                 self.logged_in.set(false);
                 ("logout", json!(null))
             }
@@ -849,4 +851,30 @@ fn a_timed_out_capture_finishes_automation_before_the_next_setter() {
         h.set(Edit::Delay(7000.0)).unwrap()["status"]["captured"],
         true
     );
+}
+
+#[test]
+fn failed_commands_cannot_reuse_a_full_servers_stale_selection() {
+    let mut h = Harness::default();
+    h.enabled();
+    h.host
+        .selection
+        .replace(json!({"ok":false,"status":"blocked","reason":"full","message":"Server is full"}));
+    h.host.failures.borrow_mut().push(("logout", "error"));
+    h.lost();
+    h.after(POLL);
+    h.after(Duration::from_millis(250));
+    assert_eq!(
+        h.policy.records.status.phase,
+        Phase::Backoff { delay_ms: 5000.0 }
+    );
+    h.host.failures.borrow_mut().push(("login", "error"));
+    h.after(Duration::from_secs(5));
+    assert_eq!(h.host.count("login"), 2);
+    h.after(Duration::from_secs(10));
+    assert_eq!(h.host.count("login"), 3);
+    h.after(Duration::from_secs(20));
+    assert_eq!(h.host.count("login"), 4);
+    assert_eq!(h.host.count("auth.connectTo"), 1);
+    assert_eq!(h.policy.records.status.phase, Phase::Failed);
 }
