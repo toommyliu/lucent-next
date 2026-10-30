@@ -1,5 +1,9 @@
+#![allow(dead_code)]
+
 use std::sync::{Arc, Condvar, Mutex, Once};
 use tracing_subscriber::prelude::*;
+
+const WAIT: std::time::Duration = std::time::Duration::from_secs(15);
 
 #[derive(Clone, Default)]
 pub struct Logs(Arc<Records>);
@@ -46,7 +50,7 @@ impl Logs {
         let (entries, timeout) = self
             .0
             .changed
-            .wait_timeout_while(entries, super::TIMEOUT, |entries| {
+            .wait_timeout_while(entries, WAIT, |entries| {
                 entries
                     .iter()
                     .filter(|(l, text, _)| *l == level && text == expected)
