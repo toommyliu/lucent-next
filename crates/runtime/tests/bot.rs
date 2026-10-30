@@ -66,52 +66,59 @@ fn drain(link: &ScriptLink) {
 #[cfg(feature = "testing")]
 #[test]
 fn malformed_packets_do_not_stop_bot_event_delivery() {
-    let (_host, mut session, observer) = start();
+    let host = testing::headless_host();
+    let (mut session, observer) =
+        testing::start_probe(&host, common::ready_movie().recording("player.walkTo"));
+    become_ready(&observer);
+    enter_map(&observer, "ledgermayne");
+    observer
+        .command(
+            serde_json::from_value(json!({
+                "kind":"patchAutoZone","patch":{"enabled":true,"map":"ledgermayne"}
+            }))
+            .unwrap(),
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
     let bot = Bot::start(session.attach().unwrap()).unwrap();
     bot.eval(
-        "listen.js",
+        "observe-walks.js",
         r#"
-        globalThis.seen = [];
-        const parse = JSON.parse;
-        JSON.parse = (...args) => {
-            const value = parse(...args);
-            if (value?.type === "json" && ["before", "after"].includes(value.dataObj?.cmd)) {
-                seen.push(value.dataObj.cmd);
-            }
-            return value;
+        globalThis.walks = [];
+        const swf = __host.swf;
+        __host.swf = (method, args) => {
+            if (method === "player.walkTo") walks.push(JSON.parse(args));
+            return swf(method, args);
         };
         null;
         "#,
     )
     .wait::<()>(TIMEOUT)
     .unwrap();
-    for (name, payload) in [
-        (
-            "onExtensionResponse",
-            r#"{"type":"json","dataObj":{"cmd":"before"}}"#,
-        ),
-        ("onExtensionResponse", "not json"),
-        (
-            "onExtensionResponse",
-            r#"{"type":"json","dataObj":{"cmd":"after"}}"#,
-        ),
-    ] {
-        observer
-            .call_loader(
-                "probe.emit",
-                vec![Value::String(name.into()), Value::String(payload.into())],
-            )
-            .recv_timeout(TIMEOUT)
+    for (zone, expected_range) in [("A", 147..=276), ("B", 727..=852)] {
+        if zone == "B" {
+            observer
+                .call_loader(
+                    "probe.emit",
+                    vec![
+                        Value::String("onExtensionResponse".into()),
+                        Value::String("not json".into()),
+                    ],
+                )
+                .recv_timeout(TIMEOUT)
+                .unwrap();
+        }
+        packet(&observer, json!({"cmd":"event","args":{"zoneSet":zone}}));
+        next_call(&observer, "player.walkTo");
+        let x = bot
+            .eval("observed-walk.js", "walks.shift()?.[0] ?? null")
+            .wait::<Option<i32>>(TIMEOUT)
             .unwrap();
+        assert!(
+            x.is_some_and(|x| expected_range.contains(&x)),
+            "{zone}: {x:?}"
+        );
     }
-    let seen = bot
-        .eval(
-            "events.js",
-            "new Promise(resolve => setTimeout(() => resolve(seen), 100));",
-        )
-        .wait::<Vec<String>>(TIMEOUT)
-        .unwrap();
-    assert_eq!(seen, vec!["before", "after"]);
     assert!(matches!(
         bot.wait(Duration::ZERO),
         Err(RuntimeError::Timeout)
