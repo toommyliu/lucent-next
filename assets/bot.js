@@ -4892,7 +4892,6 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Cause.js
   var isFailReason2 = isFailReason;
-  var isDieReason2 = isDieReason;
   var fromReasons = causeFromReasons;
   var die2 = causeDie;
   var hasInterruptsOnly2 = hasInterruptsOnly;
@@ -16798,41 +16797,23 @@ ${prefix}}`;
   });
 
   // packages/runtime/src/game/automation/AutoReloginFailureRule.ts
-  var HostBoundaryFailure = class extends Error {
-    static {
-      __name(this, "HostBoundaryFailure");
-    }
-    constructor(cause) {
-      super("Auto relogin host boundary failed", { cause });
-    }
-  };
-  var callReloginHost = /* @__PURE__ */ __name((call) => {
-    try {
-      return call();
-    } catch (cause) {
-      throw new HostBoundaryFailure(cause);
-    }
-  }, "callReloginHost");
-  var makeReloginSupervisor = /* @__PURE__ */ __name((onDefect) => (effect2, retryAfter = 500) => suspend2(() => {
+  var retryReloginTick = /* @__PURE__ */ __name((effect2, retryAfter = 500) => suspend2(() => {
     let failed = false;
-    const attempt = effect2.pipe(
+    const tick = effect2.pipe(
       tap3(() => sync2(() => {
-        if (failed) console.warn("auto relogin host boundary recovered");
+        if (failed) console.warn("auto relogin tick recovered");
         failed = false;
       })),
       catchCause2((cause) => {
-        if (hasInterruptsOnly2(cause)) return failCause4(cause);
-        if (!cause.reasons.every((reason) => isDieReason2(reason) && reason.defect instanceof HostBoundaryFailure)) {
-          return sync2(() => onDefect(squash(cause))).pipe(andThen2(failCause4(cause)));
-        }
+        if (hasInterrupts2(cause)) return failCause4(cause);
         return sync2(() => {
-          if (!failed) console.warn("auto relogin host boundary failed; retrying");
+          if (!failed) console.warn("auto relogin tick failed; retrying", pretty(cause));
           failed = true;
-        }).pipe(andThen2(sleep2(retryAfter)), andThen2(attempt));
+        }).pipe(andThen2(sleep2(retryAfter)), andThen2(tick));
       })
     );
-    return attempt;
-  }), "makeReloginSupervisor");
+    return tick;
+  }), "retryReloginTick");
 
   // packages/runtime/src/host/asks.ts
   var pending = /* @__PURE__ */ new Map();
@@ -16885,11 +16866,11 @@ ${prefix}}`;
       ])
     })
   });
-  var readReloginRecords = /* @__PURE__ */ __name((host4) => decodeUnknownSync(Records)(JSON.parse(callReloginHost(() => host4.read('{"kind":"autoRelogin"}')))), "readReloginRecords");
+  var readReloginRecords = /* @__PURE__ */ __name((host4) => decodeUnknownSync(Records)(JSON.parse(host4.read('{"kind":"autoRelogin"}'))), "readReloginRecords");
   var makeBotReloginApi = /* @__PURE__ */ __name((api, gateway2, native) => {
     const call = /* @__PURE__ */ __name((method, args2) => sync2(() => {
       const json = JSON.stringify(args2 ?? []);
-      const reply = callReloginHost(() => native.swf(method, json));
+      const reply = native.swf(method, json);
       return reply === void 0 ? void 0 : JSON.parse(reply);
     }), "call");
     const bridge = {
@@ -16908,13 +16889,13 @@ ${prefix}}`;
     const host4 = {
       read: /* @__PURE__ */ __name((query) => sync2(() => {
         const json = JSON.stringify(query);
-        const value = JSON.parse(callReloginHost(() => native.read(json)));
+        const value = JSON.parse(native.read(json));
         if (query.kind !== "readiness") throw new Error(`Unexpected relogin query: ${query.kind}`);
         return decodeUnknownSync(Readiness)(value);
       }), "read"),
       command: /* @__PURE__ */ __name((command) => sync2(() => {
         const json = JSON.stringify(command);
-        const value = JSON.parse(callReloginHost(() => native.command(json)));
+        const value = JSON.parse(native.command(json));
         let decoded;
         switch (command.kind) {
           case "refreshCredentials":
@@ -16955,22 +16936,17 @@ ${prefix}}`;
     const ready = yield* make5();
     const permit = yield* make14(1);
     const runFork3 = runForkWith2(yield* context2());
-    let terminated = false;
-    const supervise = makeReloginSupervisor((error) => {
-      if (terminated) return;
-      terminated = true;
-      void Promise.reject(error);
-    });
+    const supervise = retryReloginTick;
     const launch = /* @__PURE__ */ __name((effect2) => {
       runFork3(supervise(effect2));
     }, "launch");
     const publish2 = /* @__PURE__ */ __name((records) => sync2(() => {
       const json = JSON.stringify(records);
-      callReloginHost(() => host4.publishAutoRelogin(json));
+      host4.publishAutoRelogin(json);
     }), "publish");
     const answer = /* @__PURE__ */ __name((id, value, error) => sync2(() => {
       const json = JSON.stringify([id, value, error]);
-      callReloginHost(() => host4.answer(json));
+      host4.answer(json);
     }), "answer");
     window.onBotAsk = (id, payload) => {
       const request = decodeRequest(payload);

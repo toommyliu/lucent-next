@@ -3,7 +3,6 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { callReloginHost } from "../game/automation/AutoReloginFailureRule";
 import type { AutoReloginApi } from "../game/automation/AutoRelogin";
 import { makeAuth } from "../game/flash/api/Auth";
 import { makeMap } from "../game/flash/api/Map";
@@ -38,7 +37,7 @@ const Records = Schema.Struct({
 });
 
 export const readReloginRecords = (host: Pick<typeof __host, "read">): AutoReloginRecords =>
-  Schema.decodeUnknownSync(Records)(JSON.parse(callReloginHost(() => host.read('{"kind":"autoRelogin"}'))));
+  Schema.decodeUnknownSync(Records)(JSON.parse(host.read('{"kind":"autoRelogin"}')));
 
 export const makeBotReloginApi = (
   api: ApiService,
@@ -47,7 +46,7 @@ export const makeBotReloginApi = (
 ): AutoReloginApi => {
   const call = (method: string, args: readonly unknown[] | undefined) => Effect.sync((): unknown => {
     const json = JSON.stringify(args ?? []);
-    const reply = callReloginHost(() => native.swf(method, json));
+    const reply = native.swf(method, json);
     return reply === undefined ? undefined : JSON.parse(reply);
   });
   const bridge: BridgeService = {
@@ -62,13 +61,13 @@ export const makeBotReloginApi = (
   const host: HostStateService = {
     read: (query) => Effect.sync(() => {
       const json = JSON.stringify(query);
-      const value: unknown = JSON.parse(callReloginHost(() => native.read(json)));
+      const value: unknown = JSON.parse(native.read(json));
       if (query.kind !== "readiness") throw new Error(`Unexpected relogin query: ${query.kind}`);
       return Schema.decodeUnknownSync(Readiness)(value) as QueryOutputs[typeof query.kind];
     }),
     command: (command) => Effect.sync(() => {
       const json = JSON.stringify(command);
-      const value: unknown = JSON.parse(callReloginHost(() => native.command(json)));
+      const value: unknown = JSON.parse(native.command(json));
       let decoded: unknown;
       switch (command.kind) {
         case "refreshCredentials": decoded = Schema.decodeUnknownSync(Credentials)(value); break;

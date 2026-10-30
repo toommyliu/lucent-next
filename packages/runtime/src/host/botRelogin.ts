@@ -9,7 +9,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { makeAutoRelogin, type AutoRelogin } from "../game/automation/AutoRelogin";
-import { callReloginHost, makeReloginSupervisor } from "../game/automation/AutoReloginFailureRule";
+import { retryReloginTick } from "../game/automation/AutoReloginFailureRule";
 import { Api } from "../game/flash/api/Api";
 import { Gateway } from "../game/flash/bridge/Gateway";
 import { publicReloginState } from "./autoRelogin";
@@ -28,20 +28,15 @@ export const botRelogin = Layer.effectDiscard(Effect.gen(function* () {
   const ready = yield* Deferred.make<AutoRelogin>();
   const permit = yield* Semaphore.make(1);
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
-  let terminated = false;
-  const supervise = makeReloginSupervisor((error) => {
-    if (terminated) return;
-    terminated = true;
-    void Promise.reject(error);
-  });
+  const supervise = retryReloginTick;
   const launch = <A, E>(effect: Effect.Effect<A, E>) => { runFork(supervise(effect)); };
   const publish = (records: AutoReloginRecords) => Effect.sync(() => {
     const json = JSON.stringify(records);
-    callReloginHost(() => host.publishAutoRelogin(json));
+    host.publishAutoRelogin(json);
   });
   const answer = (id: string, value: unknown, error: string | null) => Effect.sync(() => {
     const json = JSON.stringify([id, value, error]);
-    callReloginHost(() => host.answer(json));
+    host.answer(json);
   });
 
   window.onBotAsk = (id, payload) => {
