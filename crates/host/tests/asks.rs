@@ -193,9 +193,9 @@ fn asks_remain_available_when_the_bot_player_events_overflow() {
             .unwrap();
     }
     assert!(bot.overflowed());
-    assert_eq!(bot.try_event(), Err(Error::Overflow));
     assert_eq!(asker.try_event(), Err(Error::Overflow));
     assert!(matches!(next(&bot), ScriptEvent::Ask { request } if request.id == id));
+    assert_eq!(bot.try_event(), Err(Error::Overflow));
     bot.answer(id, Ok(json!(8))).unwrap();
     assert_eq!(
         next(&asker),
@@ -354,4 +354,42 @@ fn stopped_links_drain_queued_answers_and_player_events() {
     }
     assert!(found, "queued player event was discarded");
     assert_eq!(script.try_event(), Err(Error::Stopped));
+}
+
+#[test]
+fn queued_answers_arrive_before_player_event_loss() {
+    let host = testing::headless_host();
+    let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
+    let bot = session.attach().unwrap();
+    bot.claim_bot().unwrap();
+    let ids = [asker.ask(json!(7)).unwrap(), asker.ask(json!(8)).unwrap()];
+    for id in ids {
+        assert!(matches!(next(&bot), ScriptEvent::Ask { request } if request.id == id));
+        bot.answer(id, Ok(json!(id))).unwrap();
+    }
+    for n in 0..1100 {
+        asker
+            .call_loader(
+                "probe.emit",
+                vec![
+                    lucent_host::bridge::Value::String("onDebug".into()),
+                    lucent_host::bridge::Value::Number(n as f64),
+                ],
+            )
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+    }
+    assert!(asker.overflowed());
+    for id in ids {
+        assert_eq!(
+            asker.try_event(),
+            Ok(Some(ScriptEvent::Answer {
+                id,
+                answer: Ok(json!(id))
+            }))
+        );
+    }
+    assert_eq!(asker.try_event(), Err(Error::Overflow));
+    assert_eq!(asker.try_event(), Ok(None));
+    assert_eq!(session.pending_ask_count(), 0);
 }
