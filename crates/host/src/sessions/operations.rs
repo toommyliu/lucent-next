@@ -1,3 +1,4 @@
+use std::collections::{HashMap, VecDeque};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -19,7 +20,7 @@ use lucent_protocol::{
     item::{ItemContainer, ItemData},
     operation::{Operation, OperationAnswer},
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Condvar, Mutex, RwLock};
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(5);
 const STOP_CHECK_INTERVAL: Duration = Duration::from_millis(20);
@@ -123,10 +124,16 @@ pub(crate) struct Endpoint {
 }
 
 impl Endpoint {
-    fn read<R>(&self, read: impl FnOnce(&Projection) -> R) -> Result<R, Error> {
+    fn read<R>(
+        &self,
+        operations: &Shared,
+        id: u64,
+        read: impl FnOnce(&Projection) -> R,
+    ) -> Result<R, Error> {
         let deadline = Instant::now() + CALL_TIMEOUT;
         let projection = loop {
             self.check()?;
+            operations.check(id)?;
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
                 return Err(Error::Timeout);
@@ -139,13 +146,15 @@ impl Endpoint {
             }
         };
         self.check()?;
+        operations.check(id)?;
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read(&projection)))
             .map_err(|_| Error::ReadPanicked)
     }
-    fn wait<T>(&self, pending: Pending<T>) -> Result<T, Error> {
+    fn wait<T>(&self, operations: &Shared, id: u64, pending: Pending<T>) -> Result<T, Error> {
         let deadline = Instant::now() + CALL_TIMEOUT;
         loop {
             self.check()?;
+            operations.check(id)?;
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
                 return Err(Error::Timeout);
@@ -163,19 +172,25 @@ impl Endpoint {
             Ok(())
         }
     }
-    fn accept(&self, selector: lucent_protocol::query::ItemSelector) -> Result<bool, Error> {
+    fn accept(
+        &self,
+        selector: lucent_protocol::query::ItemSelector,
+        operations: &Shared,
+        id: u64,
+    ) -> Result<bool, Error> {
         self.check()?;
+        operations.check(id)?;
         let (reply, logged_in) = crate::bridge::Pending::channel();
         self.inbox.post(Msg::Command(
             lucent_protocol::command::Command::RefreshLoggedIn {},
             reply,
         ));
-        let logged_in = serde_json::from_str::<bool>(&self.wait(logged_in)?)
+        let logged_in = serde_json::from_str::<bool>(&self.wait(operations, id, logged_in)?)
             .map_err(|error| crate::projection::commands::decode_error("auth.isLoggedIn", error))?;
         if !logged_in {
             return Ok(false);
         }
-        let prepared = self.read(|projection| {
+        let prepared = self.read(operations, id, |projection| {
             let drop = projection
                 .items
                 .resolve(ItemContainer::Drop, &selector)?
@@ -199,7 +214,7 @@ impl Endpoint {
             return Ok(false);
         };
         let response = response?;
-        let result = self.accept_subscribed(&drop, quantities, response);
+        let result = self.accept_subscribed(&drop, quantities, response, operations, id);
         self.packets.invalidate();
         result
     }
@@ -209,11 +224,16 @@ impl Endpoint {
         drop: &ItemData,
         before: [f64; 3],
         response: mpsc::Receiver<Result<AcceptResponse, Error>>,
+        operations: &Shared,
+        id: u64,
     ) -> Result<bool, Error> {
-        let call = self.wait(
+        let Some(call) = operations.issue(id, || {
             self.inbox
-                .call_loader("drops.accept", vec![Value::Number(drop.item_id as f64)]),
-        )?;
+                .call_loader("drops.accept", vec![Value::Number(drop.item_id as f64)])
+        }) else {
+            return Err(Error::Stopped);
+        };
+        let call = self.wait(operations, id, call)?;
         self.check()?;
         match call {
             Value::Bool(true) => {}
@@ -246,7 +266,7 @@ impl Endpoint {
         let expected = response
             .quantity_now
             .unwrap_or(quantity + response.quantity.unwrap_or(drop.quantity));
-        self.read(|projection| {
+        self.read(operations, id, |projection| {
             projection
                 .items
                 .get(container, drop.item_id)
@@ -263,39 +283,239 @@ pub(crate) struct Request {
     pub(crate) player: Endpoint,
 }
 
+enum Lifecycle {
+    Queued {
+        owner: super::AttachmentId,
+        request: Option<Arc<Request>>,
+    },
+    IssuedAttached(super::AttachmentId),
+    IssuedDetached,
+    Settled,
+}
+
+impl Lifecycle {
+    fn issue(&mut self) -> bool {
+        match self {
+            Self::Queued { owner, .. } => {
+                *self = Self::IssuedAttached(*owner);
+                true
+            }
+            Self::IssuedAttached(_) | Self::IssuedDetached | Self::Settled => false,
+        }
+    }
+
+    fn cancel(&mut self, caller: super::AttachmentId) {
+        match *self {
+            Self::Queued { owner, .. } if owner == caller => *self = Self::Settled,
+            Self::IssuedAttached(owner) if owner == caller => *self = Self::IssuedDetached,
+            Self::Queued { .. }
+            | Self::IssuedAttached(_)
+            | Self::IssuedDetached
+            | Self::Settled => {}
+        }
+    }
+
+    fn settle(&mut self) -> Option<super::AttachmentId> {
+        match std::mem::replace(self, Self::Settled) {
+            Self::Queued { owner, .. } | Self::IssuedAttached(owner) => Some(owner),
+            Self::IssuedDetached | Self::Settled => None,
+        }
+    }
+}
+
+#[derive(Default)]
+struct Queue {
+    entries: HashMap<u64, Lifecycle>,
+    fifo: VecDeque<u64>,
+    stopped: bool,
+}
+
+#[cfg(feature = "testing")]
+type IssuanceProbe = Arc<dyn Fn(u64, bool) + Send + Sync>;
+
+#[derive(Default)]
+pub(crate) struct Shared {
+    queue: Mutex<Queue>,
+    ready: Condvar,
+    #[cfg(feature = "testing")]
+    probe: Mutex<Option<IssuanceProbe>>,
+}
+
+impl Shared {
+    pub(crate) fn prepare(&self, owner: super::AttachmentId) -> Result<u64, Error> {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let mut queue = self.queue.lock();
+        if queue.stopped {
+            return Err(Error::Stopped);
+        }
+        if queue.entries.len() > crate::bridge::EVENT_CAPACITY {
+            return Err(Error::Overflow);
+        }
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        queue.entries.insert(
+            id,
+            Lifecycle::Queued {
+                owner,
+                request: None,
+            },
+        );
+        Ok(id)
+    }
+
+    pub(crate) fn submit(&self, request: Request) -> Result<(), Error> {
+        let mut queue = self.queue.lock();
+        if queue.stopped || request.detached.load(Ordering::Acquire) {
+            return Err(Error::Stopped);
+        }
+        let entry = queue.entries.get_mut(&request.id).ok_or(Error::Stopped)?;
+        let Lifecycle::Queued {
+            owner,
+            request: pending,
+        } = entry
+        else {
+            return Err(Error::Stopped);
+        };
+        if *owner != request.attachment || pending.is_some() {
+            return Err(Error::Stopped);
+        }
+        let id = request.id;
+        *pending = Some(Arc::new(request));
+        queue.fifo.push_back(id);
+        self.ready.notify_one();
+        Ok(())
+    }
+
+    pub(crate) fn cancel(&self, owner: super::AttachmentId, id: u64) {
+        let mut queue = self.queue.lock();
+        if let Some(entry) = queue.entries.get_mut(&id) {
+            entry.cancel(owner);
+            if matches!(entry, Lifecycle::Settled) {
+                queue.entries.remove(&id);
+                queue.fifo.retain(|queued| *queued != id);
+            }
+        }
+    }
+
+    pub(crate) fn detach(&self, owner: super::AttachmentId) {
+        let mut queue = self.queue.lock();
+        queue.entries.retain(|_, entry| {
+            entry.cancel(owner);
+            !matches!(entry, Lifecycle::Settled)
+        });
+        let Queue { entries, fifo, .. } = &mut *queue;
+        fifo.retain(|id| entries.contains_key(id));
+    }
+
+    fn next(&self) -> Option<Arc<Request>> {
+        let mut queue = self.queue.lock();
+        loop {
+            if queue.stopped {
+                return None;
+            }
+            if let Some(id) = queue.fifo.pop_front() {
+                if let Some(Lifecycle::Queued {
+                    request: Some(request),
+                    ..
+                }) = queue.entries.get(&id)
+                {
+                    return Some(request.clone());
+                }
+                continue;
+            }
+            self.ready.wait(&mut queue);
+        }
+    }
+
+    fn check(&self, id: u64) -> Result<(), Error> {
+        if self.queue.lock().entries.contains_key(&id) {
+            Ok(())
+        } else {
+            Err(Error::Stopped)
+        }
+    }
+
+    fn issue<T>(&self, id: u64, dispatch: impl FnOnce() -> T) -> Option<T> {
+        #[cfg(feature = "testing")]
+        self.probe(id, false);
+        let result = {
+            let mut queue = self.queue.lock();
+            let entry = queue.entries.get_mut(&id)?;
+            if !entry.issue() {
+                return None;
+            }
+            dispatch()
+        };
+        #[cfg(feature = "testing")]
+        self.probe(id, true);
+        Some(result)
+    }
+
+    fn settle(&self, request: &Request, answer: Result<OperationAnswer, Error>) {
+        let mut queue = self.queue.lock();
+        if let Some(mut entry) = queue.entries.remove(&request.id)
+            && let Some(recipient) = entry.settle()
+        {
+            request.player.inbox.post(Msg::OperationAnswer(
+                recipient,
+                ScriptEvent::Operation {
+                    id: request.id,
+                    answer,
+                },
+            ));
+        }
+    }
+
+    #[cfg(feature = "testing")]
+    pub(crate) fn set_probe(&self, probe: impl Fn(u64, bool) + Send + Sync + 'static) {
+        *self.probe.lock() = Some(Arc::new(probe));
+    }
+
+    #[cfg(feature = "testing")]
+    fn probe(&self, id: u64, issued: bool) {
+        let probe = self.probe.lock().clone();
+        if let Some(probe) = probe {
+            probe(id, issued);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn send(&self, request: Option<Request>) -> Result<(), Error> {
+        let request = request.ok_or(Error::Stopped)?;
+        self.queue.lock().entries.insert(
+            request.id,
+            Lifecycle::Queued {
+                owner: request.attachment,
+                request: None,
+            },
+        );
+        self.submit(request)
+    }
+}
+
 pub(crate) struct Operations {
-    pub(crate) sender: mpsc::SyncSender<Option<Request>>,
+    pub(crate) sender: Arc<Shared>,
     thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Operations {
     pub(crate) fn start(id: u64) -> std::io::Result<Self> {
-        let (sender, requests) =
-            mpsc::sync_channel::<Option<Request>>(crate::bridge::EVENT_CAPACITY);
+        let sender = Arc::new(Shared::default());
+        let requests = sender.clone();
         let thread = thread::Builder::new()
             .name(format!("operations-{id}"))
             .spawn(move || {
-                while let Ok(Some(request)) = requests.recv() {
-                    if request.detached.load(Ordering::Acquire) {
-                        continue;
-                    }
+                while let Some(request) = requests.next() {
                     request.player.inbox.post(Msg::OperationAnswer(
                         request.attachment,
                         ScriptEvent::OperationStarted { id: request.id },
                     ));
-                    let answer = match request.operation {
+                    let answer = match &request.operation {
                         Operation::AcceptDrop { selector } => request
                             .player
-                            .accept(selector)
+                            .accept(selector.clone(), &requests, request.id)
                             .map(OperationAnswer::AcceptDrop),
                     };
-                    request.player.inbox.post(Msg::OperationAnswer(
-                        request.attachment,
-                        ScriptEvent::Operation {
-                            id: request.id,
-                            answer,
-                        },
-                    ));
+                    requests.settle(&request, answer);
                 }
             })?;
         Ok(Self {
@@ -307,9 +527,73 @@ impl Operations {
 
 impl Drop for Operations {
     fn drop(&mut self) {
-        let _ = self.sender.send(None);
+        {
+            let mut queue = self.sender.queue.lock();
+            queue.stopped = true;
+            queue.fifo.clear();
+            queue.entries.clear();
+            self.sender.ready.notify_one();
+        }
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::AttachmentId;
+    use super::*;
+
+    #[test]
+    fn cancelling_queued_work_prevents_issuance_and_settlement_delivery() {
+        let owner = AttachmentId(1);
+        let mut state = Lifecycle::Queued {
+            owner,
+            request: None,
+        };
+        state.cancel(owner);
+        assert!(matches!(state, Lifecycle::Settled));
+        assert!(!state.issue());
+        assert_eq!(state.settle(), None);
+        state.cancel(owner);
+        assert!(matches!(state, Lifecycle::Settled));
+    }
+
+    #[test]
+    fn cancelling_issued_work_detaches_without_settling() {
+        let owner = AttachmentId(1);
+        let mut state = Lifecycle::Queued {
+            owner,
+            request: None,
+        };
+        assert!(state.issue());
+        assert!(!state.issue());
+        state.cancel(owner);
+        assert!(matches!(state, Lifecycle::IssuedDetached));
+        state.cancel(owner);
+        assert!(matches!(state, Lifecycle::IssuedDetached));
+        assert_eq!(state.settle(), None);
+        assert!(matches!(state, Lifecycle::Settled));
+    }
+
+    #[test]
+    fn attached_work_delivers_once_and_foreign_cancellation_is_ignored() {
+        for issued in [false, true] {
+            let owner = AttachmentId(1);
+            let mut state = Lifecycle::Queued {
+                owner,
+                request: None,
+            };
+            if issued {
+                assert!(state.issue());
+            }
+            state.cancel(AttachmentId(2));
+            assert_eq!(state.settle(), Some(owner));
+            assert_eq!(state.settle(), None);
+            assert!(!state.issue());
+            state.cancel(owner);
+            assert!(matches!(state, Lifecycle::Settled));
         }
     }
 }
