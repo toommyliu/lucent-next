@@ -1,40 +1,9 @@
 use super::*;
-use std::{
-    cell::{Cell, RefCell},
-    sync::{Arc, Mutex},
-};
-use tracing_subscriber::prelude::*;
+use crate::automation::test_logs::Logs;
+use std::cell::{Cell, RefCell};
 
 const HALF_SECOND: Duration = Duration::from_millis(500);
 const REPLY_LIMIT: Duration = Duration::from_secs(5);
-
-#[derive(Default, Clone)]
-struct Logs(Arc<Mutex<Vec<String>>>);
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Logs {
-    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        struct Message(String);
-        impl tracing::field::Visit for Message {
-            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-                if field.name() == "message" {
-                    self.0 = format!("{value:?}");
-                }
-            }
-        }
-        let mut message = Message(String::new());
-        event.record(&mut message);
-        self.0.lock().unwrap().push(message.0);
-    }
-}
-impl Logs {
-    fn count(&self, text: &str) -> usize {
-        self.0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|message| message.contains(text))
-            .count()
-    }
-}
 
 struct Host {
     config: RefCell<Result<String, String>>,
@@ -63,17 +32,17 @@ impl Host {
     }
 }
 impl AutoZoneHost for Host {
-    fn config(&self) -> Result<String, String> {
+    fn config(&self) -> Result<String, TickError> {
         if self.panic.get() {
             panic!("broken native zone boundary");
         }
-        self.config.borrow().clone()
+        self.config.borrow().clone().map_err(TickError::from)
     }
-    fn snapshot(&self) -> Result<Snapshot, String> {
+    fn snapshot(&self) -> Result<Snapshot, TickError> {
         if self.panic.get() {
             panic!("broken native zone boundary");
         }
-        self.snapshot.borrow().clone()
+        self.snapshot.borrow().clone().map_err(TickError::from)
     }
     fn walk(&self, x: i32, y: i32) -> Pending<Value> {
         self.walks.borrow_mut().push((x, y));
@@ -98,20 +67,29 @@ fn active(map: AutoZoneMap) -> AutoZoneConfig {
 
 #[test]
 fn host_read_failures_retry_once_per_streak_and_use_the_latest_record() {
-    let now = Instant::now();
-    let logs = Logs::default();
-    let dispatch = tracing::Dispatch::new(tracing_subscriber::registry().with(logs.clone()));
-    let _guard = tracing::dispatcher::set_default(&dispatch);
-    let host = Host::new("moreskulls");
-    let mut policy = AutoZone::new(now);
-    for fault in [
-        Err("temporary zone host failure".into()),
-        Ok("{".into()),
-        Ok("{}".into()),
-        Ok(r#"{"enabled":"yes","map":null}"#.into()),
-        Ok(r#"{"enabled":true,"map":"unknown"}"#.into()),
+    for (fault, cause) in [
+        (
+            Err("temporary zone host failure".into()),
+            "temporary zone host failure",
+        ),
+        (Ok("{".into()), "EOF while parsing an object"),
+        (Ok("{}".into()), "Invalid auto zone enabled value"),
+        (Ok(r#"{"enabled":true}"#.into()), "Missing auto zone map"),
+        (
+            Ok(r#"{"enabled":"yes","map":null}"#.into()),
+            "Invalid auto zone enabled value",
+        ),
+        (
+            Ok(r#"{"enabled":true,"map":"unknown"}"#.into()),
+            "unknown variant `unknown`",
+        ),
     ] {
-        policy.refresh(now);
+        let now = Instant::now();
+        let logs = Logs::default();
+        let dispatch = logs.dispatch();
+        let _guard = tracing::dispatcher::set_default(&dispatch);
+        let host = Host::new("moreskulls");
+        let mut policy = AutoZone::new(now);
         *host.config.borrow_mut() = fault;
         for i in 0..2 {
             let at = now + HALF_SECOND * i;
@@ -122,18 +100,20 @@ fn host_read_failures_retry_once_per_streak_and_use_the_latest_record() {
             );
         }
         assert_eq!(logs.count("auto zone tick failed"), 1);
+        assert_eq!(logs.count(cause), 1, "warning must name {cause:?}");
+        *host.config.borrow_mut() = Ok(r#"{"enabled":true,"map":"moreskulls"}"#.into());
+        advance(&mut policy, &host, now + HALF_SECOND * 2);
+        policy.zone("moreskulls".into(), "A".into(), now + HALF_SECOND * 2);
+        advance(&mut policy, &host, now + HALF_SECOND * 2);
+        assert_eq!(host.walks.borrow().len(), 1);
+        assert!((696..=802).contains(&host.walks.borrow()[0].0));
+        assert_eq!(logs.count("auto zone recovered"), 1);
+        *host.config.borrow_mut() = Err("another failure".into());
+        policy.refresh(now + HALF_SECOND * 3);
+        advance(&mut policy, &host, now + HALF_SECOND * 3);
+        assert_eq!(logs.count("auto zone tick failed"), 2);
+        assert_eq!(logs.count("another failure"), 1);
     }
-    *host.config.borrow_mut() = Ok(r#"{"enabled":true,"map":"moreskulls"}"#.into());
-    advance(&mut policy, &host, now + HALF_SECOND * 2);
-    policy.zone("moreskulls".into(), "A".into(), now + HALF_SECOND * 2);
-    advance(&mut policy, &host, now + HALF_SECOND * 2);
-    assert_eq!(host.walks.borrow().len(), 1);
-    assert!((696..=802).contains(&host.walks.borrow()[0].0));
-    assert_eq!(logs.count("auto zone recovered"), 1);
-    *host.config.borrow_mut() = Err("another failure".into());
-    policy.refresh(now + HALF_SECOND * 3);
-    advance(&mut policy, &host, now + HALF_SECOND * 3);
-    assert_eq!(logs.count("auto zone tick failed"), 2);
 }
 
 #[test]
@@ -141,7 +121,7 @@ fn panics_and_snapshot_errors_retry_and_recover_with_their_cause() {
     for config_failure in [true, false] {
         let now = Instant::now();
         let logs = Logs::default();
-        let dispatch = tracing::Dispatch::new(tracing_subscriber::registry().with(logs.clone()));
+        let dispatch = logs.dispatch();
         let _guard = tracing::dispatcher::set_default(&dispatch);
         let host = Host::new("ledgermayne");
         let mut policy = AutoZone::new(now);
@@ -182,7 +162,7 @@ fn panics_and_snapshot_errors_retry_and_recover_with_their_cause() {
 #[test]
 fn failed_walks_finish_once_and_leave_the_next_zone_ready() {
     let logs = Logs::default();
-    let dispatch = tracing::Dispatch::new(tracing_subscriber::registry().with(logs.clone()));
+    let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
     for reply in [
         Err(Error::Unavailable("temporary walk failure".into())),

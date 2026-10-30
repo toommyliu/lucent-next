@@ -565,8 +565,10 @@ mod tests {
     #[test]
     fn operation_answers_arrive_before_the_first_viewport() {
         let (tx, rx) = mpsc::channel();
-        let (producer, events) = crate::bridge::script_events(16);
-        let (second, second_events) = crate::bridge::script_events(16);
+        let (producer, events) =
+            crate::bridge::script_events(16, crate::bridge::EventInterests::ALL);
+        let (second, second_events) =
+            crate::bridge::script_events(16, crate::bridge::EventInterests::ALL);
         let answer = crate::bridge::ScriptEvent::Operation {
             id: 42,
             answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
@@ -598,8 +600,10 @@ mod tests {
     #[test]
     fn operation_answers_for_detached_links_are_discarded() {
         for before_viewport in [true, false] {
-            let (producer, events) = crate::bridge::script_events(16);
-            let (second, second_events) = crate::bridge::script_events(16);
+            let (producer, events) =
+                crate::bridge::script_events(16, crate::bridge::EventInterests::ALL);
+            let (second, second_events) =
+                crate::bridge::script_events(16, crate::bridge::EventInterests::ALL);
             let messages = [
                 Msg::Attach(AttachmentId(0), producer),
                 Msg::Attach(AttachmentId(1), second),
@@ -651,9 +655,12 @@ mod tests {
     #[test]
     fn attachments_before_the_viewport_are_kept_until_detached_or_stopped() {
         let viewport = Viewport::new(1024.0, 768.0, 1.0).unwrap();
-        let (first, first_events) = crate::bridge::script_events(1);
-        let (removed, removed_events) = crate::bridge::script_events(1);
-        let (last, last_events) = crate::bridge::script_events(1);
+        let (first, first_events) =
+            crate::bridge::script_events(1, crate::bridge::EventInterests::ALL);
+        let (removed, removed_events) =
+            crate::bridge::script_events(1, crate::bridge::EventInterests::ALL);
+        let (last, last_events) =
+            crate::bridge::script_events(1, crate::bridge::EventInterests::ALL);
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::Attach(AttachmentId(0), first)).unwrap();
         tx.send(Msg::Attach(AttachmentId(1), removed)).unwrap();
@@ -689,7 +696,8 @@ mod tests {
 
     #[test]
     fn stopping_before_the_viewport_ends_an_attachment() {
-        let (producer, events) = crate::bridge::script_events(1);
+        let (producer, events) =
+            crate::bridge::script_events(1, crate::bridge::EventInterests::ALL);
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::Stop).unwrap();
         tx.send(Msg::Attach(AttachmentId(0), producer)).unwrap();

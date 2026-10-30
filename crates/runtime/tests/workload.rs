@@ -1,6 +1,7 @@
 mod common;
 
 use common::*;
+use lucent_host::bridge::EventInterests;
 use lucent_host::{ScriptLink, Session, bridge::ScriptEvent, bridge::Value, testing};
 use lucent_protocol::{command::Command, script::Script};
 use lucent_runtime::{Kill, Supervisor};
@@ -211,7 +212,7 @@ fn runtime_workload() {
         .unwrap();
         link.command(command).recv_timeout(TIMEOUT).unwrap();
         while link.try_event().unwrap().is_some() {}
-        let tick_link = session.attach().unwrap();
+        let tick_link = session.attach(EventInterests::ALL).unwrap();
         let stop = Arc::new(AtomicBool::new(false));
         let observer_stop = stop.clone();
         let observer = thread::spawn(move || observe(tick_link, observer_stop));

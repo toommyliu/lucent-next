@@ -1,5 +1,6 @@
 mod common;
 
+use lucent_host::bridge::EventInterests;
 use std::time::{Duration, Instant};
 
 use lucent_host::bridge::Value;
@@ -105,7 +106,7 @@ fn drain(link: &ScriptLink) {
 fn script_kills_never_restart_the_bot() {
     let (_host, mut session, observer) = start();
     drain(&observer);
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     #[cfg(feature = "testing")]
     bot.eval("identity.js", "globalThis.identity = { turns: 0 }; null")
         .wait::<()>(TIMEOUT)
@@ -149,7 +150,7 @@ fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
         let dispatch = logs.dispatch();
         let _guard = tracing::dispatcher::set_default(&dispatch);
         let (_host, mut session, observer) = start();
-        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
         assert_eq!(
             bot.eval(
                 "exports.js",
@@ -174,7 +175,7 @@ fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
             vec!["bot runtime failed"]
         );
         drain(&observer);
-        let _replacement = Bot::start(session.attach().unwrap()).unwrap();
+        let _replacement = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     }
 }
 
@@ -308,7 +309,7 @@ fn only_scripts_request_monster_drops_on_player_location() {
 #[test]
 fn a_throwing_bot_turn_is_terminal() {
     let (_host, mut session, _observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     bot.eval(
         "break-turn.js",
         r#"
@@ -334,7 +335,7 @@ fn overflow_logs_identify_the_runtime() {
         for (let i = 0; i < 1100; i++) window.swf["probe.emit"]("onDebug", String(i));
         new Promise(() => {});
     "#;
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     assert!(matches!(
         bot.eval("flood.js", flood).wait::<()>(TIMEOUT),
         Err(RuntimeError::EventsLost)
@@ -344,7 +345,8 @@ fn overflow_logs_identify_the_runtime() {
             .iter()
             .any(|text| text == "bot events overflowed and were lost")
     );
-    let runtime = lucent_runtime::Runtime::start(session.attach().unwrap()).unwrap();
+    let runtime =
+        lucent_runtime::Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     assert!(matches!(
         runtime.eval("flood.js", flood).wait::<()>(TIMEOUT),
         Err(RuntimeError::EventsLost)
@@ -366,7 +368,7 @@ fn set_enabled_returns_the_state_after_capture() {
             .constant("auth.getPassword", json!("secret")),
     );
     become_ready(&observer);
-    let _bot = Bot::start(session.attach().unwrap()).unwrap();
+    let _bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     let run = common::start(
         &mut session,
         common::loose(&[(
@@ -390,7 +392,7 @@ fn set_enabled_returns_the_state_after_capture() {
 #[test]
 fn relogin_setters_publish_sanitized_records_before_they_answer() {
     let (_host, mut session, observer) = start();
-    let _bot = Bot::start(session.attach().unwrap()).unwrap();
+    let _bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     let run = common::start(
         &mut session,
         common::loose(&[(
@@ -448,7 +450,7 @@ fn set_enabled_captures_cached_credentials_when_refresh_fails() {
         .command(Command::RefreshCredentials {})
         .recv_timeout(TIMEOUT)
         .unwrap();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     bot.eval(
         "fail-credential-refresh.js",
         r#"
@@ -500,7 +502,7 @@ fn relogin_boundary_failures_fall_back_to_cached_credentials() {
     let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
     let (_host, mut session, _observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     bot.eval("fail-capture.js", r#"
         const command = __host.command;
         let failures = 2;
@@ -549,7 +551,7 @@ fn relogin_reply_errors_allow_the_next_capture() {
         let dispatch = logs.dispatch();
         let _guard = tracing::dispatcher::set_default(&dispatch);
         let (_host, mut session, _observer) = start();
-        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
         bot.eval("malformed-capture.js", format!(r#"
             const command = __host.command;
             let failures = 2;
@@ -600,7 +602,7 @@ fn relogin_code_failures_fail_the_ask_and_allow_the_next_setter() {
     let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
     let (_host, mut session, _observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     bot.eval(
         "break-relogin.js",
         r#"
@@ -658,7 +660,7 @@ fn relogin_code_failures_fail_the_ask_and_allow_the_next_setter() {
 fn assert_failed_recovery_command_backs_off(command: &str) {
     {
         let (_host, mut session, observer) = start();
-        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
         let run = common::start(
             &mut session,
             common::loose(&[(
@@ -731,7 +733,7 @@ fn assert_failed_recovery_command_backs_off(command: &str) {
 #[test]
 fn invalid_bot_requests_keep_their_message() {
     let (_host, mut session, observer) = start();
-    let _bot = Bot::start(session.attach().unwrap()).unwrap();
+    let _bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     let id = observer.ask(json!({"kind":"invalid"})).unwrap();
     let deadline = Instant::now() + TIMEOUT;
     loop {
@@ -765,7 +767,7 @@ fn failed_logout_commands_back_off() {
 fn assert_reconnect_uses_cached_auth(capture_on_reconnect: bool) {
     for cached_logged_in in [false, true] {
         let (_host, mut session, _observer) = start();
-        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
         bot.eval("prepare-reconnect.js", r#"
             const command = __host.command;
             const read = __host.read;
@@ -892,7 +894,7 @@ fn assert_reconnect_uses_cached_auth(capture_on_reconnect: bool) {
 #[test]
 fn reconnect_reaches_armed_when_logged_in_refresh_keeps_throwing() {
     let (_host, mut session, _observer) = start();
-    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     let run = common::start(
         &mut session,
         common::loose(&[(

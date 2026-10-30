@@ -13,10 +13,11 @@ use lucent_protocol::{
 
 use crate::{
     ScriptLink,
-    bridge::{Error, Pending, ScriptEvent, Value},
+    bridge::{Error, EventInterests, EventKind, Pending, ScriptEvent, Value},
 };
 
 const RETRY: Duration = Duration::from_millis(500);
+const READ_RETRY: Duration = Duration::from_millis(10);
 const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct AutoZonePolicy {
@@ -26,6 +27,12 @@ pub struct AutoZonePolicy {
 }
 
 impl AutoZonePolicy {
+    pub const INTERESTS: EventInterests = EventInterests::new(&[
+        EventKind::Zone,
+        EventKind::AutoZoneChanged,
+        EventKind::Invalidated,
+    ]);
+
     pub fn new(link: ScriptLink, waker: Waker) -> Self {
         link.set_waker(waker.clone());
         Self {
@@ -73,17 +80,43 @@ struct Snapshot {
 }
 
 trait AutoZoneHost {
-    fn config(&self) -> Result<String, String>;
-    fn snapshot(&self) -> Result<Snapshot, String>;
+    fn config(&self) -> Result<String, TickError>;
+    fn snapshot(&self) -> Result<Snapshot, TickError>;
     fn walk(&self, x: i32, y: i32) -> Pending<Value>;
 }
 
-impl AutoZoneHost for ScriptLink {
-    fn config(&self) -> Result<String, String> {
-        self.query_for(Duration::ZERO, &mut Some(Query::AutoZone {}))
-            .map_err(|error| error.to_string())
+enum TickError {
+    Contended,
+    Failed(String),
+}
+
+impl From<Error> for TickError {
+    fn from(error: Error) -> Self {
+        match error {
+            Error::Timeout => Self::Contended,
+            error => Self::Failed(error.to_string()),
+        }
     }
-    fn snapshot(&self) -> Result<Snapshot, String> {
+}
+
+impl From<String> for TickError {
+    fn from(error: String) -> Self {
+        Self::Failed(error)
+    }
+}
+
+impl From<&str> for TickError {
+    fn from(error: &str) -> Self {
+        Self::Failed(error.to_owned())
+    }
+}
+
+impl AutoZoneHost for ScriptLink {
+    fn config(&self) -> Result<String, TickError> {
+        self.query_for(Duration::ZERO, &mut Some(Query::AutoZone {}))
+            .map_err(TickError::from)
+    }
+    fn snapshot(&self) -> Result<Snapshot, TickError> {
         self.read_for(Duration::ZERO, |projection| {
             let player = projection.world.get_me();
             let has = |names: [&str; 2]| {
@@ -105,7 +138,7 @@ impl AutoZoneHost for ScriptLink {
                 },
             }
         })
-        .map_err(|error| error.to_string())
+        .map_err(TickError::from)
     }
     fn walk(&self, x: i32, y: i32) -> Pending<Value> {
         self.call_loader(
@@ -200,17 +233,31 @@ impl AutoZone {
                         .map(|text| (*text).to_owned())
                         .or_else(|| panic.downcast_ref::<String>().cloned())
                         .unwrap_or_default();
-                    Err(format!("auto zone transition panicked: {message}"))
+                    Err(TickError::Failed(format!(
+                        "auto zone transition panicked: {message}"
+                    )))
                 });
         if let Err(error) = result {
-            if !self.failing {
-                tracing::warn!("auto zone tick failed: {error}");
-            }
-            self.failing = true;
+            let contended = matches!(error, TickError::Contended);
+            let retry = match error {
+                TickError::Contended => READ_RETRY,
+                TickError::Failed(error) => {
+                    if !self.failing {
+                        tracing::warn!("auto zone tick failed: {error}");
+                    }
+                    self.failing = true;
+                    RETRY
+                }
+            };
             if self.refresh_at.is_some() {
-                self.refresh_at = Some(now + RETRY);
+                self.refresh_at = Some(now + retry);
             } else if let Some(transition) = &mut self.transition {
-                transition.state = State::Scheduled(now + RETRY + delay(transition.map));
+                let charge_delay = if contended {
+                    Duration::ZERO
+                } else {
+                    delay(transition.map)
+                };
+                transition.state = State::Scheduled(now + retry + charge_delay);
             }
         }
         self.refresh_at.or_else(|| {
@@ -231,7 +278,7 @@ impl AutoZone {
         host: &impl AutoZoneHost,
         waker: &Waker,
         now: Instant,
-    ) -> Result<(), String> {
+    ) -> Result<(), TickError> {
         if let Some(at) = self.refresh_at {
             if now < at {
                 return Ok(());

@@ -1,3 +1,4 @@
+use lucent_host::bridge::EventInterests;
 use std::sync::{Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
@@ -10,7 +11,7 @@ use serde_json::json;
 fn reads_before_the_viewport_are_empty_and_stop_with_the_session() {
     let host = testing::headless_host();
     let mut session = host.start_session(testing::headless_surface()).unwrap();
-    let link = session.attach().unwrap();
+    let link = session.attach(EventInterests::ALL).unwrap();
     assert_eq!(
         link.read(|projection| (
             projection.world.map.name.clone(),

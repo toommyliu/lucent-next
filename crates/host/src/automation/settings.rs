@@ -21,7 +21,7 @@ pub struct SettingsPolicy {
 }
 
 impl SettingsPolicy {
-    pub fn new(link: ScriptLink, waker: Waker) -> Self {
+    pub fn new(link: &ScriptLink, waker: Waker) -> Self {
         Self {
             inbox: link.inbox(),
             status: link.player_status(),

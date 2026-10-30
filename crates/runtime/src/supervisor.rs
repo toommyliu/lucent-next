@@ -77,7 +77,6 @@ enum Msg {
 struct Player {
     bot: ScriptLink,
     watch: Option<ScriptLink>,
-    settings: Option<ScriptLink>,
     auto_zone: Option<ScriptLink>,
 }
 
@@ -138,7 +137,9 @@ impl Supervisor {
         session: &mut Session,
         script: Script,
     ) -> Result<ScriptControls, RuntimeError> {
-        let watch = session.attach().ok_or(RuntimeError::Stopped)?;
+        let watch = session
+            .attach(bridge::EventInterests::ALL)
+            .ok_or(RuntimeError::Stopped)?;
         self.has_script = true;
         self.inbox
             .send(Msg::Start(Box::new((script, watch))))
@@ -169,17 +170,16 @@ impl Drop for Supervisor {
 }
 
 fn attach(session: &mut Session, has_script: bool) -> Option<Player> {
-    let bot = session.attach()?;
+    let bot = session.attach(bridge::EventInterests::ALL)?;
     let watch = if has_script {
-        Some(session.attach()?)
+        Some(session.attach(bridge::EventInterests::ALL)?)
     } else {
         None
     };
     Some(Player {
         bot,
         watch,
-        settings: Some(session.attach()?),
-        auto_zone: Some(session.attach_auto_zone()?),
+        auto_zone: Some(session.attach(AutoZonePolicy::INTERESTS)?),
     })
 }
 
@@ -353,7 +353,7 @@ impl Supervision {
             *next = None;
         }
         self.settings = Some(SettingsPolicy::new(
-            player.settings.take().unwrap(),
+            &player.bot,
             Waker::from(self.notify.clone()),
         ));
         self.auto_zone = Some(AutoZonePolicy::new(

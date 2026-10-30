@@ -1,6 +1,7 @@
 mod common;
 
 use common::TIMEOUT;
+use lucent_host::bridge::EventInterests;
 use lucent_host::{
     ScriptLink,
     bridge::{ScriptEvent, Value},
@@ -188,7 +189,9 @@ fn the_zone_policy_runs_without_a_bot() {
     common::log_in(&observer);
     enter_map(&observer, "ledgermayne");
     patch(&observer, json!({"enabled":true,"map":"ledgermayne"}));
-    let link = session.attach_auto_zone().unwrap();
+    let link = session
+        .attach(lucent_host::automation::AutoZonePolicy::INTERESTS)
+        .unwrap();
     let mut policy = lucent_host::automation::AutoZonePolicy::new(
         link,
         Waker::from(Arc::new(Unpark(thread::current()))),
@@ -414,7 +417,7 @@ fn player_restarts_rebind_auto_zone_without_losing_the_config() {
     supervisor
         .restart_player(&mut session, testing::headless_surface())
         .unwrap();
-    let observer = session.attach().unwrap();
+    let observer = session.attach(EventInterests::ALL).unwrap();
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100., 100., 1.).unwrap(),
     ));
@@ -443,7 +446,9 @@ fn native_auto_zone_rereads_the_host_record_after_relevant_event_overflow() {
     enter_map(&observer, "ledgermayne");
     patch(&observer, json!({"enabled":true,"map":"ledgermayne"}));
     let mut policy = lucent_host::automation::AutoZonePolicy::new(
-        session.attach_auto_zone().unwrap(),
+        session
+            .attach(lucent_host::automation::AutoZonePolicy::INTERESTS)
+            .unwrap(),
         Waker::noop().clone(),
     );
     policy.advance(Instant::now());
@@ -529,4 +534,46 @@ fn rejected_loader_walks_finish_once_and_the_next_zone_still_moves() {
         (353., 356.),
     );
     assert!(logs.messages(tracing::Level::WARN).is_empty());
+}
+
+#[test]
+fn disabling_auto_zone_cancels_a_delayed_walk_through_the_event_stream() {
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        common::ready_movie().responding("player.walkTo", [(json!(true), vec![])]),
+    );
+    common::log_in(&observer);
+    enter_map(&observer, "queeniona");
+    patch(&observer, json!({"enabled":true,"map":"queeniona"}));
+    let mut policy = lucent_host::automation::AutoZonePolicy::new(
+        session
+            .attach(lucent_host::automation::AutoZonePolicy::INTERESTS)
+            .unwrap(),
+        Waker::noop().clone(),
+    );
+    let now = Instant::now();
+    assert_eq!(policy.advance(now), None);
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":""}}));
+    assert_eq!(policy.advance(now), Some(now + Duration::from_millis(500)));
+    patch(&observer, json!({"enabled":false}));
+    assert_eq!(policy.advance(now + Duration::from_millis(1)), None);
+    assert_eq!(policy.advance(now + Duration::from_secs(1)), None);
+    observer
+        .call_loader("probe.emit", vec![])
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    while let Some(event) = observer.try_event().unwrap() {
+        assert!(!matches!(event, ScriptEvent::Loader { event, .. }
+            if event.name == "onProbeCall" && event.args.first() == Some(&Value::String("player.walkTo".into()))));
+    }
+    patch(&observer, json!({"enabled":true}));
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":""}}));
+    policy.advance(now + Duration::from_secs(1));
+    policy.advance(now + Duration::from_millis(1500));
+    assert_position(
+        &next_call(&observer, "player.walkTo"),
+        (490., 490.),
+        (320., 320.),
+    );
 }

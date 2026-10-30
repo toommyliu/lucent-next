@@ -178,7 +178,7 @@ mod tests {
 
     fn running(input: usize, output: usize) -> (Running, Bridge, ScriptEvents) {
         let (bridge, loader_events) = Bridge::with_capacity(input);
-        let (producer, events) = script_events(output);
+        let (producer, events) = script_events(output, crate::bridge::EventInterests::ALL);
         let now = Instant::now();
         (
             Running {

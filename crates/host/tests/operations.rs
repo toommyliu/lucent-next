@@ -1,3 +1,4 @@
+use lucent_host::bridge::EventInterests;
 use lucent_host::{
     ScriptLink,
     bridge::{ScriptEvent, Value},
@@ -146,7 +147,7 @@ fn operation_answers_do_not_overflow_another_links_full_queue() {
     );
     drop_item(&first, "Item", false);
     while first.try_event().unwrap().is_some() {}
-    let second = session.attach().unwrap();
+    let second = session.attach(EventInterests::ALL).unwrap();
     session.read_projection(|_| ()).recv_timeout(WAIT).unwrap();
     assert_eq!(
         second.try_event(),
@@ -331,7 +332,7 @@ fn a_player_restart_ends_its_accept_and_the_session_worker_accepts_on_the_new_pl
         Err(lucent_host::bridge::Error::Stopped)
     );
     assert!(stopped.elapsed() < Duration::from_secs(1));
-    let current = session.attach().unwrap();
+    let current = session.attach(EventInterests::ALL).unwrap();
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));

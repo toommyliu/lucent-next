@@ -1,5 +1,6 @@
 mod common;
 
+use lucent_host::bridge::EventInterests;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -109,7 +110,7 @@ fn a_runaway_turn_is_killed_within_250_ms_of_cpu_and_a_new_runtime_works() {
         "Promise.resolve().then(() => { while (true) {} }); while (true) {}",
         "for (let i = 0; i < 2; i++) Promise.reject({ get stack() { while (true) {} } })",
     ] {
-        let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+        let runtime = Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
         let waiting = runtime.eval("wait.js", "globalThis.marker = 1; new Promise(() => {})");
         let runaway = runtime.eval("runaway.js", source);
         let error = runaway.wait::<Value>(TIMEOUT).unwrap_err();
@@ -141,7 +142,7 @@ fn a_runaway_turn_is_killed_within_250_ms_of_cpu_and_a_new_runtime_works() {
             session.attached_link_count().recv_timeout(TIMEOUT).unwrap(),
             0
         );
-        let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+        let runtime = Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
         let heard = listen(&runtime);
         emit_after(&runtime);
         assert_eq!(
@@ -176,9 +177,9 @@ fn a_script_blocked_in_a_loader_call_is_killed_without_waiting_for_the_reply() {
 
     drop(runtime);
     drop(release);
-    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+    let runtime = Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     drop(runtime);
-    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+    let runtime = Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     let heard = listen(&runtime);
     emit_after(&runtime);
     assert_eq!(
@@ -211,7 +212,7 @@ fn a_script_that_catches_out_of_memory_is_killed_at_the_heap_limit() {
     );
 
     drop(runtime);
-    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+    let runtime = Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     let heard = listen(&runtime);
     emit_after(&runtime);
     assert_eq!(
@@ -337,7 +338,7 @@ fn evals_sent_before_a_kill_fail_with_it_and_the_runtime_ends() {
         Err(RuntimeError::Stopped)
     ));
     drop(runtime);
-    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+    let runtime = Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     assert_eq!(
         runtime
             .eval("after.js", "typeof globalThis.marker")
