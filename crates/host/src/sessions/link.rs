@@ -20,26 +20,29 @@ pub struct ScriptLink {
     projection: Arc<RwLock<Projection>>,
     settings: Arc<RwLock<GameSettings>>,
     stopped: Arc<AtomicBool>,
+    packets: Arc<super::operations::Packets>,
+    operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
 }
 
 impl ScriptLink {
     pub(crate) fn new(
         id: u64,
         attachment: AttachmentId,
-        inbox: Inbox,
         events: ScriptEvents,
-        projection: Arc<RwLock<Projection>>,
         settings: Arc<RwLock<GameSettings>>,
-        stopped: Arc<AtomicBool>,
+        player: super::operations::Endpoint,
+        operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
     ) -> Self {
         Self {
             id,
             attachment,
-            inbox,
+            inbox: player.inbox,
             events,
-            projection,
+            projection: player.projection,
             settings,
-            stopped,
+            stopped: player.stopped,
+            packets: player.packets,
+            operations,
         }
     }
 
@@ -61,6 +64,35 @@ impl ScriptLink {
 
     pub fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {
         self.inbox.call_loader(name, args)
+    }
+
+    pub fn operate(
+        &self,
+        operation: lucent_protocol::operation::Operation,
+    ) -> Result<u64, bridge::Error> {
+        use std::sync::atomic::AtomicU64;
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        if self.stopped.load(Ordering::Acquire) {
+            return Err(bridge::Error::Stopped);
+        }
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        self.operations
+            .try_send(Some(super::operations::Request {
+                id,
+                attachment: self.attachment,
+                operation,
+                player: super::operations::Endpoint {
+                    inbox: self.inbox.clone(),
+                    projection: self.projection.clone(),
+                    stopped: self.stopped.clone(),
+                    packets: self.packets.clone(),
+                },
+            }))
+            .map_err(|error| match error {
+                std::sync::mpsc::TrySendError::Full(_) => bridge::Error::Overflow,
+                std::sync::mpsc::TrySendError::Disconnected(_) => bridge::Error::Stopped,
+            })?;
+        Ok(id)
     }
 
     pub fn command(&self, command: lucent_protocol::command::Command) -> Pending<String> {
@@ -161,6 +193,81 @@ mod tests {
             serde_json::from_str::<serde_json::Value>(&answer).unwrap()["walkSpeed"],
             8.0
         );
+    }
+
+    #[test]
+    fn an_orphaned_accept_runs_to_its_end() {
+        let host = testing::headless_host();
+        let (mut session, link) = testing::start_probe(&host, testing::ProbeMovie::new()
+            .constant("auth.isLoggedIn", serde_json::json!(true))
+            .accepting_drop(Duration::from_millis(100), serde_json::json!({
+                "type":"json","dataObj":{"cmd":"getDrop","ItemID":70,"bSuccess":true,"iQtyNow":3}
+            }).to_string()));
+        link.call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onExtensionResponse".into()),
+                Value::String(
+                    serde_json::json!({"type":"json","dataObj":{"cmd":"dropItem","items":{"70":{
+                        "ItemID":70,"sName":"Dropped Item","iQty":2
+                    }}}})
+                    .to_string(),
+                ),
+            ],
+        )
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+        link.operate(lucent_protocol::operation::Operation::AcceptDrop {
+            selector: lucent_protocol::query::ItemSelector::Id(70.0),
+        })
+        .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        loop {
+            if matches!(link.try_event().unwrap(), Some(ScriptEvent::Loader { event, .. }) if event.name == "onProbeAccept")
+            {
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(1));
+        }
+        let observer = session.attach().unwrap();
+        drop(link);
+        let id = observer
+            .operate(lucent_protocol::operation::Operation::AcceptDrop {
+                selector: lucent_protocol::query::ItemSelector::Id(999.0),
+            })
+            .unwrap();
+        loop {
+            if let Some(ScriptEvent::Operation {
+                id: answered,
+                answer,
+            }) = observer.try_event().unwrap()
+            {
+                assert_eq!(answered, id);
+                assert_eq!(
+                    answer,
+                    Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
+                        false
+                    ))
+                );
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "worker did not finish the orphaned accept and answer the next request"
+            );
+            thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(
+            observer
+                .read(|projection| projection
+                    .items
+                    .get(lucent_protocol::item::ItemContainer::Inventory, 70)
+                    .map(|item| item.data().quantity))
+                .unwrap(),
+            Some(3.0)
+        );
+        assert_eq!(observer.try_event(), Ok(None));
     }
 
     #[test]

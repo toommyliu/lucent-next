@@ -1,8 +1,8 @@
 use std::{env, fs, path::PathBuf};
 
 use lucent_protocol::{
-    aura::*, auth::*, command::*, event::*, hydration::*, item::*, monster_drop::*, packet::*,
-    query::*, quest::*, readiness::*, script::*, settings::*, shop::*, world::*,
+    aura::*, auth::*, command::*, event::*, hydration::*, item::*, monster_drop::*, operation::*,
+    packet::*, query::*, quest::*, readiness::*, script::*, settings::*, shop::*, world::*,
 };
 use ts_rs::{Config, TS};
 
@@ -21,6 +21,8 @@ fn declarations(config: &Config) -> String {
         CredentialsSnapshot,
         RefreshContainer,
         Command,
+        Operation,
+        OperationAnswer,
         HydrationMethod,
         HydrationRequest,
         HydrationResult,

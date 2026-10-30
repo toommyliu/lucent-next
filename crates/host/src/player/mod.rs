@@ -58,6 +58,7 @@ pub(crate) struct Handle {
     pub(crate) inbox: Inbox,
     pub(crate) projection: Arc<RwLock<Projection>>,
     pub(crate) stopped: Arc<AtomicBool>,
+    pub(crate) operation_packets: Arc<crate::sessions::operations::Packets>,
     exited: mpsc::Receiver<Result<(), PlayerError>>,
     thread: Option<thread::JoinHandle<()>>,
 }
@@ -75,6 +76,7 @@ impl Handle {
 impl Drop for Handle {
     fn drop(&mut self) {
         self.stopped.store(true, Ordering::Release);
+        self.operation_packets.stop();
         self.inbox.post(Msg::Stop);
         match self.exited.recv_timeout(STOP_TIMEOUT) {
             Ok(result) => {
@@ -104,13 +106,16 @@ pub(crate) fn spawn(
     let projection = Arc::new(RwLock::new(Projection::default()));
     let stopped = Arc::new(AtomicBool::new(false));
     let thread_stopped = stopped.clone();
+    let operation_packets = Arc::new(crate::sessions::operations::Packets::default());
+    let thread_packets = operation_packets.clone();
     let bridge = PlayerBridge {
         projection: projection.clone(),
         provider,
+        operation_packets: operation_packets.clone(),
         loader_events,
     };
     let thread = thread::Builder::new().name(name).spawn(move || {
-        let _stopped = StopOnDrop(thread_stopped);
+        let _stopped = StopOnDrop(thread_stopped, thread_packets);
         let result = run(rx, outbox, surface, net, options, bridge);
         if let Err(error) = &result {
             tracing::error!(%error, "player failed");
@@ -121,16 +126,18 @@ pub(crate) fn spawn(
         inbox,
         projection,
         stopped,
+        operation_packets,
         exited,
         thread: Some(thread),
     })
 }
 
-struct StopOnDrop(Arc<AtomicBool>);
+struct StopOnDrop(Arc<AtomicBool>, Arc<crate::sessions::operations::Packets>);
 
 impl Drop for StopOnDrop {
     fn drop(&mut self) {
         self.0.store(true, Ordering::Release);
+        self.1.stop();
     }
 }
 
@@ -167,6 +174,7 @@ pub(crate) enum Msg {
     Detach(AttachmentId),
     #[cfg(feature = "testing")]
     LinkCount(mpsc::Sender<Result<usize, BridgeError>>),
+    OperationAnswer(AttachmentId, crate::bridge::ScriptEvent),
     View(ViewEvent),
     Mute(bool),
     Poll(async_task::Runnable),
@@ -262,6 +270,16 @@ fn run(
 
 type ScriptAttachments = Vec<(AttachmentId, ScriptEventSender)>;
 
+fn deliver_operation_answer(
+    script_events: &ScriptAttachments,
+    attachment: AttachmentId,
+    answer: crate::bridge::ScriptEvent,
+) {
+    if let Some((_, stream)) = script_events.iter().find(|(id, _)| *id == attachment) {
+        stream.send(answer);
+    }
+}
+
 fn first_viewport(
     inbox: &mpsc::Receiver<Msg>,
     mut muted: bool,
@@ -293,6 +311,9 @@ fn first_viewport(
                 };
                 let _ = reply.send(result);
             }
+            Msg::OperationAnswer(attachment, answer) => {
+                deliver_operation_answer(&script_events, attachment, answer);
+            }
             Msg::Stop => return None,
             Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
         }
@@ -300,6 +321,7 @@ fn first_viewport(
 }
 
 struct PlayerBridge {
+    operation_packets: Arc<crate::sessions::operations::Packets>,
     projection: Arc<RwLock<Projection>>,
     provider: Bridge,
     loader_events: Events,
@@ -308,6 +330,7 @@ struct PlayerBridge {
 struct Running {
     settings: Arc<RwLock<GameSettings>>,
     settings_applied: bool,
+    operation_packets: Arc<crate::sessions::operations::Packets>,
     loader_events: Events,
     script_events: ScriptAttachments,
     projection: Arc<RwLock<Projection>>,
@@ -331,6 +354,7 @@ impl Running {
         bridge: PlayerBridge,
     ) -> Result<Running, PlayerError> {
         let PlayerBridge {
+            operation_packets,
             projection,
             provider,
             loader_events,
@@ -359,6 +383,7 @@ impl Running {
         Ok(Running {
             settings: options.settings,
             settings_applied: false,
+            operation_packets,
             loader_events,
             script_events: Vec::new(),
             projection,
@@ -382,6 +407,9 @@ impl Running {
             #[cfg(feature = "testing")]
             Msg::LinkCount(reply) => {
                 let _ = reply.send(Ok(self.script_events.len()));
+            }
+            Msg::OperationAnswer(attachment, answer) => {
+                deliver_operation_answer(&self.script_events, attachment, answer);
             }
             Msg::Read(read) => (read.0)(Ok(&self.projection.read())),
             Msg::Command(command, reply) => {
@@ -477,6 +505,7 @@ mod tests {
             settings_applied: false,
             loader_events,
             script_events: Vec::new(),
+            operation_packets: Arc::default(),
             projection: Arc::new(RwLock::new(Projection::default())),
             player: PlayerBuilder::new().build(),
             tasks: Tasks::default(),
@@ -486,6 +515,71 @@ mod tests {
             drawn: 0,
             stats_since: now,
             surface: Surface::textures(surface::noop_gpu(), || {}),
+        }
+    }
+
+    #[test]
+    fn operation_answers_arrive_before_the_first_viewport() {
+        let (tx, rx) = mpsc::channel();
+        let (producer, events) = crate::bridge::script_events(16);
+        let (second, second_events) = crate::bridge::script_events(16);
+        let answer = crate::bridge::ScriptEvent::Operation {
+            id: 42,
+            answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
+                false,
+            )),
+        };
+        tx.send(Msg::Attach(AttachmentId(0), producer)).unwrap();
+        tx.send(Msg::Attach(AttachmentId(1), second)).unwrap();
+        tx.send(Msg::OperationAnswer(AttachmentId(0), answer.clone()))
+            .unwrap();
+        tx.send(Msg::View(ViewEvent::Resized(
+            Viewport::new(100.0, 100.0, 1.0).unwrap(),
+        )))
+        .unwrap();
+        let _attachment = first_viewport(&rx, false, &Default::default()).unwrap();
+        assert_eq!(events.try_recv(), Ok(Some(answer)));
+        assert_eq!(second_events.try_recv(), Ok(None));
+    }
+
+    #[test]
+    fn operation_answers_for_detached_links_are_discarded() {
+        for before_viewport in [true, false] {
+            let (producer, events) = crate::bridge::script_events(16);
+            let (second, second_events) = crate::bridge::script_events(16);
+            let messages = [
+                Msg::Attach(AttachmentId(0), producer),
+                Msg::Attach(AttachmentId(1), second),
+                Msg::Detach(AttachmentId(0)),
+                Msg::OperationAnswer(
+                    AttachmentId(0),
+                    crate::bridge::ScriptEvent::Operation {
+                        id: 42,
+                        answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
+                            false,
+                        )),
+                    },
+                ),
+            ];
+            if before_viewport {
+                let (tx, rx) = mpsc::channel();
+                for message in messages {
+                    tx.send(message).unwrap();
+                }
+                tx.send(Msg::View(ViewEvent::Resized(
+                    Viewport::new(100.0, 100.0, 1.0).unwrap(),
+                )))
+                .unwrap();
+                let _attachments = first_viewport(&rx, false, &Default::default()).unwrap();
+                assert_eq!(second_events.try_recv(), Ok(None));
+            } else {
+                let mut running = running();
+                for message in messages {
+                    assert!(running.handle(message).is_continue());
+                }
+                assert_eq!(second_events.try_recv(), Ok(None));
+            }
+            assert_eq!(events.try_recv(), Err(BridgeError::Stopped));
         }
     }
 

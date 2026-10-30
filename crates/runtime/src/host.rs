@@ -29,6 +29,13 @@ pub(crate) fn swf(
     Ok(to_json(value).map(|value| value.to_string()))
 }
 
+pub(crate) fn operate(link: &ScriptLink, json: &str) -> Result<String, String> {
+    let operation = serde_json::from_str(json).map_err(|error| format!("{error}"))?;
+    link.operate(operation)
+        .map(|id| id.to_string())
+        .map_err(|error| error.to_string())
+}
+
 pub(crate) fn command(
     link: &ScriptLink,
     interrupt: &Interrupt,
@@ -93,6 +100,11 @@ pub(crate) enum Item {
         projected: Vec<ProjectionEvent>,
     },
     Invalidated,
+    Operation {
+        id: String,
+        answer: Option<lucent_protocol::operation::OperationAnswer>,
+        error: Option<String>,
+    },
 }
 
 impl From<ScriptEvent> for Item {
@@ -104,6 +116,18 @@ impl From<ScriptEvent> for Item {
                 projected,
             },
             ScriptEvent::Invalidated => Item::Invalidated,
+            ScriptEvent::Operation { id, answer } => match answer {
+                Ok(answer) => Item::Operation {
+                    id: id.to_string(),
+                    answer: Some(answer),
+                    error: None,
+                },
+                Err(error) => Item::Operation {
+                    id: id.to_string(),
+                    answer: None,
+                    error: Some(error.to_string()),
+                },
+            },
         }
     }
 }

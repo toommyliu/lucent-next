@@ -188,6 +188,25 @@
     });
   }
 
+  // packages/runtime/src/host/operations.ts
+  var operations = /* @__PURE__ */ new Map();
+  var operate = /* @__PURE__ */ __name((operation) => new Promise((resolve3, reject2) => {
+    const id = __host.operate(JSON.stringify(operation));
+    const timeout2 = setTimeout(() => {
+      operations.delete(id);
+      reject2(new Error("The host operation timed out"));
+    }, 35e3);
+    operations.set(id, { resolve: resolve3, reject: reject2, timeout: timeout2 });
+  }), "operate");
+  var completeOperation = /* @__PURE__ */ __name((id, answer, error) => {
+    const pending = operations.get(id);
+    if (pending === void 0) return;
+    operations.delete(id);
+    clearTimeout(pending.timeout);
+    if (answer !== null) pending.resolve(answer);
+    else pending.reject(new Error(error ?? "The host operation failed"));
+  }, "completeOperation");
+
   // packages/runtime/src/host/loop.ts
   var timers = /* @__PURE__ */ new Map();
   var nextId = 1;
@@ -232,6 +251,8 @@
         for (const event of item.projected) {
           invoke(() => window.onProjectionEvent?.(event));
         }
+      } else if (item.type === "operation") {
+        completeOperation(item.id, item.answer, item.error);
       } else {
         invoke(() => window.onProjectionInvalidated?.());
       }
@@ -3237,6 +3258,9 @@ ${prefix}}`;
       }
     });
   }, "try_");
+  var promise = /* @__PURE__ */ __name((evaluate2) => callbackOptions(function(resume, signal) {
+    evaluate2(signal).then((a) => resume(succeed3(a)), (e) => resume(die(e)));
+  }, evaluate2.length !== 0), "promise");
   var tryPromise = /* @__PURE__ */ __name((options) => {
     const f = typeof options === "function" ? options : options.try;
     const catcher = typeof options === "function" ? (cause) => new UnknownError(cause, "An error occurred in Effect.tryPromise") : options.catch;
@@ -5203,6 +5227,7 @@ ${prefix}}`;
   var all2 = all;
   var forEach2 = forEach;
   var whileLoop2 = whileLoop;
+  var promise2 = promise;
   var tryPromise2 = tryPromise;
   var succeed7 = succeed3;
   var suspend2 = suspend;
@@ -15089,57 +15114,11 @@ ${prefix}}`;
   }, "makeCombat");
 
   // packages/runtime/src/game/flash/api/Drops.ts
-  var AcceptResponse = Struct({
-    ItemID: PositiveWireInt,
-    bBank: optionalKey2(WireBoolean),
-    bHouse: optionalKey2(WireBoolean),
-    bSuccess: WireBoolean,
-    iQty: optionalKey2(WireInt),
-    iQtyNow: optionalKey2(WireInt)
-  });
-  var decodeAcceptResponse = decodeUnknownOption2(AcceptResponse);
-  var makeDrops = fnUntraced2(function* (bridge, host, auth, wait) {
-    const accepts = yield* make14(1);
+  var makeDrops = fnUntraced2(function* (bridge, host, auth) {
     const get5 = /* @__PURE__ */ __name((selector) => readItem(host, "drop", selector), "get");
-    const accept = /* @__PURE__ */ __name((selector) => {
-      return accepts.withPermits(1)(
-        gen2(function* () {
-          if (!(yield* auth.isLoggedIn())) return false;
-          const drop = yield* get5(selector);
-          if (drop === null) return false;
-          const before = yield* all2({
-            bank: itemQuantity(host, "bank", drop.itemId),
-            house: itemQuantity(host, "house", drop.itemId),
-            inventory: itemQuantity(host, "inventory", drop.itemId)
-          });
-          let response;
-          const packet = yield* wait.forPacket(
-            {
-              command: "getDrop",
-              direction: "extension",
-              predicate: /* @__PURE__ */ __name((candidate) => {
-                const decoded = decodeAcceptResponse(packetData(candidate));
-                if (isNone2(decoded) || decoded.value.ItemID !== drop.itemId) {
-                  return false;
-                }
-                response = decoded.value;
-                return true;
-              }, "predicate"),
-              encoding: "json"
-            },
-            {
-              timeout: "10 seconds",
-              trigger: bridge.invoke("drops.accept", [drop.itemId], Boolean3).pipe(map5(getOrElse(() => false)))
-            }
-          );
-          if (packet === null || response?.bSuccess !== true) return false;
-          const container2 = response.bBank && drop.category !== "Class" ? "bank" : response.bHouse || drop.houseItem ? "house" : "inventory";
-          const expected = response.iQtyNow ?? before[container2] + (response.iQty ?? drop.quantity);
-          const owned = yield* readItem(host, container2, drop.itemId);
-          return owned !== null && owned.quantity >= expected;
-        })
-      );
-    }, "accept");
+    const accept = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? promise2(
+      () => operate({ kind: "acceptDrop", selector }).then((answer) => answer.value).catch(() => false)
+    ) : succeed7(false), "accept");
     const contains = /* @__PURE__ */ __name((selector) => get5(selector).pipe(map5((drop) => drop !== null)), "contains");
     const getAll = /* @__PURE__ */ __name(() => readItems(host, "drop"), "getAll");
     const isCustomUiEnabled = /* @__PURE__ */ __name(() => bridge.invoke("drops.isUsingCustomDrops", void 0, Boolean3).pipe(map5(getOrElse(() => false))), "isCustomUiEnabled");
@@ -16594,7 +16573,7 @@ ${prefix}}`;
     const house = makeHouse(bridge, host);
     const inventory = makeInventory(bridge, host, house, wait);
     const bank = yield* makeBank(bridge, host, auth, inventory, house, wait);
-    const drops = yield* makeDrops(bridge, host, auth, wait);
+    const drops = yield* makeDrops(bridge, host, auth);
     const map8 = makeMap(bridge, host, wait);
     const monsterServices = yield* makeMonsters(bridge, host, events, wait);
     const monsters = monsterServices.api;

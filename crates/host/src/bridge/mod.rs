@@ -96,6 +96,10 @@ pub enum ScriptEvent {
         projected: Vec<ProjectionEvent>,
     },
     Invalidated,
+    Operation {
+        id: u64,
+        answer: Result<lucent_protocol::operation::OperationAnswer, Error>,
+    },
 }
 
 pub(crate) struct ScriptEventSender {

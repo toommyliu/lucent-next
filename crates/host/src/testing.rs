@@ -25,6 +25,7 @@ pub struct ProbeMovie {
     raises: Vec<(String, String, String)>,
     records: Vec<String>,
     guarded_records: Vec<String>,
+    drop_accept: Option<(Duration, String)>,
 }
 
 impl ProbeMovie {
@@ -41,6 +42,11 @@ impl ProbeMovie {
         let name = name.into();
         self.guarded_records.push(name.clone());
         self.records.push(name);
+        self
+    }
+
+    pub fn accepting_drop(mut self, delay: Duration, packet: impl Into<String>) -> Self {
+        self.drop_accept = Some((delay, packet.into()));
         self
     }
 
@@ -275,6 +281,48 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
             (name.as_str(), actions(&body))
         })
         .collect();
+    let accept_body = movie.drop_accept.as_ref().map(|(delay, packet)| {
+        let mut notify = vec![
+            push(vec![Value::Str(string("item"))]),
+            Action::GetVariable,
+            push(vec![Value::Str(string("onProbeAccept")), Value::Int(2)]),
+        ];
+        notify.extend(external_interface());
+        notify.extend([
+            push(vec![Value::Str(string("call"))]),
+            Action::CallMethod,
+            Action::Pop,
+        ]);
+        let mut emit = vec![push(vec![
+            Value::Str(string(packet)),
+            Value::Str(string("onExtensionResponse")),
+            Value::Int(2),
+        ])];
+        emit.extend(external_interface());
+        emit.extend([
+            push(vec![Value::Str(string("call"))]),
+            Action::CallMethod,
+            Action::Pop,
+        ]);
+        let emit_bytes = actions(&emit);
+        if delay.is_zero() {
+            notify.extend(emit);
+        } else {
+            notify.extend([
+                push(vec![Value::Double(delay.as_secs_f64() * 1000.0)]),
+                Action::DefineFunction(DefineFunction {
+                    name: string(""),
+                    params: vec![],
+                    actions: &emit_bytes,
+                }),
+                push(vec![Value::Int(2), Value::Str(string("setTimeout"))]),
+                Action::CallFunction,
+                Action::Pop,
+            ]);
+        }
+        notify.extend([push(vec![Value::Bool(true)]), Action::Return]);
+        actions(&notify)
+    });
     let mut callbacks = vec![
         ("probe.ready", vec![], ready_body.as_slice()),
         ("probe.echo", vec![string("x")], echo_body.as_slice()),
@@ -284,6 +332,9 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
             emit_body.as_slice(),
         ),
     ];
+    if let Some(body) = &accept_body {
+        callbacks.push(("drops.accept", vec![string("item")], body.as_slice()));
+    }
     if !constants.iter().any(|(name, _)| name == "player.getUserId") {
         callbacks.push(("player.getUserId", vec![], user_id_body.as_slice()));
     }

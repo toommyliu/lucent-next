@@ -14,7 +14,7 @@ pub use queries::answer;
 pub mod quests;
 mod readiness;
 pub mod shops;
-mod wire;
+pub(crate) mod wire;
 pub mod world;
 
 pub use item::decode_item;

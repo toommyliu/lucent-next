@@ -50,7 +50,7 @@ impl Running {
         }
     }
 
-    fn publish(&self, event: ScriptEvent) {
+    pub(super) fn publish(&self, event: ScriptEvent) {
         if let Some(((_, last), rest)) = self.script_events.split_last() {
             for (_, stream) in rest {
                 stream.send(event.clone());
@@ -73,6 +73,12 @@ impl Running {
         };
         let direction = match event.name.as_str() {
             "onConnection" => {
+                if matches!(
+                    raw.as_str(),
+                    "OnConnection" | "OnConnectionLost" | "OnConnectionFailed"
+                ) {
+                    self.operation_packets.invalidate();
+                }
                 let output = projection.connection(raw);
                 tracing::debug!(
                     status = raw,
@@ -125,6 +131,7 @@ impl Running {
             }
         }
         projected.extend(projection.login_if_ready());
+        self.operation_packets.packet(&packet);
         tracing::debug!(
             command = packet.command(),
             direction = ?packet.direction(),
@@ -175,6 +182,7 @@ mod tests {
             Running {
                 settings: Default::default(),
                 settings_applied: false,
+                operation_packets: Default::default(),
                 loader_events,
                 script_events: vec![(crate::sessions::AttachmentId(0), producer)],
                 projection: std::sync::Arc::new(parking_lot::RwLock::new(Projection::default())),
@@ -236,6 +244,172 @@ mod tests {
             .items
             .get(ItemContainer::Inventory, id)
             .map(|item| item.data().quantity)
+    }
+
+    fn accepting_operation(
+        running: &mut Running,
+    ) -> (
+        crate::sessions::operations::Operations,
+        mpsc::Receiver<Msg>,
+        std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) {
+        let (sender, inbox) = mpsc::channel();
+        let stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let worker = crate::sessions::operations::Operations::start(0).unwrap();
+        worker
+            .sender
+            .send(Some(crate::sessions::operations::Request {
+                id: 42,
+                attachment: crate::sessions::AttachmentId(0),
+                operation: lucent_protocol::operation::Operation::AcceptDrop {
+                    selector: lucent_protocol::query::ItemSelector::Id(70.0),
+                },
+                player: crate::sessions::operations::Endpoint {
+                    inbox: super::super::Inbox(sender),
+                    projection: running.projection.clone(),
+                    stopped: stopped.clone(),
+                    packets: running.operation_packets.clone(),
+                },
+            }))
+            .unwrap();
+        let Msg::Command(_, reply) = inbox.recv_timeout(Duration::from_secs(1)).unwrap() else {
+            panic!("expected login refresh");
+        };
+        reply.send(Ok("true".into())).unwrap();
+        (worker, inbox, stopped)
+    }
+
+    fn prepare_drop(running: &mut Running, bridge: &Bridge) {
+        extension(
+            running,
+            bridge,
+            json!({"cmd":"dropItem","items":{"70":{
+                "ItemID":70,"sName":"Dropped Item","iQty":2
+            }}}),
+        );
+        running.drain_events();
+    }
+
+    fn loader_call(inbox: &mpsc::Receiver<Msg>) -> crate::bridge::Call {
+        let Msg::Call(call) = inbox.recv_timeout(Duration::from_secs(1)).unwrap() else {
+            panic!("expected drop accept");
+        };
+        call
+    }
+
+    fn operation_answer(inbox: &mpsc::Receiver<Msg>, timeout: Duration) -> ScriptEvent {
+        let Msg::OperationAnswer(_, answer) = inbox.recv_timeout(timeout).unwrap() else {
+            panic!("expected operation answer");
+        };
+        answer
+    }
+
+    #[test]
+    fn event_overflow_keeps_the_accept_resource_until_its_packet() {
+        let (mut running, bridge, _events) = running(1, 16);
+        prepare_drop(&mut running, &bridge);
+        let (_worker, inbox, _stopped) = accepting_operation(&mut running);
+        loader_call(&inbox).resolve(Ok(Value::Bool(true)));
+        queue(&mut running, &bridge, "onDebug", "first".into());
+        queue(&mut running, &bridge, "onDebug", "overflow".into());
+        running.drain_events();
+        assert!(
+            matches!(
+                inbox.recv_timeout(Duration::from_millis(100)),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ),
+            "overflow ended a live accept"
+        );
+        extension(
+            &mut running,
+            &bridge,
+            json!({"cmd":"getDrop","ItemID":70,"bSuccess":false}),
+        );
+        running.drain_events();
+        assert_eq!(
+            operation_answer(&inbox, Duration::from_secs(1)),
+            ScriptEvent::Operation {
+                id: 42,
+                answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
+                    false
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn the_packet_wait_gets_ten_seconds_after_the_loader_returns() {
+        let (mut running, bridge, _events) = running(16, 16);
+        prepare_drop(&mut running, &bridge);
+        let (_worker, inbox, _stopped) = accepting_operation(&mut running);
+        let call = loader_call(&inbox);
+        std::thread::sleep(Duration::from_secs(1));
+        let returned = Instant::now();
+        call.resolve(Ok(Value::Bool(true)));
+        let answer = operation_answer(&inbox, Duration::from_secs(12));
+        assert!(
+            returned.elapsed() >= Duration::from_secs(10),
+            "packet wait started before the call returned"
+        );
+        assert_eq!(
+            answer,
+            ScriptEvent::Operation {
+                id: 42,
+                answer: Ok(lucent_protocol::operation::OperationAnswer::AcceptDrop(
+                    false
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn stopping_a_player_interrupts_a_worker_waiting_for_its_loader() {
+        let (mut running, bridge, _events) = running(16, 16);
+        prepare_drop(&mut running, &bridge);
+        let (_worker, inbox, stopped) = accepting_operation(&mut running);
+        let _hung_call = loader_call(&inbox);
+        stopped.store(true, std::sync::atomic::Ordering::Release);
+        running.operation_packets.stop();
+        assert_eq!(
+            operation_answer(&inbox, Duration::from_millis(200)),
+            ScriptEvent::Operation {
+                id: 42,
+                answer: Err(BridgeError::Stopped)
+            }
+        );
+    }
+
+    #[test]
+    fn a_player_stop_answers_its_waiting_accept_with_stopped() {
+        let (mut running, bridge, _events) = running(16, 16);
+        prepare_drop(&mut running, &bridge);
+        let (_worker, inbox, stopped) = accepting_operation(&mut running);
+        loader_call(&inbox).resolve(Ok(Value::Bool(true)));
+        stopped.store(true, std::sync::atomic::Ordering::Release);
+        running.operation_packets.stop();
+        assert_eq!(
+            operation_answer(&inbox, Duration::from_millis(200)),
+            ScriptEvent::Operation {
+                id: 42,
+                answer: Err(BridgeError::Stopped)
+            }
+        );
+    }
+
+    #[test]
+    fn dropping_operations_adds_no_loader_timeout_after_the_player_stops() {
+        let (mut running, bridge, _events) = running(16, 16);
+        prepare_drop(&mut running, &bridge);
+        let (worker, inbox, stopped) = accepting_operation(&mut running);
+        let _hung_call = loader_call(&inbox);
+        stopped.store(true, std::sync::atomic::Ordering::Release);
+        running.operation_packets.stop();
+        let at = Instant::now();
+        drop(worker);
+        assert!(
+            at.elapsed() < Duration::from_millis(200),
+            "worker shutdown waited for the loader timeout"
+        );
     }
 
     #[test]

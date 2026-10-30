@@ -1,4 +1,5 @@
 mod link;
+pub(crate) mod operations;
 pub use link::ScriptLink;
 
 use lucent_protocol::settings::GameSettings;
@@ -33,6 +34,8 @@ pub enum HostError {
     NetRuntime(std::io::Error),
     #[error("couldn't start a player thread: {0}")]
     PlayerThread(std::io::Error),
+    #[error("couldn't start an operation worker: {0}")]
+    OperationThread(std::io::Error),
     #[error("couldn't start the clipboard thread: {0}")]
     ClipboardThread(std::io::Error),
 }
@@ -70,8 +73,10 @@ impl Host {
         let id = self.shared.next_session.fetch_add(1, Ordering::Relaxed);
         let settings = Arc::new(RwLock::new(GameSettings::default()));
         let player = self.spawn_player(id, &surface, false, &movie, settings.clone())?;
+        let operations = operations::Operations::start(id).map_err(HostError::OperationThread)?;
         Ok(Session {
             next_attachment: 0,
+            operations,
             player: Some(player),
             movie,
             id,
@@ -109,6 +114,7 @@ impl Host {
 pub struct Session {
     player: Option<player::Handle>,
     next_attachment: u64,
+    operations: operations::Operations,
     movie: Movie,
     id: u64,
     surface: Surface,
@@ -171,11 +177,15 @@ impl Session {
         Some(ScriptLink::new(
             self.id,
             attachment,
-            inbox,
             events,
-            player.projection.clone(),
             self.settings.clone(),
-            player.stopped.clone(),
+            operations::Endpoint {
+                inbox,
+                projection: player.projection.clone(),
+                stopped: player.stopped.clone(),
+                packets: player.operation_packets.clone(),
+            },
+            self.operations.sender.clone(),
         ))
     }
 
