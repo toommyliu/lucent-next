@@ -1,45 +1,30 @@
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { Api } from "../flash/api/Api";
-import { callHost, HostBoundaryFailure } from "./HostCall";
+import { HostState } from "../flash/state/HostState";
+import { makeRetryLoop } from "./retryLoop";
 
 export const run = Effect.gen(function* () {
   const api = yield* Api;
-  const failing = new Set<boolean>();
+  const host = yield* HostState;
+  const repeat = makeRetryLoop("settings policy");
   const tick = (actionsOnly: boolean) =>
     Effect.gen(function* () {
       if (!(yield* api.player.isReady())) return;
-      yield* Effect.sync(() => {
-        const reply = callHost(
-          "command",
-          JSON.stringify({ kind: "reapplySettings", actionsOnly }),
-        );
-        if (JSON.parse(reply) !== null) {
-          throw new Error("Invalid reapplySettings reply");
-        }
-      });
-    }).pipe(
-      Effect.tap(() =>
-        Effect.sync(() => {
-          if (failing.delete(actionsOnly) && failing.size === 0) {
-            console.info("settings policy recovered");
-          }
-        }),
-      ),
-      Effect.catchDefect((error) => {
-        if (!(error instanceof HostBoundaryFailure)) return Effect.die(error);
-        return Effect.sync(() => {
-          if (failing.size === 0) console.warn("settings policy tick failed", error);
-          failing.add(actionsOnly);
-        });
-      }),
-    );
-  const repeat = (actionsOnly: boolean, interval: "1 second" | "500 millis") =>
-    Effect.forever(
-      tick(actionsOnly).pipe(Effect.andThen(Effect.sleep(interval))),
-    );
-  yield* Effect.all([repeat(false, "1 second"), repeat(true, "500 millis")], {
-    concurrency: "unbounded",
-    discard: true,
-  });
+      const result = yield* host.command({ kind: "reapplySettings", actionsOnly });
+      if (Option.isNone(result)) {
+        return yield* Effect.die(new Error("Settings reapplication failed"));
+      }
+      if (result.value !== null) {
+        return yield* Effect.die(new Error("Invalid reapplySettings reply"));
+      }
+    });
+  yield* Effect.all(
+    [
+      repeat(() => tick(false), "1 second"),
+      repeat(() => tick(true), "500 millis"),
+    ],
+    { concurrency: "unbounded", discard: true },
+  );
 });

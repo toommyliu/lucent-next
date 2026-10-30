@@ -535,8 +535,13 @@ fn settings_policy_host_failures_retry_once_per_streak() {
             1,
             "{boundary}: {warnings:?}"
         );
+        let expected_line = if boundary == "read" {
+            "settings policy tick failed SyntaxError: host link unavailable"
+        } else {
+            "[cause]: SyntaxError: host link unavailable"
+        };
         assert!(
-            warnings[0].contains("host link unavailable"),
+            warnings[0].lines().any(|line| line.trim() == expected_line),
             "{warnings:?}"
         );
         let recovered = logs.messages(tracing::Level::INFO);
@@ -585,7 +590,10 @@ fn assert_policy_retries(source: &str, expected_line: &str) {
     .unwrap();
     let warnings = logs.messages(tracing::Level::WARN);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
-    assert_eq!(warnings[0].lines().next(), Some(expected_line));
+    assert!(
+        warnings[0].lines().any(|line| line.trim() == expected_line),
+        "expected {expected_line:?} in {warnings:?}"
+    );
     assert!(warnings[0].lines().count() > 1, "{warnings:?}");
     assert!(logs.messages(tracing::Level::INFO).is_empty());
     assert!(
@@ -654,7 +662,7 @@ fn settings_policy_code_errors_warn_once_and_retry() {
         globalThis.restore = () => { JSON.stringify = stringify; };
         null;
         "#,
-        "settings policy tick failed Error: broken policy serialization",
+        "[cause]: Error: broken policy serialization",
     );
 }
 
@@ -675,17 +683,13 @@ fn settings_policy_malformed_host_replies_warn_once_and_retry() {
         (
             "swf",
             "not json",
-            "settings policy tick failed Error: Failed world.isLoaded",
+            "[cause]: SyntaxError: Unexpected token 'o', \"not json\" is not valid JSON",
         ),
-        (
-            "swf",
-            r#""true""#,
-            "settings policy tick failed Error: Failed world.isLoaded",
-        ),
+        ("swf", r#""true""#, "[cause]: SchemaError: Expected boolean"),
         (
             "command",
             "not json",
-            "settings policy tick failed Error: Failed refreshLoggedIn",
+            "[cause]: SyntaxError: Unexpected token 'o', \"not json\" is not valid JSON",
         ),
     ] {
         assert_policy_retries(
@@ -744,7 +748,7 @@ fn settings_policy_uses_player_readiness() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn settings_policy_recovery_waits_for_the_failed_loop() {
+fn settings_policy_recovery_waits_for_every_failing_loop() {
     let logs = common::logs::Logs::default();
     let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
@@ -755,6 +759,8 @@ fn settings_policy_recovery_waits_for_the_failed_loop() {
         "fail-full-ticks.js",
         r#"
         globalThis.fullFailures = 0;
+        globalThis.actionFailures = 0;
+        globalThis.actionsRecovered = false;
         const command = __host.command;
         __host.command = json => {
             const input = JSON.parse(json);
@@ -762,10 +768,15 @@ fn settings_policy_recovery_waits_for_the_failed_loop() {
                 fullFailures++;
                 throw new Error("full reapply unavailable");
             }
+            if (input.kind === "reapplySettings" && !actionsRecovered) {
+                actionFailures++;
+                throw new Error("actions reapply unavailable");
+            }
             return command(json);
         };
         new Promise(resolve => {
-            const check = () => fullFailures >= 3 ? resolve(null) : setTimeout(check, 10);
+            const check = () => fullFailures >= 3 && actionFailures >= 3
+                ? resolve(null) : setTimeout(check, 10);
             check();
         });
     "#,
@@ -794,6 +805,14 @@ fn settings_policy_recovery_waits_for_the_failed_loop() {
         (1, 0),
         "warnings: {warnings:?}, recoveries: {recoveries:?}"
     );
+    bot.eval(
+        "recover-actions.js",
+        "actionsRecovered = true; new Promise(resolve => setTimeout(() => resolve(null), 1100));",
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    assert_eq!(logs.messages(tracing::Level::WARN), warnings);
+    assert!(logs.messages(tracing::Level::INFO).is_empty());
     bot.eval("restore-command.js", "__host.command = command; null;")
         .wait::<()>(TIMEOUT)
         .unwrap();
@@ -831,7 +850,7 @@ fn settings_policy_missing_loader_booleans_warn_once_and_retry() {
                 null;
                 "#
             ),
-            "settings policy tick failed Error: Failed world.isLoaded",
+            "[cause]: SchemaError: Expected boolean",
         );
     }
 }
