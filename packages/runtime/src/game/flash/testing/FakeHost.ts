@@ -310,6 +310,10 @@ const run = (state: FakeHostState, loader: Loader, command: Command) => {
   };
 
   switch (command.kind) {
+    case "setAutoReloginEnabled":
+    case "setAutoReloginDelay":
+    case "setAutoReloginServer":
+      throw new Error(`FakeHost does not implement ${command.kind}`);
     case "patchAutoZone":
       state.autoZone = {
         enabled: command.patch.enabled ?? state.autoZone.enabled,
