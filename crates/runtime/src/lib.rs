@@ -1,4 +1,5 @@
 mod alarm;
+mod cpu_time;
 mod engine;
 mod host;
 mod interrupt;
@@ -23,8 +24,12 @@ use interrupt::{Interrupt, Stop};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Kill {
-    #[error("a turn ran for more than 200 ms")]
+    #[error("a turn used more than 200 ms of CPU time")]
     Watchdog,
+    #[error("a turn exceeded the 5 s wall-clock backstop")]
+    WallBackstop,
+    #[error("a turn exceeded 200 ms of wall time after its CPU clock failed")]
+    WatchdogFallback,
     #[error("it reached the 64 MiB heap limit")]
     HeapLimit,
     #[error("it was stopped")]
@@ -141,6 +146,11 @@ impl Bot {
     pub fn eval(&self, name: impl Into<String>, source: impl Into<String>) -> PendingEval {
         self.0.eval(name, source)
     }
+
+    #[cfg(feature = "testing")]
+    pub fn join_cpu_time(&mut self) -> Option<Duration> {
+        self.0.join_cpu_time()
+    }
 }
 
 impl ScriptRun {
@@ -175,6 +185,11 @@ impl ScriptRun {
     pub fn wait(&self, timeout: Duration) -> Result<ScriptOutcome, RuntimeError> {
         self.outcome.wait(timeout)
     }
+
+    #[cfg(feature = "testing")]
+    pub fn join_cpu_time(&mut self) -> Option<Duration> {
+        self.runtime.join_cpu_time()
+    }
 }
 
 impl Runtime {
@@ -200,9 +215,13 @@ impl Runtime {
                 let _dispatch = tracing::dispatcher::set_default(&dispatch);
                 let interrupt = thread_interrupt;
                 let watchdog_interrupt = interrupt.clone();
+                let watchdog_dispatch = dispatch.clone();
                 let watchdog = thread::Builder::new()
                     .name(format!("lucent-js-watchdog-{}", link.id()))
-                    .spawn(move || watchdog_interrupt.watch());
+                    .spawn(move || {
+                        let _dispatch = tracing::dispatcher::set_default(&watchdog_dispatch);
+                        watchdog_interrupt.watch();
+                    });
                 let watchdog = match watchdog {
                     Ok(watchdog) => watchdog,
                     Err(error) => {
@@ -261,6 +280,14 @@ impl Runtime {
     pub fn kill(&self) {
         self.interrupt.kill(Kill::Requested);
         let _ = self.commands.send(Command::Kill);
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn join_cpu_time(&mut self) -> Option<Duration> {
+        if let Some(thread) = self.thread.take() {
+            thread.join().unwrap();
+        }
+        self.interrupt.killed_turn_cpu_time()
     }
 }
 

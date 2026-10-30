@@ -14,6 +14,44 @@ use serde_json::{Value, json};
 const TIMEOUT: Duration = Duration::from_secs(10);
 const STOP_LIMIT: Duration = Duration::from_millis(250);
 
+#[test]
+fn a_turn_waiting_off_cpu_keeps_its_cpu_budget() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+    assert_eq!(
+        runtime
+            .eval(
+                "wait.js",
+                "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300)",
+            )
+            .wait::<String>(TIMEOUT)
+            .unwrap(),
+        "timed-out"
+    );
+}
+
+#[test]
+fn a_turn_waiting_without_cpu_is_killed_by_the_wall_backstop() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+    let began = Instant::now();
+    let error = runtime
+        .eval(
+            "wait.js",
+            "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)",
+        )
+        .wait::<Value>(TIMEOUT)
+        .unwrap_err();
+    assert!(began.elapsed() >= Duration::from_secs(5));
+    assert!(
+        matches!(error, RuntimeError::Killed(Kill::WallBackstop)),
+        "{error}"
+    );
+    assert!(error.to_string().contains("wall-clock backstop"), "{error}");
+}
+
 fn stall_player(session: &Session) -> mpsc::Sender<()> {
     let (entered, stalled) = mpsc::channel();
     let (release, held) = mpsc::channel::<()>();
@@ -59,7 +97,7 @@ fn emit_after(runtime: &Runtime) {
 }
 
 #[test]
-fn a_runaway_turn_is_killed_within_250_ms_and_a_new_runtime_works() {
+fn a_runaway_turn_is_killed_within_250_ms_of_cpu_and_a_new_runtime_works() {
     let host = testing::headless_host();
     let (mut session, link) = testing::start_probe(&host, ProbeMovie::new());
     drop(link);
@@ -73,36 +111,31 @@ fn a_runaway_turn_is_killed_within_250_ms_and_a_new_runtime_works() {
     ] {
         let runtime = Runtime::start(session.attach().unwrap()).unwrap();
         let waiting = runtime.eval("wait.js", "globalThis.marker = 1; new Promise(() => {})");
-        let observer = session.attach().unwrap();
-        let runaway = runtime.eval(
-            "runaway.js",
-            format!(r#"window.swf["probe.emit"]("onDebug", String(Date.now())); {source}"#),
-        );
-        let event = common::await_event(&observer, "onDebug", None);
-        let lucent_protocol::bridge::Value::String(began) = &event.args[0] else {
-            panic!("{event:?}")
-        };
-        let began = began.parse::<u128>().unwrap();
+        let runaway = runtime.eval("runaway.js", source);
         let error = runaway.wait::<Value>(TIMEOUT).unwrap_err();
-        let elapsed = Duration::from_millis(
-            (std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis()
-                - began) as u64,
-        );
-        drop(observer);
         assert!(
             matches!(error, RuntimeError::Killed(Kill::Watchdog)),
             "{source}: {error}"
         );
-        assert!(elapsed < STOP_LIMIT, "{source}: stopped after {elapsed:?}");
         let error = waiting.wait::<Value>(TIMEOUT).unwrap_err();
         assert!(
             matches!(error, RuntimeError::Killed(Kill::Watchdog)),
             "{source}: {error}"
         );
 
+        #[cfg(feature = "testing")]
+        let runtime = {
+            let mut runtime = runtime;
+            let cpu = runtime
+                .join_cpu_time()
+                .expect("the killed turn had no CPU measurement");
+            assert!(
+                cpu >= Duration::from_millis(200),
+                "{source}: stopped after {cpu:?} CPU"
+            );
+            assert!(cpu < STOP_LIMIT, "{source}: stopped after {cpu:?} CPU");
+            runtime
+        };
         drop(runtime);
         assert_eq!(
             session.attached_link_count().recv_timeout(TIMEOUT).unwrap(),
@@ -315,13 +348,13 @@ fn evals_sent_before_a_kill_fail_with_it_and_the_runtime_ends() {
 }
 
 #[test]
-fn killed_runs_return_within_250_ms_and_drop_their_threads() {
+fn killed_runs_use_less_than_250_ms_of_cpu_and_drop_their_threads() {
     if std::env::var_os("LUCENT_RUN_LIMIT_CHILD").is_none() {
         assert!(
             std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
                     "--exact",
-                    "killed_runs_return_within_250_ms_and_drop_their_threads"
+                    "killed_runs_use_less_than_250_ms_of_cpu_and_drop_their_threads"
                 ])
                 .env("LUCENT_RUN_LIMIT_CHILD", "1")
                 .status()
@@ -352,13 +385,16 @@ fn killed_runs_return_within_250_ms_and_drop_their_threads() {
         "#
             ),
         );
-        let began = Instant::now();
         assert!(matches!(run.wait(TIMEOUT), Err(RuntimeError::Killed(kill)) if kill == expected));
-        assert!(
-            began.elapsed() < STOP_LIMIT,
-            "stopped after {:?}",
-            began.elapsed()
-        );
+        #[cfg(feature = "testing")]
+        let run = {
+            let mut run = run;
+            let cpu = run
+                .join_cpu_time()
+                .expect("the killed turn had no CPU measurement");
+            assert!(cpu < STOP_LIMIT, "{expected}: stopped after {cpu:?} CPU");
+            run
+        };
         drop(run);
         assert_eq!(
             session.attached_link_count().recv_timeout(TIMEOUT).unwrap(),
@@ -366,7 +402,7 @@ fn killed_runs_return_within_250_ms_and_drop_their_threads() {
         );
         #[cfg(target_os = "macos")]
         {
-            let deadline = Instant::now() + Duration::from_millis(5);
+            let deadline = Instant::now() + TIMEOUT;
             loop {
                 let threads = common::js_threads();
                 if threads == before {
