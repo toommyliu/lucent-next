@@ -73,15 +73,14 @@ fn an_ask_times_out_after_its_deadline() {
     bot.claim_bot().unwrap();
     let started = Instant::now();
     let id = asker.ask(json!(7)).unwrap();
-    std::thread::sleep(Duration::from_millis(4800));
     assert_eq!(asker.try_event(), Ok(None));
     assert_eq!(session.pending_ask_count(), 1);
-    std::thread::sleep(Duration::from_millis(300));
+    let event = next(&asker);
     assert_eq!(session.pending_ask_count(), 0);
     let ScriptEvent::Answer {
         id: answered,
         answer: Err(error),
-    } = next(&asker)
+    } = event
     else {
         panic!("expected timeout");
     };
@@ -265,7 +264,13 @@ fn only_the_current_bot_can_start_an_unexpired_ask() {
     asker.cancel_ask(id);
     assert!(!bot.is_ask_pending(id));
     let id = asker.ask(json!(8)).unwrap();
-    std::thread::sleep(Duration::from_millis(5100));
+    assert_eq!(
+        next(&asker),
+        ScriptEvent::Answer {
+            id,
+            answer: Err(Error::BotRequestTimeout)
+        }
+    );
     assert!(!bot.is_ask_pending(id));
     assert_eq!(session.pending_ask_count(), 0);
 }

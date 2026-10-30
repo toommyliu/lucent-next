@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
@@ -32,10 +33,11 @@ const boot = async (getServers: ApiService["auth"]["getServers"]) => {
 
 it("skips cancelled and expired asks before applying the surviving FIFO writes", async () => {
   const applied: number[] = [];
+  const release = Effect.runSync(Deferred.make<void>());
   let calls = 0;
   const { answers, live, ask } = await boot(() => Effect.gen(function* () {
     applied.push(++calls);
-    if (calls === 1) yield* Effect.sleep(100);
+    if (calls === 1) yield* Deferred.await(release);
     return [];
   }));
   ask("active", { kind: "autoRelogin.setServer", server: "one" });
@@ -45,15 +47,17 @@ it("skips cancelled and expired asks before applying the surviving FIFO writes",
   ask("second", { kind: "autoRelogin.setServer", server: "two" });
   ask("third", { kind: "autoRelogin.setServer", server: "three" });
   live.delete("cancelled"); live.delete("expired");
+  Effect.runSync(Deferred.succeed(release, undefined));
   await vi.waitFor(() => expect(answers.map(a => a[0])).toEqual(["active", "second", "third"]));
   expect(applied).toEqual([1, 2, 3]);
   expect(answers.map(a => (a[1] as {server:string}).server)).toEqual(["one", "two", "three"]);
 });
 
 it("bounds asks already pulled while an apply is blocked", async () => {
-  const { answers, ask } = await boot(() => Effect.never);
+  const getServers = vi.fn(() => Effect.never);
+  const { answers, ask } = await boot(getServers);
   ask("active", { kind: "autoRelogin.setServer", server: "one" });
-  await new Promise(resolve => setTimeout(resolve, 20));
+  await vi.waitFor(() => expect(getServers).toHaveBeenCalledOnce());
   for (let i = 0; i < 1100; i++) ask(String(i), { kind: "autoRelogin.setDelay", delayMs: i });
   await vi.waitFor(() => expect(answers.length).toBeGreaterThan(0));
   expect(answers.every(a => a[1] === null && a[2] === "queueFull")).toBe(true);

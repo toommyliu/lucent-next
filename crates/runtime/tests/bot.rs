@@ -64,6 +64,19 @@ fn drain(link: &ScriptLink) {
 }
 
 #[cfg(feature = "testing")]
+fn wait_for_recovery(logs: &common::logs::Logs, message: &str) {
+    let deadline = Instant::now() + TIMEOUT;
+    while !logs
+        .messages(tracing::Level::INFO)
+        .iter()
+        .any(|text| text == message)
+    {
+        assert!(Instant::now() < deadline, "did not receive {message}");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+#[cfg(feature = "testing")]
 #[test]
 fn malformed_packets_do_not_stop_bot_event_delivery() {
     let host = testing::headless_host();
@@ -472,12 +485,13 @@ fn failed_settings_ticks_warn_and_retry() {
                 }}
                 return original(json);
             }};
-            new Promise(resolve => setTimeout(() => resolve(null), 2300));
+            null;
         "#
             ),
         )
         .wait::<()>(TIMEOUT)
         .unwrap();
+        wait_for_recovery(&logs, "settings policy recovered");
         let warnings = logs.messages(tracing::Level::WARN);
         assert!(
             warnings
@@ -529,7 +543,7 @@ fn overflow_logs_identify_the_runtime() {
     let (_host, mut session, _observer) = start();
     let flood = r#"
         for (let i = 0; i < 1100; i++) window.swf["probe.emit"]("onDebug", String(i));
-        new Promise(resolve => setTimeout(() => resolve(null), 10));
+        new Promise(() => {});
     "#;
     let bot = Bot::start(session.attach().unwrap()).unwrap();
     assert!(matches!(
@@ -680,7 +694,10 @@ fn assert_policy_retries(source: &str, expected_line: &str) {
         .unwrap();
     bot.eval(
         "observe-failures.js",
-        "new Promise(resolve => setTimeout(() => resolve(null), 2200));",
+        r#"new Promise(resolve => {
+            const check = () => attempts >= 3 ? resolve(null) : setTimeout(check, 1);
+            check();
+        });"#,
     )
     .wait::<()>(TIMEOUT)
     .unwrap();
@@ -706,12 +723,7 @@ fn assert_policy_retries(source: &str, expected_line: &str) {
         next_call(&observer, "settings.setWalkSpeed")[1],
         Value::Number(30.0)
     );
-    bot.eval(
-        "flush-recovery.js",
-        "new Promise(resolve => setTimeout(() => resolve(null), 20));",
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
+    wait_for_recovery(&logs, "settings policy recovered");
     assert_eq!(
         logs.messages(tracing::Level::INFO),
         vec!["settings policy recovered"]
@@ -814,14 +826,18 @@ fn settings_policy_uses_player_readiness() {
         "not-logged-in.js",
         r#"
         globalThis.reapplications = 0;
+        globalThis.readinessChecks = 0;
         const command = __host.command;
         __host.command = json => {
             const input = JSON.parse(json);
-            if (input.kind === "refreshLoggedIn") return "false";
+            if (input.kind === "refreshLoggedIn") { readinessChecks++; return "false"; }
             if (input.kind === "reapplySettings") reapplications++;
             return command(json);
         };
-        new Promise(resolve => setTimeout(() => resolve(null), 1200));
+        new Promise(resolve => {
+            const check = () => readinessChecks >= 3 ? resolve(null) : setTimeout(check, 1);
+            check();
+        });
     "#,
     )
     .wait::<()>(TIMEOUT)
@@ -901,12 +917,11 @@ fn settings_policy_recovery_waits_for_every_failing_loop() {
         (1, 0),
         "warnings: {warnings:?}, recoveries: {recoveries:?}"
     );
-    bot.eval(
-        "recover-actions.js",
-        "actionsRecovered = true; new Promise(resolve => setTimeout(() => resolve(null), 1100));",
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
+    drain(&observer);
+    bot.eval("recover-actions.js", "actionsRecovered = true; null;")
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+    next_call(&observer, "settings.enemyMagnet");
     assert_eq!(logs.messages(tracing::Level::WARN), warnings);
     assert!(logs.messages(tracing::Level::INFO).is_empty());
     bot.eval("restore-command.js", "__host.command = command; null;")
@@ -917,12 +932,7 @@ fn settings_policy_recovery_waits_for_every_failing_loop() {
         next_call(&observer, "settings.setWalkSpeed")[1],
         Value::Number(30.0)
     );
-    bot.eval(
-        "flush-recovery.js",
-        "new Promise(resolve => setTimeout(() => resolve(null), 20));",
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
+    wait_for_recovery(&logs, "settings policy recovered");
     assert_eq!(
         logs.messages(tracing::Level::INFO)
             .iter()
@@ -1020,7 +1030,11 @@ fn failed_auto_zone_walks_leave_the_bot_ready_for_the_next_zone() {
     let attempts = bot
         .eval(
             "wait-for-walk.js",
-            "new Promise(resolve => setTimeout(() => resolve(walkAttempts), 700));",
+            r#"new Promise(resolve => {
+                const check = () => walkAttempts > 0
+                    ? setTimeout(() => resolve(walkAttempts), 700) : setTimeout(check, 1);
+                check();
+            });"#,
         )
         .wait::<usize>(TIMEOUT)
         .unwrap();
@@ -1243,12 +1257,7 @@ fn auto_zone_overflow_host_failures_retry_and_warn_once_per_streak() {
         __host.command(JSON.stringify({kind:"patchAutoZone",patch:{enabled:true,map:"moreskulls"}}));
         null;
     "#).wait::<()>(TIMEOUT).unwrap();
-    bot.eval(
-        "wait-for-recovery.js",
-        "new Promise(resolve => setTimeout(() => resolve(null), 1600))",
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
+    wait_for_recovery(&logs, "auto zone host read recovered");
     assert_eq!(
         bot.eval("read-attempts.js", "autoZoneReads")
             .wait::<usize>(TIMEOUT)
@@ -1317,12 +1326,7 @@ fn malformed_auto_zone_overflow_replies_retry_and_recover() {
         )
         .wait::<()>(TIMEOUT)
         .unwrap();
-        bot.eval(
-            "wait-for-recovery.js",
-            "new Promise(resolve => setTimeout(() => resolve(null), 1600))",
-        )
-        .wait::<()>(TIMEOUT)
-        .unwrap();
+        wait_for_recovery(&logs, "auto zone host read recovered");
         assert_eq!(
             bot.eval("attempts.js", "autoZoneReads")
                 .wait::<u32>(TIMEOUT)
@@ -1386,11 +1390,12 @@ fn auto_zone_policy_defects_retry_and_recover() {
             },
             map: null
         }), 10);
-        new Promise(resolve => setTimeout(() => resolve(null), 1600));
+        null;
     "#,
     )
     .wait::<()>(TIMEOUT)
     .unwrap();
+    wait_for_recovery(&logs, "auto zone recovered");
     assert_eq!(
         bot.eval("attempts.js", "configAttempts")
             .wait::<u32>(TIMEOUT)
@@ -1805,8 +1810,17 @@ fn assert_failed_recovery_command_backs_off(command: &str) {
                 if (method === "auth.connectTo") return JSON.stringify({{ok:false,status:"blocked",reason:"full",message:"Server is full"}});
                 return swf(method, args);
             }};
-            window.swf["probe.emit"]("onConnection", "OnConnectionLost");
-            new Promise(resolve => setTimeout(() => resolve(null), 800));
+            new Promise(resolve => {{
+                const publish = __host.publishAutoRelogin;
+                __host.publishAutoRelogin = records => {{
+                    publish(records);
+                    if (JSON.parse(records).status.phase.tag === "backoff") {{
+                        __host.publishAutoRelogin = publish;
+                        resolve(null);
+                    }}
+                }};
+                window.swf["probe.emit"]("onConnection", "OnConnectionLost");
+            }});
         "#)).wait::<()>(TIMEOUT).unwrap();
         let records = session.auto_relogin();
         assert!(
@@ -1943,11 +1957,19 @@ fn assert_reconnect_uses_cached_auth(capture_on_reconnect: bool) {
                 return JSON.stringify(result);
             }};
             reconnecting = true;
-            window.swf["probe.emit"]("onConnection", "OnConnection");
-            new Promise(resolve => setTimeout(() => {{
+            new Promise(resolve => {{
+                const publish = __host.publishAutoRelogin;
+                __host.publishAutoRelogin = records => {{
+                    publish(records);
+                    const status = JSON.parse(records).status;
+                    if (recoveryCalls.login > 0 && status.phase.tag === "armed" && status.captured) {{
+                        __host.publishAutoRelogin = publish;
+                        resolve(null);
+                    }}
+                }};
+                window.swf["probe.emit"]("onConnection", "OnConnection");
                 window.swf["probe.emit"]("onConnection", "OnConnectionLost");
-                setTimeout(() => resolve(null), 800);
-            }}, 50));
+            }});
         "#
             ),
         )
