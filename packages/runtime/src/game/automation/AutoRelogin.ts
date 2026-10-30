@@ -700,7 +700,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       ? Effect.failCause(cause)
       : Effect.sync(() => console.error("Unexpected auto relogin failure", Cause.pretty(cause))).pipe(
           Effect.andThen(updateCurrentGeneration(generation, current => ({
-            ...current, lastError: "Auto relogin failed unexpectedly.", phase: { tag: "failed" },
+            ...current, attemptsRemaining: undefined, lastError: "Auto relogin failed unexpectedly.", phase: { tag: "failed" },
           }))),
         )));
 

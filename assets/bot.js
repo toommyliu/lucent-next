@@ -16649,6 +16649,7 @@ ${prefix}}`;
     }).pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : sync2(() => console.error("Unexpected auto relogin failure", pretty(cause))).pipe(
       andThen2(updateCurrentGeneration(generation, (current) => ({
         ...current,
+        attemptsRemaining: void 0,
         lastError: "Auto relogin failed unexpectedly.",
         phase: { tag: "failed" }
       })))
