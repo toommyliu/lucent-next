@@ -26,6 +26,19 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Logs {
     }
 }
 impl Logs {
+    fn cause(&self, prefix: &str) -> String {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .find_map(|(level, msg)| {
+                (*level == tracing::Level::WARN)
+                    .then(|| msg.strip_prefix(prefix))
+                    .flatten()
+                    .map(str::to_owned)
+            })
+            .unwrap_or_default()
+    }
     fn count(&self, text: &str) -> usize {
         self.0
             .lock()
@@ -159,7 +172,7 @@ fn retries(boundary: Boundary, fault: Fault) {
     let dispatch = tracing::Dispatch::new(tracing_subscriber::registry().with(logs.clone()));
     let _guard = tracing::dispatcher::set_default(&dispatch);
     let host = Host::default();
-    host.faults.borrow_mut().push((boundary, fault));
+    host.faults.borrow_mut().push((boundary, fault.clone()));
     if boundary == Boundary::Cached {
         host.faults
             .borrow_mut()
@@ -168,10 +181,25 @@ fn retries(boundary: Boundary, fault: Fault) {
     let mut now = Instant::now();
     let mut settings = Settings::new(now);
     for _ in 0..7 {
-        now = advance(&mut settings, &host, now);
+        let next = advance(&mut settings, &host, now);
+        assert!(
+            next >= now + Kind::Actions.interval(),
+            "retried after {:?}",
+            next - now
+        );
+        now = next;
     }
     assert_eq!(logs.count("settings policy tick failed"), 1);
     assert_eq!(logs.count("settings policy recovered"), 0);
+    let cause = logs.cause("settings policy tick failed: ");
+    match (&fault, boundary) {
+        (Fault::Error, Boundary::Read | Boundary::Cached) => {
+            assert_eq!(cause, Error::ReadPanicked.to_string())
+        }
+        (Fault::Error, _) => assert!(cause.contains("temporary host failure"), "{cause}"),
+        (Fault::Panic, _) => assert!(cause.contains("broken native boundary"), "{cause}"),
+        _ => assert!(!cause.is_empty()),
+    }
     host.faults.borrow_mut().clear();
     for _ in 0..4 {
         now = advance(&mut settings, &host, now);

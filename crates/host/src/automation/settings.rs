@@ -97,7 +97,14 @@ impl Settings {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 tick.advance(host, waker, now)
             }))
-            .unwrap_or_else(|_| Some(Err("settings transition panicked".into())));
+            .unwrap_or_else(|panic| {
+                let message = panic
+                    .downcast_ref::<&str>()
+                    .map(|text| (*text).to_owned())
+                    .or_else(|| panic.downcast_ref::<String>().cloned())
+                    .unwrap_or_default();
+                Some(Err(format!("settings transition panicked: {message}")))
+            });
             if let Some(result) = result {
                 tick.state = State::Scheduled(now + tick.kind.interval());
                 match result {
