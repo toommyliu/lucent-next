@@ -26,6 +26,10 @@ fn emit(link: &ScriptLink, data: serde_json::Value) {
 }
 
 fn next_trace(link: &ScriptLink) -> String {
+    trace_within(link, TIMEOUT).expect("missing loader trace")
+}
+
+fn trace_within(link: &ScriptLink, wait: Duration) -> Option<String> {
     struct Unpark(std::thread::Thread);
     impl Wake for Unpark {
         fn wake(self: Arc<Self>) {
@@ -33,14 +37,14 @@ fn next_trace(link: &ScriptLink) -> String {
         }
     }
     link.set_waker(Waker::from(Arc::new(Unpark(std::thread::current()))));
-    let deadline = Instant::now() + TIMEOUT;
+    let deadline = Instant::now() + wait;
     loop {
         match link.try_event().unwrap() {
             Some(ScriptEvent::Loader { event, .. }) if event.name == "onProbeAccept" => {
                 let [Value::Number(id)] = event.args.as_slice() else {
                     panic!("{event:?}")
                 };
-                return format!("accept {id}");
+                return Some(format!("accept {id}"));
             }
             Some(ScriptEvent::Loader { event, .. }) if event.name == "onExtensionResponse" => {
                 let [Value::String(raw)] = event.args.as_slice() else {
@@ -48,13 +52,15 @@ fn next_trace(link: &ScriptLink) -> String {
                 };
                 let packet: serde_json::Value = serde_json::from_str(raw).unwrap();
                 if packet["dataObj"]["cmd"] == "getDrop" {
-                    return format!("packet {}", packet["dataObj"]["ItemID"]);
+                    return Some(format!("packet {}", packet["dataObj"]["ItemID"]));
                 }
             }
             Some(_) => {}
             None => {
                 let remaining = deadline.saturating_duration_since(Instant::now());
-                assert!(!remaining.is_zero(), "missing loader trace");
+                if remaining.is_zero() {
+                    return None;
+                }
                 std::thread::park_timeout(remaining);
             }
         }
@@ -230,13 +236,16 @@ fn cancel_at_issuance(issued: bool) {
     let mut trace = vec![];
     if issued {
         trace.push(next_trace(&observer));
+        release.send(()).unwrap();
+        assert_eq!(trace_within(&observer, Duration::from_millis(300)), None);
         emit(
             &control,
             json!({"cmd":"getDrop","ItemID":70,"bSuccess":false}),
         );
         trace.push(next_trace(&observer));
+    } else {
+        release.send(()).unwrap();
     }
-    release.send(()).unwrap();
     trace.push(next_trace(&observer));
     assert_eq!(
         trace,
