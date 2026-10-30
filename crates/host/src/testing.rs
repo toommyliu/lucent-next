@@ -23,6 +23,7 @@ pub fn headless_host() -> Host {
 pub struct ProbeMovie {
     constants: Vec<(String, serde_json::Value)>,
     raises: Vec<(String, String, String, u16)>,
+    sequences: Vec<(String, Vec<(String, String)>)>,
     throws: Vec<(String, String)>,
     records: Vec<String>,
     guarded_records: Vec<String>,
@@ -79,8 +80,21 @@ impl ProbeMovie {
     ) -> Self {
         let name = name.into();
         self.raises.retain(|(method, ..)| method != &name);
+        self.sequences.retain(|(method, _)| method != &name);
         self.raises
             .push((name, event.into(), payload.into(), count));
+        self
+    }
+
+    pub fn raising_sequence(
+        mut self,
+        name: impl Into<String>,
+        events: impl IntoIterator<Item = (String, String)>,
+    ) -> Self {
+        let name = name.into();
+        self.raises.retain(|(method, ..)| method != &name);
+        self.sequences.retain(|(method, _)| method != &name);
+        self.sequences.push((name, events.into_iter().collect()));
         self
     }
 }
@@ -287,6 +301,27 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
             (name.as_str(), actions(&repeated))
         })
         .collect();
+    let sequence_bodies: Vec<(&str, Vec<u8>)> = movie
+        .sequences
+        .iter()
+        .map(|(name, events)| {
+            let mut body = Vec::new();
+            for (event, payload) in events {
+                body.push(push(vec![
+                    Value::Str(string(payload)),
+                    Value::Str(string(event)),
+                    Value::Int(2),
+                ]));
+                body.extend(external_interface());
+                body.extend([
+                    push(vec![Value::Str(string("call"))]),
+                    Action::CallMethod,
+                    Action::Pop,
+                ]);
+            }
+            (name.as_str(), actions(&body))
+        })
+        .collect();
     let record_bodies: Vec<(&str, Vec<u8>)> = movie
         .records
         .iter()
@@ -398,6 +433,7 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
         constant_bodies
             .iter()
             .chain(&raise_bodies)
+            .chain(&sequence_bodies)
             .chain(&throw_bodies)
             .map(|(name, body)| (*name, vec![], body.as_slice())),
     );
