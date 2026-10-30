@@ -61,6 +61,9 @@ importers:
       '@effect/vitest':
         specifier: 4.0.3
         version: 4.0.3(effect@4.0.3)(vitest@5.0.5(@types/node@24.12.2)(vite@8.3.5(@types/node@24.12.2)(esbuild@0.28.2)(tsx@4.23.15)))
+      '@lucent/scripting-api':
+        specifier: workspace:*
+        version: link:../scripting-api
       '@types/node':
         specifier: 24.12.2
         version: 24.12.2
@@ -95,6 +98,18 @@ importers:
 
   packages/scripting-api:
     devDependencies:
+      '@lucent/game':
+        specifier: workspace:*
+        version: link:../game
+      '@lucent/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      '@types/node':
+        specifier: 24.12.2
+        version: 24.12.2
+      effect:
+        specifier: 4.0.3
+        version: 4.0.3
       typescript:
         specifier: npm:@typescript/typescript6@^6.0.2
         version: '@typescript/typescript6@6.0.2'

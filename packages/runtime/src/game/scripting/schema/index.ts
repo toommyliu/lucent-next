@@ -45,7 +45,7 @@ import {
   string,
   StringImpl,
 } from "./primitives";
-import type * as Public from "./public";
+import type * as Public from "@lucent/scripting-api/schema";
 import { create, SchemaImpl } from "./Schema";
 
 const union = (

@@ -19,6 +19,7 @@
     "@types/node": "24.12.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^5.0.4",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "@lucent/scripting-api": "workspace:*"
   }
 }

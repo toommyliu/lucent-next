@@ -5,13 +5,30 @@
   "type": "module",
   "types": "./script-api.d.ts",
   "files": [
-    "script-api.d.ts"
+    "script-api.d.ts",
+    "src"
   ],
   "scripts": {
     "generate": "node gen/gen-script-types.ts",
-    "check": "node gen/gen-script-types.ts --check"
+    "check": "node gen/gen-script-types.ts --check",
+    "typecheck": "tsc6 -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "typescript": "npm:@typescript/typescript6@^6.0.2"
+    "@types/node": "24.12.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "@lucent/game": "workspace:*",
+    "@lucent/schemas": "workspace:*",
+    "effect": "4.0.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./script-api.d.ts"
+    },
+    "./contract": {
+      "types": "./src/contract.ts"
+    },
+    "./schema": {
+      "types": "./src/schema.ts"
+    }
   }
 }

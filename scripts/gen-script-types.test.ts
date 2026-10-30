@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -53,4 +53,40 @@ test("scripting API CLI checks bytes without writing", async (context) => {
   assert.equal(missing.status, 1, missing.stdout);
   assert.match(missing.stderr, /Unable to read.*script-api\.d\.ts.*ENOENT/);
   await assert.rejects(fs.access(path), { code: "ENOENT" });
+});
+
+test("scripting declarations generate without runtime sources", async (context) => {
+  const dir = await fs.realpath(await fs.mkdtemp(join(tmpdir(), "lucent-contract-")));
+  context.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  for (const name of ["scripting-api", "game", "schemas"]) {
+    const destination = join(dir, "packages", name);
+    await fs.mkdir(dirname(destination), { recursive: true });
+    await fs.cp(join(root, "packages", name), destination, {
+      recursive: true,
+      filter: (path) => !path.includes("node_modules") && !path.includes("/dist"),
+    });
+    await fs.symlink(join(root, "packages", name, "node_modules"),
+      join(destination, "node_modules"), "dir");
+  }
+  await fs.copyFile(join(root, "tsconfig.base.json"), join(dir, "tsconfig.base.json"));
+  await fs.symlink(join(root, "node_modules"), join(dir, "node_modules"), "dir");
+  const result = spawnSync(process.execPath, [
+    join(dir, "packages/scripting-api/gen/gen-script-types.ts"), "--check",
+  ], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Scripting declarations are up to date/);
+  const source = join(dir, "packages/scripting-api/src/contract.ts");
+  const original = await fs.readFile(source, "utf8");
+  const changed = original.replace(
+    "readonly getName: () => Effect.Effect<string>;",
+    "readonly getName: () => Effect.Effect<number>;",
+  );
+  assert.notEqual(changed, original);
+  await fs.writeFile(source, changed);
+  const stale = spawnSync(process.execPath, [
+    join(dir, "packages/scripting-api/gen/gen-script-types.ts"), "--check",
+  ], { encoding: "utf8" });
+  assert.equal(stale.status, 1, stale.stdout);
+  assert.match(stale.stderr, /Scripting declarations differ at line/);
 });
