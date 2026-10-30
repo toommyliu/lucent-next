@@ -77,6 +77,7 @@ pub fn ready_movie() -> ProbeMovie {
         .constant("flash.callGameFunction0", json!("true"))
         .constant("player.isLoaded", json!(true))
         .constant("world.isLoaded", json!(true))
+        .constant("player.walkTo", json!(true))
         .constant("bank.loadItems", json!(null))
         .constant("bank.isLoaded", json!(true))
         .constant("bank.getItems", json!([]))

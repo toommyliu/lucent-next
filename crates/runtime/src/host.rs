@@ -94,6 +94,10 @@ fn wait<T>(pending: Pending<T>, interrupt: &Interrupt) -> Result<T, String> {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub(crate) enum Item {
+    EventsLost,
+    AutoZone {
+        config: lucent_protocol::auto_zone::AutoZoneConfig,
+    },
     Loader {
         name: String,
         args: serde_json::Value,
@@ -110,6 +114,7 @@ pub(crate) enum Item {
 impl From<ScriptEvent> for Item {
     fn from(event: ScriptEvent) -> Self {
         match event {
+            ScriptEvent::AutoZoneChanged { config } => Item::AutoZone { config },
             ScriptEvent::Loader { event, projected } => Item::Loader {
                 name: event.name,
                 args: to_json(Value::List(event.args)).unwrap_or_default(),

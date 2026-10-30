@@ -1,3 +1,4 @@
+use lucent_protocol::auto_zone::AutoZoneConfig;
 use lucent_protocol::{query::Query, settings::GameSettings};
 use parking_lot::RwLock;
 use std::sync::{
@@ -20,6 +21,7 @@ pub struct ScriptLink {
     events: ScriptEvents,
     projection: Arc<RwLock<Projection>>,
     settings: Arc<RwLock<GameSettings>>,
+    auto_zone: Arc<RwLock<AutoZoneConfig>>,
     stopped: Arc<AtomicBool>,
     packets: Arc<super::operations::Packets>,
     operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
@@ -31,6 +33,7 @@ impl ScriptLink {
         attachment: AttachmentId,
         events: ScriptEvents,
         settings: Arc<RwLock<GameSettings>>,
+        auto_zone: Arc<RwLock<AutoZoneConfig>>,
         player: super::operations::Endpoint,
         operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
     ) -> Self {
@@ -42,6 +45,7 @@ impl ScriptLink {
             events,
             projection: player.projection,
             settings,
+            auto_zone,
             stopped: player.stopped,
             packets: player.packets,
             operations,
@@ -123,6 +127,17 @@ impl ScriptLink {
         if self.stopped.load(Ordering::Acquire) {
             return Err(bridge::Error::Stopped);
         }
+        if matches!(query, Some(Query::AutoZone {})) {
+            let config = self
+                .auto_zone
+                .try_read_for(timeout)
+                .ok_or(bridge::Error::Timeout)?;
+            if self.stopped.load(Ordering::Acquire) {
+                return Err(bridge::Error::Stopped);
+            }
+            query.take();
+            return Ok(serde_json::to_string(&*config).unwrap());
+        }
         let start = Instant::now();
         let settings = self
             .settings
@@ -136,7 +151,12 @@ impl ScriptLink {
             return Ok(serde_json::to_string(&*settings).unwrap());
         }
         self.read_for(timeout.saturating_sub(start.elapsed()), |projection| {
-            answer(projection, &settings, query.take().unwrap())
+            answer(
+                projection,
+                &settings,
+                &self.auto_zone,
+                query.take().unwrap(),
+            )
         })
     }
 
@@ -184,6 +204,54 @@ mod tests {
     use super::*;
     use crate::testing;
     use std::{sync::mpsc, thread};
+
+    #[test]
+    fn auto_zone_boot_reads_receive_patches_queued_before_attach() {
+        use lucent_protocol::auto_zone::{AutoZoneConfig, AutoZoneMap};
+        let host = testing::headless_host();
+        let (mut session, writer) = testing::start_probe(&host, testing::ProbeMovie::new());
+        let (blocked, entered) = mpsc::channel();
+        let (release, resume) = mpsc::channel();
+        let barrier = session.read_projection(move |_| {
+            blocked.send(()).unwrap();
+            resume.recv_timeout(Duration::from_secs(5)).unwrap();
+        });
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        let patch = writer.command(
+            serde_json::from_value(serde_json::json!({
+                "kind":"patchAutoZone", "patch":{"enabled":true,"map":"ledgermayne"}
+            }))
+            .unwrap(),
+        );
+        let bot_link = session.attach().unwrap();
+        let mut query = Some(Query::AutoZone {});
+        let boot = bot_link
+            .query_for(Duration::from_secs(1), &mut query)
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&boot).unwrap(),
+            serde_json::json!({"enabled":false,"map":null})
+        );
+        release.send(()).unwrap();
+        barrier.recv_timeout(Duration::from_secs(5)).unwrap();
+        patch.recv_timeout(Duration::from_secs(5)).unwrap();
+        bot_link
+            .command(
+                serde_json::from_value(serde_json::json!({"kind":"patchAutoZone","patch":{}}))
+                    .unwrap(),
+            )
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        assert_eq!(
+            bot_link.try_event().unwrap(),
+            Some(ScriptEvent::AutoZoneChanged {
+                config: AutoZoneConfig {
+                    enabled: true,
+                    map: Some(AutoZoneMap::Ledgermayne)
+                }
+            })
+        );
+    }
 
     #[test]
     fn settings_reads_do_not_wait_for_the_projection() {

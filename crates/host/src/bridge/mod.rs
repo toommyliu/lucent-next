@@ -91,6 +91,9 @@ pub(crate) fn invoke(player: &mut Player, name: &str, args: Vec<Value>) -> Resul
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScriptEvent {
+    AutoZoneChanged {
+        config: lucent_protocol::auto_zone::AutoZoneConfig,
+    },
     Loader {
         event: Event,
         projected: Vec<ProjectionEvent>,

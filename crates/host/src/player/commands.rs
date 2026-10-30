@@ -132,6 +132,11 @@ impl Running {
 
     pub(super) fn command(&mut self, command: Command) -> Result<String, Error> {
         match command {
+            Command::PatchAutoZone { patch } => Ok(super::patch_auto_zone(
+                &self.auto_zone,
+                patch,
+                &self.script_events,
+            )),
             Command::UpdateSettings { mut patch } => {
                 let next = patched_settings(&self.settings.read(), &mut patch);
                 self.send_settings(&patch, &next);

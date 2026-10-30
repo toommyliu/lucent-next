@@ -6,6 +6,7 @@ mod projection;
 pub(crate) mod surface;
 pub(crate) mod view;
 
+use lucent_protocol::auto_zone::{AutoZoneConfig, AutoZonePatch};
 use lucent_protocol::{command::Command, settings::GameSettings};
 use parking_lot::RwLock;
 use std::ops::ControlFlow;
@@ -52,6 +53,7 @@ pub(crate) struct Options {
     pub(crate) audio: Audio,
     pub(crate) muted: bool,
     pub(crate) settings: Arc<RwLock<GameSettings>>,
+    pub(crate) auto_zone: Arc<RwLock<AutoZoneConfig>>,
 }
 
 pub(crate) struct Handle {
@@ -229,7 +231,7 @@ fn run(
     bridge: PlayerBridge,
 ) -> Result<(), PlayerError> {
     let Some((viewport, muted, script_events)) =
-        first_viewport(&inbox, options.muted, &options.settings)
+        first_viewport(&inbox, options.muted, &options.settings, &options.auto_zone)
     else {
         return Ok(());
     };
@@ -268,6 +270,27 @@ fn run(
     Ok(())
 }
 
+fn patch_auto_zone(
+    record: &RwLock<AutoZoneConfig>,
+    patch: AutoZonePatch,
+    links: &ScriptAttachments,
+) -> String {
+    let mut record = record.write();
+    let next = AutoZoneConfig {
+        enabled: patch.enabled.unwrap_or(record.enabled),
+        map: patch.map.unwrap_or(record.map),
+    };
+    if *record != next {
+        *record = next.clone();
+        for (_, stream) in links {
+            stream.send(crate::bridge::ScriptEvent::AutoZoneChanged {
+                config: next.clone(),
+            });
+        }
+    }
+    serde_json::to_string(&*record).unwrap()
+}
+
 type ScriptAttachments = Vec<(AttachmentId, ScriptEventSender)>;
 
 fn deliver_operation_answer(
@@ -284,6 +307,7 @@ fn first_viewport(
     inbox: &mpsc::Receiver<Msg>,
     mut muted: bool,
     settings: &RwLock<GameSettings>,
+    auto_zone: &RwLock<AutoZoneConfig>,
 ) -> Option<(Viewport, bool, ScriptAttachments)> {
     let mut script_events = Vec::new();
     loop {
@@ -292,7 +316,12 @@ fn first_viewport(
                 return Some((viewport, muted, script_events));
             }
             Msg::Mute(mute) => muted = mute,
-            Msg::Attach(id, producer) => script_events.push((id, producer)),
+            Msg::Attach(id, producer) => {
+                producer.send(crate::bridge::ScriptEvent::AutoZoneChanged {
+                    config: auto_zone.read().clone(),
+                });
+                script_events.push((id, producer));
+            }
             Msg::Detach(id) => script_events.retain(|(attached, _)| *attached != id),
             #[cfg(feature = "testing")]
             Msg::LinkCount(reply) => {
@@ -302,6 +331,9 @@ fn first_viewport(
             Msg::Read(read) => (read.0)(Err(BridgeError::NotReady)),
             Msg::Command(command, reply) => {
                 let result = match command {
+                    Command::PatchAutoZone { patch } => {
+                        Ok(patch_auto_zone(auto_zone, patch, &script_events))
+                    }
                     Command::UpdateSettings { mut patch } => {
                         let mut state = settings.write();
                         *state = commands::patched_settings(&state, &mut patch);
@@ -329,6 +361,7 @@ struct PlayerBridge {
 
 struct Running {
     settings: Arc<RwLock<GameSettings>>,
+    auto_zone: Arc<RwLock<AutoZoneConfig>>,
     settings_applied: bool,
     operation_packets: Arc<crate::sessions::operations::Packets>,
     loader_events: Events,
@@ -382,6 +415,7 @@ impl Running {
         let now = Instant::now();
         Ok(Running {
             settings: options.settings,
+            auto_zone: options.auto_zone,
             settings_applied: false,
             operation_packets,
             loader_events,
@@ -402,7 +436,12 @@ impl Running {
         self.drain_events();
         match msg {
             Msg::Stop => return ControlFlow::Break(()),
-            Msg::Attach(id, producer) => self.script_events.push((id, producer)),
+            Msg::Attach(id, producer) => {
+                producer.send(crate::bridge::ScriptEvent::AutoZoneChanged {
+                    config: self.auto_zone.read().clone(),
+                });
+                self.script_events.push((id, producer));
+            }
             Msg::Detach(id) => self.script_events.retain(|(attached, _)| *attached != id),
             #[cfg(feature = "testing")]
             Msg::LinkCount(reply) => {
@@ -502,6 +541,7 @@ mod tests {
         let (_provider, loader_events) = Bridge::new();
         Running {
             settings: Arc::new(RwLock::new(GameSettings::default())),
+            auto_zone: Arc::default(),
             settings_applied: false,
             loader_events,
             script_events: Vec::new(),
@@ -537,7 +577,16 @@ mod tests {
             Viewport::new(100.0, 100.0, 1.0).unwrap(),
         )))
         .unwrap();
-        let _attachment = first_viewport(&rx, false, &Default::default()).unwrap();
+        let _attachment =
+            first_viewport(&rx, false, &Default::default(), &Default::default()).unwrap();
+        for stream in [&events, &second_events] {
+            assert_eq!(
+                stream.try_recv(),
+                Ok(Some(crate::bridge::ScriptEvent::AutoZoneChanged {
+                    config: Default::default()
+                }))
+            );
+        }
         assert_eq!(events.try_recv(), Ok(Some(answer)));
         assert_eq!(second_events.try_recv(), Ok(None));
     }
@@ -561,6 +610,8 @@ mod tests {
                     },
                 ),
             ];
+            let mut player = (!before_viewport).then(running);
+            let _attachments;
             if before_viewport {
                 let (tx, rx) = mpsc::channel();
                 for message in messages {
@@ -570,15 +621,25 @@ mod tests {
                     Viewport::new(100.0, 100.0, 1.0).unwrap(),
                 )))
                 .unwrap();
-                let _attachments = first_viewport(&rx, false, &Default::default()).unwrap();
-                assert_eq!(second_events.try_recv(), Ok(None));
+                _attachments = Some(
+                    first_viewport(&rx, false, &Default::default(), &Default::default()).unwrap(),
+                );
             } else {
-                let mut running = running();
+                _attachments = None;
+                let running = player.as_mut().unwrap();
                 for message in messages {
                     assert!(running.handle(message).is_continue());
                 }
-                assert_eq!(second_events.try_recv(), Ok(None));
             }
+            for stream in [&events, &second_events] {
+                assert_eq!(
+                    stream.try_recv(),
+                    Ok(Some(crate::bridge::ScriptEvent::AutoZoneChanged {
+                        config: Default::default()
+                    }))
+                );
+            }
+            assert_eq!(second_events.try_recv(), Ok(None));
             assert_eq!(events.try_recv(), Err(BridgeError::Stopped));
         }
     }
@@ -595,9 +656,18 @@ mod tests {
         tx.send(Msg::Attach(AttachmentId(2), last)).unwrap();
         tx.send(Msg::Detach(AttachmentId(1))).unwrap();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
-        let (received, muted, producers) = first_viewport(&rx, false, &Default::default()).unwrap();
+        let (received, muted, producers) =
+            first_viewport(&rx, false, &Default::default(), &Default::default()).unwrap();
         assert_eq!((received, muted), (viewport, false));
         assert_eq!(producers.len(), 2);
+        for stream in [&first_events, &removed_events, &last_events] {
+            assert_eq!(
+                stream.try_recv(),
+                Ok(Some(crate::bridge::ScriptEvent::AutoZoneChanged {
+                    config: Default::default()
+                }))
+            );
+        }
         assert_eq!(removed_events.try_recv(), Err(BridgeError::Stopped));
         for (_, producer) in &producers {
             producer.send(crate::bridge::ScriptEvent::Invalidated);
@@ -619,7 +689,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::Stop).unwrap();
         tx.send(Msg::Attach(AttachmentId(0), producer)).unwrap();
-        assert!(first_viewport(&rx, false, &Default::default()).is_none());
+        assert!(first_viewport(&rx, false, &Default::default(), &Default::default()).is_none());
         drop(rx);
         assert_eq!(events.try_recv(), Err(BridgeError::Stopped));
     }
@@ -630,7 +700,7 @@ mod tests {
         let (call, pending) = Call::new("player.rest".into(), vec![]);
         tx.send(Msg::Call(call)).unwrap();
         tx.send(Msg::Stop).unwrap();
-        assert!(first_viewport(&rx, false, &Default::default()).is_none());
+        assert!(first_viewport(&rx, false, &Default::default(), &Default::default()).is_none());
         assert_eq!(
             pending.recv_timeout(Duration::ZERO),
             Err(BridgeError::NotReady)
@@ -665,7 +735,7 @@ mod tests {
         tx.send(Msg::Mute(true)).unwrap();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
         assert_eq!(
-            first_viewport(&rx, false, &Default::default())
+            first_viewport(&rx, false, &Default::default(), &Default::default())
                 .map(|(viewport, muted, _)| (viewport, muted)),
             Some((viewport, true))
         );
@@ -677,7 +747,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
         assert_eq!(
-            first_viewport(&rx, true, &Default::default())
+            first_viewport(&rx, true, &Default::default(), &Default::default())
                 .map(|(viewport, muted, _)| (viewport, muted)),
             Some((viewport, true))
         );

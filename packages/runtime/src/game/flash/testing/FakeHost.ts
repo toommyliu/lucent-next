@@ -16,6 +16,7 @@ import {
   type ShopSnapshot,
 } from "@lucent/game";
 import type {
+  AutoZoneConfig,
   Command,
   CommandOutputs,
   ItemContainer,
@@ -39,6 +40,7 @@ const normalizeGameText = (value: string): string => value.trim().toLowerCase();
 
 export interface FakeHostState {
   settings: SettingsState;
+  autoZone: AutoZoneConfig;
   map: MapState;
   selfEntityId: number | null;
   players: PlayerSnapshot[];
@@ -66,6 +68,7 @@ const readinessKeys: readonly ReadinessKey[] = [
 
 export const makeFakeHostState = (): FakeHostState => ({
   settings: makeSettingsState(),
+  autoZone: { enabled: false, map: null },
   map: { id: 0, name: "", roomNumber: 0 },
   selfEntityId: null,
   players: [],
@@ -218,6 +221,8 @@ const findPlayer = (
 
 const answer = (state: FakeHostState, query: Query): unknown => {
   switch (query.kind) {
+    case "autoZone":
+      return state.autoZone;
     case "settings":
       return state.settings;
     case "map":
@@ -303,6 +308,12 @@ const run = (state: FakeHostState, loader: Loader, command: Command) => {
   };
 
   switch (command.kind) {
+    case "patchAutoZone":
+      state.autoZone = {
+        enabled: command.patch.enabled ?? state.autoZone.enabled,
+        map: command.patch.map === undefined ? state.autoZone.map : command.patch.map,
+      };
+      return state.autoZone;
     case "updateSettings":
       return state.settings;
     case "reapplySettings":

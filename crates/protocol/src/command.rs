@@ -1,4 +1,5 @@
 use crate::auth::{CredentialsSnapshot, ServerSnapshot};
+use crate::auto_zone::{AutoZoneConfig, AutoZonePatch};
 use crate::query::{ItemSelector, MonsterSelector};
 use crate::quest::QuestData;
 use crate::settings::{GameSettings, SettingsPatch};
@@ -35,6 +36,7 @@ macro_rules! commands {
 }
 
 commands! {
+    PatchAutoZone { patch: AutoZonePatch } => AutoZoneConfig,
     UpdateSettings { patch: SettingsPatch } => GameSettings,
     ReapplySettings { actions_only: bool } => (),
     RefreshContainer { container: RefreshContainer } => usize,

@@ -142,6 +142,13 @@ fn operation_answers_do_not_overflow_another_links_full_queue() {
     drop_item(&first, "Item", false);
     while first.try_event().unwrap().is_some() {}
     let second = session.attach().unwrap();
+    session.read_projection(|_| ()).recv_timeout(WAIT).unwrap();
+    assert_eq!(
+        second.try_event(),
+        Ok(Some(ScriptEvent::AutoZoneChanged {
+            config: Default::default()
+        }))
+    );
     for index in 0..1022 {
         emit(&first, "onDebug", index.to_string());
         assert!(matches!(

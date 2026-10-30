@@ -1169,3 +1169,85 @@ fn settings_updated_before_the_first_viewport_are_stored_and_applied_when_ready(
     become_ready(&link);
     assert_eq!(loader_calls(&link), Vec::<Value>::new());
 }
+
+#[test]
+fn an_identical_auto_zone_patch_sends_no_event() {
+    let (_host, mut session, link) = start(ProbeMovie::new());
+    let other = session.attach().unwrap();
+    command(&other, json!({"kind":"patchAutoZone","patch":{}})).unwrap();
+    for link in [&link, &other] {
+        while link.try_event().unwrap().is_some() {}
+    }
+    let patch = json!({"kind":"patchAutoZone","patch":{"enabled":true,"map":"ledgermayne"}});
+    let parsed = serde_json::from_value::<Command>(patch.clone());
+    assert!(parsed.is_ok(), "auto zone patch rejected: {parsed:?}");
+    let expected = json!({"enabled":true,"map":"ledgermayne"});
+    assert_eq!(command(&link, patch.clone()), Ok(expected.clone()));
+    let first = link.try_event().unwrap().expect("missing change event");
+    assert_eq!(
+        first,
+        lucent_host::bridge::ScriptEvent::AutoZoneChanged {
+            config: lucent_protocol::auto_zone::AutoZoneConfig {
+                enabled: true,
+                map: Some(lucent_protocol::auto_zone::AutoZoneMap::Ledgermayne),
+            },
+        }
+    );
+    assert_eq!(other.try_event().unwrap(), Some(first));
+    assert_eq!(command(&link, patch), Ok(expected.clone()));
+    assert_eq!(query(&link, json!({"kind":"autoZone"})), expected);
+    for link in [&link, &other] {
+        assert_eq!(link.try_event().unwrap(), None);
+    }
+}
+
+#[test]
+fn auto_zone_patches_preserve_omitted_fields_clear_maps_and_reject_unknown_maps() {
+    let (_host, _session, link) = start(ProbeMovie::new());
+    command(
+        &link,
+        json!({"kind":"patchAutoZone","patch":{"enabled":true,"map":"queeniona"}}),
+    )
+    .unwrap();
+    assert_eq!(
+        command(
+            &link,
+            json!({"kind":"patchAutoZone","patch":{"enabled":false}})
+        ),
+        Ok(json!({"enabled":false,"map":"queeniona"}))
+    );
+    while link.try_event().unwrap().is_some() {}
+    assert!(
+        serde_json::from_value::<Command>(
+            json!({"kind":"patchAutoZone","patch":{"enabled":true,"map":"battleon"}})
+        )
+        .is_err()
+    );
+    assert_eq!(
+        query(&link, json!({"kind":"autoZone"})),
+        json!({"enabled":false,"map":"queeniona"})
+    );
+    assert_eq!(link.try_event().unwrap(), None);
+    assert_eq!(
+        command(&link, json!({"kind":"patchAutoZone","patch":{"map":null}})),
+        Ok(json!({"enabled":false,"map":null}))
+    );
+}
+
+#[test]
+fn auto_zone_config_survives_a_player_restart_before_the_viewport() {
+    let host = testing::headless_host();
+    let (mut session, link) = testing::start_probe_without_viewport(&host, ProbeMovie::new());
+    let expected = json!({"enabled":true,"map":"astralshrine"});
+    assert_eq!(
+        command(
+            &link,
+            json!({"kind":"patchAutoZone","patch":{"enabled":true,"map":"astralshrine"}})
+        ),
+        Ok(expected.clone())
+    );
+    assert_eq!(query(&link, json!({"kind":"autoZone"})), expected);
+    session.restart(testing::headless_surface()).unwrap();
+    let current = session.attach().unwrap();
+    assert_eq!(query(&current, json!({"kind":"autoZone"})), expected);
+}

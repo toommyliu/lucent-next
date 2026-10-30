@@ -314,6 +314,10 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
                 guarded.extend(body);
                 body = guarded;
             }
+            if let Some((_, value)) = constants.iter().find(|(method, _)| method == name) {
+                push_json(&mut body, value);
+                body.push(Action::Return);
+            }
             (name.as_str(), actions(&body))
         })
         .collect();
@@ -512,6 +516,16 @@ mod tests {
         let (mut session, old) = start_probe(&host, ProbeMovie::new());
         let other = session.attach().unwrap();
         session.restart(headless_surface()).unwrap();
+        for stream in [&old, &other] {
+            if let Ok(Some(event)) = stream.try_event() {
+                assert_eq!(
+                    event,
+                    crate::bridge::ScriptEvent::AutoZoneChanged {
+                        config: Default::default()
+                    }
+                );
+            }
+        }
         assert_eq!(old.try_event(), Err(Error::Stopped));
         assert_eq!(other.try_event(), Err(Error::Stopped));
         assert_eq!(other.read(|_| 42), Err(Error::Stopped));

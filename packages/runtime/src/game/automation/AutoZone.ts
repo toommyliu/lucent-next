@@ -1,11 +1,15 @@
+import type { AutoZoneConfig } from "@lucent/game/protocol";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as FiberMap from "effect/FiberMap";
 import * as Random from "effect/Random";
 import * as Schema from "effect/Schema";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import type * as FiberMapType from "effect/FiberMap";
 
-import type { ApiService } from "../flash/api/Api";
+import { Api, type ApiService } from "../flash/api/Api";
+import { HostState } from "../flash/state/HostState";
+import { makeRetryAttempt } from "./retryLoop";
 
 export const AutoZoneSupportedMap = Schema.Literals([
   "ledgermayne",
@@ -170,11 +174,10 @@ const target = (
 export const makeAutoZone = Effect.fnUntraced(function* (
   api: ApiService,
   fibers: FiberMapType.FiberMap<string>,
+  initial: AutoZoneState = { enabled: false, map: undefined },
 ) {
-  const state = yield* SubscriptionRef.make<AutoZoneState>({
-    enabled: false,
-    map: undefined,
-  });
+  const state = yield* SubscriptionRef.make<AutoZoneState>(initial);
+  const retry = makeRetryAttempt("auto zone");
   const move = (destination: Target) =>
     destination.kind === "point"
       ? api.player.walkTo(destination)
@@ -225,18 +228,32 @@ export const makeAutoZone = Effect.fnUntraced(function* (
   const dispose = yield* api.events.on({ type: "zone" }, (event) => {
     if (event.type !== "zone") return Effect.void;
     return SubscriptionRef.get(state).pipe(
-      Effect.flatMap((current) =>
-        current.enabled && current.map === event.map
+      Effect.flatMap((current) => {
+        const map = current.map;
+        return current.enabled && map === event.map
           ? FiberMap.run(
               fibers,
               "auto-zone-transition",
-              transition(current.map, event.zone),
+              retry(() => transition(map, event.zone), "500 millis"),
             ).pipe(Effect.asVoid)
-          : Effect.void,
-      ),
+          : Effect.void;
+      }),
     );
   });
   yield* Effect.addFinalizer(() => Effect.sync(dispose));
+
+  const applyConfig = (config: AutoZoneConfig) =>
+    retry(
+      () => Effect.gen(function* () {
+        const previous = yield* SubscriptionRef.get(state);
+        const next = { enabled: config.enabled, map: config.map ?? undefined };
+        yield* SubscriptionRef.set(state, next);
+        if (previous.map !== next.map || !next.enabled) {
+          yield* FiberMap.remove(fibers, "auto-zone-transition");
+        }
+      }),
+      "500 millis",
+    );
 
   const changes = SubscriptionRef.changes(state);
 
@@ -267,6 +284,7 @@ export const makeAutoZone = Effect.fnUntraced(function* (
   };
 
   return {
+    applyConfig,
     changes,
     getMap,
     getState,
@@ -277,3 +295,43 @@ export const makeAutoZone = Effect.fnUntraced(function* (
 });
 
 export type AutoZone = Effect.Success<ReturnType<typeof makeAutoZone>>;
+
+export const layer = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const api = yield* Api;
+    const host = yield* HostState;
+    const fibers = yield* FiberMap.make<string>();
+    const config = yield* host.read({ kind: "autoZone" });
+    const autoZone = yield* makeAutoZone(api, fibers, {
+      enabled: config.enabled,
+      map: config.map ?? undefined,
+    });
+    const runFork = yield* FiberMap.runtime(fibers)<never>();
+    const retry = makeRetryAttempt("auto zone host read");
+    const decodeConfig = Schema.decodeUnknownSync(
+      Schema.Struct({
+        enabled: Schema.Boolean,
+        map: Schema.NullOr(AutoZoneSupportedMap),
+      }),
+    );
+    const refresh = retry(
+      () => host.read({ kind: "autoZone" }).pipe(
+        Effect.map(decodeConfig),
+        Effect.flatMap(autoZone.applyConfig),
+      ),
+      "500 millis",
+    );
+    const onChange = (config: AutoZoneConfig) => {
+      runFork("auto-zone-config", autoZone.applyConfig(config));
+    };
+    const onLost = () => {
+      runFork("auto-zone-config", refresh, { onlyIfMissing: true });
+    };
+    window.onAutoZoneChanged = onChange;
+    window.onHostEventsLost = onLost;
+    yield* Effect.addFinalizer(() => Effect.sync(() => {
+      if (window.onAutoZoneChanged === onChange) delete window.onAutoZoneChanged;
+      if (window.onHostEventsLost === onLost) delete window.onHostEventsLost;
+    }));
+  }),
+);

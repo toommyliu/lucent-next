@@ -374,15 +374,69 @@ fn run(
 }
 
 fn take_events(engine: &mut Engine) -> Option<Vec<host::Item>> {
+    collect_events(|| {
+        let event = engine.try_event();
+        if matches!(event, Err(EventError::Overflow)) {
+            engine.events_lost();
+        }
+        event
+    })
+}
+
+fn collect_events(
+    mut next: impl FnMut() -> Result<Option<lucent_host::bridge::ScriptEvent>, EventError>,
+) -> Option<Vec<host::Item>> {
     let mut items = Vec::new();
     loop {
-        match engine.try_event() {
+        match next() {
             Ok(Some(event)) => items.push(host::Item::from(event)),
             Ok(None) => return Some(items),
             Err(EventError::Overflow) => {
-                engine.events_lost();
+                items.push(host::Item::EventsLost);
             }
             Err(_) => return None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lucent_host::bridge::{Event, ScriptEvent, Value};
+    use lucent_protocol::{event::ProjectionEvent, operation::OperationAnswer};
+    use serde_json::json;
+
+    #[test]
+    fn overflow_preserves_answers_and_zones_already_read_in_the_batch() {
+        let mut events = [
+            Ok(Some(ScriptEvent::Operation {
+                id: 42,
+                answer: Ok(OperationAnswer::AcceptDrop(true)),
+            })),
+            Ok(Some(ScriptEvent::Loader {
+                event: Event {
+                    name: "onExtensionResponse".into(),
+                    args: vec![Value::String("zone".into())],
+                },
+                projected: vec![ProjectionEvent::Zone {
+                    map: "ledgermayne".into(),
+                    zone: "A".into(),
+                }],
+            })),
+            Err(EventError::Overflow),
+            Ok(Some(ScriptEvent::Invalidated)),
+            Ok(None),
+        ]
+        .into_iter();
+        let items = collect_events(|| events.next().unwrap()).unwrap();
+        assert_eq!(
+            serde_json::to_value(items).unwrap(),
+            json!([
+                {"type":"operation","id":"42","answer":{"kind":"acceptDrop","value":true},"error":null},
+                {"type":"loader","name":"onExtensionResponse","args":["zone"],"projected":[{"type":"zone","map":"ledgermayne","zone":"A"}]},
+                {"type":"eventslost"},
+                {"type":"invalidated"}
+            ])
+        );
     }
 }
