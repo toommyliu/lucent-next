@@ -221,10 +221,9 @@ export const makeAuth = (
     );
   };
 
-  const logout = () => host.command({ kind: "logout" }).pipe(Effect.asVoid);
+  const logout = () => host.command({ kind: "logout" });
 
   return {
-    getCached: () => cached,
     connectTo,
     getPassword,
     getServers,

@@ -11952,9 +11952,8 @@ ${prefix}}`;
         )
       );
     }, "login");
-    const logout = /* @__PURE__ */ __name(() => host4.command({ kind: "logout" }).pipe(asVoid2), "logout");
+    const logout = /* @__PURE__ */ __name(() => host4.command({ kind: "logout" }), "logout");
     return {
-      getCached: /* @__PURE__ */ __name(() => cached2, "getCached"),
       connectTo,
       getPassword,
       getServers,
@@ -16142,12 +16141,15 @@ ${prefix}}`;
   var run3 = gen2(function* () {
     const api = yield* Api;
     const host4 = yield* HostState;
+    const diagnostics2 = yield* DiagnosticSink;
     const repeat4 = makeRetryLoop("settings policy");
     const tick = /* @__PURE__ */ __name((actionsOnly) => gen2(function* () {
       if (!(yield* api.player.isReady())) return;
       const result3 = yield* host4.command({ kind: "reapplySettings", actionsOnly });
       if (isNone2(result3)) {
-        return yield* die3(new Error("Failed reapplySettings"));
+        return yield* die3(new Error("Failed reapplySettings", {
+          cause: diagnostics2.takeCause?.("reapplySettings")
+        }));
       }
       if (result3.value !== null) {
         return yield* die3(new Error("Invalid reapplySettings reply"));
@@ -16268,8 +16270,6 @@ ${prefix}}`;
     const recordChanges = changes(state).pipe(map8(records));
     const getState = /* @__PURE__ */ __name(() => getRecords().pipe(map5(publicReloginState)), "getState");
     const changes2 = recordChanges.pipe(map8(publicReloginState));
-    const refreshOrCached = /* @__PURE__ */ __name((refresh, select) => refresh.pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : api.auth.getCached().pipe(map5(select)))), "refreshOrCached");
-    const isLoggedIn = /* @__PURE__ */ __name(() => refreshOrCached(api.auth.isLoggedIn(), (auth) => auth.loggedIn), "isLoggedIn");
     const isPlayerReady = /* @__PURE__ */ __name(() => api.player.isReady().pipe(catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : succeed7(false))), "isPlayerReady");
     const waitUntilPlayerReady = /* @__PURE__ */ __name(() => repeat2(isPlayerReady(), {
       schedule: spaced(readinessPollInterval),
@@ -16292,7 +16292,7 @@ ${prefix}}`;
       state,
       (current) => current.enabled && current.generation === generation ? update3(current) : current
     ), "updateCurrentGeneration");
-    const captureIfMissing = /* @__PURE__ */ __name((cachedFallback = false) => gen2(function* () {
+    const captureIfMissing = /* @__PURE__ */ __name(() => gen2(function* () {
       const current = yield* get4(state);
       if (!current.enabled) return true;
       if (current.username !== void 0 && current.password !== void 0) {
@@ -16307,12 +16307,12 @@ ${prefix}}`;
           phase: { tag: "awaiting-session" }
         } : latest
       );
-      const username = (yield* cachedFallback ? refreshOrCached(api.auth.getUsername(), (auth) => auth.username) : api.auth.getUsername()).trim();
+      const username = (yield* api.auth.getUsername()).trim();
       if (username === "") {
         yield* markAwaitingSession;
         return false;
       }
-      const password = yield* cachedFallback ? refreshOrCached(api.auth.getPassword(), (auth) => auth.password) : api.auth.getPassword();
+      const password = yield* api.auth.getPassword();
       if (password === "") {
         yield* markAwaitingSession;
         return false;
@@ -16335,7 +16335,7 @@ ${prefix}}`;
       captureWatcherKey,
       sleep2(captureInterval).pipe(
         andThen2(
-          repeat2(supervise(captureIfMissing(true), captureInterval), {
+          repeat2(supervise(captureIfMissing(), captureInterval), {
             schedule: spaced(captureInterval),
             until: /* @__PURE__ */ __name((captured) => captured, "until")
           })
@@ -16346,7 +16346,7 @@ ${prefix}}`;
     ).pipe(asVoid2), "watchForCapturableSession");
     const markReadySuccess = gen2(function* () {
       if (!(yield* isPlayerReady())) return false;
-      yield* captureIfMissing(true);
+      yield* captureIfMissing();
       yield* update(
         state,
         (current) => current.enabled ? {
@@ -16370,7 +16370,7 @@ ${prefix}}`;
     const waitForLoginOutcome = /* @__PURE__ */ __name(() => {
       const readOutcome = gen2(function* () {
         if (yield* isPlayerReady()) return some2("ready");
-        if (yield* isLoggedIn()) {
+        if (yield* api.auth.isLoggedIn()) {
           return some2("connected");
         }
         if (yield* api.auth.isServerSelectReady()) {
@@ -16392,6 +16392,7 @@ ${prefix}}`;
     ), resumeAtServerSelect = false) => {
       let requiresFreshServerList = false;
       const logout = /* @__PURE__ */ __name((attemptsRemaining) => api.auth.logout().pipe(
+        flatMap3((result3) => isNone2(result3) ? failAttempt("Logout could not be submitted", true, "login", attemptsRemaining) : void_3),
         timeoutOrElse2({ duration: serverSelectTimeout, orElse: /* @__PURE__ */ __name(() => die3("Logout timed out"), "orElse") }),
         catchCause2((cause) => hasInterrupts2(cause) ? failCause4(cause) : failAttempt("Logout could not be submitted", true, "login", attemptsRemaining))
       ), "logout");
@@ -16481,7 +16482,7 @@ ${prefix}}`;
         let server = yield* resolveServer;
         if (server === void 0) return { status: "server-select" };
         if (yield* isPlayerReady()) return { status: "ready" };
-        if (yield* isLoggedIn()) {
+        if (yield* api.auth.isLoggedIn()) {
           return yield* completePlayerConnection(attemptsRemaining);
         }
         const manualConnection = yield* api.events.once(
@@ -16492,7 +16493,7 @@ ${prefix}}`;
           return yield* completePlayerConnection(attemptsRemaining);
         }
         if (yield* isPlayerReady()) return { status: "ready" };
-        if (yield* isLoggedIn()) {
+        if (yield* api.auth.isLoggedIn()) {
           return yield* completePlayerConnection(attemptsRemaining);
         }
         server = yield* resolveServer;
@@ -16508,7 +16509,7 @@ ${prefix}}`;
         const selected = selection.value;
         if (selected.status !== "connected") {
           if (yield* isPlayerReady()) return { status: "ready" };
-          if (yield* isLoggedIn()) {
+          if (yield* api.auth.isLoggedIn()) {
             return yield* completePlayerConnection(attemptsRemaining);
           }
           if (selected.status === "full") {
@@ -16749,7 +16750,7 @@ ${prefix}}`;
           })
         );
       }
-      yield* captureIfMissing(true);
+      yield* captureIfMissing();
       if (yield* isPlayerReady()) {
         yield* markReadySuccess;
       } else {
@@ -16819,7 +16820,7 @@ ${prefix}}`;
           });
         }
         if (event.status === "OnConnection") {
-          return captureIfMissing(true).pipe(andThen2(watchForReady()));
+          return captureIfMissing().pipe(andThen2(watchForReady()));
         }
         return void_3;
       }).pipe(
@@ -17028,14 +17029,21 @@ ${prefix}}`;
 
   // packages/runtime/src/bot.ts
   var causes = /* @__PURE__ */ new Map();
-  var diagnostics = succeed6(DiagnosticSink, {
-    report: /* @__PURE__ */ __name((_phase, operation, cause) => {
-      causes.set(operation, cause);
-    }, "report")
-  });
-  var requireResult = /* @__PURE__ */ __name((operation) => (result3) => {
+  var takeCause = /* @__PURE__ */ __name((operation) => {
     const cause = causes.get(operation);
     causes.delete(operation);
+    return cause;
+  }, "takeCause");
+  var diagnostics = succeed6(DiagnosticSink, {
+    report: /* @__PURE__ */ __name((_phase, operation, cause) => {
+      if (operation === "world.isLoaded" || operation === "player.isLoaded" || operation === "reapplySettings") {
+        causes.set(operation, cause);
+      }
+    }, "report"),
+    takeCause
+  });
+  var requireResult = /* @__PURE__ */ __name((operation) => (result3) => {
+    const cause = takeCause(operation);
     return isNone2(result3) ? die3(new Error(`Failed ${operation}`, { cause })) : void_3;
   }, "requireResult");
   var readinessBridge = effect(
@@ -17049,25 +17057,13 @@ ${prefix}}`;
       ), "invoke")
     }))
   );
-  var commandHost = effect(
-    HostState,
-    map5(HostState, (host4) => ({
-      ...host4,
-      command: /* @__PURE__ */ __name((command) => host4.command(command).pipe(tap3(
-        (result3) => command.kind === "refreshCredentials" || command.kind === "refreshServers" || command.kind === "refreshLoggedIn" || command.kind === "logout" || command.kind === "reapplySettings" ? requireResult(command.kind)(result3) : void_3
-      )), "command")
-    }))
-  );
   var apiLayer = layer5.pipe(provide2(readinessBridge));
   var gateway = layer2.pipe(provideMerge(layer));
-  var host3 = commandHost.pipe(
-    provide2(layer3),
-    provideMerge(gateway)
-  );
+  var host3 = layer3.pipe(provideMerge(gateway));
   var services = apiLayer.pipe(provideMerge(host3));
   var botLayer = effectDiscard(
     flatMap3(Gateway, (gateway2) => gateway2.start())
-  ).pipe(provideMerge(services), provide2(diagnostics));
+  ).pipe(provideMerge(services), provideMerge(diagnostics));
   var runtime2 = make6(mergeAll2(layer6, botRelogin).pipe(provideMerge(botLayer)));
   runtime2.runSync(void_3);
   runtime2.runPromise(run3);

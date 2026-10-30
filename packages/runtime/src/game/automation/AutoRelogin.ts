@@ -25,7 +25,6 @@ export interface AutoReloginApi {
   readonly auth: Pick<
     ApiService["auth"],
     | "connectTo"
-    | "getCached"
     | "getPassword"
     | "getServers"
     | "getUsername"
@@ -194,15 +193,6 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
   const getState = () => getRecords().pipe(Effect.map(publicReloginState));
   const changes = recordChanges.pipe(Stream.map(publicReloginState));
 
-  const refreshOrCached = <A>(
-    refresh: Effect.Effect<A>,
-    select: (auth: Effect.Success<ReturnType<AutoReloginApi["auth"]["getCached"]>>) => A,
-  ) => refresh.pipe(Effect.catchCause(cause => Cause.hasInterrupts(cause)
-    ? Effect.failCause(cause)
-    : api.auth.getCached().pipe(Effect.map(select))));
-
-  const isLoggedIn = () => refreshOrCached(api.auth.isLoggedIn(), auth => auth.loggedIn);
-
   const isPlayerReady = () =>
     api.player.isReady().pipe(Effect.catchCause(cause => Cause.hasInterrupts(cause) ? Effect.failCause(cause) : Effect.succeed(false)));
 
@@ -239,7 +229,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         : current,
     );
 
-  const captureIfMissing = (cachedFallback = false) => Effect.gen(function* () {
+  const captureIfMissing = () => Effect.gen(function* () {
     const current = yield* SubscriptionRef.get(state);
     if (!current.enabled) return true;
     if (current.username !== undefined && current.password !== undefined) {
@@ -263,17 +253,13 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
           : latest,
     );
 
-    const username = (yield* cachedFallback
-      ? refreshOrCached(api.auth.getUsername(), auth => auth.username)
-      : api.auth.getUsername()).trim();
+    const username = (yield* api.auth.getUsername()).trim();
     if (username === "") {
       yield* markAwaitingSession;
       return false;
     }
 
-    const password = yield* cachedFallback
-      ? refreshOrCached(api.auth.getPassword(), auth => auth.password)
-      : api.auth.getPassword();
+    const password = yield* api.auth.getPassword();
     if (password === "") {
       yield* markAwaitingSession;
       return false;
@@ -303,7 +289,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       captureWatcherKey,
       Effect.sleep(captureInterval).pipe(
         Effect.andThen(
-          Effect.repeat(supervise(captureIfMissing(true), captureInterval), {
+          Effect.repeat(supervise(captureIfMissing(), captureInterval), {
             schedule: Schedule.spaced(captureInterval),
             until: (captured) => captured,
           }),
@@ -315,7 +301,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
 
   const markReadySuccess = Effect.gen(function* () {
     if (!(yield* isPlayerReady())) return false;
-    yield* captureIfMissing(true);
+    yield* captureIfMissing();
     yield* SubscriptionRef.update(
       state,
       (current): State =>
@@ -350,7 +336,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
   const waitForLoginOutcome = () => {
     const readOutcome = Effect.gen(function* () {
       if (yield* isPlayerReady()) return Option.some("ready" as const);
-      if (yield* isLoggedIn()) {
+      if (yield* api.auth.isLoggedIn()) {
         return Option.some("connected" as const);
       }
       if (yield* api.auth.isServerSelectReady()) {
@@ -380,6 +366,9 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
   ): Effect.Effect<AutoReloginLoginResult, AutoReloginAttemptError> => {
     let requiresFreshServerList = false;
     const logout = (attemptsRemaining: number) => api.auth.logout().pipe(
+      Effect.flatMap((result) => Option.isNone(result)
+        ? failAttempt("Logout could not be submitted", true, "login", attemptsRemaining)
+        : Effect.void),
       Effect.timeoutOrElse({ duration: serverSelectTimeout, orElse: () => Effect.die("Logout timed out") }),
       Effect.catchCause((cause) => Cause.hasInterrupts(cause)
         ? Effect.failCause(cause)
@@ -481,7 +470,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       if (server === undefined) return { status: "server-select" as const };
 
       if (yield* isPlayerReady()) return { status: "ready" as const };
-      if (yield* isLoggedIn()) {
+      if (yield* api.auth.isLoggedIn()) {
         return yield* completePlayerConnection(attemptsRemaining);
       }
 
@@ -496,7 +485,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         return yield* completePlayerConnection(attemptsRemaining);
       }
       if (yield* isPlayerReady()) return { status: "ready" as const };
-      if (yield* isLoggedIn()) {
+      if (yield* api.auth.isLoggedIn()) {
         return yield* completePlayerConnection(attemptsRemaining);
       }
 
@@ -511,7 +500,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       const selected = selection.value;
       if (selected.status !== "connected") {
         if (yield* isPlayerReady()) return { status: "ready" as const };
-        if (yield* isLoggedIn()) {
+        if (yield* api.auth.isLoggedIn()) {
           return yield* completePlayerConnection(attemptsRemaining);
         }
         if (selected.status === "full") {
@@ -823,7 +812,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
         );
       }
 
-      yield* captureIfMissing(true);
+      yield* captureIfMissing();
       if (yield* isPlayerReady()) {
         yield* markReadySuccess;
       } else {
@@ -929,7 +918,7 @@ export const makeAutoRelogin = Effect.fnUntraced(function* (
       }
       if (event.status === "OnConnection") {
         // isReady is a query; connection starts the bounded readiness watcher.
-        return captureIfMissing(true).pipe(Effect.andThen(watchForReady()));
+        return captureIfMissing().pipe(Effect.andThen(watchForReady()));
       }
       return Effect.void;
     }).pipe(

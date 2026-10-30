@@ -12274,9 +12274,8 @@ ${prefix}}`;
         )
       );
     }, "login");
-    const logout = /* @__PURE__ */ __name(() => host3.command({ kind: "logout" }).pipe(asVoid2), "logout");
+    const logout = /* @__PURE__ */ __name(() => host3.command({ kind: "logout" }), "logout");
     return {
-      getCached: /* @__PURE__ */ __name(() => cached2, "getCached"),
       connectTo,
       getPassword,
       getServers,
@@ -17642,7 +17641,7 @@ ${prefix}}`;
       isServerSelectReady: services.auth.isServerSelectReady,
       isTemporarilyKicked: services.auth.isTemporarilyKicked,
       login: services.auth.login,
-      logout: services.auth.logout
+      logout: /* @__PURE__ */ __name(() => services.auth.logout().pipe(asVoid2), "logout")
     }),
     bank: Object.freeze({
       contains: services.bank.contains,

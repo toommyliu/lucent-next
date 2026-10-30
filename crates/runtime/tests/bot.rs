@@ -754,7 +754,7 @@ fn settings_policy_code_errors_warn_once_and_retry() {
         };
         null;
         "#,
-        "settings policy tick failed Error: Failed refreshLoggedIn",
+        "settings policy tick failed Error: Failed reapplySettings",
     );
     assert_policy_retries(
         r#"

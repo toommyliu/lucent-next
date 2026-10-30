@@ -4,9 +4,13 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FiberMap from "effect/FiberMap";
 import * as Ref from "effect/Ref";
+import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as TestClock from "effect/testing/TestClock";
 
+import { makeAuth } from "../flash/api/Auth";
+import { makeBridge } from "../flash/bridge/Bridge";
+import { makeFakeApi, makeFakeHost, makeFakeHostState } from "../flash/testing/FakeHost";
 import type { Event, EventSelector } from "../flash/contract/Event";
 import { makeAutoRelogin } from "./AutoRelogin";
 import type { AutoReloginApi, AutoReloginLifecycleStep } from "./AutoRelogin";
@@ -24,9 +28,6 @@ const connection = (status: string): Event => ({
 
 const apiWith = (overrides: ApiOverrides = {}): AutoReloginApi => ({
   auth: {
-    getCached: overrides.auth?.getCached ?? (() => Effect.succeed({
-      loggedIn: false, username: "Hero", password: "pw", servers: [],
-    })),
     connectTo:
       overrides.auth?.connectTo ??
       ((server) =>
@@ -40,7 +41,7 @@ const apiWith = (overrides: ApiOverrides = {}): AutoReloginApi => ({
     isTemporarilyKicked:
       overrides.auth?.isTemporarilyKicked ?? (() => Effect.succeed(false)),
     login: overrides.auth?.login ?? (() => Effect.succeed(true)),
-    logout: overrides.auth?.logout ?? (() => Effect.void),
+    logout: overrides.auth?.logout ?? (() => Effect.succeed(Option.some(null))),
   },
   events: {
     on: overrides.events?.on ?? (() => Effect.succeed(() => undefined)),
@@ -153,21 +154,18 @@ describe("AutoRelogin", () => {
 
   it.effect("starts the capture watcher when credential refresh fails with an empty cache", () =>
     Effect.gen(function* () {
-      const username = yield* Ref.make("");
-      const password = yield* Ref.make("");
+      const state = makeFakeHostState();
+      const target = { swf: {} } as Window;
+      const api = yield* makeFakeApi(target, state);
+      const auth = makeAuth(yield* makeBridge(target), {
+        ...makeFakeHost(state, target),
+        command: () => Effect.succeed(Option.none()),
+      }, api.wait);
       let loginCalls = 0;
       const autoRelogin = yield* makeFeature(apiWith({
         auth: {
-          getUsername: () => Effect.die("player restarting"),
-          getPassword: () => Effect.die("player restarting"),
-          getCached: () => Effect.gen(function* () {
-            return {
-              loggedIn: false,
-              username: yield* Ref.get(username),
-              password: yield* Ref.get(password),
-              servers: [],
-            };
-          }),
+          getUsername: auth.getUsername,
+          getPassword: auth.getPassword,
           login: () => Effect.sync(() => { loginCalls++; return true; }),
         },
       }));
@@ -175,8 +173,8 @@ describe("AutoRelogin", () => {
       expect(yield* autoRelogin.setEnabled(true)).toEqual({
         enabled: true, captured: false, delayMs: 3000, attempting: false, waitingDelay: false,
       });
-      yield* Ref.set(username, "Hero");
-      yield* Ref.set(password, "pw");
+      state.username = "Hero";
+      state.password = "pw";
       yield* advance("5 seconds");
 
       expect(yield* autoRelogin.getState()).toEqual({
@@ -263,6 +261,7 @@ describe("AutoRelogin", () => {
               Effect.sync(() => {
                 logoutCalls += 1;
                 attempts.push(`logout:${loginCalls}`);
+                return Option.some(null);
               }),
           },
         }),
@@ -517,6 +516,7 @@ describe("AutoRelogin", () => {
               logout: () =>
                 Effect.sync(() => {
                   logoutCalls += 1;
+                  return Option.some(null);
                 }),
             },
           }),
@@ -599,7 +599,6 @@ it.effect("moves past failed connection events and logs once per streak", () => 
   let broken = false;
   const relogin = yield* makeFeature(apiWith({ events: {on:events.on}, auth: {
     getUsername: () => Effect.sync(() => { reads++; if (broken) throw new Error("capture event failure"); return ""; }),
-    getCached: () => Effect.die("cached auth unavailable"),
   } }));
   yield* relogin.setEnabled(true);
   broken = true;
