@@ -10,6 +10,61 @@ const advance = (millis: number) =>
   TestClock.adjust(millis).pipe(Effect.andThen(Effect.yieldNow));
 
 describe("retryLoop", () => {
+  it.effect("keeps separate retry factories' failure streaks independent", () =>
+    Effect.gen(function* () {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const info = vi.spyOn(console, "info").mockImplementation(() => {});
+      yield* Effect.addFinalizer(() => Effect.sync(() => vi.restoreAllMocks()));
+      let firstFails = true;
+      let secondFails = false;
+      let firstAttempts = 0;
+      let secondAttempts = 0;
+      yield* makeRetryLoop("first")(() => {
+        firstAttempts++;
+        return firstFails ? Effect.fail(new Error("first unavailable")) : Effect.void;
+      }, 500).pipe(Effect.forkScoped);
+      yield* makeRetryLoop("second")(() => {
+        secondAttempts++;
+        return secondFails ? Effect.fail(new Error("second unavailable")) : Effect.void;
+      }, 500).pipe(Effect.forkScoped);
+
+      yield* advance(1000);
+      expect([firstAttempts, secondAttempts]).toEqual([3, 3]);
+      expect(warn.mock.calls.map(([message]) => message)).toEqual(["first tick failed"]);
+      expect(info.mock.calls).toEqual([]);
+
+      secondFails = true;
+      yield* advance(500);
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([
+        "first tick failed",
+        "second tick failed",
+      ]);
+      firstFails = false;
+      yield* advance(500);
+      expect(info.mock.calls).toEqual([["first recovered"]]);
+
+      firstFails = true;
+      yield* advance(500);
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([
+        "first tick failed",
+        "second tick failed",
+        "first tick failed",
+      ]);
+      secondFails = false;
+      yield* advance(500);
+      expect(info.mock.calls).toEqual([["first recovered"], ["second recovered"]]);
+      firstFails = false;
+      yield* advance(500);
+      expect(info.mock.calls).toEqual([
+        ["first recovered"],
+        ["second recovered"],
+        ["first recovered"],
+      ]);
+      expect([firstAttempts, secondAttempts]).toEqual([8, 8]);
+      expect(warn).toHaveBeenCalledTimes(3);
+    }),
+  );
+
   it.effect("retries ticks and logs once until every failing loop recovers", () =>
     Effect.gen(function* () {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

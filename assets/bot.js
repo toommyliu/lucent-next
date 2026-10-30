@@ -15517,5 +15517,11 @@ ${prefix}}`;
   var runtime = make5(botLayer);
   runtime.runSync(void_3);
   runtime.runPromise(run2);
-  Object.assign(globalThis, { __lucent: Object.freeze({ turn, wake }) });
+  var onEvent = /* @__PURE__ */ __name((listener) => runtime.runPromise(
+    flatMap3(
+      Api,
+      (api) => api.events.on(void 0, (event) => sync2(() => listener(event)))
+    )
+  ), "onEvent");
+  Object.assign(globalThis, { __lucent: Object.freeze({ turn, wake, onEvent }) });
 })();

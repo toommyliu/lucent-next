@@ -54,7 +54,7 @@ describe("SettingsPolicy", () => {
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0]?.[0]).toBe("settings policy tick failed");
       expect(String(warn.mock.calls[0]?.[1]).split("\n")[0]).toBe(
-        "Error: Settings reapplication failed",
+        "Error: Failed reapplySettings",
       );
       expect(info).not.toHaveBeenCalled();
       fails = false;

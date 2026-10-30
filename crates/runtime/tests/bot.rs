@@ -63,6 +63,48 @@ fn drain(link: &ScriptLink) {
     while link.try_event().unwrap().is_some() {}
 }
 
+#[cfg(feature = "testing")]
+#[test]
+fn malformed_packets_do_not_stop_bot_event_delivery() {
+    let (_host, mut session, observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    bot.eval(
+        "listen.js",
+        r#"
+        globalThis.seen = [];
+        __lucent.onEvent(event => {
+            if (event.type === "debug") seen.push(event.message);
+        }).then(() => null);
+        "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    for (name, payload) in [
+        ("onDebug", "before malformed packet"),
+        ("onExtensionResponse", "not json"),
+        ("onDebug", "after malformed packet"),
+    ] {
+        observer
+            .call_loader(
+                "probe.emit",
+                vec![Value::String(name.into()), Value::String(payload.into())],
+            )
+            .recv_timeout(TIMEOUT)
+            .unwrap();
+    }
+    let seen = bot
+        .eval(
+            "events.js",
+            "new Promise(resolve => setTimeout(() => resolve(seen), 100));",
+        )
+        .wait::<Vec<String>>(TIMEOUT)
+        .unwrap();
+    assert_eq!(
+        seen,
+        vec!["before malformed packet", "after malformed packet"]
+    );
+}
+
 #[test]
 fn script_kills_never_restart_the_bot() {
     let (_host, mut session, observer) = start();
