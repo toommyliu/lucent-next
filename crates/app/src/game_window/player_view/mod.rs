@@ -16,6 +16,7 @@ use gpui::{
 };
 use lucent_host::{Host, HostError, Ime, Session, ViewEvent};
 
+use lucent_runtime::{RuntimeError, ScriptRequest, Supervisor};
 use native::NativeView;
 
 #[derive(Debug, thiserror::Error)]
@@ -24,9 +25,12 @@ pub enum PlayerViewError {
     Native(#[from] native::Error),
     #[error(transparent)]
     Host(#[from] HostError),
+    #[error(transparent)]
+    Runtime(#[from] RuntimeError),
 }
 
 pub struct PlayerView {
+    supervisor: Supervisor,
     // Dropped before `native`: on Windows the player draws into its window until the session stops.
     session: Session,
     native: NativeView,
@@ -40,12 +44,14 @@ pub struct PlayerView {
 impl PlayerView {
     pub fn new(
         host: &Host,
+        script: Option<ScriptRequest>,
         window: &mut Window,
         cx: &mut App,
     ) -> Result<Entity<PlayerView>, PlayerViewError> {
         let (wake, woken) = async_channel::bounded(1);
         let native = NativeView::attach(window, wake)?;
-        let session = host.start_session(native.surface())?;
+        let mut session = host.start_session(native.surface())?;
+        let supervisor = Supervisor::start(&mut session, script)?;
         Ok(cx.new(|cx| {
             cx.spawn(async move |this, cx| {
                 while woken.recv().await.is_ok() {
@@ -74,6 +80,7 @@ impl PlayerView {
                 }),
             ];
             Self {
+                supervisor,
                 session,
                 native,
                 focus,
@@ -88,7 +95,7 @@ impl PlayerView {
     fn layout(&mut self, bounds: Bounds<Pixels>, window: &Window) {
         let restarted = self.native.replaced_device(window).map(|surface| {
             tracing::warn!("the window's GPU device was replaced; restarting its player");
-            self.session.restart(surface)
+            self.supervisor.restart_player(&mut self.session, surface)
         });
         let scale = window.scale_factor();
         self.native.set_frame(bounds, scale);
