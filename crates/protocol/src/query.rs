@@ -5,6 +5,7 @@ use crate::item::{ItemContainer, ItemSnapshot};
 use crate::monster_drop::MonsterDrop;
 use crate::quest::QuestData;
 use crate::readiness::ReadinessSnapshot;
+use crate::settings::GameSettings;
 use crate::shop::ShopData;
 use crate::world::{MonsterSnapshot, PlayerSnapshot};
 
@@ -70,6 +71,7 @@ macro_rules! queries {
 }
 
 queries! {
+    Settings {} => GameSettings,
     Map {} => MapState,
     Me {} => Option<PlayerSnapshot>,
     SelfEntityId {} => Option<i64>,

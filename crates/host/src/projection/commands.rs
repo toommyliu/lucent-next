@@ -2,7 +2,6 @@ use lucent_protocol::{
     auth::{CredentialsSnapshot, ServerSnapshot},
     command::RefreshContainer,
     item::ItemContainer,
-    query::Answer,
     quest::QuestData,
     world::MonsterSnapshot,
 };
@@ -186,7 +185,7 @@ pub(crate) fn refresh_servers(
     answer: Option<Value>,
 ) -> Result<Vec<ServerSnapshot>, Error> {
     let Some(answer) = answer.filter(|answer| !answer.is_null()) else {
-        return Ok(projection.auth().servers);
+        return Ok(projection.auth.snapshot().servers);
     };
     let servers = decode_servers(&answer)
         .ok_or_else(|| decode_error("auth.getServers", "expected an array of server payloads"))?;
@@ -225,7 +224,12 @@ pub(crate) fn refresh_accepted_quests(
         })
         .collect::<Result<_, _>>()?;
     projection.quests.set_accepted(&ids);
-    Ok(projection.accepted_quests())
+    Ok(projection
+        .quests
+        .accepted()
+        .iter()
+        .map(|quest| quest.data().clone())
+        .collect())
 }
 
 pub(crate) fn refresh_equipped_consumable(
@@ -271,7 +275,8 @@ mod tests {
         assert!(refresh_servers(&mut projection, Some(json!([{"sName": "Yorumi"}, {}]))).is_err());
         assert_eq!(
             projection
-                .auth()
+                .auth
+                .snapshot()
                 .servers
                 .iter()
                 .map(|server| server.data.name.as_str())

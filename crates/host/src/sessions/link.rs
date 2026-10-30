@@ -1,20 +1,22 @@
+use lucent_protocol::{query::Query, settings::GameSettings};
 use parking_lot::RwLock;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
 use std::task::Waker;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::bridge::{self, Pending, PendingCall, ScriptEvent, ScriptEvents, Value};
 use crate::player::Inbox;
-use crate::projection::Projection;
+use crate::projection::{Projection, answer};
 
 pub struct ScriptLink {
     id: u64,
     inbox: Inbox,
     events: ScriptEvents,
     projection: Arc<RwLock<Projection>>,
+    settings: Arc<RwLock<GameSettings>>,
     stopped: Arc<AtomicBool>,
 }
 
@@ -24,6 +26,7 @@ impl ScriptLink {
         inbox: Inbox,
         events: ScriptEvents,
         projection: Arc<RwLock<Projection>>,
+        settings: Arc<RwLock<GameSettings>>,
         stopped: Arc<AtomicBool>,
     ) -> Self {
         Self {
@@ -31,6 +34,7 @@ impl ScriptLink {
             inbox,
             events,
             projection,
+            settings,
             stopped,
         }
     }
@@ -59,6 +63,42 @@ impl ScriptLink {
         let (reply, pending) = Pending::channel();
         self.inbox.post(crate::player::Msg::Command(command, reply));
         pending
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn query(&self, query: Query) -> Result<String, bridge::Error> {
+        let mut query = Some(query);
+        loop {
+            match self.query_for(Duration::from_millis(20), &mut query) {
+                Err(bridge::Error::Timeout) => {}
+                result => return result,
+            }
+        }
+    }
+
+    pub fn query_for(
+        &self,
+        timeout: Duration,
+        query: &mut Option<Query>,
+    ) -> Result<String, bridge::Error> {
+        if self.stopped.load(Ordering::Acquire) {
+            return Err(bridge::Error::Stopped);
+        }
+        let start = Instant::now();
+        let settings = self
+            .settings
+            .try_read_for(timeout)
+            .ok_or(bridge::Error::Timeout)?;
+        if self.stopped.load(Ordering::Acquire) {
+            return Err(bridge::Error::Stopped);
+        }
+        if matches!(query, Some(Query::Settings {})) {
+            query.take();
+            return Ok(serde_json::to_string(&*settings).unwrap());
+        }
+        self.read_for(timeout.saturating_sub(start.elapsed()), |projection| {
+            answer(projection, &settings, query.take().unwrap())
+        })
     }
 
     pub fn read<R>(&self, read: impl FnOnce(&Projection) -> R) -> Result<R, bridge::Error> {
@@ -98,6 +138,20 @@ mod tests {
     use super::*;
     use crate::testing;
     use std::{sync::mpsc, thread};
+
+    #[test]
+    fn settings_reads_do_not_wait_for_the_projection() {
+        let host = testing::headless_host();
+        let mut session = host.start_session(testing::headless_surface()).unwrap();
+        let link = session.take_script_link().unwrap();
+        let _projection = link.projection.write();
+        let mut query = Some(Query::Settings {});
+        let answer = link.query_for(Duration::ZERO, &mut query).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&answer).unwrap()["walkSpeed"],
+            8.0
+        );
+    }
 
     #[test]
     fn a_contended_read_times_out_without_calling_its_reader_and_stops_with_its_player() {

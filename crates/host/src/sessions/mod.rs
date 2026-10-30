@@ -1,6 +1,8 @@
 mod link;
 pub use link::ScriptLink;
 
+use lucent_protocol::settings::GameSettings;
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 use crate::bridge::{EVENT_CAPACITY, PendingRead, script_events};
@@ -62,7 +64,8 @@ impl Host {
 
     pub(crate) fn start_movie(&self, surface: Surface, movie: Movie) -> Result<Session, HostError> {
         let id = self.shared.next_session.fetch_add(1, Ordering::Relaxed);
-        let player = self.spawn_player(id, &surface, false, &movie)?;
+        let settings = Arc::new(RwLock::new(GameSettings::default()));
+        let player = self.spawn_player(id, &surface, false, &movie, settings.clone())?;
         Ok(Session {
             unclaimed_link: Some(player.inbox.clone()),
             player: Some(player),
@@ -70,6 +73,7 @@ impl Host {
             id,
             surface,
             muted: false,
+            settings,
             host: self.clone(),
         })
     }
@@ -80,6 +84,7 @@ impl Host {
         surface: &Surface,
         muted: bool,
         movie: &Movie,
+        settings: Arc<RwLock<GameSettings>>,
     ) -> Result<player::Handle, HostError> {
         player::spawn(
             format!("player-{session}"),
@@ -90,6 +95,7 @@ impl Host {
                 audio: self.shared.audio,
                 movie: movie.clone(),
                 muted,
+                settings,
             },
         )
         .map_err(HostError::PlayerThread)
@@ -104,6 +110,7 @@ pub struct Session {
     surface: Surface,
     muted: bool,
     host: Host,
+    settings: Arc<RwLock<GameSettings>>,
 }
 
 impl Session {
@@ -148,6 +155,7 @@ impl Session {
             inbox,
             events,
             player.projection.clone(),
+            self.settings.clone(),
             player.stopped.clone(),
         ))
     }
@@ -166,9 +174,13 @@ impl Session {
         self.unclaimed_link = None;
         self.player = None;
         self.surface = surface;
-        let player = self
-            .host
-            .spawn_player(self.id, &self.surface, self.muted, &self.movie)?;
+        let player = self.host.spawn_player(
+            self.id,
+            &self.surface,
+            self.muted,
+            &self.movie,
+            self.settings.clone(),
+        )?;
         self.unclaimed_link = Some(player.inbox.clone());
         self.player = Some(player);
         Ok(())

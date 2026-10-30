@@ -6,6 +6,7 @@ mod projection;
 pub(crate) mod surface;
 pub(crate) mod view;
 
+use lucent_protocol::{command::Command, settings::GameSettings};
 use parking_lot::RwLock;
 use std::ops::ControlFlow;
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -49,6 +50,7 @@ pub(crate) struct Options {
     pub(crate) clipboard: Clipboard,
     pub(crate) audio: Audio,
     pub(crate) muted: bool,
+    pub(crate) settings: Arc<RwLock<GameSettings>>,
 }
 
 pub(crate) struct Handle {
@@ -214,7 +216,9 @@ fn run(
     options: Options,
     bridge: PlayerBridge,
 ) -> Result<(), PlayerError> {
-    let Some((viewport, muted, script_events)) = first_viewport(&inbox, options.muted) else {
+    let Some((viewport, muted, script_events)) =
+        first_viewport(&inbox, options.muted, &options.settings)
+    else {
         return Ok(());
     };
     let mut running = Running::build(viewport, &surface, Net::new(net)?, outbox, options, bridge)?;
@@ -255,6 +259,7 @@ fn run(
 fn first_viewport(
     inbox: &mpsc::Receiver<Msg>,
     mut muted: bool,
+    settings: &RwLock<GameSettings>,
 ) -> Option<(Viewport, bool, Option<ScriptEventSender>)> {
     let mut script_events = None;
     loop {
@@ -266,8 +271,16 @@ fn first_viewport(
             Msg::Attach(producer) => script_events = Some(producer),
             Msg::Call(call) => call.reject(BridgeError::NotReady),
             Msg::Read(read) => (read.0)(Err(BridgeError::NotReady)),
-            Msg::Command(_, reply) => {
-                let _ = reply.send(Err(BridgeError::NotReady));
+            Msg::Command(command, reply) => {
+                let result = match command {
+                    Command::UpdateSettings { mut patch } => {
+                        let mut state = settings.write();
+                        *state = commands::patched_settings(&state, &mut patch);
+                        Ok(serde_json::to_string(&*state).unwrap())
+                    }
+                    _ => Err(BridgeError::NotReady),
+                };
+                let _ = reply.send(result);
             }
             Msg::Stop => return None,
             Msg::View(_) | Msg::Poll(_) | Msg::Wake => {}
@@ -282,6 +295,8 @@ struct PlayerBridge {
 }
 
 struct Running {
+    settings: Arc<RwLock<GameSettings>>,
+    settings_applied: bool,
     loader_events: Events,
     script_events: Option<ScriptEventSender>,
     projection: Arc<RwLock<Projection>>,
@@ -331,6 +346,8 @@ impl Running {
             .build();
         let now = Instant::now();
         Ok(Running {
+            settings: options.settings,
+            settings_applied: false,
             loader_events,
             script_events: None,
             projection,
@@ -440,6 +457,8 @@ mod tests {
         let now = Instant::now();
         let (_provider, loader_events) = Bridge::new();
         Running {
+            settings: Arc::new(RwLock::new(GameSettings::default())),
+            settings_applied: false,
             loader_events,
             script_events: None,
             projection: Arc::new(RwLock::new(Projection::default())),
@@ -461,7 +480,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::Attach(producer)).unwrap();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
-        let (received, muted, producer) = first_viewport(&rx, false).unwrap();
+        let (received, muted, producer) = first_viewport(&rx, false, &Default::default()).unwrap();
         assert_eq!((received, muted), (viewport, false));
         assert_eq!(events.try_recv(), Ok(None));
         producer
@@ -482,7 +501,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::Stop).unwrap();
         tx.send(Msg::Attach(producer)).unwrap();
-        assert!(first_viewport(&rx, false).is_none());
+        assert!(first_viewport(&rx, false, &Default::default()).is_none());
         drop(rx);
         assert_eq!(events.try_recv(), Err(BridgeError::Stopped));
     }
@@ -493,7 +512,7 @@ mod tests {
         let (call, pending) = Call::new("player.rest".into(), vec![]);
         tx.send(Msg::Call(call)).unwrap();
         tx.send(Msg::Stop).unwrap();
-        assert!(first_viewport(&rx, false).is_none());
+        assert!(first_viewport(&rx, false, &Default::default()).is_none());
         assert_eq!(
             pending.recv_timeout(Duration::ZERO),
             Err(BridgeError::NotReady)
@@ -528,7 +547,8 @@ mod tests {
         tx.send(Msg::Mute(true)).unwrap();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
         assert_eq!(
-            first_viewport(&rx, false).map(|(viewport, muted, _)| (viewport, muted)),
+            first_viewport(&rx, false, &Default::default())
+                .map(|(viewport, muted, _)| (viewport, muted)),
             Some((viewport, true))
         );
     }
@@ -539,7 +559,8 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         tx.send(Msg::View(ViewEvent::Resized(viewport))).unwrap();
         assert_eq!(
-            first_viewport(&rx, true).map(|(viewport, muted, _)| (viewport, muted)),
+            first_viewport(&rx, true, &Default::default())
+                .map(|(viewport, muted, _)| (viewport, muted)),
             Some((viewport, true))
         );
     }

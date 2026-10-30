@@ -1,4 +1,9 @@
-use lucent_protocol::{bridge::to_json, command::Command, item::ItemContainer};
+use lucent_protocol::{
+    bridge::to_json,
+    command::Command,
+    item::ItemContainer,
+    settings::{GameSettings, RenderingMode, SettingsPatch},
+};
 use serde::Serialize;
 use serde_json::{Value as Json, json};
 
@@ -29,8 +34,114 @@ impl Running {
         commit(&mut self.projection.write()).map(|output| serde_json::to_string(&output).unwrap())
     }
 
+    fn send_settings(&mut self, patch: &SettingsPatch, state: &GameSettings) {
+        let mut calls: Vec<(&str, Vec<Value>)> = Vec::new();
+        macro_rules! setting {
+            ($field:ident, $method:literal, $value:ident) => {
+                if let Some(value) = &patch.$field {
+                    calls.push(($method, vec![Value::$value(*value)]));
+                }
+            };
+        }
+        setting!(animations_enabled, "settings.setAnimationsEnabled", Bool);
+        setting!(collisions_enabled, "settings.setCollisionsEnabled", Bool);
+        if let Some(value) = &patch.custom_guild {
+            calls.push(match value {
+                Some(value) => (
+                    "settings.setCustomGuild",
+                    vec![Value::String(value.clone())],
+                ),
+                None => ("settings.resetCustomGuild", vec![]),
+            });
+        }
+        if let Some(value) = &patch.custom_name {
+            calls.push(match value {
+                Some(value) => ("settings.setCustomName", vec![Value::String(value.clone())]),
+                None => ("settings.resetCustomName", vec![]),
+            });
+        }
+        setting!(death_ads_visible, "settings.setDeathAdsVisible", Bool);
+        setting!(
+            other_players_visible,
+            "settings.setOtherPlayersVisible",
+            Bool
+        );
+        setting!(walk_speed, "settings.setWalkSpeed", Number);
+        if patch.rendering_mode.is_some() {
+            calls.push((
+                "settings.setLagKillerEnabled",
+                vec![Value::Bool(state.rendering_mode != RenderingMode::Full)],
+            ));
+        }
+        if patch.frame_rate.is_some() || patch.rendering_mode.is_some() {
+            let rate = if state.rendering_mode == RenderingMode::Minimal {
+                2.0
+            } else {
+                state.frame_rate
+            };
+            calls.push(("settings.setFrameRate", vec![Value::Number(rate)]));
+        }
+        for (enabled, method) in [
+            (patch.enemy_magnet_enabled, "settings.enemyMagnet"),
+            (patch.infinite_range_enabled, "settings.infiniteRange"),
+            (patch.provoke_cell_enabled, "settings.provokeCell"),
+            (patch.skip_cutscenes_enabled, "settings.skipCutscenes"),
+        ] {
+            if enabled == Some(true) {
+                calls.push((method, vec![]));
+            }
+        }
+        for (method, args) in calls {
+            if let Err(error) = self.invoke_command(method, args) {
+                tracing::warn!(method, %error, "couldn't apply game setting");
+            }
+        }
+    }
+
+    pub(super) fn reapply_settings(&mut self, actions_only: bool) {
+        let state = self.settings.read().clone();
+        let patch = SettingsPatch {
+            enemy_magnet_enabled: Some(state.enemy_magnet_enabled),
+            infinite_range_enabled: Some(state.infinite_range_enabled),
+            provoke_cell_enabled: Some(state.provoke_cell_enabled),
+            skip_cutscenes_enabled: Some(state.skip_cutscenes_enabled),
+            ..if actions_only {
+                SettingsPatch::default()
+            } else {
+                SettingsPatch {
+                    animations_enabled: Some(state.animations_enabled),
+                    anti_counter_enabled: Some(state.anti_counter_enabled),
+                    collisions_enabled: Some(state.collisions_enabled),
+                    custom_guild: state
+                        .custom_guild_configured
+                        .then(|| Some(state.custom_guild.clone())),
+                    custom_name: state
+                        .custom_name_configured
+                        .then(|| Some(state.custom_name.clone())),
+                    death_ads_visible: Some(state.death_ads_visible),
+                    frame_rate: Some(state.frame_rate),
+                    other_players_visible: Some(state.other_players_visible),
+                    rendering_mode: Some(state.rendering_mode),
+                    walk_speed: Some(state.walk_speed),
+                    ..SettingsPatch::default()
+                }
+            }
+        };
+        self.send_settings(&patch, &state);
+    }
+
     pub(super) fn command(&mut self, command: Command) -> Result<String, Error> {
         match command {
+            Command::UpdateSettings { mut patch } => {
+                let next = patched_settings(&self.settings.read(), &mut patch);
+                self.send_settings(&patch, &next);
+                *self.settings.write() = next.clone();
+                Ok(serde_json::to_string(&next).unwrap())
+            }
+            Command::ReapplySettings { actions_only } => {
+                self.reapply_settings(actions_only);
+                Ok("null".into())
+            }
             Command::RefreshContainer { container } => {
                 let (_, callback) = commands::container_kind(container);
                 let answer = self.command_answer(callback, vec![])?;
@@ -176,4 +287,36 @@ impl Running {
             }
         }
     }
+}
+
+pub(super) fn patched_settings(state: &GameSettings, patch: &mut SettingsPatch) -> GameSettings {
+    patch.frame_rate = patch.frame_rate.map(|value| value.clamp(1.0, 60.0));
+    patch.walk_speed = patch.walk_speed.map(|value| value.max(1.0));
+    let mut next = state.clone();
+    macro_rules! update {
+        ($($field:ident),*) => { $(if let Some(value) = patch.$field { next.$field = value; })* };
+    }
+    update!(
+        animations_enabled,
+        anti_counter_enabled,
+        collisions_enabled,
+        death_ads_visible,
+        enemy_magnet_enabled,
+        frame_rate,
+        infinite_range_enabled,
+        other_players_visible,
+        provoke_cell_enabled,
+        rendering_mode,
+        skip_cutscenes_enabled,
+        walk_speed
+    );
+    if let Some(value) = &patch.custom_guild {
+        next.custom_guild = value.clone().unwrap_or_default();
+        next.custom_guild_configured = value.is_some();
+    }
+    if let Some(value) = &patch.custom_name {
+        next.custom_name = value.clone().unwrap_or_default();
+        next.custom_name_configured = value.is_some();
+    }
+    next
 }

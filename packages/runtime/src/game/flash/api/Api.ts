@@ -53,7 +53,7 @@ const makeApiServices = Effect.gen(function* () {
   );
   const projectionReadiness = makeProjectionReadiness(host);
   const quests = makeQuests(bridge, host, wait);
-  const settings = yield* makeSettings(bridge);
+  const settings = makeSettings(host);
   const antiCounter = makeAntiCounter(bridge, settings.isAntiCounterEnabled);
   const shops = makeShops(bridge, host, inventory, wait);
   const tempInventory = makeTempInventory(host);

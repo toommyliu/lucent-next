@@ -5,7 +5,7 @@ use lucent_host::bridge::{Error, Pending, ScriptEvent};
 use lucent_protocol::bridge::{Value, from_json, to_json};
 use lucent_protocol::command::Command;
 use lucent_protocol::event::ProjectionEvent;
-use lucent_protocol::query::{Query, answer};
+use lucent_protocol::query::Query;
 use serde::Serialize;
 
 use crate::RuntimeError;
@@ -55,9 +55,7 @@ pub(crate) fn read(
         if left.is_zero() {
             break Err(Error::Timeout.to_string());
         }
-        match link.read_for(left.min(STOP_SLICE), |projection| {
-            answer(projection, query.take().unwrap())
-        }) {
+        match link.query_for(left.min(STOP_SLICE), &mut query) {
             Err(Error::Timeout) => {}
             result => break result.map_err(|error| error.to_string()),
         }

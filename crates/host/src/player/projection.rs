@@ -35,9 +35,14 @@ impl Running {
                 }
             };
             let invalidated = projection.receipts.epoch() != epoch;
+            let ready = projection.current_readiness().missing.is_empty();
             drop(projection);
             if let Some(event) = event {
                 self.publish(event);
+            }
+            if ready && !self.settings_applied {
+                self.settings_applied = true;
+                self.reapply_settings(false);
             }
             if invalidated {
                 self.publish(ScriptEvent::Invalidated);
@@ -164,6 +169,8 @@ mod tests {
         let now = Instant::now();
         (
             Running {
+                settings: Default::default(),
+                settings_applied: false,
                 loader_events,
                 script_events: Some(producer),
                 projection: std::sync::Arc::new(parking_lot::RwLock::new(Projection::default())),
@@ -378,7 +385,7 @@ mod tests {
         let (request, reply) = Read::new(|_| 42);
         sender.send(Msg::Read(request)).unwrap();
         sender.send(Msg::Stop).unwrap();
-        assert!(first_viewport(&receiver, false).is_none());
+        assert!(first_viewport(&receiver, false, &Default::default()).is_none());
         assert_eq!(
             reply.recv_timeout(Duration::ZERO),
             Err(BridgeError::NotReady)

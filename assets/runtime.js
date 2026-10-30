@@ -16513,301 +16513,27 @@ ${prefix}}`;
     };
   }, "makeQuests");
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
-  var TypeId23 = "~effect/SubscriptionRef";
-  var Proto3 = {
-    ...PipeInspectableProto,
-    [TypeId23]: {
-      _A: identity
-    },
-    toJSON() {
-      return {
-        _id: "SubscriptionRef",
-        value: this.value
-      };
-    }
-  };
-  var make17 = /* @__PURE__ */ __name((value) => map5(unbounded({
-    replay: 1
-  }), (pubsub) => {
-    const self = Object.create(Proto3);
-    self.semaphore = makeUnsafe5(1);
-    self.value = value;
-    self.pubsub = pubsub;
-    publishUnsafe(self.pubsub, value);
-    return self;
-  }), "make");
-  var changes = /* @__PURE__ */ __name((self) => fromPubSub(self.pubsub), "changes");
-  var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
-  var setUnsafe2 = /* @__PURE__ */ __name((self, value) => {
-    self.value = value;
-    publishUnsafe(self.pubsub, value);
-  }, "setUnsafe");
-  var set4 = /* @__PURE__ */ dual(2, (self, value) => self.semaphore.withPermit(sync2(() => setUnsafe2(self, value))));
-  var updateAndGet2 = /* @__PURE__ */ dual(2, (self, update2) => self.semaphore.withPermit(sync2(() => {
-    const newValue = update2(self.value);
-    setUnsafe2(self, newValue);
-    return newValue;
-  })));
-
-  // packages/runtime/src/game/flash/state/Settings.ts
-  var makeSettingsState = /* @__PURE__ */ __name(() => ({
-    animationsEnabled: true,
-    antiCounterEnabled: true,
-    collisionsEnabled: true,
-    customGuild: "",
-    customGuildConfigured: false,
-    customName: "",
-    customNameConfigured: false,
-    deathAdsVisible: true,
-    enemyMagnetEnabled: false,
-    frameRate: 24,
-    infiniteRangeEnabled: false,
-    otherPlayersVisible: true,
-    provokeCellEnabled: false,
-    renderingMode: "full",
-    skipCutscenesEnabled: false,
-    walkSpeed: 8
-  }), "makeSettingsState");
-
   // packages/runtime/src/game/flash/api/Settings.ts
-  var MINIMAL_RENDERING_FRAME_RATE = 2;
-  var normalizeFrameRate = /* @__PURE__ */ __name((frameRate) => Math.max(1, Math.min(60, frameRate)), "normalizeFrameRate");
-  var normalizePatch = /* @__PURE__ */ __name((input) => ({
-    ...input,
-    ...input.frameRate === void 0 ? {} : { frameRate: normalizeFrameRate(input.frameRate) },
-    ...input.walkSpeed === void 0 ? {} : { walkSpeed: Math.max(1, input.walkSpeed) }
-  }), "normalizePatch");
-  var reapplyPatch = /* @__PURE__ */ __name((state) => {
-    const {
-      customGuild,
-      customGuildConfigured,
-      customName,
-      customNameConfigured,
-      ...settings
-    } = state;
+  var makeSettings = /* @__PURE__ */ __name((host) => {
+    const get6 = /* @__PURE__ */ __name(() => host.read({ kind: "settings" }), "get");
     return {
-      ...settings,
-      ...customGuildConfigured ? { customGuild } : {},
-      ...customNameConfigured ? { customName } : {}
-    };
-  }, "reapplyPatch");
-  var recurringActionsPatch = /* @__PURE__ */ __name((state) => ({
-    enemyMagnetEnabled: state.enemyMagnetEnabled,
-    infiniteRangeEnabled: state.infiniteRangeEnabled,
-    provokeCellEnabled: state.provokeCellEnabled,
-    skipCutscenesEnabled: state.skipCutscenesEnabled
-  }), "recurringActionsPatch");
-  var effectiveFrameRate = /* @__PURE__ */ __name((state, frameRateLimit) => {
-    if (state.renderingMode === "minimal") {
-      return MINIMAL_RENDERING_FRAME_RATE;
-    }
-    return frameRateLimit === null ? state.frameRate : Math.min(state.frameRate, frameRateLimit);
-  }, "effectiveFrameRate");
-  var isNonMinimalRenderingMode = /* @__PURE__ */ __name((mode) => mode !== "minimal", "isNonMinimalRenderingMode");
-  var makeSettings = fnUntraced2(function* (bridge) {
-    const stateRef = yield* make17(makeSettingsState());
-    const stored = {
-      changes: changes(stateRef),
-      get: get5(stateRef),
-      patch: /* @__PURE__ */ __name((patch) => updateAndGet2(stateRef, (state) => ({
-        ...state,
-        ...patch
-      })), "patch")
-    };
-    const scope3 = yield* scope2;
-    const updates = yield* make14(1);
-    const frameRateLimit = yield* make16(null);
-    const resumeRenderingMode = yield* make16("full");
-    const runFork3 = runForkWith2(yield* context2());
-    const command = /* @__PURE__ */ __name((method, value) => bridge.invoke(method, value === void 0 ? void 0 : [value], Void2).pipe(asVoid2), "command");
-    const execute = fnUntraced2(function* (patch, state) {
-      const effects = [];
-      const enqueue = /* @__PURE__ */ __name((key, method) => {
-        const value = patch[key];
-        if (value !== void 0 && value !== null)
-          effects.push(command(method, value));
-      }, "enqueue");
-      enqueue("animationsEnabled", "settings.setAnimationsEnabled");
-      enqueue("collisionsEnabled", "settings.setCollisionsEnabled");
-      if (patch.customGuild === null)
-        effects.push(command("settings.resetCustomGuild"));
-      enqueue("customGuild", "settings.setCustomGuild");
-      if (patch.customName === null)
-        effects.push(command("settings.resetCustomName"));
-      enqueue("customName", "settings.setCustomName");
-      enqueue("deathAdsVisible", "settings.setDeathAdsVisible");
-      enqueue("otherPlayersVisible", "settings.setOtherPlayersVisible");
-      enqueue("walkSpeed", "settings.setWalkSpeed");
-      if (patch.renderingMode !== void 0) {
-        effects.push(
-          command("settings.setLagKillerEnabled", state.renderingMode !== "full")
-        );
-      }
-      if (patch.frameRate !== void 0 || patch.renderingMode !== void 0) {
-        const limit = yield* get4(frameRateLimit);
-        effects.push(
-          command("settings.setFrameRate", effectiveFrameRate(state, limit))
-        );
-      }
-      if (patch.enemyMagnetEnabled === true) {
-        effects.push(command("settings.enemyMagnet"));
-      }
-      if (patch.infiniteRangeEnabled === true) {
-        effects.push(command("settings.infiniteRange"));
-      }
-      if (patch.provokeCellEnabled === true) {
-        effects.push(command("settings.provokeCell"));
-      }
-      if (patch.skipCutscenesEnabled === true) {
-        effects.push(command("settings.skipCutscenes"));
-      }
-      yield* all2(effects, { discard: true });
-    });
-    const applyUnlocked = fnUntraced2(function* (input) {
-      const patch = normalizePatch(input);
-      const current = yield* stored.get;
-      const { customGuild, customName, ...values2 } = patch;
-      const statePatch = {
-        ...values2,
-        ...customGuild === void 0 ? {} : {
-          customGuild: customGuild ?? "",
-          customGuildConfigured: customGuild !== null
-        },
-        ...customName === void 0 ? {} : {
-          customName: customName ?? "",
-          customNameConfigured: customName !== null
+      apply: /* @__PURE__ */ __name((patch) => gen2(function* () {
+        for (const field2 of ["frameRate", "walkSpeed"]) {
+          if (typeof patch[field2] === "number" && !Number.isFinite(patch[field2])) {
+            return yield* die3(new Error(`${field2} must be a finite number`));
+          }
         }
-      };
-      const next = { ...current, ...statePatch };
-      yield* execute(patch, next);
-      yield* stored.patch(statePatch);
-      if (patch.renderingMode === "minimal") {
-        if (isNonMinimalRenderingMode(current.renderingMode)) {
-          yield* set3(resumeRenderingMode, current.renderingMode);
+        const result2 = yield* host.command({ kind: "updateSettings", patch });
+        if (isNone2(result2)) {
+          return yield* die3(new Error("host rejected settings patch"));
         }
-      } else if (patch.renderingMode !== void 0) {
-        yield* set3(resumeRenderingMode, patch.renderingMode);
-      }
-    });
-    const apply = /* @__PURE__ */ __name((input) => updates.withPermits(1)(applyUnlocked(input)), "apply");
-    const action = /* @__PURE__ */ __name((key, method) => updates.withPermits(1)(
-      gen2(function* () {
-        yield* command(method);
-        const state = yield* stored.get;
-        yield* stored.patch({ [key]: !state[key] });
-      })
-    ), "action");
-    const reapply = /* @__PURE__ */ __name(() => updates.withPermits(1)(
-      gen2(function* () {
-        const state = yield* stored.get;
-        yield* execute(reapplyPatch(state), state);
-      })
-    ), "reapply");
-    const reapplyActions = /* @__PURE__ */ __name(() => updates.withPermits(1)(
-      gen2(function* () {
-        const state = yield* stored.get;
-        yield* execute(recurringActionsPatch(state), state);
-      })
-    ), "reapplyActions");
-    const set5 = /* @__PURE__ */ __name((key) => (value) => apply({ [key]: value }), "set");
-    const changes2 = stored.changes;
-    const get6 = /* @__PURE__ */ __name(() => stored.get, "get");
-    const enemyMagnet = /* @__PURE__ */ __name(() => action("enemyMagnetEnabled", "settings.enemyMagnet"), "enemyMagnet");
-    const infiniteRange = /* @__PURE__ */ __name(() => action("infiniteRangeEnabled", "settings.infiniteRange"), "infiniteRange");
-    const provokeCell = /* @__PURE__ */ __name(() => action("provokeCellEnabled", "settings.provokeCell"), "provokeCell");
-    const skipCutscenes = /* @__PURE__ */ __name(() => action("skipCutscenesEnabled", "settings.skipCutscenes"), "skipCutscenes");
-    const isAntiCounterEnabled = /* @__PURE__ */ __name(() => stored.get.pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled");
-    const getRenderingMode = /* @__PURE__ */ __name(() => stored.get.pipe(map5((state) => state.renderingMode)), "getRenderingMode");
-    const onState = /* @__PURE__ */ __name((listener) => stored.changes.pipe(
-      runForEach2((state) => sync2(() => listener(state))),
-      forkIn2(scope3),
-      map5((fiber2) => () => {
-        runFork3(interrupt4(fiber2));
-      })
-    ), "onState");
-    const setAnimationsEnabled = set5("animationsEnabled");
-    const setAntiCounterEnabled = set5("antiCounterEnabled");
-    const setCollisionsEnabled = set5("collisionsEnabled");
-    const setCustomGuild = set5("customGuild");
-    const setCustomName = set5("customName");
-    const resetCustomGuild = updates.withPermits(1)(
-      gen2(function* () {
-        yield* command("settings.resetCustomGuild");
-        yield* stored.patch({
-          customGuild: "",
-          customGuildConfigured: false
-        });
-      })
-    );
-    const resetCustomName = updates.withPermits(1)(
-      gen2(function* () {
-        yield* command("settings.resetCustomName");
-        yield* stored.patch({
-          customName: "",
-          customNameConfigured: false
-        });
-      })
-    );
-    const setDeathAdsVisible = set5("deathAdsVisible");
-    const setEnemyMagnetEnabled = set5("enemyMagnetEnabled");
-    const setFrameRate = set5("frameRate");
-    const setFrameRateLimit = /* @__PURE__ */ __name((limit) => updates.withPermits(1)(
-      gen2(function* () {
-        const normalized = limit === null ? null : normalizeFrameRate(limit);
-        yield* set3(frameRateLimit, normalized);
-        const state = yield* stored.get;
-        yield* command(
-          "settings.setFrameRate",
-          effectiveFrameRate(state, normalized)
-        );
-      })
-    ), "setFrameRateLimit");
-    const setInfiniteRangeEnabled = set5("infiniteRangeEnabled");
-    const setOtherPlayersVisible = set5("otherPlayersVisible");
-    const setProvokeCellEnabled = set5("provokeCellEnabled");
-    const setRenderingMode = set5("renderingMode");
-    const setSkipCutscenesEnabled = set5("skipCutscenesEnabled");
-    const setWalkSpeed = set5("walkSpeed");
-    const restoreRenderingMode = /* @__PURE__ */ __name(() => updates.withPermits(1)(
-      gen2(function* () {
-        const mode = yield* get4(resumeRenderingMode);
-        yield* applyUnlocked({ renderingMode: mode });
-      })
-    ), "restoreRenderingMode");
-    return {
-      apply,
-      changes: changes2,
-      enemyMagnet,
+      }), "apply"),
       get: get6,
-      getRenderingMode,
-      infiniteRange,
-      isAntiCounterEnabled,
-      onState,
-      provokeCell,
-      reapply,
-      reapplyActions,
-      restoreRenderingMode,
-      resetCustomGuild,
-      resetCustomName,
-      setAnimationsEnabled,
-      setAntiCounterEnabled,
-      setCollisionsEnabled,
-      setCustomGuild,
-      setCustomName,
-      setDeathAdsVisible,
-      setEnemyMagnetEnabled,
-      setFrameRate,
-      setFrameRateLimit,
-      setInfiniteRangeEnabled,
-      setOtherPlayersVisible,
-      setProvokeCellEnabled,
-      setRenderingMode,
-      setSkipCutscenesEnabled,
-      setWalkSpeed,
-      skipCutscenes
+      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get6().pipe(map5((state) => state.antiCounterEnabled)), "isAntiCounterEnabled"),
+      reapply: /* @__PURE__ */ __name(() => host.command({ kind: "reapplySettings", actionsOnly: false }).pipe(asVoid2), "reapply"),
+      reapplyActions: /* @__PURE__ */ __name(() => host.command({ kind: "reapplySettings", actionsOnly: true }).pipe(asVoid2), "reapplyActions")
     };
-  });
+  }, "makeSettings");
 
   // packages/runtime/src/game/flash/api/Shops.ts
   var BuyResponse = Struct({
@@ -17177,7 +16903,7 @@ ${prefix}}`;
     );
     const projectionReadiness = makeProjectionReadiness(host);
     const quests = makeQuests(bridge, host, wait);
-    const settings = yield* makeSettings(bridge);
+    const settings = makeSettings(host);
     const antiCounter = makeAntiCounter(bridge, settings.isAntiCounterEnabled);
     const shops = makeShops(bridge, host, inventory, wait);
     const tempInventory = makeTempInventory(host);
@@ -17245,6 +16971,43 @@ ${prefix}}`;
   var gatewayLayer = layer2.pipe(provideMerge(layer));
   var hostLayer = layer3.pipe(provideMerge(gatewayLayer));
   var apiLayer = layer4.pipe(provideMerge(hostLayer));
+
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
+  var TypeId23 = "~effect/SubscriptionRef";
+  var Proto3 = {
+    ...PipeInspectableProto,
+    [TypeId23]: {
+      _A: identity
+    },
+    toJSON() {
+      return {
+        _id: "SubscriptionRef",
+        value: this.value
+      };
+    }
+  };
+  var make17 = /* @__PURE__ */ __name((value) => map5(unbounded({
+    replay: 1
+  }), (pubsub) => {
+    const self = Object.create(Proto3);
+    self.semaphore = makeUnsafe5(1);
+    self.value = value;
+    self.pubsub = pubsub;
+    publishUnsafe(self.pubsub, value);
+    return self;
+  }), "make");
+  var changes = /* @__PURE__ */ __name((self) => fromPubSub(self.pubsub), "changes");
+  var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
+  var setUnsafe2 = /* @__PURE__ */ __name((self, value) => {
+    self.value = value;
+    publishUnsafe(self.pubsub, value);
+  }, "setUnsafe");
+  var set4 = /* @__PURE__ */ dual(2, (self, value) => self.semaphore.withPermit(sync2(() => setUnsafe2(self, value))));
+  var updateAndGet2 = /* @__PURE__ */ dual(2, (self, update2) => self.semaphore.withPermit(sync2(() => {
+    const newValue = update2(self.value);
+    setUnsafe2(self, newValue);
+    return newValue;
+  })));
 
   // packages/runtime/src/game/audio/beep.ts
   var SOURCE_STOP_PADDING = 0.05;

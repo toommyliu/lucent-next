@@ -1,23 +1,6 @@
-import type { RenderingMode } from "../contract/Settings";
+import type { GameSettings } from "@lucent/game/protocol";
 
-export interface SettingsState {
-  animationsEnabled: boolean;
-  antiCounterEnabled: boolean;
-  collisionsEnabled: boolean;
-  customGuild: string;
-  customGuildConfigured: boolean;
-  customName: string;
-  customNameConfigured: boolean;
-  deathAdsVisible: boolean;
-  enemyMagnetEnabled: boolean;
-  frameRate: number;
-  infiniteRangeEnabled: boolean;
-  otherPlayersVisible: boolean;
-  provokeCellEnabled: boolean;
-  renderingMode: RenderingMode;
-  skipCutscenesEnabled: boolean;
-  walkSpeed: number;
-}
+export type SettingsState = GameSettings;
 
 export const makeSettingsState = (): SettingsState => ({
   animationsEnabled: true,
