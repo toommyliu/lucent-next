@@ -34,8 +34,8 @@ impl Running {
         commit(&mut self.projection.write()).map(|output| serde_json::to_string(&output).unwrap())
     }
 
-    fn send_settings(&mut self, patch: &SettingsPatch, state: &GameSettings) {
-        let mut calls: Vec<(&str, Vec<Value>)> = Vec::new();
+    fn send_settings(&mut self, patch: &SettingsPatch, state: &GameSettings) -> Result<(), Error> {
+        let mut calls: Vec<(&'static str, Vec<Value>)> = Vec::new();
         macro_rules! setting {
             ($field:ident, $method:literal, $value:ident) => {
                 if let Some(value) = &patch.$field {
@@ -91,14 +91,26 @@ impl Running {
                 calls.push((method, vec![]));
             }
         }
-        for (method, args) in calls {
-            if let Err(error) = self.invoke_command(method, args) {
-                tracing::warn!(method, %error, "couldn't apply game setting");
+        let mut first_failure = None;
+        for (callback, args) in calls {
+            match self.invoke_command(callback, args) {
+                Err(error) => {
+                    if self.rejected_settings.insert(callback) {
+                        tracing::warn!(callback, %error, "couldn't apply game setting");
+                    }
+                    first_failure.get_or_insert(error);
+                }
+                Ok(_) => {
+                    if self.rejected_settings.remove(callback) {
+                        tracing::info!(callback, "game setting accepted again");
+                    }
+                }
             }
         }
+        first_failure.map_or(Ok(()), Err)
     }
 
-    pub(super) fn reapply_settings(&mut self, actions_only: bool) {
+    pub(super) fn reapply_settings(&mut self, actions_only: bool) -> Result<(), Error> {
         let state = self.settings.read().clone();
         let patch = SettingsPatch {
             enemy_magnet_enabled: Some(state.enemy_magnet_enabled),
@@ -127,7 +139,7 @@ impl Running {
                 }
             }
         };
-        self.send_settings(&patch, &state);
+        self.send_settings(&patch, &state)
     }
 
     pub(super) fn command(&mut self, command: Command) -> Result<String, Error> {
@@ -139,12 +151,13 @@ impl Running {
             )),
             Command::UpdateSettings { mut patch } => {
                 let next = patched_settings(&self.settings.read(), &mut patch);
-                self.send_settings(&patch, &next);
+                let result = self.send_settings(&patch, &next);
                 *self.settings.write() = next.clone();
+                result?;
                 Ok(serde_json::to_string(&next).unwrap())
             }
             Command::ReapplySettings { actions_only } => {
-                self.reapply_settings(actions_only);
+                self.reapply_settings(actions_only)?;
                 Ok("null".into())
             }
             Command::RefreshContainer { container } => {
@@ -254,28 +267,24 @@ impl Running {
                         serde_json::to_string(&self.projection.read().auth.credentials()).unwrap(),
                     );
                 }
-                let username = self
-                    .command_answer(
-                        "flash.getGameObjectS",
-                        vec![Value::String("loginInfo.strUsername".into())],
-                    )
-                    .ok();
-                let password = self
-                    .command_answer(
-                        "flash.getGameObjectS",
-                        vec![Value::String("loginInfo.strPassword".into())],
-                    )
-                    .ok();
+                let username = self.command_answer(
+                    "flash.getGameObjectS",
+                    vec![Value::String("loginInfo.strUsername".into())],
+                )?;
+                let password = self.command_answer(
+                    "flash.getGameObjectS",
+                    vec![Value::String("loginInfo.strPassword".into())],
+                )?;
                 self.commit_command(|projection| {
                     commands::refresh_credentials(projection, username, password)
                 })
             }
             Command::RefreshServers {} => {
-                let answer = self.command_answer("auth.getServers", vec![]).ok();
+                let answer = self.command_answer("auth.getServers", vec![])?;
                 self.commit_command(|projection| commands::refresh_servers(projection, answer))
             }
             Command::RefreshLoggedIn {} => {
-                let answer = self.command_answer("auth.isLoggedIn", vec![]).ok();
+                let answer = self.command_answer("auth.isLoggedIn", vec![])?;
                 self.commit_command(|projection| commands::refresh_logged_in(projection, answer))
             }
             Command::RefreshAcceptedQuests {} => {

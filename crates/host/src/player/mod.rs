@@ -9,6 +9,7 @@ pub(crate) mod view;
 use lucent_protocol::auto_zone::{AutoZoneConfig, AutoZonePatch};
 use lucent_protocol::{command::Command, settings::GameSettings};
 use parking_lot::RwLock;
+use std::collections::HashSet;
 use std::ops::ControlFlow;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{
@@ -363,6 +364,7 @@ struct Running {
     settings: Arc<RwLock<GameSettings>>,
     auto_zone: Arc<RwLock<AutoZoneConfig>>,
     settings_applied: bool,
+    rejected_settings: HashSet<&'static str>,
     operation_packets: Arc<crate::sessions::operations::Packets>,
     loader_events: Events,
     script_events: ScriptAttachments,
@@ -417,6 +419,7 @@ impl Running {
             settings: options.settings,
             auto_zone: options.auto_zone,
             settings_applied: false,
+            rejected_settings: HashSet::new(),
             operation_packets,
             loader_events,
             script_events: Vec::new(),
@@ -543,6 +546,7 @@ mod tests {
             settings: Arc::new(RwLock::new(GameSettings::default())),
             auto_zone: Arc::default(),
             settings_applied: false,
+            rejected_settings: HashSet::new(),
             loader_events,
             script_events: Vec::new(),
             operation_packets: Arc::default(),

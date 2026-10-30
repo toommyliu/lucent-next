@@ -36,7 +36,7 @@ pub fn package(dir: &str, entry: &str, extra: &[(&str, &str)]) -> Script {
 }
 
 pub fn ready_movie() -> ProbeMovie {
-    ProbeMovie::new()
+    let movie = ProbeMovie::new()
         .raising("flash.sendClientPacket", "onDebug", "started")
         .constant("auth.isLoggedIn", json!(true))
         .constant("flash.getGameObjectS", json!("\"player-a\""))
@@ -64,7 +64,26 @@ pub fn ready_movie() -> ProbeMovie {
                 },
             })
             .to_string(),
-        )
+        );
+    [
+        "settings.setAnimationsEnabled",
+        "settings.setCollisionsEnabled",
+        "settings.setCustomGuild",
+        "settings.resetCustomGuild",
+        "settings.setCustomName",
+        "settings.resetCustomName",
+        "settings.setDeathAdsVisible",
+        "settings.setOtherPlayersVisible",
+        "settings.setWalkSpeed",
+        "settings.setLagKillerEnabled",
+        "settings.setFrameRate",
+        "settings.enemyMagnet",
+        "settings.infiniteRange",
+        "settings.provokeCell",
+        "settings.skipCutscenes",
+    ]
+    .into_iter()
+    .fold(movie, |movie, name| movie.constant(name, json!(null)))
 }
 
 pub fn ready(runtime: &Runtime) {

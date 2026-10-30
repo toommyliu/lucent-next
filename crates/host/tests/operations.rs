@@ -35,6 +35,13 @@ fn next(link: &ScriptLink) -> ScriptEvent {
 }
 
 fn next_for(link: &ScriptLink, timeout: Duration) -> ScriptEvent {
+    try_next_for(link, timeout).unwrap()
+}
+
+fn try_next_for(
+    link: &ScriptLink,
+    timeout: Duration,
+) -> Result<ScriptEvent, lucent_host::bridge::Error> {
     struct Wake(std::thread::Thread);
     impl std::task::Wake for Wake {
         fn wake(self: std::sync::Arc<Self>) {
@@ -46,8 +53,8 @@ fn next_for(link: &ScriptLink, timeout: Duration) -> ScriptEvent {
     ))));
     let deadline = Instant::now() + timeout;
     loop {
-        match link.try_event().unwrap() {
-            Some(event) => return event,
+        match link.try_event()? {
+            Some(event) => return Ok(event),
             None => {
                 let remaining = deadline.saturating_duration_since(Instant::now());
                 assert!(!remaining.is_zero(), "no event within {timeout:?}");
@@ -59,16 +66,14 @@ fn next_for(link: &ScriptLink, timeout: Duration) -> ScriptEvent {
 fn operation_result(link: &ScriptLink, id: u64) -> Result<bool, lucent_host::bridge::Error> {
     let deadline = Instant::now() + WAIT;
     loop {
-        if let Some(ScriptEvent::Operation {
+        if let ScriptEvent::Operation {
             id: current,
             answer,
-        }) = link.try_event()?
+        } = try_next_for(link, deadline.saturating_duration_since(Instant::now()))?
         {
             assert_eq!(current, id);
             return answer.map(|OperationAnswer::AcceptDrop(value)| value);
         }
-        assert!(Instant::now() < deadline, "accept {id} did not answer");
-        std::thread::sleep(Duration::from_millis(1));
     }
 }
 fn answer(link: &ScriptLink, id: u64) -> bool {
@@ -288,8 +293,18 @@ fn a_disconnect_and_an_unavailable_loader_free_the_resource() {
     drop_item(&link, "Item", false);
     let first = accept(&link);
     let second = accept(&link);
-    assert!(!answer(&link, first));
-    assert!(!answer(&link, second));
+    assert_eq!(
+        operation_result(&link, first),
+        Err(lucent_host::bridge::Error::Unavailable(
+            "drops.accept".into()
+        ))
+    );
+    assert_eq!(
+        operation_result(&link, second),
+        Err(lucent_host::bridge::Error::Unavailable(
+            "drops.accept".into()
+        ))
+    );
 }
 
 #[test]
@@ -401,5 +416,88 @@ fn dropping_a_session_does_not_add_an_operation_timeout_to_the_player_stop() {
     assert!(
         elapsed < Duration::from_millis(2500),
         "session drop took {elapsed:?}"
+    );
+}
+
+#[test]
+fn a_drop_accept_propagates_a_throwing_loader_callback() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(
+        &host,
+        ProbeMovie::new()
+            .constant("auth.isLoggedIn", json!(true))
+            .throwing("drops.accept", "accept boom"),
+    );
+    drop_item(&link, "Item", false);
+    for _ in 0..2 {
+        let id = accept(&link);
+        assert_eq!(
+            operation_result(&link, id),
+            Err(lucent_host::bridge::Error::LoaderThrew {
+                callback: "drops.accept".into(),
+                message: "accept boom".into(),
+            })
+        );
+    }
+}
+
+#[test]
+fn drop_accepts_propagate_readiness_failures() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(
+        &host,
+        ProbeMovie::new().throwing("auth.isLoggedIn", "login boom"),
+    );
+    drop_item(&link, "Item", false);
+    let id = accept(&link);
+    assert_eq!(
+        operation_result(&link, id),
+        Err(lucent_host::bridge::Error::LoaderThrew {
+            callback: "auth.isLoggedIn".into(),
+            message: "login boom".into(),
+        })
+    );
+}
+
+#[test]
+fn a_drop_accept_rejects_a_malformed_reply_but_keeps_a_decline_as_false() {
+    let host = testing::headless_host();
+    for (reply, expected) in [
+        (json!(false), Ok(false)),
+        (
+            json!(null),
+            Err(lucent_host::bridge::Error::CommandDecode {
+                callback: "drops.accept".into(),
+                reason: "expected a boolean reply".into(),
+            }),
+        ),
+    ] {
+        let (_session, link) = testing::start_probe(
+            &host,
+            ProbeMovie::new()
+                .constant("auth.isLoggedIn", json!(true))
+                .constant("drops.accept", reply),
+        );
+        drop_item(&link, "Item", false);
+        let id = accept(&link);
+        assert_eq!(operation_result(&link, id), expected);
+    }
+}
+
+#[test]
+fn a_drop_accept_propagates_a_malformed_logged_in_reply() {
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(
+        &host,
+        ProbeMovie::new().constant("auth.isLoggedIn", json!("yes")),
+    );
+    drop_item(&link, "Item", false);
+    let id = accept(&link);
+    assert_eq!(
+        operation_result(&link, id),
+        Err(lucent_host::bridge::Error::CommandDecode {
+            callback: "auth.isLoggedIn".into(),
+            reason: "invalid type: string \"yes\", expected a boolean".into(),
+        })
     );
 }

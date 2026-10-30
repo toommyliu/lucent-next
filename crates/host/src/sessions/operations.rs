@@ -170,11 +170,8 @@ impl Endpoint {
             lucent_protocol::command::Command::RefreshLoggedIn {},
             reply,
         ));
-        let logged_in = match self.wait(logged_in) {
-            Ok(value) => serde_json::from_str::<bool>(&value).unwrap_or(false),
-            Err(Error::Stopped) => return Err(Error::Stopped),
-            Err(_) => self.read(|projection| projection.auth.logged_in)?,
-        };
+        let logged_in = serde_json::from_str::<bool>(&self.wait(logged_in)?)
+            .map_err(|error| crate::projection::commands::decode_error("auth.isLoggedIn", error))?;
         if !logged_in {
             return Ok(false);
         }
@@ -216,10 +213,17 @@ impl Endpoint {
         let call = self.wait(
             self.inbox
                 .call_loader("drops.accept", vec![Value::Number(drop.item_id as f64)]),
-        );
+        )?;
         self.check()?;
-        if !matches!(call, Ok(Value::Bool(true))) {
-            return Ok(false);
+        match call {
+            Value::Bool(true) => {}
+            Value::Bool(false) => return Ok(false),
+            _ => {
+                return Err(crate::projection::commands::decode_error(
+                    "drops.accept",
+                    "expected a boolean reply",
+                ));
+            }
         }
         let response = match response.recv_timeout(PACKET_TIMEOUT) {
             Ok(Ok(response)) => response,

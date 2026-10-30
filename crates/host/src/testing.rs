@@ -23,6 +23,7 @@ pub fn headless_host() -> Host {
 pub struct ProbeMovie {
     constants: Vec<(String, serde_json::Value)>,
     raises: Vec<(String, String, String, u16)>,
+    throws: Vec<(String, String)>,
     records: Vec<String>,
     guarded_records: Vec<String>,
     drop_accept: Option<(Duration, String)>,
@@ -52,6 +53,11 @@ impl ProbeMovie {
 
     pub fn constant(mut self, name: impl Into<String>, value: serde_json::Value) -> Self {
         self.constants.push((name.into(), value));
+        self
+    }
+
+    pub fn throwing(mut self, name: impl Into<String>, message: impl Into<String>) -> Self {
+        self.throws.push((name.into(), message.into()));
         self
     }
 
@@ -229,6 +235,16 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
             (name.as_str(), actions(&body))
         })
         .collect();
+    let throw_bodies: Vec<(&str, Vec<u8>)> = movie
+        .throws
+        .iter()
+        .map(|(name, message)| {
+            (
+                name.as_str(),
+                actions(&[push(vec![Value::Str(string(message))]), Action::Throw]),
+            )
+        })
+        .collect();
     let raise_bodies: Vec<(&str, Vec<u8>)> = movie
         .raises
         .iter()
@@ -382,6 +398,7 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
         constant_bodies
             .iter()
             .chain(&raise_bodies)
+            .chain(&throw_bodies)
             .map(|(name, body)| (*name, vec![], body.as_slice())),
     );
     callbacks.extend(
