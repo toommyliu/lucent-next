@@ -2,20 +2,20 @@ import * as Cause from "effect/Cause";
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
-export const makeRetryLoop = (name: string) => {
+export const makeRetryAttempt = (name: string) => {
   const failing = new Set<symbol>();
 
   return <A, E, R>(
     tick: () => Effect.Effect<A, E, R>,
     interval: Duration.Input,
-  ): Effect.Effect<never, never, R> =>
+  ): Effect.Effect<A, never, R> =>
     Effect.suspend(() => {
-      const loop = Symbol();
-      return Effect.forever(
+      const token = Symbol();
+      const attempt = (): Effect.Effect<A, never, R> =>
         Effect.suspend(tick).pipe(
           Effect.tap(() =>
             Effect.sync(() => {
-              if (failing.delete(loop) && failing.size === 0) {
+              if (failing.delete(token) && failing.size === 0) {
                 console.info(`${name} recovered`);
               }
             }),
@@ -27,11 +27,23 @@ export const makeRetryLoop = (name: string) => {
                   if (failing.size === 0) {
                     console.warn(`${name} tick failed`, Cause.pretty(cause));
                   }
-                  failing.add(loop);
-                }),
+                  failing.add(token);
+                }).pipe(
+                  Effect.andThen(Effect.sleep(interval)),
+                  Effect.andThen(Effect.suspend(attempt)),
+                ),
           ),
-          Effect.andThen(Effect.sleep(interval)),
-        ),
-      ).pipe(Effect.ensuring(Effect.sync(() => failing.delete(loop))));
+        );
+      return attempt().pipe(
+        Effect.ensuring(Effect.sync(() => failing.delete(token))),
+      );
     });
+};
+
+export const makeRetryLoop = (name: string) => {
+  const retry = makeRetryAttempt(name);
+  return <A, E, R>(tick: () => Effect.Effect<A, E, R>, interval: Duration.Input) =>
+    Effect.forever(
+      retry(tick, interval).pipe(Effect.andThen(Effect.sleep(interval))),
+    );
 };

@@ -4,12 +4,12 @@ import * as Layer from "effect/Layer";
 import * as FiberMap from "effect/FiberMap";
 import * as Random from "effect/Random";
 import * as Schema from "effect/Schema";
-import * as Schedule from "effect/Schedule";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import type * as FiberMapType from "effect/FiberMap";
 
 import { Api, type ApiService } from "../flash/api/Api";
 import { HostState } from "../flash/state/HostState";
+import { makeRetryAttempt } from "./retryLoop";
 
 export const AutoZoneSupportedMap = Schema.Literals([
   "ledgermayne",
@@ -177,6 +177,7 @@ export const makeAutoZone = Effect.fnUntraced(function* (
   initial: AutoZoneState = { enabled: false, map: undefined },
 ) {
   const state = yield* SubscriptionRef.make<AutoZoneState>(initial);
+  const retry = makeRetryAttempt("auto zone");
   const move = (destination: Target) =>
     destination.kind === "point"
       ? api.player.walkTo(destination)
@@ -227,28 +228,32 @@ export const makeAutoZone = Effect.fnUntraced(function* (
   const dispose = yield* api.events.on({ type: "zone" }, (event) => {
     if (event.type !== "zone") return Effect.void;
     return SubscriptionRef.get(state).pipe(
-      Effect.flatMap((current) =>
-        current.enabled && current.map === event.map
+      Effect.flatMap((current) => {
+        const map = current.map;
+        return current.enabled && map === event.map
           ? FiberMap.run(
               fibers,
               "auto-zone-transition",
-              transition(current.map, event.zone),
+              retry(() => transition(map, event.zone), "500 millis"),
             ).pipe(Effect.asVoid)
-          : Effect.void,
-      ),
+          : Effect.void;
+      }),
     );
   });
   yield* Effect.addFinalizer(() => Effect.sync(dispose));
 
   const applyConfig = (config: AutoZoneConfig) =>
-    Effect.gen(function* () {
-      const previous = yield* SubscriptionRef.get(state);
-      const next = { enabled: config.enabled, map: config.map ?? undefined };
-      yield* SubscriptionRef.set(state, next);
-      if (previous.map !== next.map || !next.enabled) {
-        yield* FiberMap.remove(fibers, "auto-zone-transition");
-      }
-    });
+    retry(
+      () => Effect.gen(function* () {
+        const previous = yield* SubscriptionRef.get(state);
+        const next = { enabled: config.enabled, map: config.map ?? undefined };
+        yield* SubscriptionRef.set(state, next);
+        if (previous.map !== next.map || !next.enabled) {
+          yield* FiberMap.remove(fibers, "auto-zone-transition");
+        }
+      }),
+      "500 millis",
+    );
 
   const changes = SubscriptionRef.changes(state);
 
@@ -301,38 +306,26 @@ export const layer = Layer.effectDiscard(
       enabled: config.enabled,
       map: config.map ?? undefined,
     });
-    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-    const boundary = __host;
-    const decodeConfig = Schema.decodeUnknownSync(Schema.Struct({
-      enabled: Schema.Boolean,
-      map: Schema.NullOr(AutoZoneSupportedMap),
-    }));
-    let refreshing = false;
-    let failed = false;
-    const refresh = Effect.try({
-      try: () => boundary.read('{"kind":"autoZone"}'),
-      catch: (cause) => cause,
-    }).pipe(
-      Effect.tapError((error) => Effect.sync(() => {
-        if (!failed) console.warn("auto zone host read failed; retrying", error);
-        failed = true;
-      })),
-      Effect.retry(Schedule.spaced("500 millis")),
-      Effect.map((json) => decodeConfig(JSON.parse(json))),
-      Effect.flatMap(autoZone.applyConfig),
-      Effect.tap(() => Effect.sync(() => {
-        if (failed) console.warn("auto zone host read recovered");
-        failed = false;
-      })),
-      Effect.ensuring(Effect.sync(() => { refreshing = false; })),
+    const runFork = yield* FiberMap.runtime(fibers)<never>();
+    const retry = makeRetryAttempt("auto zone host read");
+    const decodeConfig = Schema.decodeUnknownSync(
+      Schema.Struct({
+        enabled: Schema.Boolean,
+        map: Schema.NullOr(AutoZoneSupportedMap),
+      }),
+    );
+    const refresh = retry(
+      () => host.read({ kind: "autoZone" }).pipe(
+        Effect.map(decodeConfig),
+        Effect.flatMap(autoZone.applyConfig),
+      ),
+      "500 millis",
     );
     const onChange = (config: AutoZoneConfig) => {
-      void runPromise(autoZone.applyConfig(config));
+      runFork("auto-zone-config", autoZone.applyConfig(config));
     };
     const onLost = () => {
-      if (refreshing) return;
-      refreshing = true;
-      void runPromise(refresh);
+      runFork("auto-zone-config", refresh, { onlyIfMissing: true });
     };
     window.onAutoZoneChanged = onChange;
     window.onHostEventsLost = onLost;

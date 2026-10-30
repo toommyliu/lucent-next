@@ -314,6 +314,10 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
                 guarded.extend(body);
                 body = guarded;
             }
+            if let Some((_, value)) = constants.iter().find(|(method, _)| method == name) {
+                push_json(&mut body, value);
+                body.push(Action::Return);
+            }
             (name.as_str(), actions(&body))
         })
         .collect();

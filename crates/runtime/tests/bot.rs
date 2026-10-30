@@ -1188,13 +1188,14 @@ fn auto_zone_overflow_host_failures_retry_and_warn_once_per_streak() {
         1,
         "{warnings:?}"
     );
+    let recoveries = logs.messages(tracing::Level::INFO);
     assert_eq!(
-        warnings
+        recoveries
             .iter()
             .filter(|message| message.contains("auto zone") && message.contains("recovered"))
             .count(),
         1,
-        "{warnings:?}"
+        "{recoveries:?}"
     );
     assert_eq!(
         observer.try_event(),
@@ -1209,12 +1210,17 @@ fn auto_zone_overflow_host_failures_retry_and_warn_once_per_streak() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn malformed_auto_zone_overflow_replies_end_the_bot() {
+fn malformed_auto_zone_overflow_replies_retry_and_recover() {
     for reply in ["{", "{}", r#"{"enabled":"yes","map":null}"#] {
+        let logs = common::logs::Logs::default();
+        let dispatch = logs.dispatch();
+        let _guard = tracing::dispatcher::set_default(&dispatch);
         let host = testing::headless_host();
         let (mut session, observer) = testing::start_probe(
             &host,
-            common::ready_movie().raising_many("probe.overflow", "onDebug", "noise", 100),
+            common::ready_movie()
+                .recording("player.walkTo")
+                .raising_many("probe.overflow", "onDebug", "noise", 100),
         );
         become_ready(&observer);
         let bot = Bot::start(session.attach().unwrap()).unwrap();
@@ -1223,8 +1229,11 @@ fn malformed_auto_zone_overflow_replies_end_the_bot() {
             format!(
                 r#"
             const original = __host.read;
-            __host.read = json => JSON.parse(json).kind === "autoZone" ? {reply} : original(json);
+            globalThis.autoZoneReads = 0;
+            __host.read = json => JSON.parse(json).kind === "autoZone" && ++autoZoneReads <= 2
+                ? {reply} : original(json);
             for (let i = 0; i < 11; i++) __host.swf("probe.overflow", "[]");
+            __host.command(JSON.stringify({{kind:"patchAutoZone",patch:{{enabled:true,map:"moreskulls"}}}}));
             null;
         "#,
                 reply = serde_json::to_string(reply).unwrap()
@@ -1232,36 +1241,112 @@ fn malformed_auto_zone_overflow_replies_end_the_bot() {
         )
         .wait::<()>(TIMEOUT)
         .unwrap();
-        let result = bot.wait(Duration::from_secs(2));
-        assert!(
-            matches!(&result, Err(RuntimeError::JavaScript(error)) if error.contains("SyntaxError") || error.contains("SchemaError")),
-            "{reply}: {result:?}"
+        bot.eval(
+            "wait-for-recovery.js",
+            "new Promise(resolve => setTimeout(() => resolve(null), 1600))",
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+        assert_eq!(
+            bot.eval("attempts.js", "autoZoneReads")
+                .wait::<u32>(TIMEOUT)
+                .unwrap(),
+            3
         );
+        let warnings = logs.messages(tracing::Level::WARN);
+        assert_eq!(
+            warnings
+                .iter()
+                .filter(|message| message.contains("auto zone") && message.contains("failed"))
+                .count(),
+            1,
+            "{warnings:?}"
+        );
+        assert!(
+            warnings
+                .iter()
+                .any(|message| message.contains("SyntaxError") || message.contains("SchemaError")),
+            "{warnings:?}"
+        );
+        assert_eq!(
+            logs.messages(tracing::Level::INFO)
+                .iter()
+                .filter(|message| message.contains("auto zone") && message.contains("recovered"))
+                .count(),
+            1
+        );
+        assert_eq!(
+            observer.try_event(),
+            Err(lucent_host::bridge::Error::Overflow)
+        );
+        enter_map(&observer, "moreskulls");
+        drain(&observer);
+        packet(&observer, json!({"cmd":"event","args":{"zoneSet":"A"}}));
+        let call = next_call(&observer, "player.walkTo");
+        assert!(matches!(call.get(1), Some(Value::Number(x)) if (696.0..=802.0).contains(x)));
+        assert!(matches!(
+            bot.wait(Duration::ZERO),
+            Err(RuntimeError::Timeout)
+        ));
     }
 }
 
 #[cfg(feature = "testing")]
 #[test]
-fn auto_zone_policy_defects_end_the_bot() {
+fn auto_zone_policy_defects_retry_and_recover() {
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
     let (_host, mut session, _observer) = start();
     let bot = Bot::start(session.attach().unwrap()).unwrap();
     bot.eval(
         "auto-zone-defect.js",
         r#"
+        globalThis.configAttempts = 0;
         setTimeout(() => window.onAutoZoneChanged({
-            get enabled() { throw new Error("auto zone policy defect"); },
+            get enabled() {
+                if (++configAttempts <= 2) throw new Error("auto zone policy defect");
+                return false;
+            },
             map: null
         }), 10);
-        null;
+        new Promise(resolve => setTimeout(() => resolve(null), 1600));
     "#,
     )
     .wait::<()>(TIMEOUT)
     .unwrap();
-    let result = bot.wait(Duration::from_secs(2));
-    assert!(
-        matches!(&result, Err(RuntimeError::JavaScript(error)) if error.contains("auto zone policy defect")),
-        "{result:?}"
+    assert_eq!(
+        bot.eval("attempts.js", "configAttempts")
+            .wait::<u32>(TIMEOUT)
+            .unwrap(),
+        3
     );
+    let warnings = logs.messages(tracing::Level::WARN);
+    assert_eq!(
+        warnings
+            .iter()
+            .filter(|message| message.contains("auto zone") && message.contains("failed"))
+            .count(),
+        1,
+        "{warnings:?}"
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|message| message.contains("auto zone policy defect")),
+        "{warnings:?}"
+    );
+    assert_eq!(
+        logs.messages(tracing::Level::INFO)
+            .iter()
+            .filter(|message| message.contains("auto zone") && message.contains("recovered"))
+            .count(),
+        1
+    );
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
 }
 
 #[test]

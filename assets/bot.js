@@ -3530,14 +3530,6 @@ ${prefix}}`;
     return isFailure2(eb) ? failCause(eb.failure) : f(eb.success, cause);
   }));
   var catch_ = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
-  var tapCauseFilter = /* @__PURE__ */ dual(3, (self, filter7, f) => catchCause(self, (cause) => {
-    const result2 = filter7(cause);
-    if (isFailure2(result2)) {
-      return failCause(cause);
-    }
-    return andThen(f(result2.success, cause), failCause(cause));
-  }));
-  var tapError = /* @__PURE__ */ dual(2, (self, f) => tapCauseFilter(self, findError, (e) => f(e)));
   var mapError2 = /* @__PURE__ */ dual(2, (self, f) => catch_(self, (error) => failSync(() => f(error))));
   var orDie = /* @__PURE__ */ __name((self) => catch_(self, die), "orDie");
   var result = /* @__PURE__ */ __name((self) => matchEager(self, {
@@ -5005,25 +4997,9 @@ ${prefix}}`;
       disableYield: true
     }), (out) => succeed3(out)), findErrorOnly, (error) => orElse(error, meta.attempt === 0 ? none2() : some2(meta)));
   }));
-  var retryOrElse = /* @__PURE__ */ dual(3, (self, policy, orElse) => flatMap2(toStepWithMetadata(policy), (step) => {
-    let meta = CurrentMetadata.defaultValue();
-    let lastError;
-    const loop = catchCauseFilter(suspend(() => provideService(self, CurrentMetadata, meta)), findErrorOnly, (error) => {
-      lastError = error;
-      return flatMap2(step(error), (meta_) => {
-        meta = meta_;
-        return loop;
-      });
-    });
-    return catchDone(loop, (out) => internalCall(() => orElse(lastError, out)));
-  }));
   var repeat = /* @__PURE__ */ dual(2, (self, options) => {
     const schedule4 = typeof options === "function" ? options(identity) : isSchedule(options) ? options : buildFromOptions(options);
     return repeatOrElse(self, schedule4, fail3);
-  });
-  var retry = /* @__PURE__ */ dual(2, (self, options) => {
-    const schedule4 = typeof options === "function" ? options(identity) : isSchedule(options) ? options : buildFromOptions(options);
-    return retryOrElse(self, schedule4, fail3);
   });
   var passthroughForever = /* @__PURE__ */ passthrough(forever2);
   var buildFromOptions = /* @__PURE__ */ __name((options) => {
@@ -5085,8 +5061,6 @@ ${prefix}}`;
   var catch_2 = catch_;
   var catchCause2 = catchCause;
   var orDie2 = orDie;
-  var tapError2 = tapError;
-  var retry2 = retry;
   var timeoutOption2 = timeoutOption;
   var sleep2 = sleep;
   var raceFirst2 = raceFirst;
@@ -5445,6 +5419,19 @@ ${prefix}}`;
     setUnsafe(self, key, fiber2, options);
     return succeed7(fiber2);
   }), "runImpl");
+  var runtime = /* @__PURE__ */ __name((self) => () => map4(context2(), (services2) => {
+    const runFork3 = runForkWith2(services2);
+    return (key, effect2, options) => {
+      if (self.state._tag === "Closed") {
+        return constInterruptedFiber();
+      } else if (options?.onlyIfMissing === true && hasUnsafe(self, key)) {
+        return constInterruptedFiber();
+      }
+      const fiber2 = runFork3(effect2, options);
+      setUnsafe(self, key, fiber2, options);
+      return fiber2;
+    };
+  }), "runtime");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Random.js
   var Random2 = Random;
@@ -13994,7 +13981,7 @@ ${prefix}}`;
         return session;
       });
     }, "makeKillProfileRuntime");
-    const fight = /* @__PURE__ */ __name((selector, options, runtime2) => {
+    const fight = /* @__PURE__ */ __name((selector, options, runtime3) => {
       const skills = normalizeSkills(options?.skills);
       const skillInterval = normalizeSkillInterval(options?.skillInterval);
       const attackOrder = [...options?.targetPriority ?? [], selector];
@@ -14009,8 +13996,8 @@ ${prefix}}`;
       });
       return forever3(
         gen2(function* () {
-          if (runtime2 !== null) {
-            const result2 = yield* runtime2.runCycle().pipe(orDie2);
+          if (runtime3 !== null) {
+            const result2 = yield* runtime3.runCycle().pipe(orDie2);
             if (result2.kind === "no-target") {
               yield* stopCombat2;
             }
@@ -14038,7 +14025,7 @@ ${prefix}}`;
         })
       );
     }, "fight");
-    const killWithRuntime = /* @__PURE__ */ __name((selector, options, runtime2) => gen2(function* () {
+    const killWithRuntime = /* @__PURE__ */ __name((selector, options, runtime3) => gen2(function* () {
       const startMap = yield* host4.read({ kind: "map" });
       const available = yield* monsters.getAvailable();
       const monster = available.find(
@@ -14052,7 +14039,7 @@ ${prefix}}`;
           type: "monster-death"
         },
         {
-          trigger: forkScoped2(fight(selector, options, runtime2)).pipe(
+          trigger: forkScoped2(fight(selector, options, runtime3)).pipe(
             as2(true)
           )
         }
@@ -14078,15 +14065,15 @@ ${prefix}}`;
     }), "killWithRuntime");
     const kill = /* @__PURE__ */ __name((selector, options) => scoped2(
       gen2(function* () {
-        const runtime2 = yield* makeKillProfileRuntime(selector, options);
-        return yield* killWithRuntime(selector, options, runtime2);
+        const runtime3 = yield* makeKillProfileRuntime(selector, options);
+        return yield* killWithRuntime(selector, options, runtime3);
       })
     ).pipe(ensuring2(stopCombat2)), "kill");
     const killFor = /* @__PURE__ */ __name((selector, item, requested, source, options) => {
       const wanted = Math.max(1, Math.trunc(requested ?? 1));
       return scoped2(
         gen2(function* () {
-          const runtime2 = yield* makeKillProfileRuntime(selector, options);
+          const runtime3 = yield* makeKillProfileRuntime(selector, options);
           const loop = gen2(function* () {
             while (true) {
               if (yield* source.contains(item, wanted)) return true;
@@ -14094,7 +14081,7 @@ ${prefix}}`;
                 yield* drops.accept(item);
                 if (yield* source.contains(item, wanted)) return true;
               }
-              if (!(yield* killWithRuntime(selector, options, runtime2))) {
+              if (!(yield* killWithRuntime(selector, options, runtime3))) {
                 yield* sleep2("100 millis");
               }
             }
@@ -15708,6 +15695,43 @@ ${prefix}}`;
     )
   );
 
+  // packages/runtime/src/game/automation/retryLoop.ts
+  var makeRetryAttempt = /* @__PURE__ */ __name((name) => {
+    const failing = /* @__PURE__ */ new Set();
+    return (tick, interval) => suspend2(() => {
+      const token = /* @__PURE__ */ Symbol();
+      const attempt = /* @__PURE__ */ __name(() => suspend2(tick).pipe(
+        tap2(
+          () => sync2(() => {
+            if (failing.delete(token) && failing.size === 0) {
+              console.info(`${name} recovered`);
+            }
+          })
+        ),
+        catchCause2(
+          (cause) => hasInterrupts2(cause) ? interrupt3 : sync2(() => {
+            if (failing.size === 0) {
+              console.warn(`${name} tick failed`, pretty(cause));
+            }
+            failing.add(token);
+          }).pipe(
+            andThen2(sleep2(interval)),
+            andThen2(suspend2(attempt))
+          )
+        )
+      ), "attempt");
+      return attempt().pipe(
+        ensuring2(sync2(() => failing.delete(token)))
+      );
+    });
+  }, "makeRetryAttempt");
+  var makeRetryLoop = /* @__PURE__ */ __name((name) => {
+    const retry3 = makeRetryAttempt(name);
+    return (tick, interval) => forever3(
+      retry3(tick, interval).pipe(andThen2(sleep2(interval)))
+    );
+  }, "makeRetryLoop");
+
   // packages/runtime/src/game/automation/AutoZone.ts
   var AutoZoneSupportedMap = Literals([
     "ledgermayne",
@@ -15828,6 +15852,7 @@ ${prefix}}`;
   }, "target");
   var makeAutoZone = fnUntraced2(function* (api, fibers, initial = { enabled: false, map: void 0 }) {
     const state = yield* make15(initial);
+    const retry3 = makeRetryAttempt("auto zone");
     const move = /* @__PURE__ */ __name((destination) => destination.kind === "point" ? api.player.walkTo(destination) : all2({
       x: nextIntBetween(
         destination.range[0][0],
@@ -15863,24 +15888,28 @@ ${prefix}}`;
     const dispose = yield* api.events.on({ type: "zone" }, (event) => {
       if (event.type !== "zone") return void_3;
       return get4(state).pipe(
-        flatMap3(
-          (current) => current.enabled && current.map === event.map ? run(
+        flatMap3((current) => {
+          const map7 = current.map;
+          return current.enabled && map7 === event.map ? run(
             fibers,
             "auto-zone-transition",
-            transition(current.map, event.zone)
-          ).pipe(asVoid2) : void_3
-        )
+            retry3(() => transition(map7, event.zone), "500 millis")
+          ).pipe(asVoid2) : void_3;
+        })
       );
     });
     yield* addFinalizer3(() => sync2(dispose));
-    const applyConfig = /* @__PURE__ */ __name((config) => gen2(function* () {
-      const previous = yield* get4(state);
-      const next = { enabled: config.enabled, map: config.map ?? void 0 };
-      yield* set3(state, next);
-      if (previous.map !== next.map || !next.enabled) {
-        yield* remove2(fibers, "auto-zone-transition");
-      }
-    }), "applyConfig");
+    const applyConfig = /* @__PURE__ */ __name((config) => retry3(
+      () => gen2(function* () {
+        const previous = yield* get4(state);
+        const next = { enabled: config.enabled, map: config.map ?? void 0 };
+        yield* set3(state, next);
+        if (previous.map !== next.map || !next.enabled) {
+          yield* remove2(fibers, "auto-zone-transition");
+        }
+      }),
+      "500 millis"
+    ), "applyConfig");
     const changes2 = changes(state);
     const getMap = /* @__PURE__ */ __name(() => get4(state).pipe(map4((current) => current.map)), "getMap");
     const getState = /* @__PURE__ */ __name(() => get4(state).pipe(map4(snapshotState)), "getState");
@@ -15919,40 +15948,26 @@ ${prefix}}`;
         enabled: config.enabled,
         map: config.map ?? void 0
       });
-      const runPromise3 = runPromiseWith2(yield* context2());
-      const boundary = __host;
-      const decodeConfig = decodeUnknownSync(Struct({
-        enabled: Boolean3,
-        map: NullOr(AutoZoneSupportedMap)
-      }));
-      let refreshing = false;
-      let failed = false;
-      const refresh = try_2({
-        try: /* @__PURE__ */ __name(() => boundary.read('{"kind":"autoZone"}'), "try"),
-        catch: /* @__PURE__ */ __name((cause) => cause, "catch")
-      }).pipe(
-        tapError2((error) => sync2(() => {
-          if (!failed) console.warn("auto zone host read failed; retrying", error);
-          failed = true;
-        })),
-        retry2(spaced("500 millis")),
-        map4((json) => decodeConfig(JSON.parse(json))),
-        flatMap3(autoZone.applyConfig),
-        tap2(() => sync2(() => {
-          if (failed) console.warn("auto zone host read recovered");
-          failed = false;
-        })),
-        ensuring2(sync2(() => {
-          refreshing = false;
-        }))
+      const runFork3 = yield* runtime(fibers)();
+      const retry3 = makeRetryAttempt("auto zone host read");
+      const decodeConfig = decodeUnknownSync(
+        Struct({
+          enabled: Boolean3,
+          map: NullOr(AutoZoneSupportedMap)
+        })
+      );
+      const refresh = retry3(
+        () => host4.read({ kind: "autoZone" }).pipe(
+          map4(decodeConfig),
+          flatMap3(autoZone.applyConfig)
+        ),
+        "500 millis"
       );
       const onChange = /* @__PURE__ */ __name((config2) => {
-        void runPromise3(autoZone.applyConfig(config2));
+        runFork3("auto-zone-config", autoZone.applyConfig(config2));
       }, "onChange");
       const onLost = /* @__PURE__ */ __name(() => {
-        if (refreshing) return;
-        refreshing = true;
-        void runPromise3(refresh);
+        runFork3("auto-zone-config", refresh, { onlyIfMissing: true });
       }, "onLost");
       window.onAutoZoneChanged = onChange;
       window.onHostEventsLost = onLost;
@@ -15962,34 +15977,6 @@ ${prefix}}`;
       }));
     })
   );
-
-  // packages/runtime/src/game/automation/retryLoop.ts
-  var makeRetryLoop = /* @__PURE__ */ __name((name) => {
-    const failing = /* @__PURE__ */ new Set();
-    return (tick, interval) => suspend2(() => {
-      const loop = /* @__PURE__ */ Symbol();
-      return forever3(
-        suspend2(tick).pipe(
-          tap2(
-            () => sync2(() => {
-              if (failing.delete(loop) && failing.size === 0) {
-                console.info(`${name} recovered`);
-              }
-            })
-          ),
-          catchCause2(
-            (cause) => hasInterrupts2(cause) ? interrupt3 : sync2(() => {
-              if (failing.size === 0) {
-                console.warn(`${name} tick failed`, pretty(cause));
-              }
-              failing.add(loop);
-            })
-          ),
-          andThen2(sleep2(interval))
-        )
-      ).pipe(ensuring2(sync2(() => failing.delete(loop))));
-    });
-  }, "makeRetryLoop");
 
   // packages/runtime/src/game/automation/SettingsPolicy.ts
   var run3 = gen2(function* () {
@@ -16148,8 +16135,8 @@ ${prefix}}`;
   var botLayer = effectDiscard(
     flatMap3(Gateway, (gateway2) => gateway2.start())
   ).pipe(provideMerge(services), provide2(diagnostics));
-  var runtime = make5(layer6.pipe(provideMerge(botLayer)));
-  runtime.runSync(void_3);
-  runtime.runPromise(run3);
+  var runtime2 = make5(layer6.pipe(provideMerge(botLayer)));
+  runtime2.runSync(void_3);
+  runtime2.runPromise(run3);
   Object.assign(globalThis, { __lucent: Object.freeze({ turn, wake }) });
 })();
