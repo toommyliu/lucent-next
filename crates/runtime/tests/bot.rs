@@ -118,6 +118,24 @@ fn malformed_packets_do_not_stop_bot_event_delivery() {
     ));
 }
 
+fn walks_for(link: &ScriptLink, duration: Duration) -> usize {
+    let deadline = Instant::now() + duration;
+    let mut walks = 0;
+    while Instant::now() < deadline {
+        if let Some(lucent_host::bridge::ScriptEvent::Loader { event, .. }) =
+            link.try_event().unwrap()
+        {
+            walks += usize::from(
+                event.name == "onProbeCall"
+                    && event.args.first() == Some(&Value::String("player.walkTo".into())),
+            );
+        } else {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+    walks
+}
+
 #[test]
 fn script_kills_never_restart_the_bot() {
     let (_host, mut session, observer) = start();
@@ -1061,6 +1079,17 @@ fn a_new_bot_reads_the_auto_zone_config_and_scripts_can_clear_it() {
         run.wait(TIMEOUT).unwrap(),
         lucent_protocol::script::ScriptOutcome::Completed
     );
+    drain(&observer);
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":"A"}}));
+    assert_eq!(
+        walks_for(&observer, Duration::from_millis(1200)),
+        0,
+        "the cleared map still moved the player"
+    );
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
 }
 
 #[cfg(feature = "testing")]
