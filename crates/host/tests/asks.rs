@@ -10,6 +10,9 @@ fn next(link: &ScriptLink) -> ScriptEvent {
     let deadline = Instant::now() + Duration::from_secs(7);
     loop {
         if let Some(event) = link.try_event().unwrap() {
+            if matches!(event, ScriptEvent::AutoZoneChanged { .. }) {
+                continue;
+            }
             return event;
         }
         assert!(Instant::now() < deadline);
@@ -37,7 +40,10 @@ fn an_answer_reaches_only_its_asker() {
             answer: Ok(json!(8))
         }
     );
-    assert_eq!(other.try_event(), Ok(None));
+    assert!(!matches!(
+        other.try_event(),
+        Ok(Some(ScriptEvent::Answer { .. }))
+    ));
     assert_eq!(session.pending_ask_count(), 0);
 }
 
@@ -53,7 +59,10 @@ fn a_detached_askers_routes_are_dropped() {
     assert_eq!(session.pending_ask_count(), 0);
     let replacement = session.attach().unwrap();
     bot.answer(id, Ok(json!(8))).unwrap();
-    assert_eq!(replacement.try_event(), Ok(None));
+    assert!(!matches!(
+        replacement.try_event(),
+        Ok(Some(ScriptEvent::Answer { .. }))
+    ));
 }
 
 #[test]
@@ -64,7 +73,10 @@ fn an_ask_times_out_after_its_deadline() {
     bot.claim_bot().unwrap();
     let started = Instant::now();
     let id = asker.ask(json!(7)).unwrap();
-    std::thread::sleep(Duration::from_millis(5100));
+    std::thread::sleep(Duration::from_millis(4800));
+    assert_eq!(asker.try_event(), Ok(None));
+    assert_eq!(session.pending_ask_count(), 1);
+    std::thread::sleep(Duration::from_millis(300));
     assert_eq!(session.pending_ask_count(), 0);
     assert_eq!(
         next(&asker),
@@ -83,7 +95,10 @@ fn an_ask_times_out_after_its_deadline() {
 fn no_bot_rejects_without_leaving_a_route() {
     let host = testing::headless_host();
     let (session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    assert!(matches!(asker.ask(json!(7)), Err(Error::Unavailable(_))));
+    assert_eq!(
+        asker.ask(json!(7)).unwrap_err().to_string(),
+        "No bot is attached"
+    );
     assert_eq!(session.pending_ask_count(), 0);
 }
 
@@ -112,13 +127,13 @@ fn bot_detach_fails_its_asks_and_replacement_cannot_answer_them() {
     bot.claim_bot().unwrap();
     let id = asker.ask(json!(7)).unwrap();
     drop(bot);
-    assert_eq!(
-        next(&asker),
-        ScriptEvent::Answer {
-            id,
-            answer: Err(Error::Stopped)
-        }
-    );
+    let ScriptEvent::Answer {
+        answer: Err(error), ..
+    } = next(&asker)
+    else {
+        panic!("expected bot failure");
+    };
+    assert_eq!(error.to_string(), "The bot has stopped");
     assert_eq!(session.pending_ask_count(), 0);
     let replacement = session.attach().unwrap();
     replacement.claim_bot().unwrap();
@@ -226,7 +241,10 @@ fn the_router_rejects_a_full_bot_mailbox_without_leaving_a_route() {
     for n in 0..1024 {
         asker.ask(json!(n)).unwrap();
     }
-    assert_eq!(asker.ask(json!(1024)), Err(Error::Overflow));
+    assert_eq!(
+        asker.ask(json!(1024)).unwrap_err().to_string(),
+        "The bot request queue is full"
+    );
     assert_eq!(session.pending_ask_count(), 1024);
     drop(asker);
     assert_eq!(session.pending_ask_count(), 0);

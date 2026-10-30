@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import * as Effect from "effect/Effect";
 
 import { makeFakeApi, makeFakeHostState } from "../game/flash/testing/FakeHost";
-import { completeOperation, startOperation } from "./operations";
+import { operate, completeOperation, startOperation } from "./operations";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -61,4 +61,17 @@ it("keeps queued accepts waiting beyond the execution deadline", async () => {
   completeOperation("queued", { kind: "acceptDrop", value: true }, null);
   await finished;
   expect(result).toBe(true);
+});
+
+it("fails queued and running operations when their event stream overflows", async () => {
+  const host = { now: () => 0, operate: () => "queued-lost" };
+  vi.stubGlobal("__host", host);
+  vi.stubGlobal("window", {});
+  const { turn } = await import("./loop");
+  let error: unknown;
+  void operate({ kind: "acceptDrop", dropId: 1 } as never, host).catch(cause => { error = cause; });
+  turn('[{"type":"eventslost"}]');
+  await Promise.resolve();
+  expect(error).toBeInstanceOf(Error);
+  expect((error as Error).message).toBe("Host events were lost; pending requests failed");
 });

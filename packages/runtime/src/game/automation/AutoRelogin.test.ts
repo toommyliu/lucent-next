@@ -7,6 +7,7 @@ import * as Result from "effect/Result";
 import * as TestClock from "effect/testing/TestClock";
 
 import type { Event, EventSelector } from "../flash/contract/Event";
+import { retryReloginTick } from "./AutoReloginFailureRule";
 import { makeAutoRelogin } from "./AutoRelogin";
 import type { AutoReloginApi, AutoReloginLifecycleStep } from "./AutoRelogin";
 
@@ -502,3 +503,28 @@ describe("AutoRelogin", () => {
       }),
   );
 });
+
+it.effect("treats readiness failures as not ready", () => Effect.gen(function* () {
+  const relogin = yield* makeFeature(apiWith({ player: { isReady: () => Effect.die("not ready") } }));
+  expect(yield* relogin.setEnabled(true)).toMatchObject({ enabled: true, captured: true });
+}));
+
+it.effect("ends a faulty recovery without refilling consumed attempts", () => Effect.gen(function* () {
+  const events = makeConnectionEvents();
+  let attempts = 0;
+  const fibers = yield* FiberMap.make<string>();
+  const relogin = yield* makeAutoRelogin(apiWith({ events: { on: events.on }, auth: {
+    login: () => Effect.sync(() => { attempts++; return false; }),
+    isServerSelectReady: () => attempts === 1 ? Effect.die("unexpected recovery fault") : Effect.succeed(false),
+  } }), fibers, undefined, retryReloginTick);
+  yield* relogin.setDelay(0);
+  yield* relogin.setEnabled(true);
+  yield* events.emit("OnConnectionLost");
+  yield* advance("0 millis");
+  expect(attempts).toBe(1);
+  yield* advance("5 seconds");
+  yield* advance("1 second");
+  expect(yield* relogin.getState()).toMatchObject({ lastError: "Auto relogin failed unexpectedly.", attempting: false });
+  expect((yield* relogin.getRecords()).status.phase).toEqual({ tag: "failed" });
+  expect(attempts).toBe(1);
+}));

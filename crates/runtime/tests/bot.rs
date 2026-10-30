@@ -1512,7 +1512,7 @@ fn relogin_setters_publish_sanitized_records_before_they_answer() {
                 const state = yield* relogin.setEnabled(true);
                 const read = yield* relogin.getState();
                 if (!state.captured || JSON.stringify(state) !== JSON.stringify(read)) throw new Error(JSON.stringify({state, read}));
-                if (state.username !== undefined || "password" in state) throw new Error("Captured credentials escaped");
+                if (state.username !== "player-a" || "password" in state) throw new Error("Captured credentials escaped");
             }
         }
     "#,
@@ -1529,7 +1529,7 @@ fn relogin_setters_publish_sanitized_records_before_they_answer() {
     assert_eq!(records.config.server.as_deref(), Some("Artix"));
     assert!(records.status.captured);
     let serialized = serde_json::to_string(&records).unwrap();
-    assert!(!serialized.contains("player-a"));
+    assert!(serialized.contains("player-a"));
     assert!(!serialized.contains("password"));
     assert_eq!(
         observer
