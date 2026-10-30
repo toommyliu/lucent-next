@@ -1813,3 +1813,134 @@ fn failed_login_commands_back_off() {
 fn failed_logout_commands_back_off() {
     assert_failed_recovery_command_backs_off("logout");
 }
+
+#[cfg(feature = "testing")]
+fn assert_reconnect_uses_cached_auth(capture_on_reconnect: bool) {
+    for cached_logged_in in [false, true] {
+        let (_host, mut session, observer) = start();
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        next_call(&observer, "settings.setWalkSpeed");
+        bot.eval("prepare-reconnect.js", r#"
+            const command = __host.command;
+            const read = __host.read;
+            const swf = __host.swf;
+            globalThis.reconnecting = false;
+            globalThis.ready = false;
+            globalThis.refreshFailures = { credentials: 0, loggedIn: 0 };
+            globalThis.recoveryCalls = { login: 0, connect: 0 };
+            __host.command = json => {
+                const input = JSON.parse(json);
+                if (input.kind === "refreshCredentials") {
+                    if (!reconnecting) return captureOnReconnect ? JSON.stringify({ username: "", password: "" }) : command(json);
+                    refreshFailures.credentials++;
+                    throw new Error("player not ready for credentials");
+                }
+                if (reconnecting && input.kind === "refreshLoggedIn") {
+                    if (ready) return "true";
+                    refreshFailures.loggedIn++;
+                    throw new Error("logged-in refresh timed out");
+                }
+                if (input.kind === "login") { recoveryCalls.login++; return "true"; }
+                return command(json);
+            };
+            __host.swf = (method, args) => {
+                if (method === "world.isLoaded" || method === "player.isLoaded") return String(ready);
+                if (method === "flash.isNull") return "false";
+                if (method === "auth.connectTo") {
+                    recoveryCalls.connect++;
+                    ready = true;
+                    return JSON.stringify({ ok: true, status: "selected", message: "Connected" });
+                }
+                return swf(method, args);
+            };
+            null;
+        "#).wait::<()>(TIMEOUT).unwrap();
+        bot.eval(
+            "capture-mode.js",
+            format!("globalThis.captureOnReconnect = {capture_on_reconnect}; null"),
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+        let run = common::start(
+            &mut session,
+            common::loose(&[(
+                "enable.js",
+                r#"
+                import * as relogin from "lucent/autorelogin";
+                export default function* () {
+                    yield* relogin.setDelay(0);
+                    yield* relogin.setServer("Artix");
+                    yield* relogin.setEnabled(true);
+                }
+            "#,
+            )]),
+            Default::default(),
+        );
+        assert_eq!(
+            run.wait(TIMEOUT).unwrap(),
+            lucent_protocol::script::ScriptOutcome::Completed
+        );
+        bot.eval(
+            "reconnect.js",
+            format!(
+                r#"
+            __host.read = json => {{
+                const result = JSON.parse(read(json));
+                if (JSON.parse(json).kind === "auth") {{
+                    result.loggedIn = {cached_logged_in};
+                    if (result.loggedIn && recoveryCalls.login > 0 && refreshFailures.loggedIn > 0) ready = true;
+                }}
+                return JSON.stringify(result);
+            }};
+            reconnecting = true;
+            window.swf["probe.emit"]("onConnection", "OnConnection");
+            new Promise(resolve => setTimeout(() => {{
+                window.swf["probe.emit"]("onConnection", "OnConnectionLost");
+                setTimeout(() => resolve(null), 800);
+            }}, 50));
+        "#
+            ),
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+        let records = session.auto_relogin();
+        assert!(records.status.captured, "{records:?}");
+        assert_eq!(
+            records.status.phase,
+            lucent_protocol::auto_relogin::AutoReloginPhase::Armed,
+            "{records:?}"
+        );
+        assert_eq!(records.status.last_error, None);
+        assert_eq!(
+            session.auto_relogin().status.username.as_deref(),
+            Some("player-a")
+        );
+        let calls = bot
+            .eval(
+                "recovery-calls.js",
+                "({ ...recoveryCalls, ...refreshFailures })",
+            )
+            .wait::<serde_json::Value>(TIMEOUT)
+            .unwrap();
+        assert_eq!(calls["login"], 1);
+        assert_eq!(calls["connect"], u32::from(!cached_logged_in));
+        assert_eq!(
+            calls["credentials"].as_u64().unwrap() >= 2,
+            capture_on_reconnect,
+            "{calls}"
+        );
+        assert!(calls["loggedIn"].as_u64().unwrap() >= 1, "{calls}");
+    }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn reconnect_uses_cached_auth_when_logged_in_refresh_throws() {
+    assert_reconnect_uses_cached_auth(false);
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn reconnect_captures_cached_credentials_when_refresh_throws() {
+    assert_reconnect_uses_cached_auth(true);
+}
