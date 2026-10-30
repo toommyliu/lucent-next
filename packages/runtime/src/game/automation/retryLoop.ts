@@ -39,11 +39,3 @@ export const makeRetryAttempt = (name: string) => {
       );
     });
 };
-
-export const makeRetryLoop = (name: string) => {
-  const retry = makeRetryAttempt(name);
-  return <A, E, R>(tick: () => Effect.Effect<A, E, R>, interval: Duration.Input) =>
-    Effect.forever(
-      retry(tick, interval).pipe(Effect.andThen(Effect.sleep(interval))),
-    );
-};

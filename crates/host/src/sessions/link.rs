@@ -12,6 +12,15 @@ use crate::bridge::{self, Pending, PendingCall, ScriptEvent, ScriptEvents, Value
 use crate::player::{Inbox, Msg};
 use crate::projection::{Projection, answer};
 
+#[derive(Clone)]
+pub struct PlayerStatus(Arc<AtomicBool>);
+
+impl PlayerStatus {
+    pub fn is_stopped(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+}
+
 pub struct ScriptLink {
     asks: Arc<super::asks::Shared>,
     id: u64,
@@ -51,6 +60,10 @@ impl ScriptLink {
         }
     }
 
+    pub fn player_status(&self) -> PlayerStatus {
+        PlayerStatus(self.stopped.clone())
+    }
+
     pub fn id(&self) -> u64 {
         self.id
     }
@@ -73,6 +86,16 @@ impl ScriptLink {
     pub fn set_waker(&self, waker: Waker) {
         self.events.set_waker(waker.clone());
         self.asks.set_waker(self.attachment, waker);
+    }
+
+    pub fn cached_logged_in(&self) -> Pending<bool> {
+        self.inbox
+            .read_projection(|projection| projection.auth.logged_in)
+    }
+
+    pub fn readiness(&self) -> Pending<bool> {
+        self.inbox
+            .read_projection(|projection| projection.current_readiness().missing.is_empty())
     }
 
     pub fn call_loader(&self, name: impl Into<String>, args: Vec<Value>) -> PendingCall {

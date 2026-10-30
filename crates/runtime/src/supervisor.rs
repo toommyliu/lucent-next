@@ -6,10 +6,12 @@ use std::{
     },
     task::{Wake, Waker},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
-use lucent_host::{HostError, ScriptLink, Session, Surface, bridge};
+use lucent_host::{
+    HostError, ScriptLink, Session, Surface, automation::SettingsPolicy, bridge, reap,
+};
 use lucent_protocol::script::{Script, ScriptOutcome};
 use tracing::{Level, error, info, warn};
 
@@ -60,6 +62,11 @@ pub struct Supervisor {
 enum Msg {
     Player(Box<Player>),
     Wake,
+    Start(Box<(Script, ScriptLink)>),
+    RunReady(u64),
+    RunExited(u64),
+    Reaped(u64),
+    BotReaped,
     Stop,
     Kill,
     Status,
@@ -68,6 +75,7 @@ enum Msg {
 struct Player {
     bot: ScriptLink,
     watch: Option<ScriptLink>,
+    settings: Option<ScriptLink>,
 }
 
 impl Supervisor {
@@ -101,8 +109,11 @@ impl Supervisor {
                 },
                 None => ScriptState::Idle,
             },
-            bot: None,
+            bot: BotState::Idle,
             bots_started: 0,
+            next_run: 0,
+            settings: None,
+            deadline: None,
         };
         let dispatch = tracing::dispatcher::get_default(Clone::clone);
         let thread = thread::Builder::new()
@@ -116,6 +127,19 @@ impl Supervisor {
             has_script,
             thread: Some(thread),
         })
+    }
+
+    pub fn start_script(
+        &mut self,
+        session: &mut Session,
+        script: Script,
+    ) -> Result<ScriptControls, RuntimeError> {
+        let watch = session.attach().ok_or(RuntimeError::Stopped)?;
+        self.has_script = true;
+        self.inbox
+            .send(Msg::Start(Box::new((script, watch))))
+            .map_err(|_| RuntimeError::Stopped)?;
+        Ok(ScriptControls(self.inbox.clone()))
     }
 
     pub fn restart_player(
@@ -147,7 +171,11 @@ fn attach(session: &mut Session, has_script: bool) -> Option<Player> {
     } else {
         None
     };
-    Some(Player { bot, watch })
+    Some(Player {
+        bot,
+        watch,
+        settings: Some(session.attach()?),
+    })
 }
 
 struct Notify {
@@ -169,12 +197,25 @@ struct Supervision {
     session: u64,
     notify: Arc<Notify>,
     script: ScriptState,
-    bot: Option<CurrentBot>,
+    bot: BotState,
     bots_started: u32,
+    next_run: u64,
+    settings: Option<SettingsPolicy>,
+    deadline: Option<Instant>,
+}
+enum BotState {
+    Idle,
+    Running(CurrentBot),
+    Reaping { replacement: Option<Box<Player>> },
 }
 struct CurrentBot {
     bot: Bot,
     number: u32,
+}
+struct CurrentRun {
+    id: u64,
+    name: String,
+    run: ScriptRun,
 }
 enum ScriptState {
     Idle,
@@ -182,59 +223,165 @@ enum ScriptState {
         script: Script,
         watch: Option<ScriptLink>,
     },
-    Running {
-        name: String,
-        run: ScriptRun,
+    Booting(CurrentRun),
+    Running(CurrentRun),
+    Reaping {
+        id: u64,
+        next: Option<(Script, ScriptLink)>,
     },
+}
+
+struct RunNotify {
+    inbox: mpsc::Sender<Msg>,
+    id: u64,
+    ready: bool,
+}
+impl Wake for RunNotify {
+    fn wake(self: Arc<Self>) {
+        self.wake_by_ref();
+    }
+    fn wake_by_ref(self: &Arc<Self>) {
+        let _ = self.inbox.send(if self.ready {
+            Msg::RunReady(self.id)
+        } else {
+            Msg::RunExited(self.id)
+        });
+    }
 }
 
 impl Supervision {
     fn run(mut self, first: Player, messages: mpsc::Receiver<Msg>) {
         self.player(first);
-        self.settle();
-        while let Ok(message) = messages.recv() {
-            match message {
-                Msg::Player(player) => self.player(*player),
-                Msg::Wake => self.notify.queued.store(false, Ordering::Release),
-                Msg::Stop => self.control(false),
-                Msg::Kill => self.control(true),
-                Msg::Status => {
-                    self.settle();
-                    self.status();
-                }
-                Msg::Shutdown => return,
-            }
+        loop {
             self.settle();
+            let message = match self.deadline {
+                Some(deadline) => {
+                    messages.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                }
+                None => messages
+                    .recv()
+                    .map_err(|_| mpsc::RecvTimeoutError::Disconnected),
+            };
+            match message {
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) | Ok(Msg::Shutdown) => break,
+                Ok(Msg::Player(player)) => self.player(*player),
+                Ok(Msg::Wake) => self.notify.queued.store(false, Ordering::Release),
+                Ok(Msg::Start(request)) => {
+                    let (script, watch) = *request;
+                    self.request(script, watch);
+                }
+                Ok(Msg::RunReady(id)) => {
+                    if matches!(&self.script, ScriptState::Booting(run) if run.id == id) {
+                        let ScriptState::Booting(run) =
+                            std::mem::replace(&mut self.script, ScriptState::Idle)
+                        else {
+                            unreachable!()
+                        };
+                        if run.run.take_ready() {
+                            info!("session {}: {} started", self.session, run.name);
+                            self.script = ScriptState::Running(run);
+                        } else {
+                            self.script = ScriptState::Booting(run);
+                        }
+                    }
+                }
+                Ok(Msg::RunExited(id)) => {
+                    if matches!(&self.script, ScriptState::Booting(run) | ScriptState::Running(run) if run.id == id)
+                    {
+                        self.finish_run(None);
+                    }
+                }
+                Ok(Msg::Reaped(id)) => {
+                    if matches!(&self.script, ScriptState::Reaping { id: current, .. } if *current == id)
+                    {
+                        let ScriptState::Reaping { next, .. } =
+                            std::mem::replace(&mut self.script, ScriptState::Idle)
+                        else {
+                            unreachable!()
+                        };
+                        if let Some((script, watch)) = next {
+                            self.script = ScriptState::Waiting {
+                                script,
+                                watch: Some(watch),
+                            };
+                        }
+                        tracing::debug!("session {}: script worker reaped", self.session);
+                    }
+                }
+                Ok(Msg::BotReaped) => {
+                    let previous = std::mem::replace(&mut self.bot, BotState::Idle);
+                    if let BotState::Reaping {
+                        replacement: Some(player),
+                    } = previous
+                    {
+                        self.install_player(*player);
+                    }
+                }
+                Ok(Msg::Stop) => self.control(false),
+                Ok(Msg::Kill) => self.control(true),
+                Ok(Msg::Status) => self.status(),
+            }
+        }
+        if matches!(
+            self.script,
+            ScriptState::Booting(_) | ScriptState::Running(_)
+        ) {
+            self.finish_run(Some(Err(RuntimeError::Stopped)));
+        }
+        if let BotState::Running(CurrentBot { bot, .. }) =
+            std::mem::replace(&mut self.bot, BotState::Idle)
+        {
+            reap(move || drop(bot));
         }
     }
 
-    fn player(&mut self, player: Player) {
-        let mut ended_run = false;
-        if let ScriptState::Running { .. } = &self.script {
-            let ScriptState::Running { name, run } =
-                std::mem::replace(&mut self.script, ScriptState::Idle)
-            else {
-                unreachable!()
-            };
-            let result = match run.wait(Duration::ZERO) {
-                Err(RuntimeError::Timeout) => Err(RuntimeError::Stopped),
-                result => result,
-            };
-            drop(run);
-            self.ended(&name, result);
-            ended_run = true;
+    fn player(&mut self, mut player: Player) {
+        if matches!(
+            self.script,
+            ScriptState::Booting(_) | ScriptState::Running(_)
+        ) {
+            self.finish_run(Some(Err(RuntimeError::Stopped)));
         }
-        if let Some(CurrentBot { bot, number }) = self.bot.take() {
-            let result = bot.wait(Duration::ZERO);
-            self.bot_ended(number, result);
-            drop(bot);
+        if let ScriptState::Reaping { next, .. } = &mut self.script {
+            *next = None;
+        }
+        self.settings = Some(SettingsPolicy::new(
+            player.settings.take().unwrap(),
+            Waker::from(self.notify.clone()),
+        ));
+        self.install_player(player);
+    }
+
+    fn install_player(&mut self, player: Player) {
+        if let BotState::Reaping { replacement } = &mut self.bot {
+            *replacement = Some(Box::new(player));
+            return;
+        }
+        if let BotState::Running(CurrentBot { bot, number }) =
+            std::mem::replace(&mut self.bot, BotState::Idle)
+        {
+            self.bot_ended(number, bot.wait(Duration::ZERO));
+            let inbox = self.notify.inbox.clone();
+            reap(move || {
+                drop(bot);
+                let _ = inbox.send(Msg::BotReaped);
+            });
+            self.bot = BotState::Reaping {
+                replacement: Some(Box::new(player)),
+            };
+            return;
         }
         self.bots_started += 1;
         let number = self.bots_started;
-        match Bot::spawn(player.bot, Waker::from(self.notify.clone())) {
+        match Bot::spawn(
+            player.bot,
+            Waker::from(self.notify.clone()),
+            Waker::from(self.notify.clone()),
+        ) {
             Ok(bot) => {
                 info!("session {}: bot {number} started", self.session);
-                self.bot = Some(CurrentBot { bot, number });
+                self.bot = BotState::Running(CurrentBot { bot, number });
             }
             Err(error) => error!("session {}: bot couldn't start: {error}", self.session),
         }
@@ -249,38 +396,64 @@ impl Supervision {
                 script.entry()
             );
         }
-        if ended_run {
-            self.bot_line();
+    }
+
+    fn request(&mut self, script: Script, watch: ScriptLink) {
+        watch.set_waker(Waker::from(self.notify.clone()));
+        match &mut self.script {
+            ScriptState::Idle => {
+                self.script = ScriptState::Waiting {
+                    script,
+                    watch: Some(watch),
+                }
+            }
+            ScriptState::Reaping {
+                next: slot @ None, ..
+            } => *slot = Some((script, watch)),
+            _ => warn!("session {}: a script is already active", self.session),
         }
     }
 
     fn settle_bot(&mut self) {
-        if let Some(CurrentBot { bot, number }) = &self.bot {
+        if let BotState::Running(CurrentBot { bot, number }) = &self.bot {
+            if bot.take_ready() {
+                tracing::debug!("session {}: bot {number} ready", self.session);
+            }
             let result = bot.wait(Duration::ZERO);
             if !matches!(result, Err(RuntimeError::Timeout)) {
                 self.bot_ended(*number, result);
-                self.bot = None;
+                let BotState::Running(CurrentBot { bot, .. }) =
+                    std::mem::replace(&mut self.bot, BotState::Idle)
+                else {
+                    unreachable!()
+                };
+                let inbox = self.notify.inbox.clone();
+                self.bot = BotState::Reaping { replacement: None };
+                reap(move || {
+                    drop(bot);
+                    let _ = inbox.send(Msg::BotReaped);
+                });
             }
         }
     }
 
     fn settle(&mut self) {
+        self.deadline = self
+            .settings
+            .as_mut()
+            .and_then(|settings| settings.advance(Instant::now()));
         self.settle_bot();
-        if let ScriptState::Running { name, run } = &self.script {
-            let result = run.wait(Duration::ZERO);
-            if !matches!(result, Err(RuntimeError::Timeout)) {
-                self.ended(name, result);
-                self.script = ScriptState::Idle;
-                self.bot_line();
-            }
-        }
         if let ScriptState::Waiting {
             watch: Some(watch), ..
         } = &self.script
         {
             match logged_in(watch) {
-                Ok(true) => self.start_run(),
-                Ok(false) => {}
+                Ok(WatchReadiness::Ready) => self.start_run(),
+                Ok(WatchReadiness::Waiting) => {}
+                Ok(WatchReadiness::Draining) => self.deadline = Some(Instant::now()),
+                Err(bridge::Error::Timeout) => {
+                    self.deadline = Some(Instant::now() + Duration::from_millis(1))
+                }
                 Err(_) => {
                     if let ScriptState::Waiting { watch, .. } = &mut self.script {
                         *watch = None;
@@ -299,15 +472,24 @@ impl Supervision {
             unreachable!()
         };
         let name = script.entry().to_string();
+        self.next_run += 1;
+        let id = self.next_run;
+        let notify = |ready| {
+            Waker::from(Arc::new(RunNotify {
+                inbox: self.notify.inbox.clone(),
+                id,
+                ready,
+            }))
+        };
         match ScriptRun::spawn(
             watch,
             script,
             Default::default(),
-            Waker::from(self.notify.clone()),
+            notify(true),
+            notify(false),
         ) {
             Ok(run) => {
-                info!("session {}: {name} started", self.session);
-                self.script = ScriptState::Running { name, run };
+                self.script = ScriptState::Booting(CurrentRun { id, name, run });
             }
             Err(error) => {
                 self.ended(&name, Err(error));
@@ -316,9 +498,27 @@ impl Supervision {
         }
     }
 
+    fn finish_run(&mut self, result: Option<Result<ScriptOutcome, RuntimeError>>) {
+        let run = match std::mem::replace(&mut self.script, ScriptState::Idle) {
+            ScriptState::Booting(run) | ScriptState::Running(run) => run,
+            _ => unreachable!(),
+        };
+        let result = result.unwrap_or_else(|| run.run.wait(Duration::ZERO));
+        self.ended(&run.name, result);
+        let inbox = self.notify.inbox.clone();
+        let id = run.id;
+        self.script = ScriptState::Reaping { id, next: None };
+        reap(move || {
+            drop(run);
+            let _ = inbox.send(Msg::Reaped(id));
+        });
+        self.bot_line();
+    }
+
     fn control(&mut self, kill: bool) {
-        match &self.script {
-            ScriptState::Running { name, run } => {
+        match &mut self.script {
+            ScriptState::Booting(CurrentRun { name, run, .. })
+            | ScriptState::Running(CurrentRun { name, run, .. }) => {
                 if kill {
                     run.kill();
                     info!("session {}: killing {name}", self.session);
@@ -336,6 +536,9 @@ impl Supervision {
                 self.script = ScriptState::Idle;
                 self.bot_line();
             }
+            ScriptState::Reaping { next, .. } => {
+                *next = None;
+            }
             ScriptState::Idle => info!("session {}: no script is running", self.session),
         }
     }
@@ -343,26 +546,27 @@ impl Supervision {
     fn status(&mut self) {
         self.bot_line();
         match &self.script {
-            ScriptState::Idle => info!("session {}: no script is running", self.session),
+            ScriptState::Idle | ScriptState::Reaping { .. } => {
+                info!("session {}: no script is running", self.session)
+            }
             ScriptState::Waiting { script, .. } => info!(
                 "session {}: {} is waiting for login",
                 self.session,
                 script.entry()
             ),
-            ScriptState::Running { name, .. } => {
-                info!("session {}: {name} is running", self.session)
-            }
+            ScriptState::Booting(run) => info!("session {}: {} is booting", self.session, run.name),
+            ScriptState::Running(run) => info!("session {}: {} is running", self.session, run.name),
         }
     }
 
     fn bot_line(&mut self) {
         self.settle_bot();
         match &self.bot {
-            Some(CurrentBot { bot, number }) => info!(
+            BotState::Running(CurrentBot { bot, number }) => info!(
                 turns = bot.turns(),
                 "session {}: bot {number} is running", self.session
             ),
-            None => info!("session {}: no bot is running", self.session),
+            _ => info!("session {}: no bot is running", self.session),
         }
     }
 
@@ -386,15 +590,29 @@ impl Supervision {
     }
 }
 
-fn logged_in(link: &ScriptLink) -> Result<bool, bridge::Error> {
-    loop {
+enum WatchReadiness {
+    Ready,
+    Waiting,
+    Draining,
+}
+
+fn logged_in(link: &ScriptLink) -> Result<WatchReadiness, bridge::Error> {
+    for _ in 0..64 {
         match link.try_event() {
             Ok(Some(_)) | Err(bridge::Error::Overflow) => {}
-            Ok(None) => break,
+            Ok(None) => {
+                return link.read_for(Duration::ZERO, |projection| {
+                    if projection.current_readiness().missing.is_empty() {
+                        WatchReadiness::Ready
+                    } else {
+                        WatchReadiness::Waiting
+                    }
+                });
+            }
             Err(error) => return Err(error),
         }
     }
-    link.read(|projection| projection.current_readiness().missing.is_empty())
+    Ok(WatchReadiness::Draining)
 }
 
 fn ended(name: &str, result: Result<ScriptOutcome, RuntimeError>) -> (Level, String) {

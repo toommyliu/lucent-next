@@ -2,11 +2,8 @@ mod common;
 
 use common::*;
 use lucent_host::{ScriptLink, Session, bridge::ScriptEvent, bridge::Value, testing};
-use lucent_protocol::{
-    command::Command,
-    script::{Script, ScriptOutcome},
-};
-use lucent_runtime::{Bot, Kill, RuntimeError, ScriptRun};
+use lucent_protocol::{command::Command, script::Script};
+use lucent_runtime::{Kill, Supervisor};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::{
@@ -115,36 +112,40 @@ fn started() -> Vec<Value> {
     vec![Value::String("started".into())]
 }
 
-fn blocked_drop(run: ScriptRun) -> f64 {
-    let began = Instant::now();
-    drop(run);
-    ms(began.elapsed())
-}
-
-fn kill_run(session: &mut Session, link: &ScriptLink, script: &Script, kill: Kill) -> (f64, f64) {
-    let run = ScriptRun::start(
-        session.attach().unwrap(),
-        script.clone(),
-        Default::default(),
-    )
-    .unwrap();
-    assert_eq!(await_event(link, "onDebug", Some(&run)).args, started());
+fn kill_run(
+    session: &mut Session,
+    link: &ScriptLink,
+    script: &Script,
+    kill: Kill,
+    supervisor: &mut Supervisor,
+    logs: &logs::Logs,
+    count: usize,
+) -> (f64, f64) {
+    let controls = supervisor.start_script(session, script.clone()).unwrap();
+    assert_eq!(await_event(link, "onDebug", None).args, started());
     let began = Instant::now();
     if kill == Kill::Requested {
-        run.kill();
+        controls.kill();
     }
-    let result = run.wait(TIMEOUT);
+    let line = if kill == Kill::Requested {
+        "session 1: sleep.js was killed"
+    } else {
+        "session 1: spin.js was killed: a turn used more than 200 ms of CPU time"
+    };
+    logs.wait_for_count(tracing::Level::WARN, line, (count - 101) % 10 + 1);
     let terminal = ms(began.elapsed());
-    assert!(
-        matches!(result, Err(RuntimeError::Killed(killed)) if killed == kill),
-        "{result:?}"
+    let began = Instant::now();
+    logs.wait_for_count(
+        tracing::Level::DEBUG,
+        "session 1: script worker reaped",
+        count,
     );
-    (terminal, blocked_drop(run))
+    (terminal, ms(began.elapsed()))
 }
 
 fn kill_summaries(kills: Vec<(f64, f64)>) -> serde_json::Value {
     let (terminal, dropped): (Vec<_>, Vec<_>) = kills.into_iter().unzip();
-    json!({"terminal_ms": summary(terminal), "drop_blocked_ms": summary(dropped)})
+    json!({"terminal_ms": summary(terminal), "reap_wait_ms": summary(dropped)})
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -214,11 +215,12 @@ fn runtime_workload() {
         let stop = Arc::new(AtomicBool::new(false));
         let observer_stop = stop.clone();
         let observer = thread::spawn(move || observe(tick_link, observer_stop));
-        let _bot = Bot::start(session.attach().unwrap()).unwrap();
+        let mut supervisor = Supervisor::start(&mut session, None).unwrap();
         while await_event(&link, "onProbeCall", None).args.first()
             != Some(&Value::String(SETTINGS[0].into()))
         {}
 
+        logs.wait_for(tracing::Level::DEBUG, "session 1: bot 1 ready");
         let mut phases = vec![phase("idle", || thread::sleep(Duration::from_secs(10)))];
 
         let trivial = loose(&[(
@@ -231,16 +233,23 @@ fn runtime_workload() {
         let mut outcome = Vec::new();
         let mut drop_blocked = Vec::new();
         phases.push(phase("runs", || {
-            for _ in 0..100 {
-                let run_link = session.attach().unwrap();
+            for index in 1..=100 {
                 let began = Instant::now();
-                let run = ScriptRun::start(run_link, trivial.clone(), Default::default()).unwrap();
+                supervisor
+                    .start_script(&mut session, trivial.clone())
+                    .unwrap();
                 start_blocked.push(ms(began.elapsed()));
-                assert_eq!(await_event(&link, "onDebug", Some(&run)).args, started());
+                assert_eq!(await_event(&link, "onDebug", None).args, started());
                 first_action.push(ms(began.elapsed()));
-                assert_eq!(run.wait(TIMEOUT).unwrap(), ScriptOutcome::Completed);
+                logs.wait_for_count(tracing::Level::INFO, "session 1: run.js completed", index);
                 outcome.push(ms(began.elapsed()));
-                drop_blocked.push(blocked_drop(run));
+                let began = Instant::now();
+                logs.wait_for_count(
+                    tracing::Level::DEBUG,
+                    "session 1: script worker reaped",
+                    index,
+                );
+                drop_blocked.push(ms(began.elapsed()));
             }
         }));
 
@@ -261,11 +270,31 @@ fn runtime_workload() {
         let mut watchdog = Vec::new();
         let mut explicit = Vec::new();
         phases.push(phase("kills", || {
-            watchdog = (0..10)
-                .map(|_| kill_run(&mut session, &link, &spin, Kill::Watchdog))
+            watchdog = (101..=110)
+                .map(|count| {
+                    kill_run(
+                        &mut session,
+                        &link,
+                        &spin,
+                        Kill::Watchdog,
+                        &mut supervisor,
+                        &logs,
+                        count,
+                    )
+                })
                 .collect();
-            explicit = (0..10)
-                .map(|_| kill_run(&mut session, &link, &sleep, Kill::Requested))
+            explicit = (111..=120)
+                .map(|count| {
+                    kill_run(
+                        &mut session,
+                        &link,
+                        &sleep,
+                        Kill::Requested,
+                        &mut supervisor,
+                        &logs,
+                        count,
+                    )
+                })
                 .collect();
         }));
 
@@ -288,8 +317,13 @@ fn runtime_workload() {
             ),
         )]);
         phases.push(phase("latency", || {
-            let run = start(&mut session, measure, Default::default());
-            assert_eq!(run.wait(TIMEOUT).unwrap(), ScriptOutcome::Completed);
+            supervisor.start_script(&mut session, measure).unwrap();
+            logs.wait_for(tracing::Level::INFO, "session 1: latency.js completed");
+            logs.wait_for_count(
+                tracing::Level::DEBUG,
+                "session 1: script worker reaped",
+                121,
+            );
         }));
         #[derive(Deserialize)]
         struct Latency {
@@ -318,7 +352,7 @@ fn runtime_workload() {
                 "os": std::env::consts::OS, "arch": std::env::consts::ARCH,
                 "cpus": thread::available_parallelism().unwrap().get(), "phases": phases,
                 "runs": {"start_blocked_ms": summary(start_blocked), "first_action_ms": summary(first_action),
-                    "outcome_ms": summary(outcome), "drop_blocked_ms": summary(drop_blocked)},
+                    "outcome_ms": summary(outcome), "reap_wait_ms": summary(drop_blocked)},
                 "watchdog_kills": kill_summaries(watchdog),
                 "explicit_kills": kill_summaries(explicit),
                 "latency": {"call_us": summary(latency.calls), "read_us": summary(latency.reads),

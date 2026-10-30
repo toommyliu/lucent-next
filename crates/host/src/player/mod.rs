@@ -170,13 +170,13 @@ pub(crate) enum Msg {
     Read(Read),
     Command(
         lucent_protocol::command::Command,
-        mpsc::Sender<Result<String, BridgeError>>,
+        crate::bridge::Reply<String>,
     ),
     Call(Call),
     Attach(AttachmentId, ScriptEventSender),
     Detach(AttachmentId),
     #[cfg(feature = "testing")]
-    LinkCount(mpsc::Sender<Result<usize, BridgeError>>),
+    LinkCount(crate::bridge::Reply<usize>),
     OperationAnswer(AttachmentId, crate::bridge::ScriptEvent),
     View(ViewEvent),
     Mute(bool),

@@ -1,7 +1,9 @@
+mod reaper;
+pub use reaper::reap;
 pub mod asks;
 mod link;
 pub(crate) mod operations;
-pub use link::ScriptLink;
+pub use link::{PlayerStatus, ScriptLink};
 
 use lucent_protocol::auto_zone::AutoZoneConfig;
 use lucent_protocol::settings::GameSettings;
