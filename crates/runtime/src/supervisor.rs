@@ -58,7 +58,7 @@ pub struct Supervisor {
 }
 
 enum Msg {
-    Player(Player),
+    Player(Box<Player>),
     Wake,
     Stop,
     Kill,
@@ -125,7 +125,7 @@ impl Supervisor {
     ) -> Result<(), HostError> {
         session.restart(surface)?;
         if let Some(player) = attach(session, self.has_script) {
-            let _ = self.inbox.send(Msg::Player(player));
+            let _ = self.inbox.send(Msg::Player(Box::new(player)));
         }
         Ok(())
     }
@@ -194,7 +194,7 @@ impl Supervision {
         self.settle();
         while let Ok(message) = messages.recv() {
             match message {
-                Msg::Player(player) => self.player(player),
+                Msg::Player(player) => self.player(*player),
                 Msg::Wake => self.notify.queued.store(false, Ordering::Release),
                 Msg::Stop => self.control(false),
                 Msg::Kill => self.control(true),
