@@ -25,3 +25,5 @@ pub mod operation;
 pub mod script;
 
 pub mod settings;
+
+pub mod combat_profile;

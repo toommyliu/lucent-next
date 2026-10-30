@@ -1,0 +1,235 @@
+[
+  {
+    "name": "missing-profile-fields",
+    "input": {
+      "profiles": [
+        {
+          "id": "saved",
+          "steps": [
+            {
+              "skill": 2
+            }
+          ],
+          "messageTriggers": [
+            {
+              "messageIncludes": " Enrage ",
+              "skill": 3
+            }
+          ]
+        }
+      ]
+    },
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "generic-base",
+          "label": "Generic",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": []
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            },
+            {
+              "skill": 3,
+              "conditions": []
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            }
+          ]
+        },
+        {
+          "id": "saved",
+          "label": "Profile",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 2,
+              "conditions": []
+            }
+          ],
+          "messageTriggers": [
+            {
+              "messageIncludes": "Enrage",
+              "skill": 3,
+              "source": "any"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing-library-fields",
+    "input": {},
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "generic-base",
+          "label": "Generic",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": []
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            },
+            {
+              "skill": 3,
+              "conditions": []
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "missing-condition-fields-and-inactive-options",
+    "input": {
+      "profiles": [
+        {
+          "id": "condition-defaults",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": [
+                {
+                  "type": "self-hp"
+                },
+                {
+                  "type": "self-mp",
+                  "unit": "value"
+                },
+                {
+                  "type": "ally-hp"
+                },
+                {
+                  "type": "self-aura",
+                  "auraName": " Focus "
+                },
+                {
+                  "type": "target-aura",
+                  "auraName": " Marked "
+                }
+              ]
+            },
+            {
+              "skill": 2,
+              "priority": false,
+              "waitMs": 0
+            }
+          ],
+          "resetSkillIndexOnTargetDeath": false,
+          "messageTriggers": [
+            {
+              "messageIncludes": "cast",
+              "skill": 5,
+              "cooldownMs": 0
+            }
+          ]
+        }
+      ]
+    },
+    "expected": {
+      "version": 1,
+      "profiles": [
+        {
+          "id": "generic-base",
+          "label": "Generic",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": []
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            },
+            {
+              "skill": 3,
+              "conditions": []
+            },
+            {
+              "skill": 4,
+              "conditions": []
+            }
+          ]
+        },
+        {
+          "id": "condition-defaults",
+          "label": "Profile",
+          "delayMs": 150,
+          "cooldownMode": "use-if-ready",
+          "steps": [
+            {
+              "skill": 1,
+              "conditions": [
+                {
+                  "type": "self-hp",
+                  "op": "<=",
+                  "value": 0,
+                  "unit": "percent"
+                },
+                {
+                  "type": "self-mp",
+                  "op": "<=",
+                  "value": 0,
+                  "unit": "value"
+                },
+                {
+                  "type": "ally-hp",
+                  "op": "<=",
+                  "value": 0,
+                  "unit": "percent"
+                },
+                {
+                  "type": "self-aura",
+                  "auraName": "Focus",
+                  "op": "<=",
+                  "value": 0
+                },
+                {
+                  "type": "target-aura",
+                  "auraName": "Marked",
+                  "op": "<=",
+                  "value": 0
+                }
+              ]
+            },
+            {
+              "skill": 2,
+              "conditions": []
+            }
+          ],
+          "messageTriggers": [
+            {
+              "messageIncludes": "cast",
+              "skill": 5,
+              "source": "any"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
