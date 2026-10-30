@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -509,6 +510,7 @@ it.effect("treats readiness failures as not ready", () => Effect.gen(function* (
 }));
 
 it.effect("ends a faulty recovery without refilling consumed attempts", () => Effect.gen(function* () {
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
   const events = makeConnectionEvents();
   let attempts = 0;
   const fibers = yield* FiberMap.make<string>();
@@ -526,4 +528,45 @@ it.effect("ends a faulty recovery without refilling consumed attempts", () => Ef
   expect(yield* relogin.getState()).toMatchObject({ lastError: "Auto relogin failed unexpectedly.", attempting: false, attemptsRemaining: 2 });
   expect((yield* relogin.getRecords()).status.phase).toEqual({ tag: "failed" });
   expect(attempts).toBe(1);
+  expect(log).toHaveBeenCalledTimes(1);
+  expect(log.mock.calls.flat().join(" ")).toContain("unexpected recovery fault");
+  log.mockRestore();
+}));
+
+it.effect("a defective login finishes the readiness race", () => Effect.gen(function* () {
+  const relogin = yield* makeFeature(apiWith({ auth: { login: () => Effect.die("login defect") } }));
+  const fiber = yield* Effect.forkChild(Effect.exit(relogin.runLogin({username:"Hero",password:"pw"})));
+  yield* advance("1 second");
+  expect(fiber.pollUnsafe()).toBeDefined();
+}));
+
+it.effect("bounds a login that never completes", () => Effect.gen(function* () {
+  const relogin = yield* makeFeature(apiWith({ auth: { login: () => Effect.never, isServerSelectReady: () => Effect.succeed(false) } }));
+  const fiber = yield* Effect.forkChild(Effect.result(relogin.runLogin({username:"Hero",password:"pw"})));
+  for (let i = 0; i < 4; i++) { yield* advance("90 seconds"); yield* advance("40 seconds"); }
+  expect(fiber.pollUnsafe()).toBeDefined();
+  const result = yield* Fiber.join(fiber);
+  expect(Result.isFailure(result) && result.failure.detail).toBe("Login could not be submitted.");
+}));
+
+it.effect("moves past failed connection events and logs once per streak", () => Effect.gen(function* () {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const events = makeConnectionEvents();
+  let reads = 0;
+  let broken = false;
+  const relogin = yield* makeFeature(apiWith({ events: {on:events.on}, auth: {
+    getUsername: () => Effect.sync(() => { reads++; if (broken) throw new Error("capture event failure"); return ""; }),
+  } }));
+  yield* relogin.setEnabled(true);
+  broken = true;
+  const first = yield* Effect.forkChild(events.emit("OnConnection"));
+  yield* advance("2 seconds");
+  expect(first.pollUnsafe()).toBeDefined();
+  expect(reads).toBe(2);
+  yield* events.emit("OnConnection");
+  expect(warn).toHaveBeenCalledTimes(1);
+  yield* events.emit("OnConnectionLost");
+  yield* events.emit("OnConnection");
+  expect(warn).toHaveBeenCalledTimes(2);
+  warn.mockRestore();
 }));

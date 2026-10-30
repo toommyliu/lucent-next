@@ -78,13 +78,15 @@ fn an_ask_times_out_after_its_deadline() {
     assert_eq!(session.pending_ask_count(), 1);
     std::thread::sleep(Duration::from_millis(300));
     assert_eq!(session.pending_ask_count(), 0);
-    assert_eq!(
-        next(&asker),
-        ScriptEvent::Answer {
-            id,
-            answer: Err(Error::Timeout)
-        }
-    );
+    let ScriptEvent::Answer {
+        id: answered,
+        answer: Err(error),
+    } = next(&asker)
+    else {
+        panic!("expected timeout");
+    };
+    assert_eq!(answered, id);
+    assert_eq!(error.to_string(), "The bot request timed out");
     assert!(started.elapsed() >= Duration::from_secs(5));
     assert_eq!(session.pending_ask_count(), 0);
     bot.answer(id, Ok(json!(8))).unwrap();
@@ -266,4 +268,90 @@ fn only_the_current_bot_can_start_an_unexpired_ask() {
     std::thread::sleep(Duration::from_millis(5100));
     assert!(!bot.is_ask_pending(id));
     assert_eq!(session.pending_ask_count(), 0);
+}
+
+#[test]
+fn publishing_records_does_not_wake_script_links() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use std::task::{Wake, Waker};
+    struct Wakes(AtomicUsize);
+    impl Wake for Wakes {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let host = testing::headless_host();
+    let (mut session, script) = testing::start_probe(&host, testing::ProbeMovie::new());
+    let bot = session.attach().unwrap();
+    bot.claim_bot().unwrap();
+    while script.try_event().unwrap().is_some() {}
+    let wakes = Arc::new(Wakes(AtomicUsize::new(0)));
+    script.set_waker(Waker::from(wakes.clone()));
+    wakes.0.store(0, Ordering::Relaxed);
+    bot.publish_auto_relogin(Default::default()).unwrap();
+    assert_eq!(wakes.0.load(Ordering::Relaxed), 0);
+    assert_eq!(script.try_event(), Ok(None));
+}
+
+#[test]
+fn router_errors_describe_bot_authority() {
+    let host = testing::headless_host();
+    let (mut session, script) = testing::start_probe(&host, testing::ProbeMovie::new());
+    let bot = session.attach().unwrap();
+    bot.claim_bot().unwrap();
+    assert_eq!(
+        script.claim_bot().unwrap_err().to_string(),
+        "A bot is already attached"
+    );
+    assert_eq!(
+        script.answer(1, Ok(json!(null))).unwrap_err().to_string(),
+        "Only the attached bot can answer requests"
+    );
+    assert_eq!(
+        script
+            .publish_auto_relogin(Default::default())
+            .unwrap_err()
+            .to_string(),
+        "Only the attached bot can publish auto relogin records"
+    );
+}
+
+#[test]
+fn stopped_links_drain_queued_answers_and_player_events() {
+    let host = testing::headless_host();
+    let (mut session, script) = testing::start_probe(&host, testing::ProbeMovie::new());
+    let bot = session.attach().unwrap();
+    bot.claim_bot().unwrap();
+    while script.try_event().unwrap().is_some() {}
+    let id = script.ask(json!(1)).unwrap();
+    bot.answer(id, Ok(json!(2))).unwrap();
+    script
+        .call_loader(
+            "probe.emit",
+            vec![
+                lucent_host::bridge::Value::String("onDebug".into()),
+                lucent_host::bridge::Value::String("queued".into()),
+            ],
+        )
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    session.restart(testing::headless_surface()).unwrap();
+    assert_eq!(
+        script.try_event(),
+        Ok(Some(ScriptEvent::Answer {
+            id,
+            answer: Ok(json!(2))
+        }))
+    );
+    let mut found = false;
+    while let Ok(Some(event)) = script.try_event() {
+        if let ScriptEvent::Loader { event, .. } = event {
+            found |= event.name == "onDebug";
+        }
+    }
+    assert!(found, "queued player event was discarded");
+    assert_eq!(script.try_event(), Err(Error::Stopped));
 }

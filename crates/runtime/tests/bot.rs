@@ -1715,3 +1715,101 @@ fn relogin_code_failures_fail_the_ask_and_allow_the_next_setter() {
         Err(RuntimeError::Timeout)
     ));
 }
+
+#[cfg(feature = "testing")]
+fn assert_failed_recovery_command_backs_off(command: &str) {
+    {
+        let (_host, mut session, observer) = start();
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        let run = common::start(
+            &mut session,
+            common::loose(&[(
+                "enable.js",
+                r#"
+            import * as relogin from "lucent/autorelogin";
+            export default function* () {
+                yield* relogin.setDelay(0);
+                yield* relogin.setServer("Artix");
+                yield* relogin.setEnabled(true);
+            }
+        "#,
+            )]),
+            Default::default(),
+        );
+        assert_eq!(
+            run.wait(TIMEOUT).unwrap(),
+            lucent_protocol::script::ScriptOutcome::Completed
+        );
+        bot.eval("fail-recovery-command.js", format!(r#"
+            const command = __host.command;
+            const swf = __host.swf;
+            __host.command = json => {{
+                const input = JSON.parse(json);
+                if (input.kind === "{command}") throw new Error("recovery command refused");
+                if (input.kind === "login") return "true";
+                if (input.kind === "refreshLoggedIn") return "false";
+                return command(json);
+            }};
+            __host.swf = (method, args) => {{
+                if (method === "world.isLoaded" || method === "player.isLoaded" || method === "auth.isLoggedIn") return "false";
+                if (method === "flash.isNull") return "false";
+                if (method === "auth.connectTo") return JSON.stringify({{ok:false,status:"blocked",reason:"full",message:"Server is full"}});
+                return swf(method, args);
+            }};
+            window.swf["probe.emit"]("onConnection", "OnConnectionLost");
+            new Promise(resolve => setTimeout(() => resolve(null), 800));
+        "#)).wait::<()>(TIMEOUT).unwrap();
+        let records = session.auto_relogin();
+        assert!(
+            matches!(
+                records.status.phase,
+                lucent_protocol::auto_relogin::AutoReloginPhase::Backoff { .. }
+            ),
+            "{command}: {records:?}"
+        );
+        assert_eq!(records.status.attempts_remaining, Some(3.0));
+        assert_eq!(
+            records.status.last_error.as_deref(),
+            Some(if command == "login" {
+                "Login could not be submitted."
+            } else {
+                "Logout could not be submitted."
+            })
+        );
+        drop(observer);
+    }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn invalid_bot_requests_keep_their_message() {
+    let (_host, mut session, observer) = start();
+    let _bot = Bot::start(session.attach().unwrap()).unwrap();
+    let id = observer.ask(json!({"kind":"invalid"})).unwrap();
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        assert!(Instant::now() < deadline);
+        if let Some(lucent_host::bridge::ScriptEvent::Answer {
+            id: answered,
+            answer,
+        }) = observer.try_event().unwrap()
+        {
+            assert_eq!(answered, id);
+            assert_eq!(answer.unwrap_err().to_string(), "Invalid bot request");
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn failed_login_commands_back_off() {
+    assert_failed_recovery_command_backs_off("login");
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn failed_logout_commands_back_off() {
+    assert_failed_recovery_command_backs_off("logout");
+}
