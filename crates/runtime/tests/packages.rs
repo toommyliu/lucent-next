@@ -124,11 +124,6 @@ fn consumables_buys_the_missing_potions() {
                     "cmd":"buyItem","ItemID":900,"CharItemID":2900,"bitSuccess":1,"bBank":0,"iQty":3
                 })],
             )],
-        )
-        .constant(
-            "inventory.getItems",
-            json!([{ "ItemID":900,"sName":"Endurance Draught",
-            "sType":"Item","iQty":5,"iStk":300 }]),
         );
     let host = testing::headless_host();
     let (mut session, link) = testing::start_probe(&host, movie);
@@ -433,7 +428,7 @@ fn consumables_rejects_a_nonpositive_quantity() {
 }
 
 #[test]
-fn wheel_uses_default_banking_for_a_nonboolean_input() {
+fn a_nonboolean_wheel_banking_input_does_not_fail_the_run() {
     let host = testing::headless_host();
     let (mut session, link) = testing::start_probe(
         &host,
