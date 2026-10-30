@@ -13,7 +13,9 @@ pub fn reap(task: impl FnOnce() + Send + 'static) {
             .name("lucent-reaper".into())
             .spawn(move || {
                 for task in tasks {
-                    task();
+                    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(task)).is_err() {
+                        tracing::error!("a worker join panicked");
+                    }
                 }
             })
             .expect("couldn't start the worker reaper");
