@@ -1539,3 +1539,82 @@ fn relogin_setters_publish_sanitized_records_before_they_answer() {
     );
     assert_eq!(session.pending_ask_count(), 0);
 }
+
+#[cfg(feature = "testing")]
+#[test]
+fn relogin_boundary_failures_warn_once_until_capture_recovers() {
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let (_host, mut session, observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    next_call(&observer, "settings.setWalkSpeed");
+    bot.eval("fail-capture.js", r#"
+        const command = __host.command;
+        let failures = 2;
+        __host.command = json => {
+            if (JSON.parse(json).kind === "refreshCredentials" && failures-- > 0) throw new Error("temporary capture failure");
+            return command(json);
+        };
+        null;
+    "#).wait::<()>(TIMEOUT).unwrap();
+    let run = common::start(
+        &mut session,
+        common::loose(&[(
+            "capture.js",
+            r#"
+        import * as relogin from "lucent/autorelogin";
+        export default function* () {
+            const state = yield* relogin.setEnabled(true);
+            if (!state.captured) throw new Error("capture did not recover");
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        lucent_protocol::script::ScriptOutcome::Completed
+    );
+    let warnings: Vec<_> = logs
+        .messages(tracing::Level::WARN)
+        .into_iter()
+        .filter(|message| message.contains("auto relogin"))
+        .collect();
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert!(warnings[0].contains("failed"));
+    assert!(warnings[1].contains("recovered"));
+    assert!(matches!(
+        bot.wait(Duration::ZERO),
+        Err(RuntimeError::Timeout)
+    ));
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn malformed_relogin_replies_end_the_bot_with_their_error() {
+    for reply in ["{}", "{"] {
+        let (_host, mut session, observer) = start();
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        next_call(&observer, "settings.setWalkSpeed");
+        bot.eval("malformed-capture.js", format!(r#"
+            const command = __host.command;
+            __host.command = json => JSON.parse(json).kind === "refreshCredentials" ? {reply} : command(json);
+            null;
+        "#, reply = serde_json::to_string(reply).unwrap())).wait::<()>(TIMEOUT).unwrap();
+        let _run = common::start(
+            &mut session,
+            common::loose(&[(
+                "capture.js",
+                r#"
+            import * as relogin from "lucent/autorelogin";
+            export default function* () { yield* relogin.setEnabled(true); }
+        "#,
+            )]),
+            Default::default(),
+        );
+        assert!(
+            matches!(bot.wait(Duration::from_secs(2)), Err(RuntimeError::JavaScript(error)) if error.contains("trim") || error.contains("JSON"))
+        );
+    }
+}
