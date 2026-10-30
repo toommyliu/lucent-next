@@ -5,7 +5,9 @@ owns the public schema module declarations.
 
 The runtime imports `@lucent/scripting-api/contract` for its public API annotations
 and `@lucent/scripting-api/schema` for the schema module's types. These imports
-are type-only. An incompatible implementation fails `pnpm typecheck`.
+are type-only. An incompatible implementation fails `pnpm typecheck`, except
+the `lucent/schema` module and the `events.on`, `events.once` and `packet.on`
+overloads, which the runtime casts to their contract types.
 
 User scripts type-check against `script-api.d.ts`. Regenerate it with
 `pnpm --filter @lucent/scripting-api generate`; do not edit it by hand.
