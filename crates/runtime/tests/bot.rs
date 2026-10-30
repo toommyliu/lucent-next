@@ -516,8 +516,10 @@ fn a_policy_defect_ends_the_bot_instead_of_silencing_a_tick() {
     )
     .wait::<()>(TIMEOUT)
     .unwrap();
+    let result = bot.wait(Duration::from_secs(2));
     assert!(
-        matches!(bot.wait(Duration::from_secs(2)), Err(RuntimeError::JavaScript(error)) if error.contains("length"))
+        matches!(&result, Err(RuntimeError::JavaScript(error)) if error == "SchemaError"),
+        "{result:?}"
     );
 }
 
