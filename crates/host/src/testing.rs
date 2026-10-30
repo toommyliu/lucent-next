@@ -512,6 +512,16 @@ mod tests {
         let (mut session, old) = start_probe(&host, ProbeMovie::new());
         let other = session.attach().unwrap();
         session.restart(headless_surface()).unwrap();
+        for stream in [&old, &other] {
+            if let Ok(Some(event)) = stream.try_event() {
+                assert_eq!(
+                    event,
+                    crate::bridge::ScriptEvent::AutoZoneChanged {
+                        config: Default::default()
+                    }
+                );
+            }
+        }
         assert_eq!(old.try_event(), Err(Error::Stopped));
         assert_eq!(other.try_event(), Err(Error::Stopped));
         assert_eq!(other.read(|_| 42), Err(Error::Stopped));

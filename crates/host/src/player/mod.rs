@@ -316,7 +316,12 @@ fn first_viewport(
                 return Some((viewport, muted, script_events));
             }
             Msg::Mute(mute) => muted = mute,
-            Msg::Attach(id, producer) => script_events.push((id, producer)),
+            Msg::Attach(id, producer) => {
+                producer.send(crate::bridge::ScriptEvent::AutoZoneChanged {
+                    config: auto_zone.read().clone(),
+                });
+                script_events.push((id, producer));
+            }
             Msg::Detach(id) => script_events.retain(|(attached, _)| *attached != id),
             #[cfg(feature = "testing")]
             Msg::LinkCount(reply) => {
@@ -431,7 +436,12 @@ impl Running {
         self.drain_events();
         match msg {
             Msg::Stop => return ControlFlow::Break(()),
-            Msg::Attach(id, producer) => self.script_events.push((id, producer)),
+            Msg::Attach(id, producer) => {
+                producer.send(crate::bridge::ScriptEvent::AutoZoneChanged {
+                    config: self.auto_zone.read().clone(),
+                });
+                self.script_events.push((id, producer));
+            }
             Msg::Detach(id) => self.script_events.retain(|(attached, _)| *attached != id),
             #[cfg(feature = "testing")]
             Msg::LinkCount(reply) => {
@@ -569,6 +579,14 @@ mod tests {
         .unwrap();
         let _attachment =
             first_viewport(&rx, false, &Default::default(), &Default::default()).unwrap();
+        for stream in [&events, &second_events] {
+            assert_eq!(
+                stream.try_recv(),
+                Ok(Some(crate::bridge::ScriptEvent::AutoZoneChanged {
+                    config: Default::default()
+                }))
+            );
+        }
         assert_eq!(events.try_recv(), Ok(Some(answer)));
         assert_eq!(second_events.try_recv(), Ok(None));
     }
@@ -592,6 +610,8 @@ mod tests {
                     },
                 ),
             ];
+            let mut player = (!before_viewport).then(running);
+            let _attachments;
             if before_viewport {
                 let (tx, rx) = mpsc::channel();
                 for message in messages {
@@ -601,16 +621,25 @@ mod tests {
                     Viewport::new(100.0, 100.0, 1.0).unwrap(),
                 )))
                 .unwrap();
-                let _attachments =
-                    first_viewport(&rx, false, &Default::default(), &Default::default()).unwrap();
-                assert_eq!(second_events.try_recv(), Ok(None));
+                _attachments = Some(
+                    first_viewport(&rx, false, &Default::default(), &Default::default()).unwrap(),
+                );
             } else {
-                let mut running = running();
+                _attachments = None;
+                let running = player.as_mut().unwrap();
                 for message in messages {
                     assert!(running.handle(message).is_continue());
                 }
-                assert_eq!(second_events.try_recv(), Ok(None));
             }
+            for stream in [&events, &second_events] {
+                assert_eq!(
+                    stream.try_recv(),
+                    Ok(Some(crate::bridge::ScriptEvent::AutoZoneChanged {
+                        config: Default::default()
+                    }))
+                );
+            }
+            assert_eq!(second_events.try_recv(), Ok(None));
             assert_eq!(events.try_recv(), Err(BridgeError::Stopped));
         }
     }
@@ -631,6 +660,14 @@ mod tests {
             first_viewport(&rx, false, &Default::default(), &Default::default()).unwrap();
         assert_eq!((received, muted), (viewport, false));
         assert_eq!(producers.len(), 2);
+        for stream in [&first_events, &removed_events, &last_events] {
+            assert_eq!(
+                stream.try_recv(),
+                Ok(Some(crate::bridge::ScriptEvent::AutoZoneChanged {
+                    config: Default::default()
+                }))
+            );
+        }
         assert_eq!(removed_events.try_recv(), Err(BridgeError::Stopped));
         for (_, producer) in &producers {
             producer.send(crate::bridge::ScriptEvent::Invalidated);

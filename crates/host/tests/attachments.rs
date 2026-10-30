@@ -31,11 +31,24 @@ fn count(session: &Session) -> usize {
     session.attached_link_count().recv_timeout(TIMEOUT).unwrap()
 }
 
+fn initial_config(link: &ScriptLink) {
+    link.call_loader("probe.echo", vec![])
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    assert_eq!(
+        link.try_event(),
+        Ok(Some(ScriptEvent::AutoZoneChanged {
+            config: Default::default()
+        }))
+    );
+}
+
 #[test]
 fn two_links_see_the_same_events_in_order() {
     let host = testing::headless_host();
     let (mut session, first) = testing::start_probe(&host, ProbeMovie::new());
     let second = session.attach().expect("a second link attaches");
+    initial_config(&second);
     for index in 0..1_000 {
         emit(&first, index);
     }
@@ -56,6 +69,7 @@ fn a_dropped_link_is_detached() {
     drop(link);
     assert_eq!(count(&session), 0);
     let survivor = session.attach().expect("a new link attaches");
+    initial_config(&survivor);
     for index in 0..100 {
         let transient = session.attach().expect("another link attaches");
         assert_eq!(count(&session), 2);
@@ -71,6 +85,7 @@ fn one_links_overflow_leaves_the_other_intact() {
     let host = testing::headless_host();
     let (mut session, stalled) = testing::start_probe(&host, ProbeMovie::new());
     let draining = session.attach().expect("a second link attaches");
+    initial_config(&draining);
     for index in 0..1_100 {
         emit(&draining, index);
         assert_eq!(draining.try_event(), Ok(Some(event(index))));
@@ -118,11 +133,12 @@ fn replies_belong_to_their_calling_link() {
 }
 
 #[test]
-fn new_links_only_receive_events_after_attach() {
+fn new_links_receive_config_then_events_after_attach() {
     let host = testing::headless_host();
     let (mut session, first) = testing::start_probe(&host, ProbeMovie::new());
     emit(&first, 0);
     let second = session.attach().unwrap();
+    initial_config(&second);
     emit(&first, 1);
     assert_eq!(first.try_event(), Ok(Some(event(0))));
     assert_eq!(first.try_event(), Ok(Some(event(1))));
@@ -132,6 +148,7 @@ fn new_links_only_receive_events_after_attach() {
     drop(second);
     assert_eq!(count(&session), 0);
     let third = session.attach().unwrap();
+    initial_config(&third);
     emit(&third, 2);
     assert_eq!(third.try_event(), Ok(Some(event(2))));
     assert_eq!(third.try_event(), Ok(None));

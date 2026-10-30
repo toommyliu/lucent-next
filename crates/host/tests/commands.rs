@@ -1174,7 +1174,7 @@ fn settings_updated_before_the_first_viewport_are_stored_and_applied_when_ready(
 fn an_identical_auto_zone_patch_sends_no_event() {
     let (_host, mut session, link) = start(ProbeMovie::new());
     let other = session.attach().unwrap();
-    query(&other, json!({"kind":"auth"}));
+    command(&other, json!({"kind":"patchAutoZone","patch":{}})).unwrap();
     for link in [&link, &other] {
         while link.try_event().unwrap().is_some() {}
     }
