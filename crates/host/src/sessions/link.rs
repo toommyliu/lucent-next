@@ -29,7 +29,7 @@ pub struct ScriptLink {
     inbox: Inbox,
     events: ScriptEvents,
     projection: Arc<RwLock<Projection>>,
-    records: super::Records,
+    pub(crate) records: super::Records,
     stopped: Arc<AtomicBool>,
     packets: Arc<super::operations::Packets>,
     operations: std::sync::mpsc::SyncSender<Option<super::operations::Request>>,
@@ -88,6 +88,22 @@ impl ScriptLink {
         self.asks.set_waker(self.attachment, waker);
     }
 
+    pub(crate) fn relogin_snapshot(&self) -> Pending<crate::automation::relogin::Snapshot> {
+        self.inbox
+            .read_projection(|projection| crate::automation::relogin::Snapshot {
+                username: projection.auth.username.clone(),
+                password: projection.auth.password.clone(),
+                logged_in: projection.auth.logged_in,
+                ready: projection.current_readiness().missing.is_empty(),
+                servers: projection
+                    .auth
+                    .servers()
+                    .iter()
+                    .map(|s| s.snapshot().data.name)
+                    .collect(),
+            })
+    }
+
     pub fn cached_logged_in(&self) -> Pending<bool> {
         self.inbox
             .read_projection(|projection| projection.auth.logged_in)
@@ -125,15 +141,6 @@ impl ScriptLink {
     ) -> Result<(), bridge::Error> {
         self.asks.answer(self.attachment, id, answer)
     }
-    pub fn publish_auto_relogin(
-        &self,
-        records: lucent_protocol::auto_relogin::AutoReloginRecords,
-    ) -> Result<(), bridge::Error> {
-        self.asks.publish(self.attachment, || {
-            *self.records.auto_relogin.write() = records;
-        })
-    }
-
     pub fn operate(
         &self,
         operation: lucent_protocol::operation::Operation,
@@ -165,6 +172,22 @@ impl ScriptLink {
     }
 
     pub fn command(&self, command: lucent_protocol::command::Command) -> Pending<String> {
+        use super::relogin::Edit;
+        use lucent_protocol::command::Command;
+        let submit = |edit| {
+            if self.stopped.load(Ordering::Acquire) {
+                return Pending::stopped();
+            }
+            self.records
+                .relogin
+                .submit(edit, self.detached.clone(), Instant::now())
+        };
+        let command = match command {
+            Command::SetAutoReloginEnabled { enabled } => return submit(Edit::Enabled(enabled)),
+            Command::SetAutoReloginDelay { delay_ms } => return submit(Edit::Delay(delay_ms)),
+            Command::SetAutoReloginServer { server } => return submit(Edit::Server(server)),
+            other => other,
+        };
         let (reply, pending) = Pending::channel();
         self.inbox.post(crate::player::Msg::Command(command, reply));
         pending

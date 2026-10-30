@@ -143,33 +143,16 @@ fn bot_detach_fails_its_asks_and_replacement_cannot_answer_them() {
 }
 
 #[test]
-fn restart_stops_old_routes_and_preserves_only_the_config() {
-    use lucent_protocol::auto_relogin::*;
+fn restart_stops_old_routes() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
     let bot = session.attach().unwrap();
     bot.claim_bot().unwrap();
-    let records = AutoReloginRecords {
-        config: AutoReloginConfig {
-            enabled: true,
-            delay_ms: 7000.0,
-            server: Some("Artix".into()),
-        },
-        status: AutoReloginStatus {
-            captured: true,
-            ..Default::default()
-        },
-    };
-    assert!(asker.publish_auto_relogin(records.clone()).is_err());
-    bot.publish_auto_relogin(records.clone()).unwrap();
     let id = asker.ask(json!(7)).unwrap();
     session.restart(testing::headless_surface()).unwrap();
     assert_eq!(asker.try_event(), Err(Error::Stopped));
     assert_eq!(session.pending_ask_count(), 0);
-    assert_eq!(session.auto_relogin().config, records.config);
-    assert!(!session.auto_relogin().status.captured);
     assert_eq!(bot.answer(id, Ok(json!(8))), Err(Error::Stopped));
-    assert!(bot.publish_auto_relogin(records).is_err());
 }
 
 #[test]
@@ -276,32 +259,6 @@ fn only_the_current_bot_can_start_an_unexpired_ask() {
 }
 
 #[test]
-fn publishing_records_does_not_wake_script_links() {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
-    use std::task::{Wake, Waker};
-    struct Wakes(AtomicUsize);
-    impl Wake for Wakes {
-        fn wake(self: Arc<Self>) {
-            self.0.fetch_add(1, Ordering::Relaxed);
-        }
-    }
-    let host = testing::headless_host();
-    let (mut session, script) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
-    bot.claim_bot().unwrap();
-    while script.try_event().unwrap().is_some() {}
-    let wakes = Arc::new(Wakes(AtomicUsize::new(0)));
-    script.set_waker(Waker::from(wakes.clone()));
-    wakes.0.store(0, Ordering::Relaxed);
-    bot.publish_auto_relogin(Default::default()).unwrap();
-    assert_eq!(wakes.0.load(Ordering::Relaxed), 0);
-    assert_eq!(script.try_event(), Ok(None));
-}
-
-#[test]
 fn router_errors_describe_bot_authority() {
     let host = testing::headless_host();
     let (mut session, script) = testing::start_probe(&host, testing::ProbeMovie::new());
@@ -314,13 +271,6 @@ fn router_errors_describe_bot_authority() {
     assert_eq!(
         script.answer(1, Ok(json!(null))).unwrap_err().to_string(),
         "Only the attached bot can answer requests"
-    );
-    assert_eq!(
-        script
-            .publish_auto_relogin(Default::default())
-            .unwrap_err()
-            .to_string(),
-        "Only the attached bot can publish auto relogin records"
     );
 }
 
@@ -397,4 +347,22 @@ fn queued_answers_arrive_before_player_event_loss() {
     assert_eq!(asker.try_event(), Err(Error::Overflow));
     assert_eq!(asker.try_event(), Ok(None));
     assert_eq!(session.pending_ask_count(), 0);
+}
+
+#[test]
+fn invalid_bot_requests_keep_their_message() {
+    let host = testing::headless_host();
+    let (mut session, script) = testing::start_probe(&host, testing::ProbeMovie::new());
+    let bot = session.attach().unwrap();
+    bot.claim_bot().unwrap();
+    let id = script.ask(json!({"kind":"invalid"})).unwrap();
+    assert!(matches!(next(&bot), ScriptEvent::Ask { .. }));
+    bot.answer(id, Err(Error::InvalidBotRequest)).unwrap();
+    let ScriptEvent::Answer {
+        answer: Err(error), ..
+    } = next(&script)
+    else {
+        panic!("expected a rejected request");
+    };
+    assert_eq!(error.to_string(), "Invalid bot request");
 }

@@ -1,4 +1,5 @@
 mod reaper;
+pub(crate) mod relogin;
 pub use reaper::reap;
 pub mod asks;
 mod link;
@@ -12,7 +13,8 @@ use parking_lot::RwLock;
 pub(crate) struct Records {
     settings: Arc<RwLock<GameSettings>>,
     auto_zone: Arc<RwLock<AutoZoneConfig>>,
-    auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
+    pub(crate) auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
+    pub(crate) relogin: Arc<relogin::Shared>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -93,9 +95,11 @@ impl Host {
         )?;
         let operations = operations::Operations::start(id).map_err(HostError::OperationThread)?;
         let asks = asks::Router::start(id).map_err(HostError::OperationThread)?;
+        let relogin = Arc::new(relogin::Shared::default());
         Ok(Session {
             asks,
-            auto_relogin: Arc::default(),
+            auto_relogin: relogin.records.clone(),
+            relogin,
             next_attachment: 0,
             operations,
             player: Some(player),
@@ -138,6 +142,7 @@ impl Host {
 pub struct Session {
     asks: asks::Router,
     auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
+    relogin: Arc<relogin::Shared>,
     player: Option<player::Handle>,
     next_attachment: u64,
     operations: operations::Operations,
@@ -191,6 +196,11 @@ impl Session {
         }
     }
 
+    #[cfg(feature = "testing")]
+    pub fn pending_relogin_count(&self) -> usize {
+        self.relogin.count()
+    }
+
     pub fn auto_relogin(&self) -> lucent_protocol::auto_relogin::AutoReloginRecords {
         self.auto_relogin.read().clone()
     }
@@ -219,6 +229,7 @@ impl Session {
                 settings: self.settings.clone(),
                 auto_zone: self.auto_zone.clone(),
                 auto_relogin: self.auto_relogin.clone(),
+                relogin: self.relogin.clone(),
             },
             operations::Endpoint {
                 inbox,
@@ -243,7 +254,6 @@ impl Session {
 
     pub fn restart(&mut self, surface: Surface) -> Result<(), HostError> {
         self.asks = asks::Router::start(self.id).map_err(HostError::OperationThread)?;
-        self.auto_relogin.write().status = Default::default();
         self.player = None;
         self.surface = surface;
         let player = self.host.spawn_player(

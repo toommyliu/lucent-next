@@ -1653,9 +1653,6 @@ ${ind(d)}}`;
   var isGreaterThan = /* @__PURE__ */ __name((O) => dual(2, (self, that) => O(self, that) === 1), "isGreaterThan");
   var isLessThanOrEqualTo = /* @__PURE__ */ __name((O) => dual(2, (self, that) => O(self, that) !== 1), "isLessThanOrEqualTo");
   var isGreaterThanOrEqualTo = /* @__PURE__ */ __name((O) => dual(2, (self, that) => O(self, that) !== -1), "isGreaterThanOrEqualTo");
-  var min = /* @__PURE__ */ __name((O) => dual(2, (self, that) => self === that || O(self, that) < 1 ? self : that), "min");
-  var max = /* @__PURE__ */ __name((O) => dual(2, (self, that) => self === that || O(self, that) > -1 ? self : that), "max");
-  var clamp = /* @__PURE__ */ __name((O) => dual(2, (self, options) => min(O)(options.maximum, max(O)(options.minimum, self))), "clamp");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Option.js
   var none2 = /* @__PURE__ */ __name(() => none, "none");
@@ -4899,8 +4896,6 @@ ${prefix}}`;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Number.js
   var Number3 = globalThis.Number;
-  var Order2 = Number2;
-  var clamp2 = /* @__PURE__ */ clamp(Order2);
   var remainder = /* @__PURE__ */ dual(2, (self, divisor) => {
     if (!globalThis.Number.isFinite(self) || !globalThis.Number.isFinite(divisor) || divisor === 0) {
       return NaN;
@@ -5253,41 +5248,6 @@ ${prefix}}`;
 
   // packages/runtime/src/host/asks.ts
   var pending = /* @__PURE__ */ new Map();
-  var serializePayload = /* @__PURE__ */ __name((payload) => {
-    const seen = /* @__PURE__ */ new Set();
-    const visit = /* @__PURE__ */ __name((value) => {
-      if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-      if (typeof value === "number" && Number.isFinite(value)) return value;
-      if (typeof value !== "object" || value === null) throw new TypeError("Ask payloads must contain only JSON data");
-      if (seen.has(value)) throw new TypeError("Ask payloads cannot contain cycles");
-      const array2 = Array.isArray(value);
-      const prototype = Object.getPrototypeOf(value);
-      if (prototype !== (array2 ? Array.prototype : Object.prototype) && prototype !== null) throw new TypeError("Ask payloads cannot contain methods");
-      seen.add(value);
-      const copy3 = array2 ? new Array(value.length) : /* @__PURE__ */ Object.create(null);
-      Object.setPrototypeOf(copy3, null);
-      for (const key of Reflect.ownKeys(value)) {
-        if (array2 && key === "length") continue;
-        const descriptor = Object.getOwnPropertyDescriptor(value, key);
-        if (typeof key === "symbol" || !("value" in descriptor)) throw new TypeError("Ask payloads cannot contain accessors or symbols");
-        Object.defineProperty(copy3, key, { value: visit(descriptor.value), enumerable: true });
-      }
-      seen.delete(value);
-      return copy3;
-    }, "visit");
-    return JSON.stringify(visit(payload));
-  }, "serializePayload");
-  var ask = /* @__PURE__ */ __name((payload, host3) => callback2((resume) => {
-    const id = host3.ask(serializePayload(payload));
-    pending.set(id, {
-      complete: /* @__PURE__ */ __name((answer, error) => resume(error === null ? succeed7(answer) : die3(new Error(error))), "complete"),
-      cancel: /* @__PURE__ */ __name(() => host3.cancelAsk(id), "cancel")
-    });
-    return sync2(() => {
-      pending.delete(id);
-      host3.cancelAsk(id);
-    });
-  }), "ask");
   var completeAsk = /* @__PURE__ */ __name((id, answer, error) => {
     const resolve3 = pending.get(id);
     pending.delete(id);
@@ -20969,11 +20929,8 @@ ${prefix}}`;
     })
   );
 
-  // packages/runtime/src/game/automation/autoReloginConfig.ts
-  var defaultAutoReloginDelay = 3e3;
-  var normalizeAutoReloginDelay = /* @__PURE__ */ __name((delayMs) => Number.isFinite(delayMs) ? clamp2({ minimum: 0, maximum: 3e5 })(delayMs) : defaultAutoReloginDelay, "normalizeAutoReloginDelay");
-
   // packages/runtime/src/host/autoRelogin.ts
+  var normalizeAutoReloginDelay = /* @__PURE__ */ __name((delayMs) => Number.isFinite(delayMs) ? Math.min(3e5, Math.max(0, delayMs)) : 3e3, "normalizeAutoReloginDelay");
   var publicReloginState = /* @__PURE__ */ __name(({ config, status }) => ({
     enabled: config.enabled,
     delayMs: config.delayMs,
@@ -20987,15 +20944,15 @@ ${prefix}}`;
   }), "publicReloginState");
   var makeAutoReloginService = /* @__PURE__ */ __name((host3) => {
     const getState = /* @__PURE__ */ __name(() => sync2(() => publicReloginState(JSON.parse(host3.read('{"kind":"autoRelogin"}')))), "getState");
-    const set4 = /* @__PURE__ */ __name((payload) => ask(payload, host3).pipe(map5((answer) => answer)), "set");
+    const set4 = /* @__PURE__ */ __name((payload) => sync2(() => publicReloginState(JSON.parse(host3.command(JSON.stringify(payload))))), "set");
     return {
       getState,
       getDelayMs: /* @__PURE__ */ __name(() => getState().pipe(map5((state) => state.delayMs)), "getDelayMs"),
       getServer: /* @__PURE__ */ __name(() => getState().pipe(map5((state) => state.server)), "getServer"),
       isEnabled: /* @__PURE__ */ __name(() => getState().pipe(map5((state) => state.enabled)), "isEnabled"),
-      setEnabled: /* @__PURE__ */ __name((enabled) => set4({ kind: "autoRelogin.setEnabled", enabled }), "setEnabled"),
-      setDelay: /* @__PURE__ */ __name((delay3) => set4({ kind: "autoRelogin.setDelay", delayMs: normalizeAutoReloginDelay(toMillis(delay3)) }), "setDelay"),
-      setServer: /* @__PURE__ */ __name((server) => set4({ kind: "autoRelogin.setServer", server: server ?? null }), "setServer")
+      setEnabled: /* @__PURE__ */ __name((enabled) => set4({ kind: "setAutoReloginEnabled", enabled }), "setEnabled"),
+      setDelay: /* @__PURE__ */ __name((delay3) => set4({ kind: "setAutoReloginDelay", delayMs: normalizeAutoReloginDelay(toMillis(delay3)) }), "setDelay"),
+      setServer: /* @__PURE__ */ __name((server) => set4({ kind: "setAutoReloginServer", server: server ?? null }), "setServer")
     };
   }, "makeAutoReloginService");
 

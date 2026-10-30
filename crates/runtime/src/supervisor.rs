@@ -10,7 +10,9 @@ use std::{
 };
 
 use lucent_host::{
-    HostError, ScriptLink, Session, Surface, automation::SettingsPolicy, bridge, reap,
+    HostError, ScriptLink, Session, Surface,
+    automation::{ReloginPolicy, SettingsPolicy},
+    bridge, reap,
 };
 use lucent_protocol::script::{Script, ScriptOutcome};
 use tracing::{Level, error, info, warn};
@@ -76,6 +78,7 @@ struct Player {
     bot: ScriptLink,
     watch: Option<ScriptLink>,
     settings: Option<ScriptLink>,
+    relogin: Option<ScriptLink>,
 }
 
 impl Supervisor {
@@ -113,6 +116,7 @@ impl Supervisor {
             bots_started: 0,
             next_run: 0,
             settings: None,
+            relogin: None,
             deadline: None,
         };
         let dispatch = tracing::dispatcher::get_default(Clone::clone);
@@ -175,6 +179,7 @@ fn attach(session: &mut Session, has_script: bool) -> Option<Player> {
         bot,
         watch,
         settings: Some(session.attach()?),
+        relogin: Some(session.attach()?),
     })
 }
 
@@ -201,6 +206,7 @@ struct Supervision {
     bots_started: u32,
     next_run: u64,
     settings: Option<SettingsPolicy>,
+    relogin: Option<ReloginPolicy>,
     deadline: Option<Instant>,
 }
 enum BotState {
@@ -350,6 +356,10 @@ impl Supervision {
             player.settings.take().unwrap(),
             Waker::from(self.notify.clone()),
         ));
+        self.relogin = Some(ReloginPolicy::new(
+            player.relogin.take().unwrap(),
+            Waker::from(self.notify.clone()),
+        ));
         self.install_player(player);
     }
 
@@ -442,6 +452,13 @@ impl Supervision {
             .settings
             .as_mut()
             .and_then(|settings| settings.advance(Instant::now()));
+        if let Some(at) = self
+            .relogin
+            .as_mut()
+            .and_then(|policy| policy.advance(Instant::now()))
+        {
+            self.deadline = Some(self.deadline.map_or(at, |deadline| deadline.min(at)));
+        }
         self.settle_bot();
         if let ScriptState::Waiting {
             watch: Some(watch), ..

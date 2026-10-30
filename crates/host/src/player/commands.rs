@@ -144,6 +144,11 @@ impl Running {
 
     pub(super) fn command(&mut self, command: Command) -> Result<String, Error> {
         match command {
+            Command::SetAutoReloginEnabled { .. }
+            | Command::SetAutoReloginDelay { .. }
+            | Command::SetAutoReloginServer { .. } => Err(Error::Unavailable(
+                "auto relogin requires a session controller".into(),
+            )),
             Command::PatchAutoZone { patch } => Ok(super::patch_auto_zone(
                 &self.auto_zone,
                 patch,
