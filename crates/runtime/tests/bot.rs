@@ -1109,3 +1109,128 @@ fn auto_zone_rereads_the_host_record_after_the_bot_link_overflows() {
     let call = next_call(&observer, "player.walkTo");
     assert!(matches!(call.get(1), Some(Value::Number(x)) if (696.0..=802.0).contains(x)));
 }
+
+#[cfg(feature = "testing")]
+#[test]
+fn auto_zone_overflow_host_failures_retry_and_warn_once_per_streak() {
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        common::ready_movie()
+            .recording("player.walkTo")
+            .raising_many("probe.overflow", "onDebug", "noise", 100),
+    );
+    become_ready(&observer);
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    bot.eval("overflow-read-failure.js", r#"
+        const original = __host.read;
+        globalThis.autoZoneReads = 0;
+        __host.read = json => {
+            if (JSON.parse(json).kind === "autoZone" && ++autoZoneReads <= 2) {
+                throw new Error("temporary auto zone host failure");
+            }
+            return original(json);
+        };
+        for (let i = 0; i < 11; i++) __host.swf("probe.overflow", "[]");
+        __host.command(JSON.stringify({kind:"patchAutoZone",patch:{enabled:true,map:"moreskulls"}}));
+        null;
+    "#).wait::<()>(TIMEOUT).unwrap();
+    bot.eval(
+        "wait-for-recovery.js",
+        "new Promise(resolve => setTimeout(() => resolve(null), 1600))",
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    assert_eq!(
+        bot.eval("read-attempts.js", "autoZoneReads")
+            .wait::<usize>(TIMEOUT)
+            .unwrap(),
+        3
+    );
+    let warnings = logs.messages(tracing::Level::WARN);
+    assert_eq!(
+        warnings
+            .iter()
+            .filter(|message| message.contains("auto zone") && message.contains("failed"))
+            .count(),
+        1,
+        "{warnings:?}"
+    );
+    assert_eq!(
+        warnings
+            .iter()
+            .filter(|message| message.contains("auto zone") && message.contains("recovered"))
+            .count(),
+        1,
+        "{warnings:?}"
+    );
+    assert_eq!(
+        observer.try_event(),
+        Err(lucent_host::bridge::Error::Overflow)
+    );
+    enter_map(&observer, "moreskulls");
+    drain(&observer);
+    packet(&observer, json!({"cmd":"event","args":{"zoneSet":"A"}}));
+    let call = next_call(&observer, "player.walkTo");
+    assert!(matches!(call.get(1), Some(Value::Number(x)) if (696.0..=802.0).contains(x)));
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn malformed_auto_zone_overflow_replies_end_the_bot() {
+    for reply in ["{", "{}", r#"{"enabled":"yes","map":null}"#] {
+        let host = testing::headless_host();
+        let (mut session, observer) = testing::start_probe(
+            &host,
+            common::ready_movie().raising_many("probe.overflow", "onDebug", "noise", 100),
+        );
+        become_ready(&observer);
+        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        bot.eval(
+            "malformed-overflow-read.js",
+            format!(
+                r#"
+            const original = __host.read;
+            __host.read = json => JSON.parse(json).kind === "autoZone" ? {reply} : original(json);
+            for (let i = 0; i < 11; i++) __host.swf("probe.overflow", "[]");
+            null;
+        "#,
+                reply = serde_json::to_string(reply).unwrap()
+            ),
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+        let result = bot.wait(Duration::from_secs(2));
+        assert!(
+            matches!(&result, Err(RuntimeError::JavaScript(error)) if error.contains("SyntaxError") || error.contains("SchemaError")),
+            "{reply}: {result:?}"
+        );
+    }
+}
+
+#[cfg(feature = "testing")]
+#[test]
+fn auto_zone_policy_defects_end_the_bot() {
+    let (_host, mut session, _observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    bot.eval(
+        "auto-zone-defect.js",
+        r#"
+        window.onAutoZoneChanged({
+            get enabled() { throw new Error("auto zone policy defect"); },
+            map: null
+        });
+        null;
+    "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    let result = bot.wait(Duration::from_secs(2));
+    assert!(
+        matches!(&result, Err(RuntimeError::JavaScript(error)) if error.contains("auto zone policy defect")),
+        "{result:?}"
+    );
+}
