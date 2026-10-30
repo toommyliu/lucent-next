@@ -38,6 +38,8 @@ pub enum Error {
     NotReady,
     #[error("the loader has not registered callback {0}")]
     Unavailable(String),
+    #[error("loader callback {callback} threw: {message}")]
+    LoaderThrew { callback: String, message: String },
     #[error("timed out waiting for the player")]
     Timeout,
     #[error("events were discarded because the event queue overflowed")]

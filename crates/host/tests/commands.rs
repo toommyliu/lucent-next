@@ -1251,3 +1251,106 @@ fn auto_zone_config_survives_a_player_restart_before_the_viewport() {
     let current = session.attach().unwrap();
     assert_eq!(query(&current, json!({"kind":"autoZone"})), expected);
 }
+
+#[test]
+fn throwing_callbacks_are_distinct_from_null_and_undefined_replies() {
+    let (_host, _session, link) = start(
+        ProbeMovie::new()
+            .throwing("auth.logout", "logout boom")
+            .constant("auth.connectTo", Value::Null),
+    );
+    let error = lucent_host::bridge::Error::LoaderThrew {
+        callback: "auth.logout".into(),
+        message: "logout boom".into(),
+    };
+    assert_eq!(
+        link.call_loader("auth.logout", vec![])
+            .recv_timeout(Duration::from_secs(5)),
+        Err(error.clone())
+    );
+    assert_eq!(
+        error.to_string(),
+        "loader callback auth.logout threw: logout boom"
+    );
+    assert_eq!(
+        link.call_loader("auth.connectTo", vec![])
+            .recv_timeout(Duration::from_secs(5)),
+        Ok(LoaderValue::Null)
+    );
+    assert_eq!(
+        link.call_loader("probe.echo", vec![])
+            .recv_timeout(Duration::from_secs(5)),
+        Ok(LoaderValue::Undefined)
+    );
+}
+
+#[test]
+fn refresh_commands_propagate_callback_failures_without_changing_auth() {
+    for (command, callback) in [
+        (Command::RefreshCredentials {}, "flash.getGameObjectS"),
+        (Command::RefreshServers {}, "auth.getServers"),
+        (Command::RefreshLoggedIn {}, "auth.isLoggedIn"),
+    ] {
+        let (_host, _session, link) = start(ProbeMovie::new().throwing(callback, "refresh boom"));
+        become_ready(&link);
+        assert_eq!(
+            link.command(command).recv_timeout(Duration::from_secs(5)),
+            Err(lucent_host::bridge::Error::LoaderThrew {
+                callback: callback.into(),
+                message: "refresh boom".into(),
+            })
+        );
+        assert_eq!(auth(&link), logged_out());
+    }
+}
+
+#[test]
+fn refresh_commands_propagate_missing_callbacks() {
+    let (_host, _session, link) = start(ProbeMovie::new());
+    become_ready(&link);
+    for (command, callback) in [
+        (Command::RefreshCredentials {}, "flash.getGameObjectS"),
+        (Command::RefreshServers {}, "auth.getServers"),
+        (Command::RefreshLoggedIn {}, "auth.isLoggedIn"),
+    ] {
+        assert_eq!(
+            link.command(command).recv_timeout(Duration::from_secs(5)),
+            Err(lucent_host::bridge::Error::Unavailable(callback.into()))
+        );
+    }
+}
+
+#[test]
+fn settings_failures_preserve_desired_values_and_attempt_the_remaining_callbacks() {
+    let (_host, _session, link) = start(
+        ProbeMovie::new()
+            .throwing("settings.setWalkSpeed", "walk boom")
+            .recording("settings.setFrameRate"),
+    );
+    assert_eq!(
+        link.command(Command::UpdateSettings {
+            patch: lucent_protocol::settings::SettingsPatch {
+                walk_speed: Some(30.0),
+                frame_rate: Some(24.0),
+                ..Default::default()
+            }
+        })
+        .recv_timeout(Duration::from_secs(5)),
+        Err(lucent_host::bridge::Error::LoaderThrew {
+            callback: "settings.setWalkSpeed".into(),
+            message: "walk boom".into(),
+        })
+    );
+    assert_eq!(
+        query(&link, json!({"kind":"settings"}))["walkSpeed"],
+        json!(30.0)
+    );
+    assert_eq!(
+        query(&link, json!({"kind":"settings"}))["frameRate"],
+        json!(24.0)
+    );
+    assert_eq!(
+        loader_calls(&link),
+        vec![json!(["settings.setFrameRate", 24.0])]
+    );
+}
