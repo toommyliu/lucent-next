@@ -22,14 +22,6 @@ export const makeSettings = (host: HostStateService) => {
     get,
     isAntiCounterEnabled: () =>
       get().pipe(Effect.map((state) => state.antiCounterEnabled)),
-    reapply: () =>
-      host
-        .command({ kind: "reapplySettings", actionsOnly: false })
-        .pipe(Effect.asVoid),
-    reapplyActions: () =>
-      host
-        .command({ kind: "reapplySettings", actionsOnly: true })
-        .pipe(Effect.asVoid),
   };
 };
 

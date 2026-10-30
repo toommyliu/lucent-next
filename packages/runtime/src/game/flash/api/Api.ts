@@ -23,6 +23,7 @@ import {
   ProjectionReadiness,
 } from "./ProjectionReadiness";
 import { makeQuests } from "./Quests";
+import { ScriptReactions, start as startScriptReactions } from "./ScriptReactions";
 import { makeSettings } from "./Settings";
 import { makeShops } from "./Shops";
 import { makeTempInventory } from "./TempInventory";
@@ -41,7 +42,7 @@ const makeApiServices = Effect.gen(function* () {
   const bank = yield* makeBank(bridge, host, auth, inventory, house, wait);
   const drops = yield* makeDrops(bridge, host, auth);
   const map = makeMap(bridge, host, wait);
-  const monsterServices = yield* makeMonsters(bridge, host, events, wait);
+  const monsterServices = yield* makeMonsters(bridge, host, wait);
   const monsters = monsterServices.api;
   const players = makePlayers(host);
   const player = makePlayer(bridge, host, auth, inventory, map, wait);
@@ -66,7 +67,6 @@ const makeApiServices = Effect.gen(function* () {
     tempInventory,
     wait,
   );
-  yield* gateway.start(antiCounter.handleEvent);
 
   return {
     api: {
@@ -90,12 +90,22 @@ const makeApiServices = Effect.gen(function* () {
       wait,
     },
     projectionReadiness,
+    scriptReactions: {
+      antiCounter,
+      events,
+      gateway,
+      host,
+      monsters: monsterServices,
+    },
   };
 });
 
 export type ApiService = Effect.Success<typeof makeApiServices>["api"];
 
-export const makeApi = makeApiServices.pipe(Effect.map(({ api }) => api));
+export const makeApi = makeApiServices.pipe(
+  Effect.tap(({ scriptReactions }) => startScriptReactions(scriptReactions)),
+  Effect.map(({ api }) => api),
+);
 
 export class Api extends Context.Service<Api, ApiService>()(
   "lucent/renderer/flash/Api",
@@ -103,9 +113,10 @@ export class Api extends Context.Service<Api, ApiService>()(
 
 export const layer = Layer.effectContext(
   makeApiServices.pipe(
-    Effect.map(({ api, projectionReadiness }) =>
+    Effect.map(({ api, projectionReadiness, scriptReactions }) =>
       Context.make(Api, api).pipe(
         Context.add(ProjectionReadiness, projectionReadiness),
+        Context.add(ScriptReactions, scriptReactions),
       ),
     ),
   ),

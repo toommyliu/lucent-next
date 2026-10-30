@@ -29,13 +29,24 @@ struct Active {
 }
 
 pub(crate) struct Engine {
+    bundle: Bundle,
     active: Vec<Active>,
     context: v8::Global<v8::Context>,
     isolate: v8::OwnedIsolate,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum Bundle {
+    Script,
+    Bot,
+}
+
 impl Engine {
-    pub(crate) fn new(link: ScriptLink, interrupt: Arc<Interrupt>) -> Result<Self, RuntimeError> {
+    pub(crate) fn new(
+        link: ScriptLink,
+        interrupt: Arc<Interrupt>,
+        bundle: Bundle,
+    ) -> Result<Self, RuntimeError> {
         static PLATFORM: Once = Once::new();
         PLATFORM.call_once(|| {
             let platform = v8::new_default_platform(0, false).make_shared();
@@ -52,7 +63,9 @@ impl Engine {
         isolate.set_slot(link);
         isolate.set_slot(Instant::now());
         isolate.set_slot(Rejections::new());
-        isolate.set_slot(Scripts::default());
+        if matches!(bundle, Bundle::Script) {
+            isolate.set_slot(Scripts::default());
+        }
         isolate.set_promise_reject_callback(promise_rejected);
         let context = {
             v8::scope!(let scope, &mut isolate);
@@ -78,12 +91,17 @@ impl Engine {
             v8::Global::new(scope, context)
         };
         let mut engine = Self {
+            bundle,
             active: Vec::new(),
             context,
             isolate,
         };
-        engine.evaluate("runtime.js", include_str!("../../../assets/runtime.js"))?;
-        let entries = engine.in_context(EntryPoints::capture)?;
+        let (name, source) = match bundle {
+            Bundle::Script => ("runtime.js", include_str!("../../../assets/runtime.js")),
+            Bundle::Bot => ("bot.js", include_str!("../../../assets/bot.js")),
+        };
+        engine.evaluate(name, source)?;
+        let entries = engine.in_context(|scope| EntryPoints::capture(scope, bundle))?;
         engine.isolate.set_slot(entries);
         interrupt.attach(engine.isolate.thread_safe_handle());
         Ok(engine)
@@ -109,6 +127,11 @@ impl Engine {
     }
 
     pub(crate) fn events_lost(&mut self) {
+        let runtime = match self.bundle {
+            Bundle::Bot => "bot",
+            Bundle::Script => "script",
+        };
+        tracing::error!("{runtime} events overflowed and were lost");
         let mut running = false;
         self.active.retain_mut(|active| {
             if active.run.is_some() {
@@ -298,38 +321,41 @@ impl Engine {
         }
     }
 
-    pub(crate) fn turn(&mut self, items: &str) -> Option<Instant> {
-        let (result, rejections) = self
-            .in_context(|tc| {
-                let result = (|| {
-                    let items = v8::String::new(tc, items).ok_or_else(|| {
-                        RuntimeError::JavaScript("script events too large".into())
-                    })?;
-                    let errors = call_lucent(tc, EntryPoint::Turn, &[items.into()])?;
-                    if let Ok(errors) = v8::Local::<v8::Array>::try_from(errors) {
-                        for index in 0..errors.length() {
-                            if let Some(error) = errors.get_index(tc, index) {
-                                tracing::error!(
-                                    error = error.to_rust_string_lossy(tc),
-                                    "script callback failed"
-                                );
-                            }
+    pub(crate) fn turn(&mut self, items: &str) -> Result<Option<Instant>, RuntimeError> {
+        let (result, rejections) = self.in_context(|tc| {
+            let result = (|| {
+                let items = v8::String::new(tc, items)
+                    .ok_or_else(|| RuntimeError::JavaScript("script events too large".into()))?;
+                let errors = call_lucent(tc, EntryPoint::Turn, &[items.into()])?;
+                if let Ok(errors) = v8::Local::<v8::Array>::try_from(errors) {
+                    for index in 0..errors.length() {
+                        if let Some(error) = errors.get_index(tc, index) {
+                            tracing::error!(
+                                error = error.to_rust_string_lossy(tc),
+                                "script callback failed"
+                            );
                         }
                     }
-                    Ok::<_, RuntimeError>(())
-                })();
-                checkpoint(tc)?;
-                Ok((result, take_rejections(tc)))
-            })
-            .ok()?;
+                }
+                Ok::<_, RuntimeError>(())
+            })();
+            checkpoint(tc)?;
+            Ok((result, take_rejections(tc)))
+        })?;
         if let Err(error) = result {
+            if matches!(self.bundle, Bundle::Bot) {
+                return Err(error);
+            }
             tracing::error!(%error, "script turn failed");
+        }
+        if matches!(self.bundle, Bundle::Bot) && !rejections.is_empty() {
+            return Err(RuntimeError::JavaScript(rejections.join("\n")));
         }
         for error in rejections {
             tracing::error!(%error, "unhandled script rejection");
         }
         self.check_pending();
-        self.wake()
+        Ok(self.wake())
     }
 
     fn wake(&mut self) -> Option<Instant> {
@@ -381,9 +407,13 @@ fn stringify(
     })
 }
 
-struct EntryPoints {
+struct ScriptEntryPoints {
     start: v8::Global<v8::Function>,
     stop: v8::Global<v8::Function>,
+}
+
+struct EntryPoints {
+    script: Option<ScriptEntryPoints>,
     turn: v8::Global<v8::Function>,
     wake: v8::Global<v8::Function>,
 }
@@ -391,6 +421,7 @@ struct EntryPoints {
 impl EntryPoints {
     fn capture(
         scope: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
+        bundle: Bundle,
     ) -> Result<Self, RuntimeError> {
         let global = scope.get_current_context().global(scope);
         let key = v8::String::new(scope, "__lucent").unwrap();
@@ -407,8 +438,13 @@ impl EntryPoints {
             Ok::<_, RuntimeError>(v8::Global::new(scope, function))
         };
         Ok(Self {
-            start: get("start")?,
-            stop: get("stop")?,
+            script: match bundle {
+                Bundle::Script => Some(ScriptEntryPoints {
+                    start: get("start")?,
+                    stop: get("stop")?,
+                }),
+                Bundle::Bot => None,
+            },
             turn: get("turn")?,
             wake: get("wake")?,
         })
@@ -431,8 +467,8 @@ fn call_lucent<'s>(
     let function = v8::Local::new(
         scope,
         match method {
-            EntryPoint::Start => &entries.start,
-            EntryPoint::Stop => &entries.stop,
+            EntryPoint::Start => &entries.script.as_ref().unwrap().start,
+            EntryPoint::Stop => &entries.script.as_ref().unwrap().stop,
             EntryPoint::Turn => &entries.turn,
             EntryPoint::Wake => &entries.wake,
         },

@@ -262,3 +262,45 @@ fn a_script_whose_result_loses_events_while_serializing_fails() {
     let error = waiting.wait::<Value>(TIMEOUT).unwrap_err();
     assert!(matches!(error, RuntimeError::EventsLost), "{error}");
 }
+
+#[test]
+fn a_throwing_turn_delivers_settled_results_and_logs_rejections() {
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
+    let runtime = Runtime::start(link).unwrap();
+    let pending = runtime.eval(
+        "throwing-turn.js",
+        r#"
+        new Promise(resolve => {
+            setTimeout(() => {
+                const filter = Array.prototype.filter;
+                Array.prototype.filter = function () {
+                    Array.prototype.filter = filter;
+                    resolve("settled during throw");
+                    Promise.reject(new Error("rejection during throw"));
+                    throw new Error("one broken filter");
+                };
+                setTimeout(() => {}, 20);
+            }, 20);
+        });
+    "#,
+    );
+    assert_eq!(
+        pending.wait::<String>(Duration::from_secs(3)).unwrap(),
+        "settled during throw"
+    );
+    let errors = logs.messages(tracing::Level::ERROR);
+    assert!(
+        errors
+            .iter()
+            .any(|text| text == "unhandled script rejection"),
+        "{errors:?}"
+    );
+    assert!(
+        errors.iter().any(|text| text == "script turn failed"),
+        "{errors:?}"
+    );
+}

@@ -1,30 +1,30 @@
 import * as Effect from "effect/Effect";
-import * as FiberMap from "effect/FiberMap";
-import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import { Api } from "../flash/api/Api";
-import { Automation } from "./Automation";
+import { HostState } from "../flash/state/HostState";
+import { makeRetryLoop } from "./retryLoop";
 
-export const layer = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const api = yield* Api;
-    yield* Automation;
-    const fibers = yield* FiberMap.make<string>();
-    const whenPlayerReady = (effect: Effect.Effect<void>) =>
-      api.player
-        .isReady()
-        .pipe(Effect.flatMap((ready) => (ready ? effect : Effect.void)));
-    const reapply = Effect.forever(
-      whenPlayerReady(api.settings.reapply()).pipe(
-        Effect.andThen(Effect.sleep("1 second")),
-      ),
-    );
-    const actions = Effect.forever(
-      whenPlayerReady(api.settings.reapplyActions()).pipe(
-        Effect.andThen(Effect.sleep("500 millis")),
-      ),
-    );
-    yield* FiberMap.run(fibers, "settings-reapply", reapply);
-    yield* FiberMap.run(fibers, "settings-actions", actions);
-  }),
-);
+export const run = Effect.gen(function* () {
+  const api = yield* Api;
+  const host = yield* HostState;
+  const repeat = makeRetryLoop("settings policy");
+  const tick = (actionsOnly: boolean) =>
+    Effect.gen(function* () {
+      if (!(yield* api.player.isReady())) return;
+      const result = yield* host.command({ kind: "reapplySettings", actionsOnly });
+      if (Option.isNone(result)) {
+        return yield* Effect.die(new Error("Failed reapplySettings"));
+      }
+      if (result.value !== null) {
+        return yield* Effect.die(new Error("Invalid reapplySettings reply"));
+      }
+    });
+  yield* Effect.all(
+    [
+      repeat(() => tick(false), "1 second"),
+      repeat(() => tick(true), "500 millis"),
+    ],
+    { concurrency: "unbounded", discard: true },
+  );
+});

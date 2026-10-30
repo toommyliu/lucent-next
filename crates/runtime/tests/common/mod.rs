@@ -271,3 +271,5 @@ pub fn js_threads() -> Vec<String> {
         names
     }
 }
+
+pub mod logs;

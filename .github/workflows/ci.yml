@@ -60,7 +60,9 @@ jobs:
       - run: cargo run -p lucent-protocol --bin export-types -- --check
       - run: cargo build --workspace
       - run: cargo test --workspace
+      - run: cargo test -p lucent-runtime --features testing
       - run: cargo clippy --workspace -- -D warnings
+      - run: cargo clippy -p lucent-runtime --features testing --tests -- -D warnings
 
   scripts:
     runs-on: ubuntu-latest
