@@ -207,7 +207,7 @@ fn accepting_a_drop_updates_host_state_before_the_action_completes() {
     let (mut session, link) = testing::start_probe(
         &host,
         common::ready_movie().accepting_drop(
-            Duration::ZERO,
+            Duration::from_millis(50),
             json!({"type":"json","dataObj":{
                 "cmd":"getDrop","ItemID":70,"bSuccess":1,"iQtyNow":3
             }})

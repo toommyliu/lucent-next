@@ -80,6 +80,7 @@ impl ProbeMovie {
     ) -> Self {
         let name = name.into();
         self.raises.retain(|(method, ..)| method != &name);
+        self.sequences.retain(|(method, _)| method != &name);
         self.raises
             .push((name, event.into(), payload.into(), count));
         self
@@ -91,6 +92,7 @@ impl ProbeMovie {
         events: impl IntoIterator<Item = (String, String)>,
     ) -> Self {
         let name = name.into();
+        self.raises.retain(|(method, ..)| method != &name);
         self.sequences.retain(|(method, _)| method != &name);
         self.sequences.push((name, events.into_iter().collect()));
         self
