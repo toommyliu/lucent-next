@@ -9,9 +9,12 @@ const operations = new Map<
   }
 >();
 
-export const operate = (operation: Operation): Promise<OperationAnswer> =>
+export const operate = (
+  operation: Operation,
+  host: Pick<typeof __host, "operate">,
+): Promise<OperationAnswer> =>
   new Promise((resolve, reject) => {
-    const id = __host.operate(JSON.stringify(operation));
+    const id = host.operate(JSON.stringify(operation));
     const timeout = setTimeout(() => {
       operations.delete(id);
       reject(new Error("The host operation timed out"));

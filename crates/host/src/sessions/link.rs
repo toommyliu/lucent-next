@@ -15,6 +15,7 @@ use crate::projection::{Projection, answer};
 pub struct ScriptLink {
     id: u64,
     attachment: AttachmentId,
+    detached: Arc<AtomicBool>,
     inbox: Inbox,
     events: ScriptEvents,
     projection: Arc<RwLock<Projection>>,
@@ -36,6 +37,7 @@ impl ScriptLink {
         Self {
             id,
             attachment,
+            detached: Arc::default(),
             inbox: player.inbox,
             events,
             projection: player.projection,
@@ -80,6 +82,7 @@ impl ScriptLink {
             .try_send(Some(super::operations::Request {
                 id,
                 attachment: self.attachment,
+                detached: self.detached.clone(),
                 operation,
                 player: super::operations::Endpoint {
                     inbox: self.inbox.clone(),
@@ -171,6 +174,7 @@ impl ScriptLink {
 
 impl Drop for ScriptLink {
     fn drop(&mut self) {
+        self.detached.store(true, Ordering::Release);
         self.inbox.post(Msg::Detach(self.attachment));
     }
 }

@@ -16,7 +16,7 @@ class InvokeFailure extends Data.TaggedError("InvokeFailure")<{
 
 export const makeBridge = (target?: Pick<Window, "swf">) =>
   Effect.gen(function* () {
-    const resolvedTarget = target ?? window;
+    const swf = (target ?? window).swf;
     const diagnosticSink = yield* DiagnosticSink;
 
     const fail = (
@@ -40,13 +40,11 @@ export const makeBridge = (target?: Pick<Window, "swf">) =>
     ): Effect.Effect<Option.Option<A>> =>
       Effect.try({
         try: () => {
-          const candidate: unknown = resolvedTarget.swf[method];
+          const candidate: unknown = swf[method];
           if (typeof candidate !== "function") {
             throw new Error(`Missing Flash method: ${String(method)}`);
           }
-          return Reflect.apply(candidate, resolvedTarget.swf, [
-            ...(args ?? []),
-          ]);
+          return Reflect.apply(candidate, swf, [...(args ?? [])]);
         },
         catch: (cause) => new InvokeFailure({ cause }),
       }).pipe(

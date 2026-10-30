@@ -83,16 +83,21 @@ impl Engine {
             isolate,
         };
         engine.evaluate("runtime.js", include_str!("../../../assets/runtime.js"))?;
+        let entries = engine.in_context(EntryPoints::capture)?;
+        engine.isolate.set_slot(entries);
         interrupt.attach(engine.isolate.thread_safe_handle());
         Ok(engine)
     }
 
-    pub(crate) fn kill(mut self, kill: Kill) -> ScriptLink {
+    pub(crate) fn kill(&mut self, kill: Kill) {
         self.isolate.get_slot::<Arc<Interrupt>>().unwrap().detach();
         for active in self.active.drain(..) {
             let _ = active.reply.send(Err(RuntimeError::Killed(kill)));
         }
-        self.isolate.remove_slot::<ScriptLink>().unwrap()
+    }
+
+    pub(crate) fn is_idle(&self) -> bool {
+        self.active.is_empty()
     }
 
     pub(crate) fn try_event(&self) -> Result<Option<ScriptEvent>, EventError> {
@@ -153,7 +158,11 @@ impl Engine {
                 .ok_or_else(|| exception_text(tc))?;
             let name = v8::String::new(tc, &name).unwrap();
             let inputs = v8::String::new(tc, &serde_json::to_string(&inputs).unwrap()).unwrap();
-            let value = call_lucent(tc, "start", &[load.into(), name.into(), inputs.into()])?;
+            let value = call_lucent(
+                tc,
+                EntryPoint::Start,
+                &[load.into(), name.into(), inputs.into()],
+            )?;
             let promise =
                 v8::Local::<v8::Promise>::try_from(value).map_err(|_| exception_text(tc))?;
             promise.mark_as_handled();
@@ -182,7 +191,7 @@ impl Engine {
                 .into_iter()
                 .map(|reason| v8::String::new(tc, reason).unwrap().into())
                 .collect();
-            let value = call_lucent(tc, "stop", &args)?;
+            let value = call_lucent(tc, EntryPoint::Stop, &args)?;
             if let Ok(promise) = v8::Local::<v8::Promise>::try_from(value) {
                 promise.mark_as_handled();
             }
@@ -296,7 +305,7 @@ impl Engine {
                     let items = v8::String::new(tc, items).ok_or_else(|| {
                         RuntimeError::JavaScript("script events too large".into())
                     })?;
-                    let errors = call_lucent(tc, "turn", &[items.into()])?;
+                    let errors = call_lucent(tc, EntryPoint::Turn, &[items.into()])?;
                     if let Ok(errors) = v8::Local::<v8::Array>::try_from(errors) {
                         for index in 0..errors.length() {
                             if let Some(error) = errors.get_index(tc, index) {
@@ -326,7 +335,7 @@ impl Engine {
     fn wake(&mut self) -> Option<Instant> {
         let started = *self.isolate.get_slot::<Instant>().unwrap();
         let result = self.in_context(|tc| {
-            call_lucent(tc, "wake", &[])
+            call_lucent(tc, EntryPoint::Wake, &[])
                 .and_then(|value| value.number_value(tc).ok_or_else(|| exception_text(tc)))
         });
         let deadline = match result {
@@ -372,24 +381,65 @@ fn stringify(
     })
 }
 
+struct EntryPoints {
+    start: v8::Global<v8::Function>,
+    stop: v8::Global<v8::Function>,
+    turn: v8::Global<v8::Function>,
+    wake: v8::Global<v8::Function>,
+}
+
+impl EntryPoints {
+    fn capture(
+        scope: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
+    ) -> Result<Self, RuntimeError> {
+        let global = scope.get_current_context().global(scope);
+        let key = v8::String::new(scope, "__lucent").unwrap();
+        let object = global
+            .get(scope, key.into())
+            .and_then(|value| v8::Local::<v8::Object>::try_from(value).ok())
+            .ok_or_else(|| exception_text(scope))?;
+        let mut get = |name| {
+            let key = v8::String::new(scope, name).unwrap();
+            let function = object
+                .get(scope, key.into())
+                .and_then(|value| v8::Local::<v8::Function>::try_from(value).ok())
+                .ok_or_else(|| exception_text(scope))?;
+            Ok::<_, RuntimeError>(v8::Global::new(scope, function))
+        };
+        Ok(Self {
+            start: get("start")?,
+            stop: get("stop")?,
+            turn: get("turn")?,
+            wake: get("wake")?,
+        })
+    }
+}
+
+enum EntryPoint {
+    Start,
+    Stop,
+    Turn,
+    Wake,
+}
+
 fn call_lucent<'s>(
     scope: &mut v8::PinnedRef<'s, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
-    method: &str,
+    method: EntryPoint,
     args: &[v8::Local<v8::Value>],
 ) -> Result<v8::Local<'s, v8::Value>, RuntimeError> {
-    let global = scope.get_current_context().global(scope);
-    let key = v8::String::new(scope, "__lucent").unwrap();
-    let object = global
-        .get(scope, key.into())
-        .and_then(|value| v8::Local::<v8::Object>::try_from(value).ok())
-        .ok_or_else(|| exception_text(scope))?;
-    let key = v8::String::new(scope, method).unwrap();
-    let function = object
-        .get(scope, key.into())
-        .and_then(|value| v8::Local::<v8::Function>::try_from(value).ok())
-        .ok_or_else(|| exception_text(scope))?;
+    let entries = scope.get_slot::<EntryPoints>().unwrap();
+    let function = v8::Local::new(
+        scope,
+        match method {
+            EntryPoint::Start => &entries.start,
+            EntryPoint::Stop => &entries.stop,
+            EntryPoint::Turn => &entries.turn,
+            EntryPoint::Wake => &entries.wake,
+        },
+    );
+    let receiver = v8::undefined(scope).into();
     function
-        .call(scope, object.into(), args)
+        .call(scope, receiver, args)
         .ok_or_else(|| exception_text(scope))
 }
 
@@ -623,3 +673,6 @@ fn host_log(
         _ => tracing::info!(target: TARGET, "{}", text.to_rust_string_lossy(scope)),
     }
 }
+
+#[cfg(test)]
+mod tests;

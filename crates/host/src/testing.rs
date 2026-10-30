@@ -22,7 +22,7 @@ pub fn headless_host() -> Host {
 #[derive(Default)]
 pub struct ProbeMovie {
     constants: Vec<(String, serde_json::Value)>,
-    raises: Vec<(String, String, String)>,
+    raises: Vec<(String, String, String, u16)>,
     records: Vec<String>,
     guarded_records: Vec<String>,
     drop_accept: Option<(Duration, String)>,
@@ -56,13 +56,25 @@ impl ProbeMovie {
     }
 
     pub fn raising(
-        mut self,
+        self,
         name: impl Into<String>,
         event: impl Into<String>,
         payload: impl Into<String>,
     ) -> Self {
+        self.raising_many(name, event, payload, 1)
+    }
+
+    pub fn raising_many(
+        mut self,
+        name: impl Into<String>,
+        event: impl Into<String>,
+        payload: impl Into<String>,
+        count: u16,
+    ) -> Self {
+        let name = name.into();
+        self.raises.retain(|(method, ..)| method != &name);
         self.raises
-            .push((name.into(), event.into(), payload.into()));
+            .push((name, event.into(), payload.into(), count));
         self
     }
 }
@@ -220,7 +232,7 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
     let raise_bodies: Vec<(&str, Vec<u8>)> = movie
         .raises
         .iter()
-        .map(|(name, event, payload)| {
+        .map(|(name, event, payload, count)| {
             let mut body = vec![
                 push(vec![Value::Str(string(payload))]),
                 push(vec![Value::Str(string(event))]),
@@ -232,7 +244,31 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
                 Action::CallMethod,
                 Action::Pop,
             ]);
-            (name.as_str(), actions(&body))
+            body.extend([
+                push(vec![
+                    Value::Str(string("remaining")),
+                    Value::Str(string("remaining")),
+                ]),
+                Action::GetVariable,
+                push(vec![Value::Int(1)]),
+                Action::Subtract,
+                Action::SetVariable,
+                push(vec![Value::Str(string("remaining"))]),
+                Action::GetVariable,
+            ]);
+            let offset = -i16::try_from(actions(&body).len() + 5).unwrap();
+            body.push(Action::If(swf::avm1::types::If { offset }));
+            let mut repeated = vec![
+                push(vec![
+                    Value::Str(string("remaining")),
+                    Value::Int(i32::from(*count)),
+                ]),
+                Action::DefineLocal,
+            ];
+            if *count != 0 {
+                repeated.extend(body);
+            }
+            (name.as_str(), actions(&repeated))
         })
         .collect();
     let record_bodies: Vec<(&str, Vec<u8>)> = movie
@@ -403,6 +439,41 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
 mod tests {
     use super::*;
     use crate::bridge::{Error, Value};
+
+    #[test]
+    fn a_synchronous_burst_overflows_the_script_event_queue() {
+        let host = headless_host();
+        let (_session, link) = start_probe(
+            &host,
+            ProbeMovie::new().raising_many("probe.burst", "onConnection", "OnConnection", 600),
+        );
+        link.call_loader("probe.burst", vec![])
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        assert_eq!(link.try_event(), Err(Error::Overflow));
+    }
+
+    #[test]
+    fn a_loader_call_raises_the_configured_number_of_events() {
+        let host = headless_host();
+        let (_session, link) = start_probe(
+            &host,
+            ProbeMovie::new()
+                .raising("probe.burst", "onDebug", "old")
+                .raising_many("probe.burst", "onDebug", "burst", 3),
+        );
+        link.call_loader("probe.burst", vec![])
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        let mut received = Vec::new();
+        while let Some(ScriptEvent::Loader { event, .. }) = link.try_event().unwrap() {
+            received.push((event.name, event.args));
+        }
+        assert_eq!(
+            received,
+            vec![("onDebug".into(), vec![Value::String("burst".into())]); 3]
+        );
+    }
 
     #[test]
     fn a_constant_answers_its_loader_call_with_nested_values() {

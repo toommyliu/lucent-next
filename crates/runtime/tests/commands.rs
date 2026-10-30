@@ -60,7 +60,7 @@ fn invalid_commands_and_unavailable_callbacks_throw_errors_and_leave_the_runtime
 #[test]
 fn a_script_waiting_for_a_host_command_is_killed_without_waiting_for_the_player() {
     let host = testing::headless_host();
-    let (session, link) = testing::start_probe(
+    let (mut session, link) = testing::start_probe(
         &host,
         ProbeMovie::new().constant("bank.getItems", json!([{"ItemID": 1, "sName": "Sword"}])),
     );
@@ -96,6 +96,8 @@ fn a_script_waiting_for_a_host_command_is_killed_without_waiting_for_the_player(
             .unwrap(),
         1
     );
+    drop(runtime);
+    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
     assert_eq!(
         runtime
             .eval("after.js", "typeof globalThis.marker")

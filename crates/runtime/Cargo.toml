@@ -18,3 +18,4 @@ libc = "0.2"
 
 [dev-dependencies]
 lucent-host = { workspace = true, features = ["testing"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }

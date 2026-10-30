@@ -56,6 +56,8 @@ interface Timer {
   readonly repeat?: number;
 }
 
+const host = __host;
+
 const timers = new Map<number, Timer>();
 let nextId = 1;
 
@@ -68,7 +70,7 @@ const schedule = (
   const ms = Math.max(0, Number(delay) || 0);
   const timer: Timer = {
     id: nextId++,
-    at: __host.now() + ms,
+    at: host.now() + ms,
     callback: () => callback(...args),
     ...(repeat ? { repeat: ms } : {}),
   };
@@ -89,7 +91,7 @@ const describe = (cause: unknown): string => {
 };
 
 export const turn = (itemsJson: string): string[] => {
-  const now = __host.now();
+  const now = host.now();
   const due = [...timers.values()]
     .filter((timer) => timer.at <= now)
     .sort((a, b) => a.at - b.at || a.id - b.id);
@@ -121,7 +123,7 @@ export const turn = (itemsJson: string): string[] => {
     if (timer.repeat === undefined) {
       timers.delete(timer.id);
     } else {
-      timers.set(timer.id, { ...timer, at: __host.now() + timer.repeat });
+      timers.set(timer.id, { ...timer, at: host.now() + timer.repeat });
     }
     invoke(timer.callback);
   }
@@ -151,10 +153,16 @@ window.swf = new Proxy({} as Window["swf"], {
   get(_target, method) {
     if (typeof method === "string") {
       return (...args: unknown[]) => {
-        const reply = __host.swf(method, JSON.stringify(args));
+        const reply = host.swf(method, JSON.stringify(args));
         return reply === undefined ? undefined : JSON.parse(reply);
       };
     }
     return undefined;
   },
 });
+
+export const hideInternals = (): void => {
+  Reflect.deleteProperty(globalThis, "__host");
+  Reflect.deleteProperty(globalThis, "__lucent");
+  Reflect.deleteProperty(window, "swf");
+};
