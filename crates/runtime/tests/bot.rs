@@ -685,3 +685,78 @@ fn settings_policy_uses_player_readiness() {
         Value::Number(30.0)
     );
 }
+
+#[cfg(feature = "testing")]
+#[test]
+fn settings_policy_recovery_waits_for_the_failed_loop() {
+    let logs = common::logs::Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let (_host, mut session, observer) = start();
+    let bot = Bot::start(session.attach().unwrap()).unwrap();
+    next_call(&observer, "settings.setWalkSpeed");
+    bot.eval(
+        "fail-full-ticks.js",
+        r#"
+        globalThis.fullFailures = 0;
+        const command = __host.command;
+        __host.command = json => {
+            const input = JSON.parse(json);
+            if (input.kind === "reapplySettings" && !input.actionsOnly) {
+                fullFailures++;
+                throw new Error("full reapply unavailable");
+            }
+            return command(json);
+        };
+        new Promise(resolve => {
+            const check = () => fullFailures >= 3 ? resolve(null) : setTimeout(check, 10);
+            check();
+        });
+    "#,
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    assert_eq!(
+        bot.eval("failures.js", "fullFailures")
+            .wait::<u32>(TIMEOUT)
+            .unwrap(),
+        3
+    );
+    let warnings = logs.messages(tracing::Level::WARN);
+    let recoveries = logs.messages(tracing::Level::INFO);
+    assert_eq!(
+        (
+            warnings
+                .iter()
+                .filter(|text| text.contains("settings policy tick failed"))
+                .count(),
+            recoveries
+                .iter()
+                .filter(|text| text.contains("settings policy recovered"))
+                .count()
+        ),
+        (1, 0),
+        "warnings: {warnings:?}, recoveries: {recoveries:?}"
+    );
+    bot.eval("restore-command.js", "__host.command = command; null;")
+        .wait::<()>(TIMEOUT)
+        .unwrap();
+    drain(&observer);
+    assert_eq!(
+        next_call(&observer, "settings.setWalkSpeed")[1],
+        Value::Number(30.0)
+    );
+    bot.eval(
+        "flush-recovery.js",
+        "new Promise(resolve => setTimeout(() => resolve(null), 20));",
+    )
+    .wait::<()>(TIMEOUT)
+    .unwrap();
+    assert_eq!(
+        logs.messages(tracing::Level::INFO)
+            .iter()
+            .filter(|text| text.contains("settings policy recovered"))
+            .count(),
+        1
+    );
+}
