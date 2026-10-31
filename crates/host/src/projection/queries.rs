@@ -52,8 +52,8 @@ impl Answer for State<'_> {
     fn combat_state(
         &self,
         priorities: Vec<MonsterSelector>,
-    ) -> lucent_protocol::combat_state::CombatSnapshot {
-        self.projection.combat_snapshot(
+    ) -> Vec<lucent_protocol::combat_state::CombatMonsterState> {
+        self.projection.combat_monsters(
             super::combat_state::now_ms(),
             &priorities,
             self.settings.anti_counter_enabled,

@@ -147,8 +147,6 @@ impl Running {
     pub(super) fn command(&mut self, command: Command) -> Result<String, Error> {
         match command {
             Command::RefreshCombatState {} => {
-                self.drain_events();
-                let scope = self.projection.write().begin_combat_hydration();
                 let mut read = |path: &str| -> Result<Json, Error> {
                     let raw: String = commands::decode(
                         "flash.getGameObject",
@@ -168,24 +166,17 @@ impl Running {
                 let target = self.command_answer("combat.getTarget", vec![])?;
                 let available_monster_ids =
                     self.command_answer("world.getAvailableMonsterMapIds", vec![])?;
-                let anti_counter_enabled = self.settings.read().anti_counter_enabled;
-                self.commit_command(|projection| {
-                    let now = now_ms();
-                    projection.hydrate_combat(
-                        scope,
-                        CombatHydration {
-                            actions,
-                            haste,
-                            global_cooldown,
-                            global_used_at,
-                            potions_locked,
-                            target,
-                            available_monster_ids,
-                        },
-                        now,
-                    )?;
-                    Ok(projection.combat_snapshot(now, &[], anti_counter_enabled))
-                })
+                let snapshot = CombatHydration {
+                    actions,
+                    haste,
+                    global_cooldown,
+                    global_used_at,
+                    potions_locked,
+                    target,
+                    available_monster_ids,
+                }
+                .snapshot(now_ms())?;
+                Ok(serde_json::to_string(&snapshot).unwrap())
             }
             Command::PatchAutoZone { patch } => Ok(super::patch_auto_zone(
                 &self.auto_zone,

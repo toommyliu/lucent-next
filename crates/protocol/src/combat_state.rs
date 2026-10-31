@@ -7,7 +7,6 @@ use serde::Serialize;
     rename_all_fields = "camelCase"
 )]
 pub enum SkillCooldown {
-    Unavailable,
     Ready,
     Cooldown { remaining_ms: i64 },
 }
@@ -20,11 +19,9 @@ pub enum SkillCooldown {
 )]
 pub enum CombatTarget {
     #[default]
-    Unavailable,
     None,
     Monster {
         monster_map_id: i64,
-        generation: u64,
     },
     Player {
         entity_id: i64,
@@ -46,17 +43,14 @@ pub struct CombatMonsterState {
     pub generation: u64,
     pub priority_rank: Option<usize>,
     pub attack_blocked: bool,
-    pub available: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CombatSnapshot {
-    pub epoch: u64,
-    pub area_revision: u64,
-    pub observed_at_ms: Option<f64>,
+    pub observed_at_ms: f64,
     pub skills: [SkillCooldown; 6],
     pub selected_target: CombatTarget,
     pub consumable: Option<ConsumableReadiness>,
-    pub monsters: Vec<CombatMonsterState>,
+    pub available_monster_ids: Vec<i64>,
 }
