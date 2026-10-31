@@ -10,32 +10,27 @@ pub struct Logs(Arc<Records>);
 
 #[derive(Default)]
 struct Records {
-    entries: Mutex<Vec<(tracing::Level, String, Option<u64>)>>,
+    entries: Mutex<Vec<(tracing::Level, String)>>,
     changed: Condvar,
 }
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Logs {
     fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        struct Message(String, Option<u64>);
+        struct Message(String);
         impl tracing::field::Visit for Message {
-            fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
-                if field.name() == "turns" {
-                    self.1 = Some(value);
-                }
-            }
             fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
                 if field.name() == "message" {
                     self.0 = format!("{value:?}");
                 }
             }
         }
-        let mut message = Message(String::new(), None);
+        let mut message = Message(String::new());
         event.record(&mut message);
         self.0
             .entries
             .lock()
             .unwrap()
-            .push((*event.metadata().level(), message.0, message.1));
+            .push((*event.metadata().level(), message.0));
         self.0.changed.notify_all();
     }
 }
@@ -53,7 +48,7 @@ impl Logs {
             .wait_timeout_while(entries, WAIT, |entries| {
                 entries
                     .iter()
-                    .filter(|(l, text, _)| *l == level && text == expected)
+                    .filter(|(l, text)| *l == level && text == expected)
                     .count()
                     < count
             })
@@ -62,16 +57,6 @@ impl Logs {
             !timeout.timed_out(),
             "did not receive {expected:?} {count} times: {entries:?}"
         );
-    }
-
-    pub fn bot_turns(&self) -> Vec<u64> {
-        self.0
-            .entries
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|(_, _, turns)| *turns)
-            .collect()
     }
 
     pub fn dispatch(&self) -> tracing::Dispatch {
@@ -88,8 +73,8 @@ impl Logs {
             .lock()
             .unwrap()
             .iter()
-            .filter(|(l, _, _)| *l == level)
-            .map(|(_, text, _)| text.clone())
+            .filter(|(l, _)| *l == level)
+            .map(|(_, text)| text.clone())
             .collect()
     }
 }

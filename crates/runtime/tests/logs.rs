@@ -6,33 +6,31 @@ use common::logs;
 use std::{thread, time::Duration};
 
 use lucent_host::testing::{self, ProbeMovie};
-use lucent_runtime::{Bot, Kill, RuntimeError};
+use lucent_runtime::{Kill, Runtime, RuntimeError};
 
 const TIMEOUT: Duration = Duration::from_secs(15);
 
 fn warn_and_fail(message: &str) {
     let host = testing::headless_host();
     let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
-    let bot = Bot::start(link).unwrap();
-    bot.eval(
-        "warning.js",
-        format!(
-            "console.warn({0}); console.info({0}); null",
-            serde_json::to_string(message).unwrap()
-        ),
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
+    let mut runtime = Runtime::start(link).unwrap();
+    runtime
+        .eval(
+            "warning.js",
+            format!(
+                "console.warn({0}); console.info({0}); null",
+                serde_json::to_string(message).unwrap()
+            ),
+        )
+        .wait::<()>(TIMEOUT)
+        .unwrap();
     assert!(matches!(
-        bot.eval("runaway.js", "while (true) {}")
+        runtime
+            .eval("runaway.js", "while (true) {}")
             .wait::<()>(TIMEOUT),
         Err(RuntimeError::Killed(Kill::Watchdog))
     ));
-    assert!(matches!(
-        bot.wait(TIMEOUT),
-        Err(RuntimeError::Killed(Kill::Watchdog))
-    ));
-    drop(bot);
+    runtime.join_cpu_time();
 }
 
 #[test]
@@ -48,12 +46,12 @@ fn runtime_logs_are_captured_after_an_unobserved_runtime_and_stay_isolated() {
     assert!(first.messages(tracing::Level::ERROR).is_empty());
 
     warn_and_fail("first");
-    assert_eq!(first.messages(tracing::Level::WARN), vec!["first"]);
-    assert_eq!(first.messages(tracing::Level::INFO), vec!["first"]);
     assert_eq!(
-        first.messages(tracing::Level::ERROR),
-        vec!["bot runtime failed"]
+        first.messages(tracing::Level::WARN),
+        vec!["first", "script runtime killed"]
     );
+    assert_eq!(first.messages(tracing::Level::INFO), vec!["first"]);
+    assert_eq!(first.messages(tracing::Level::ERROR), Vec::<String>::new());
 
     let second = logs::Logs::default();
     let other = second.dispatch();
@@ -69,20 +67,22 @@ fn runtime_logs_are_captured_after_an_unobserved_runtime_and_stay_isolated() {
     });
     assert_eq!(
         first.messages(tracing::Level::WARN),
-        vec!["first", "first again"]
+        vec![
+            "first",
+            "script runtime killed",
+            "first again",
+            "script runtime killed"
+        ]
     );
     assert_eq!(
         first.messages(tracing::Level::INFO),
         vec!["first", "first again"]
     );
+    assert_eq!(first.messages(tracing::Level::ERROR), Vec::<String>::new());
     assert_eq!(
-        first.messages(tracing::Level::ERROR),
-        vec!["bot runtime failed"; 2]
+        second.messages(tracing::Level::WARN),
+        vec!["second", "script runtime killed"]
     );
-    assert_eq!(second.messages(tracing::Level::WARN), vec!["second"]);
     assert_eq!(second.messages(tracing::Level::INFO), vec!["second"]);
-    assert_eq!(
-        second.messages(tracing::Level::ERROR),
-        vec!["bot runtime failed"]
-    );
+    assert_eq!(second.messages(tracing::Level::ERROR), Vec::<String>::new());
 }

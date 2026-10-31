@@ -15,9 +15,9 @@ use lucent_host::{
     bridge, reap,
 };
 use lucent_protocol::script::{Script, ScriptOutcome};
-use tracing::{Level, error, info, warn};
+use tracing::{Level, info, warn};
 
-use crate::{Bot, Kill, RuntimeError, ScriptRun};
+use crate::{Kill, RuntimeError, ScriptRun};
 
 pub struct ScriptRequest {
     script: Script,
@@ -68,17 +68,15 @@ enum Msg {
     RunReady(u64),
     RunExited(u64),
     Reaped(u64),
-    BotReaped,
     Stop,
     Kill,
     Status,
     Shutdown,
 }
 struct Player {
-    bot: ScriptLink,
     watch: Option<ScriptLink>,
-    relogin: Option<ScriptLink>,
-    auto_zone: Option<ScriptLink>,
+    relogin: ScriptLink,
+    auto_zone: ScriptLink,
 }
 
 impl Supervisor {
@@ -100,7 +98,7 @@ impl Supervisor {
         let has_script = script.is_some();
         let first = attach(session, has_script).ok_or(RuntimeError::Stopped)?;
         let supervision = Supervision {
-            session: first.bot.id(),
+            session: first.relogin.id(),
             notify: Arc::new(Notify {
                 inbox: inbox.clone(),
                 queued: AtomicBool::new(false),
@@ -112,8 +110,6 @@ impl Supervisor {
                 },
                 None => ScriptState::Idle,
             },
-            bot: BotState::Idle,
-            bots_started: 0,
             next_run: 0,
             settings: None,
             relogin: None,
@@ -122,7 +118,7 @@ impl Supervisor {
         };
         let dispatch = tracing::dispatcher::get_default(Clone::clone);
         let thread = thread::Builder::new()
-            .name(format!("lucent-supervisor-{}", first.bot.id()))
+            .name(format!("lucent-supervisor-{}", first.relogin.id()))
             .spawn(move || {
                 let _dispatch = tracing::dispatcher::set_default(&dispatch);
                 supervision.run(first, messages);
@@ -172,17 +168,15 @@ impl Drop for Supervisor {
 }
 
 fn attach(session: &mut Session, has_script: bool) -> Option<Player> {
-    let bot = session.attach(bridge::EventInterests::ALL)?;
     let watch = if has_script {
         Some(session.attach(bridge::EventInterests::ALL)?)
     } else {
         None
     };
     Some(Player {
-        bot,
         watch,
-        relogin: Some(session.attach(ReloginPolicy::INTERESTS)?),
-        auto_zone: Some(session.attach(AutoZonePolicy::INTERESTS)?),
+        relogin: session.attach(ReloginPolicy::INTERESTS)?,
+        auto_zone: session.attach(AutoZonePolicy::INTERESTS)?,
     })
 }
 
@@ -205,22 +199,11 @@ struct Supervision {
     session: u64,
     notify: Arc<Notify>,
     script: ScriptState,
-    bot: BotState,
-    bots_started: u32,
     next_run: u64,
     settings: Option<SettingsPolicy>,
     relogin: Option<ReloginPolicy>,
     auto_zone: Option<AutoZonePolicy>,
     deadline: Option<Instant>,
-}
-enum BotState {
-    Idle,
-    Running(CurrentBot),
-    Reaping { replacement: Option<Box<Player>> },
-}
-struct CurrentBot {
-    bot: Bot,
-    number: u32,
 }
 struct CurrentRun {
     id: u64,
@@ -319,15 +302,6 @@ impl Supervision {
                         tracing::debug!("session {}: script worker reaped", self.session);
                     }
                 }
-                Ok(Msg::BotReaped) => {
-                    let previous = std::mem::replace(&mut self.bot, BotState::Idle);
-                    if let BotState::Reaping {
-                        replacement: Some(player),
-                    } = previous
-                    {
-                        self.install_player(*player);
-                    }
-                }
                 Ok(Msg::Stop) => self.control(false),
                 Ok(Msg::Kill) => self.control(true),
                 Ok(Msg::Status) => self.status(),
@@ -339,14 +313,14 @@ impl Supervision {
         ) {
             self.finish_run(Some(Err(RuntimeError::Stopped)));
         }
-        if let BotState::Running(CurrentBot { bot, .. }) =
-            std::mem::replace(&mut self.bot, BotState::Idle)
-        {
-            reap(move || drop(bot));
-        }
     }
 
-    fn player(&mut self, mut player: Player) {
+    fn player(&mut self, player: Player) {
+        let Player {
+            watch,
+            relogin,
+            auto_zone,
+        } = player;
         if matches!(
             self.script,
             ScriptState::Booting(_) | ScriptState::Running(_)
@@ -356,58 +330,29 @@ impl Supervision {
         if let ScriptState::Reaping { next, .. } = &mut self.script {
             *next = None;
         }
+        info!("session {}: supervisor started", self.session);
         self.settings = Some(SettingsPolicy::new(
-            &player.bot,
+            &relogin,
             Waker::from(self.notify.clone()),
         ));
         self.auto_zone = Some(AutoZonePolicy::new(
-            player.auto_zone.take().unwrap(),
+            auto_zone,
             Waker::from(self.notify.clone()),
         ));
         self.relogin = Some(ReloginPolicy::new(
-            player.relogin.take().unwrap(),
+            relogin,
             Waker::from(self.notify.clone()),
         ));
-        self.install_player(player);
-    }
 
-    fn install_player(&mut self, player: Player) {
-        if let BotState::Reaping { replacement } = &mut self.bot {
-            *replacement = Some(Box::new(player));
-            return;
-        }
-        if let BotState::Running(CurrentBot { bot, number }) =
-            std::mem::replace(&mut self.bot, BotState::Idle)
+        if let ScriptState::Waiting {
+            script,
+            watch: slot,
+        } = &mut self.script
         {
-            self.bot_ended(number, bot.wait(Duration::ZERO));
-            let inbox = self.notify.inbox.clone();
-            reap(move || {
-                drop(bot);
-                let _ = inbox.send(Msg::BotReaped);
-            });
-            self.bot = BotState::Reaping {
-                replacement: Some(Box::new(player)),
-            };
-            return;
-        }
-        self.bots_started += 1;
-        let number = self.bots_started;
-        match Bot::spawn(
-            player.bot,
-            Waker::from(self.notify.clone()),
-            Waker::from(self.notify.clone()),
-        ) {
-            Ok(bot) => {
-                info!("session {}: bot {number} started", self.session);
-                self.bot = BotState::Running(CurrentBot { bot, number });
-            }
-            Err(error) => error!("session {}: bot couldn't start: {error}", self.session),
-        }
-        if let ScriptState::Waiting { script, watch } = &mut self.script {
-            if let Some(link) = &player.watch {
+            if let Some(link) = &watch {
                 link.set_waker(Waker::from(self.notify.clone()));
             }
-            *watch = player.watch;
+            *slot = watch;
             info!(
                 "session {}: {} is waiting for login",
                 self.session,
@@ -432,29 +377,6 @@ impl Supervision {
         }
     }
 
-    fn settle_bot(&mut self) {
-        if let BotState::Running(CurrentBot { bot, number }) = &self.bot {
-            if bot.take_ready() {
-                tracing::debug!("session {}: bot {number} ready", self.session);
-            }
-            let result = bot.wait(Duration::ZERO);
-            if !matches!(result, Err(RuntimeError::Timeout)) {
-                self.bot_ended(*number, result);
-                let BotState::Running(CurrentBot { bot, .. }) =
-                    std::mem::replace(&mut self.bot, BotState::Idle)
-                else {
-                    unreachable!()
-                };
-                let inbox = self.notify.inbox.clone();
-                self.bot = BotState::Reaping { replacement: None };
-                reap(move || {
-                    drop(bot);
-                    let _ = inbox.send(Msg::BotReaped);
-                });
-            }
-        }
-    }
-
     fn settle(&mut self) {
         self.deadline = self
             .settings
@@ -476,7 +398,6 @@ impl Supervision {
                     .and_then(|policy| policy.advance(Instant::now())),
             )
             .min();
-        self.settle_bot();
         if let ScriptState::Waiting {
             watch: Some(watch), ..
         } = &self.script
@@ -527,7 +448,6 @@ impl Supervision {
             }
             Err(error) => {
                 self.ended(&name, Err(error));
-                self.bot_line();
             }
         }
     }
@@ -546,7 +466,6 @@ impl Supervision {
             drop(run);
             let _ = inbox.send(Msg::Reaped(id));
         });
-        self.bot_line();
     }
 
     fn control(&mut self, kill: bool) {
@@ -568,7 +487,6 @@ impl Supervision {
                     script.entry()
                 );
                 self.script = ScriptState::Idle;
-                self.bot_line();
             }
             ScriptState::Reaping { next, .. } => {
                 *next = None;
@@ -578,7 +496,6 @@ impl Supervision {
     }
 
     fn status(&mut self) {
-        self.bot_line();
         match &self.script {
             ScriptState::Idle | ScriptState::Reaping { .. } => {
                 info!("session {}: no script is running", self.session)
@@ -590,27 +507,6 @@ impl Supervision {
             ),
             ScriptState::Booting(run) => info!("session {}: {} is booting", self.session, run.name),
             ScriptState::Running(run) => info!("session {}: {} is running", self.session, run.name),
-        }
-    }
-
-    fn bot_line(&mut self) {
-        self.settle_bot();
-        match &self.bot {
-            BotState::Running(CurrentBot { bot, number }) => info!(
-                turns = bot.turns(),
-                "session {}: bot {number} is running", self.session
-            ),
-            _ => info!("session {}: no bot is running", self.session),
-        }
-    }
-
-    fn bot_ended(&self, number: u32, result: Result<(), RuntimeError>) {
-        match result {
-            Ok(()) | Err(RuntimeError::Stopped | RuntimeError::Timeout) => info!(
-                "session {}: bot {number} stopped with its player",
-                self.session
-            ),
-            Err(error) => error!("session {}: bot {number} ended: {error}", self.session),
         }
     }
 

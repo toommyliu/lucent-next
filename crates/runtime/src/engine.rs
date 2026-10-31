@@ -29,24 +29,13 @@ struct Active {
 }
 
 pub(crate) struct Engine {
-    bundle: Bundle,
     active: Vec<Active>,
     context: v8::Global<v8::Context>,
     isolate: v8::OwnedIsolate,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum Bundle {
-    Script,
-    Bot,
-}
-
 impl Engine {
-    pub(crate) fn new(
-        link: ScriptLink,
-        interrupt: Arc<Interrupt>,
-        bundle: Bundle,
-    ) -> Result<Self, RuntimeError> {
+    pub(crate) fn new(link: ScriptLink, interrupt: Arc<Interrupt>) -> Result<Self, RuntimeError> {
         static PLATFORM: Once = Once::new();
         PLATFORM.call_once(|| {
             let platform = v8::new_default_platform(0, false).make_shared();
@@ -63,9 +52,7 @@ impl Engine {
         isolate.set_slot(link);
         isolate.set_slot(Instant::now());
         isolate.set_slot(Rejections::new());
-        if matches!(bundle, Bundle::Script) {
-            isolate.set_slot(Scripts::default());
-        }
+        isolate.set_slot(Scripts::default());
         isolate.set_promise_reject_callback(promise_rejected);
         let context = {
             v8::scope!(let scope, &mut isolate);
@@ -85,13 +72,6 @@ impl Engine {
                     "cancelOperation",
                     v8::Function::new(scope, host_cancel_operation),
                 ),
-                ("ask", v8::Function::new(scope, host_ask)),
-                ("cancelAsk", v8::Function::new(scope, host_cancel_ask)),
-                (
-                    "isAskPending",
-                    v8::Function::new(scope, host_is_ask_pending),
-                ),
-                ("answer", v8::Function::new(scope, host_answer)),
                 ("now", v8::Function::new(scope, host_now)),
                 ("log", v8::Function::new(scope, host_log)),
             ] {
@@ -106,17 +86,12 @@ impl Engine {
             v8::Global::new(scope, context)
         };
         let mut engine = Self {
-            bundle,
             active: Vec::new(),
             context,
             isolate,
         };
-        let (name, source) = match bundle {
-            Bundle::Script => ("runtime.js", include_str!("../../../assets/runtime.js")),
-            Bundle::Bot => ("bot.js", include_str!("../../../assets/bot.js")),
-        };
-        engine.evaluate(name, source)?;
-        let entries = engine.in_context(|scope| EntryPoints::capture(scope, bundle))?;
+        engine.evaluate("runtime.js", include_str!("../../../assets/runtime.js"))?;
+        let entries = engine.in_context(EntryPoints::capture)?;
         engine.isolate.set_slot(entries);
         interrupt.attach(engine.isolate.thread_safe_handle());
         Ok(engine)
@@ -142,11 +117,7 @@ impl Engine {
     }
 
     pub(crate) fn events_lost(&mut self) {
-        let runtime = match self.bundle {
-            Bundle::Bot => "bot",
-            Bundle::Script => "script",
-        };
-        tracing::error!("{runtime} events overflowed and were lost");
+        tracing::error!("script events overflowed and were lost");
         let mut running = false;
         self.active.retain_mut(|active| {
             if active.run.is_some() {
@@ -358,13 +329,7 @@ impl Engine {
             Ok((result, take_rejections(tc)))
         })?;
         if let Err(error) = result {
-            if matches!(self.bundle, Bundle::Bot) {
-                return Err(error);
-            }
             tracing::error!(%error, "script turn failed");
-        }
-        if matches!(self.bundle, Bundle::Bot) && !rejections.is_empty() {
-            return Err(RuntimeError::JavaScript(rejections.join("\n")));
         }
         for error in rejections {
             tracing::error!(%error, "unhandled script rejection");
@@ -422,13 +387,9 @@ fn stringify(
     })
 }
 
-struct ScriptEntryPoints {
+struct EntryPoints {
     start: v8::Global<v8::Function>,
     stop: v8::Global<v8::Function>,
-}
-
-struct EntryPoints {
-    script: Option<ScriptEntryPoints>,
     turn: v8::Global<v8::Function>,
     wake: v8::Global<v8::Function>,
 }
@@ -436,7 +397,6 @@ struct EntryPoints {
 impl EntryPoints {
     fn capture(
         scope: &mut v8::PinnedRef<'_, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
-        bundle: Bundle,
     ) -> Result<Self, RuntimeError> {
         let global = scope.get_current_context().global(scope);
         let key = v8::String::new(scope, "__lucent").unwrap();
@@ -453,13 +413,8 @@ impl EntryPoints {
             Ok::<_, RuntimeError>(v8::Global::new(scope, function))
         };
         Ok(Self {
-            script: match bundle {
-                Bundle::Script => Some(ScriptEntryPoints {
-                    start: get("start")?,
-                    stop: get("stop")?,
-                }),
-                Bundle::Bot => None,
-            },
+            start: get("start")?,
+            stop: get("stop")?,
             turn: get("turn")?,
             wake: get("wake")?,
         })
@@ -482,8 +437,8 @@ fn call_lucent<'s>(
     let function = v8::Local::new(
         scope,
         match method {
-            EntryPoint::Start => &entries.script.as_ref().unwrap().start,
-            EntryPoint::Stop => &entries.script.as_ref().unwrap().stop,
+            EntryPoint::Start => &entries.start,
+            EntryPoint::Stop => &entries.stop,
             EntryPoint::Turn => &entries.turn,
             EntryPoint::Wake => &entries.wake,
         },
@@ -671,76 +626,6 @@ fn host_read(
     return_reply(scope, reply, result);
 }
 
-fn host_ask(
-    scope: &mut v8::PinScope,
-    args: v8::FunctionCallbackArguments,
-    reply: v8::ReturnValue<v8::Value>,
-) {
-    let Some(json) = args.get(0).to_string(scope) else {
-        return;
-    };
-    let json = json.to_rust_string_lossy(scope);
-    let link = scope.get_slot::<ScriptLink>().unwrap();
-    let result = (|| -> Result<Option<String>, String> {
-        let payload = serde_json::from_str(&json).map_err(|error| format!("{error}"))?;
-        link.ask(payload)
-            .map(|id| Some(id.to_string()))
-            .map_err(|error| error.to_string())
-    })();
-    return_reply(scope, reply, result);
-}
-fn host_is_ask_pending(
-    scope: &mut v8::PinScope,
-    args: v8::FunctionCallbackArguments,
-    mut reply: v8::ReturnValue<v8::Value>,
-) {
-    let Some(id) = args.get(0).to_string(scope) else {
-        return;
-    };
-    let id = id.to_rust_string_lossy(scope).parse::<u64>();
-    let pending = id.is_ok_and(|id| scope.get_slot::<ScriptLink>().unwrap().is_ask_pending(id));
-    reply.set_bool(pending);
-}
-fn host_cancel_ask(
-    scope: &mut v8::PinScope,
-    args: v8::FunctionCallbackArguments,
-    reply: v8::ReturnValue<v8::Value>,
-) {
-    let Some(json) = args.get(0).to_string(scope) else {
-        return;
-    };
-    let json = json.to_rust_string_lossy(scope);
-    let link = scope.get_slot::<ScriptLink>().unwrap();
-    let result = (|| -> Result<Option<String>, String> {
-        let id = json.parse::<u64>().map_err(|error| error.to_string())?;
-        link.cancel_ask(id);
-        Ok(None)
-    })();
-    return_reply(scope, reply, result);
-}
-fn host_answer(
-    scope: &mut v8::PinScope,
-    args: v8::FunctionCallbackArguments,
-    reply: v8::ReturnValue<v8::Value>,
-) {
-    let Some(json) = args.get(0).to_string(scope) else {
-        return;
-    };
-    let json = json.to_rust_string_lossy(scope);
-    let link = scope.get_slot::<ScriptLink>().unwrap();
-    let result = (|| -> Result<Option<String>, String> {
-        let (id, answer, error): (
-            String,
-            serde_json::Value,
-            Option<lucent_host::bridge::BotRequestError>,
-        ) = serde_json::from_str(&json).map_err(|error| error.to_string())?;
-        let id = id.parse::<u64>().map_err(|error| error.to_string())?;
-        link.answer(id, error.map_or(Ok(answer), |error| Err(error.into())))
-            .map(|_| None)
-            .map_err(|error| error.to_string())
-    })();
-    return_reply(scope, reply, result);
-}
 fn host_prepare_operation(
     scope: &mut v8::PinScope,
     _args: v8::FunctionCallbackArguments,

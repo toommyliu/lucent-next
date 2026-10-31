@@ -281,3 +281,21 @@ pub fn js_threads() -> Vec<String> {
 }
 
 pub mod logs;
+
+#[cfg(target_os = "linux")]
+pub fn js_threads() -> Vec<String> {
+    let mut names: Vec<_> = std::fs::read_dir("/proc/self/task")
+        .unwrap()
+        .filter_map(
+            |entry| match std::fs::read_to_string(entry.unwrap().path().join("comm")) {
+                Ok(name) => Some(name),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => panic!("could not read thread name: {error}"),
+            },
+        )
+        .map(|name| name.trim().to_owned())
+        .filter(|name| name.starts_with("lucent-js-"))
+        .collect();
+    names.sort();
+    names
+}
