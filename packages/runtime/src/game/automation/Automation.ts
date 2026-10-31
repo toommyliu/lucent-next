@@ -11,8 +11,6 @@ import { makeAutoAttack } from "./AutoAttack";
 import type { AutoAttackState } from "./AutoAttack";
 import { makeAutoRelogin } from "./AutoRelogin";
 import type { AutoReloginState } from "./AutoRelogin";
-import { makeAutoZone } from "./AutoZone";
-import type { AutoZoneState } from "./AutoZone";
 import { makeDesktopFollowerPort, makeFollower } from "./Follower";
 import type { FollowerState } from "@lucent/schemas/follower";
 
@@ -23,7 +21,6 @@ export const makeAutomation = Effect.gen(function* () {
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
   const autoAttack = yield* makeAutoAttack(api, fibers);
   const autoRelogin = yield* makeAutoRelogin(api, fibers);
-  const autoZone = yield* makeAutoZone(api, fibers);
   const follower = yield* makeFollower(api, fibers, makeDesktopFollowerPort());
 
   const observe = <S>(
@@ -43,9 +40,6 @@ export const makeAutomation = Effect.gen(function* () {
 
   const observeAutoRelogin = (listener: (state: AutoReloginState) => void) =>
     observe(autoRelogin.changes, listener);
-
-  const observeAutoZone = (listener: (state: AutoZoneState) => void) =>
-    observe(autoZone.changes, listener);
 
   const observeFollower = (listener: (state: FollowerState) => void) =>
     observe(follower.changes, listener);
@@ -67,15 +61,6 @@ export const makeAutomation = Effect.gen(function* () {
     setServer: autoRelogin.setServer,
   };
 
-  const autoZoneApi = {
-    getMap: autoZone.getMap,
-    getState: autoZone.getState,
-    isEnabled: autoZone.isEnabled,
-    onState: observeAutoZone,
-    setEnabled: autoZone.setEnabled,
-    setMap: autoZone.setMap,
-  };
-
   const followerApi = {
     ...follower,
     onState: observeFollower,
@@ -84,7 +69,6 @@ export const makeAutomation = Effect.gen(function* () {
   return {
     autoAttack: autoAttackApi,
     autoRelogin: autoReloginApi,
-    autoZone: autoZoneApi,
     follower: followerApi,
   };
 });

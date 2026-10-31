@@ -33,8 +33,14 @@ fn a_trivial_scripts_first_turn_stays_below_half_the_watchdog_budget() {
     drop(link);
     for sample in 1..=10 {
         let interrupt = Arc::new(Interrupt::new().unwrap());
-        let mut engine =
-            Engine::new(session.attach().unwrap(), interrupt, super::Bundle::Script).unwrap();
+        let mut engine = Engine::new(
+            session
+                .attach(lucent_host::bridge::EventInterests::ALL)
+                .unwrap(),
+            interrupt,
+            super::Bundle::Script,
+        )
+        .unwrap();
         let entry = ModulePath::loose("trivial.js").unwrap();
         let script = Script::new(
             entry.clone(),

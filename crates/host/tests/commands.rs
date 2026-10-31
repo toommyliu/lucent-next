@@ -1,3 +1,4 @@
+use lucent_host::bridge::EventInterests;
 use std::time::Duration;
 
 use lucent_host::ScriptLink;
@@ -815,7 +816,7 @@ fn refresh_equipped_consumable_with_an_empty_slot_unequips_every_consumable() {
 fn commands_before_the_viewport_are_not_ready_and_stop_with_the_session() {
     let host = testing::headless_host();
     let mut session = host.start_session(testing::headless_surface()).unwrap();
-    let link = session.attach().unwrap();
+    let link = session.attach(EventInterests::ALL).unwrap();
     assert_eq!(
         link.command(Command::RefreshLoggedIn {})
             .recv_timeout(Duration::from_secs(5)),
@@ -1076,7 +1077,7 @@ fn a_restarted_player_gets_the_stored_settings() {
         link.query(serde_json::from_value(json!({"kind": "settings"})).unwrap())
             .is_err()
     );
-    let current = session.attach().unwrap();
+    let current = session.attach(EventInterests::ALL).unwrap();
     current.set_waker(Waker::from(Arc::new(Unpark(std::thread::current()))));
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
@@ -1173,7 +1174,7 @@ fn settings_updated_before_the_first_viewport_are_stored_and_applied_when_ready(
 #[test]
 fn an_identical_auto_zone_patch_sends_no_event() {
     let (_host, mut session, link) = start(ProbeMovie::new());
-    let other = session.attach().unwrap();
+    let other = session.attach(EventInterests::ALL).unwrap();
     command(&other, json!({"kind":"patchAutoZone","patch":{}})).unwrap();
     for link in [&link, &other] {
         while link.try_event().unwrap().is_some() {}
@@ -1248,7 +1249,7 @@ fn auto_zone_config_survives_a_player_restart_before_the_viewport() {
     );
     assert_eq!(query(&link, json!({"kind":"autoZone"})), expected);
     session.restart(testing::headless_surface()).unwrap();
-    let current = session.attach().unwrap();
+    let current = session.attach(EventInterests::ALL).unwrap();
     assert_eq!(query(&current, json!({"kind":"autoZone"})), expected);
 }
 

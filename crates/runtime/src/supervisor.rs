@@ -10,7 +10,9 @@ use std::{
 };
 
 use lucent_host::{
-    HostError, ScriptLink, Session, Surface, automation::SettingsPolicy, bridge, reap,
+    HostError, ScriptLink, Session, Surface,
+    automation::{AutoZonePolicy, SettingsPolicy},
+    bridge, reap,
 };
 use lucent_protocol::script::{Script, ScriptOutcome};
 use tracing::{Level, error, info, warn};
@@ -75,7 +77,7 @@ enum Msg {
 struct Player {
     bot: ScriptLink,
     watch: Option<ScriptLink>,
-    settings: Option<ScriptLink>,
+    auto_zone: Option<ScriptLink>,
 }
 
 impl Supervisor {
@@ -113,6 +115,7 @@ impl Supervisor {
             bots_started: 0,
             next_run: 0,
             settings: None,
+            auto_zone: None,
             deadline: None,
         };
         let dispatch = tracing::dispatcher::get_default(Clone::clone);
@@ -134,7 +137,9 @@ impl Supervisor {
         session: &mut Session,
         script: Script,
     ) -> Result<ScriptControls, RuntimeError> {
-        let watch = session.attach().ok_or(RuntimeError::Stopped)?;
+        let watch = session
+            .attach(bridge::EventInterests::ALL)
+            .ok_or(RuntimeError::Stopped)?;
         self.has_script = true;
         self.inbox
             .send(Msg::Start(Box::new((script, watch))))
@@ -165,16 +170,16 @@ impl Drop for Supervisor {
 }
 
 fn attach(session: &mut Session, has_script: bool) -> Option<Player> {
-    let bot = session.attach()?;
+    let bot = session.attach(bridge::EventInterests::ALL)?;
     let watch = if has_script {
-        Some(session.attach()?)
+        Some(session.attach(bridge::EventInterests::ALL)?)
     } else {
         None
     };
     Some(Player {
         bot,
         watch,
-        settings: Some(session.attach()?),
+        auto_zone: Some(session.attach(AutoZonePolicy::INTERESTS)?),
     })
 }
 
@@ -201,6 +206,7 @@ struct Supervision {
     bots_started: u32,
     next_run: u64,
     settings: Option<SettingsPolicy>,
+    auto_zone: Option<AutoZonePolicy>,
     deadline: Option<Instant>,
 }
 enum BotState {
@@ -347,7 +353,11 @@ impl Supervision {
             *next = None;
         }
         self.settings = Some(SettingsPolicy::new(
-            player.settings.take().unwrap(),
+            &player.bot,
+            Waker::from(self.notify.clone()),
+        ));
+        self.auto_zone = Some(AutoZonePolicy::new(
+            player.auto_zone.take().unwrap(),
             Waker::from(self.notify.clone()),
         ));
         self.install_player(player);
@@ -442,6 +452,15 @@ impl Supervision {
             .settings
             .as_mut()
             .and_then(|settings| settings.advance(Instant::now()));
+        self.deadline = self
+            .deadline
+            .into_iter()
+            .chain(
+                self.auto_zone
+                    .as_mut()
+                    .and_then(|policy| policy.advance(Instant::now())),
+            )
+            .min();
         self.settle_bot();
         if let ScriptState::Waiting {
             watch: Some(watch), ..

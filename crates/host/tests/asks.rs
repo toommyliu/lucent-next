@@ -1,3 +1,4 @@
+use lucent_host::bridge::EventInterests;
 use lucent_host::{
     ScriptLink,
     bridge::{Error, ScriptEvent},
@@ -24,8 +25,8 @@ fn next(link: &ScriptLink) -> ScriptEvent {
 fn an_answer_reaches_only_its_asker() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let other = session.attach().unwrap();
-    let bot = session.attach().unwrap();
+    let other = session.attach(EventInterests::ALL).unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     let id = asker.ask(json!({"value":7})).unwrap();
     assert!(
@@ -51,13 +52,13 @@ fn an_answer_reaches_only_its_asker() {
 fn a_detached_askers_routes_are_dropped() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     let id = asker.ask(json!(7)).unwrap();
     assert!(matches!(next(&bot), ScriptEvent::Ask { .. }));
     drop(asker);
     assert_eq!(session.pending_ask_count(), 0);
-    let replacement = session.attach().unwrap();
+    let replacement = session.attach(EventInterests::ALL).unwrap();
     bot.answer(id, Ok(json!(8))).unwrap();
     assert!(!matches!(
         replacement.try_event(),
@@ -69,7 +70,7 @@ fn a_detached_askers_routes_are_dropped() {
 fn an_ask_times_out_after_its_deadline() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     let started = Instant::now();
     let id = asker.ask(json!(7)).unwrap();
@@ -107,8 +108,8 @@ fn no_bot_rejects_without_leaving_a_route() {
 fn cancellation_keeps_bot_work_and_drops_only_the_callers_route() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let other = session.attach().unwrap();
-    let bot = session.attach().unwrap();
+    let other = session.attach(EventInterests::ALL).unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     let id = asker.ask(json!(7)).unwrap();
     other.cancel_ask(id);
@@ -124,7 +125,7 @@ fn cancellation_keeps_bot_work_and_drops_only_the_callers_route() {
 fn bot_detach_fails_its_asks_and_replacement_cannot_answer_them() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     let id = asker.ask(json!(7)).unwrap();
     drop(bot);
@@ -136,7 +137,7 @@ fn bot_detach_fails_its_asks_and_replacement_cannot_answer_them() {
     };
     assert_eq!(error.to_string(), "The bot has stopped");
     assert_eq!(session.pending_ask_count(), 0);
-    let replacement = session.attach().unwrap();
+    let replacement = session.attach(EventInterests::ALL).unwrap();
     replacement.claim_bot().unwrap();
     replacement.answer(id, Ok(json!(8))).unwrap();
     assert_eq!(asker.try_event(), Ok(None));
@@ -147,7 +148,7 @@ fn restart_stops_old_routes_and_preserves_only_the_config() {
     use lucent_protocol::auto_relogin::*;
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     let records = AutoReloginRecords {
         config: AutoReloginConfig {
@@ -176,7 +177,7 @@ fn restart_stops_old_routes_and_preserves_only_the_config() {
 fn asks_remain_available_when_the_bot_player_events_overflow() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     let id = asker.ask(json!(7)).unwrap();
     for n in 0..1100 {
@@ -210,7 +211,7 @@ fn asks_remain_available_when_the_bot_player_events_overflow() {
 fn a_blocked_player_does_not_block_an_ask() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     let (entered, wait_entered) = std::sync::mpsc::channel();
     let (release, wait_release) = std::sync::mpsc::channel();
@@ -237,7 +238,7 @@ fn a_blocked_player_does_not_block_an_ask() {
 fn the_router_rejects_a_full_bot_mailbox_without_leaving_a_route() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     for n in 0..1024 {
         asker.ask(json!(n)).unwrap();
@@ -255,9 +256,9 @@ fn the_router_rejects_a_full_bot_mailbox_without_leaving_a_route() {
 fn only_the_current_bot_can_start_an_unexpired_ask() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
-    let other = session.attach().unwrap();
+    let other = session.attach(EventInterests::ALL).unwrap();
     let id = asker.ask(json!(7)).unwrap();
     assert!(bot.is_ask_pending(id));
     assert!(!other.is_ask_pending(id));
@@ -290,7 +291,7 @@ fn publishing_records_does_not_wake_script_links() {
     }
     let host = testing::headless_host();
     let (mut session, script) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     while script.try_event().unwrap().is_some() {}
     let wakes = Arc::new(Wakes(AtomicUsize::new(0)));
@@ -305,7 +306,7 @@ fn publishing_records_does_not_wake_script_links() {
 fn router_errors_describe_bot_authority() {
     let host = testing::headless_host();
     let (mut session, script) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     assert_eq!(
         script.claim_bot().unwrap_err().to_string(),
@@ -328,7 +329,7 @@ fn router_errors_describe_bot_authority() {
 fn stopped_links_drain_queued_answers_and_player_events() {
     let host = testing::headless_host();
     let (mut session, script) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     while script.try_event().unwrap().is_some() {}
     let id = script.ask(json!(1)).unwrap();
@@ -365,7 +366,7 @@ fn stopped_links_drain_queued_answers_and_player_events() {
 fn queued_answers_arrive_before_player_event_loss() {
     let host = testing::headless_host();
     let (mut session, asker) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let bot = session.attach().unwrap();
+    let bot = session.attach(EventInterests::ALL).unwrap();
     bot.claim_bot().unwrap();
     let ids = [asker.ask(json!(7)).unwrap(), asker.ask(json!(8)).unwrap()];
     for id in ids {

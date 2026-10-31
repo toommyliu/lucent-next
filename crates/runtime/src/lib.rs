@@ -617,7 +617,12 @@ mod tests {
         let host = lucent_host::testing::headless_host();
         let (mut session, observer) =
             lucent_host::testing::start_probe(&host, lucent_host::testing::ProbeMovie::new());
-        let bot = Bot::start(session.attach().unwrap()).unwrap();
+        let bot = Bot::start(
+            session
+                .attach(lucent_host::bridge::EventInterests::ALL)
+                .unwrap(),
+        )
+        .unwrap();
         let first = bot.turns();
         observer
             .call_loader(

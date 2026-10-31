@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use lucent_host::bridge::EventInterests;
 use lucent_host::testing::{self, ProbeMovie};
 use lucent_host::{Host, Session};
 use lucent_protocol::script::{ModulePath, Script};
@@ -141,7 +142,7 @@ pub fn start(
     script: Script,
     inputs: lucent_protocol::script::ScriptInputs,
 ) -> ScriptRun {
-    ScriptRun::start(session.attach().unwrap(), script, inputs).unwrap()
+    ScriptRun::start(session.attach(EventInterests::ALL).unwrap(), script, inputs).unwrap()
 }
 
 pub fn await_event(
@@ -190,7 +191,7 @@ pub fn await_event(
 }
 
 pub fn started_run(session: &mut Session, source: &str) -> ScriptRun {
-    let observer = session.attach().unwrap();
+    let observer = session.attach(EventInterests::ALL).unwrap();
     let run = start(session, loose(&[("wait.js", source)]), BTreeMap::new());
     assert_eq!(
         await_event(&observer, "onDebug", Some(&run)).args,
