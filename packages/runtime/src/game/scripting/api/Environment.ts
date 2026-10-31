@@ -88,14 +88,7 @@ export const makeScriptEnvironmentApi = (
     updateQuestAutoRegister: (patch) =>
       exposeMutation(
         "updateQuestAutoRegister",
-        environment.getState().pipe(
-          Effect.flatMap((state) =>
-            environment.setQuestAutoRegister({
-              ...state.questAutoRegister,
-              ...patch,
-            }),
-          ),
-        ),
+        environment.setQuestAutoRegister(patch),
       ),
 
     addItem: (name) => exposeMutation("addItem", environment.addItem(name)),

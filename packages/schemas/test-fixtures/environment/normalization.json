@@ -1,0 +1,339 @@
+[
+  {
+    "name": "normalization",
+    "input": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [
+        4.9,
+        -1,
+        2,
+        4,
+        0,
+        2.8
+      ],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {
+        "4.9": 8.8,
+        "2": 5.9,
+        "99": 2
+      },
+      "itemNames": [
+        " Zorbak ",
+        "apple",
+        "APPLE",
+        " Banana",
+        "\ufeff",
+        "\ufeffApple "
+      ],
+      "itemNotificationNames": [
+        "APPLE",
+        "absent",
+        "banana"
+      ],
+      "itemRules": {
+        "buckets": [
+          "non-ac-member",
+          "ac-member",
+          "ac-member"
+        ],
+        "rejectElse": true
+      },
+      "boosts": [
+        "XP Boost",
+        " xp boost ",
+        "Gold Boost"
+      ]
+    },
+    "expected": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [
+        2,
+        4
+      ],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {
+        "2": 5,
+        "4": 8
+      },
+      "itemNames": [
+        "apple",
+        "Banana",
+        "Zorbak"
+      ],
+      "itemNotificationNames": [
+        "APPLE",
+        "banana"
+      ],
+      "itemRules": {
+        "buckets": [
+          "ac-member",
+          "non-ac-member"
+        ],
+        "rejectElse": true
+      },
+      "boosts": [
+        "Gold Boost",
+        "XP Boost"
+      ]
+    }
+  },
+  {
+    "name": "clear preserves settings",
+    "input": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [
+        2,
+        4
+      ],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {
+        "2": 5,
+        "4": 8
+      },
+      "itemNames": [
+        "apple",
+        "Banana",
+        "Zorbak"
+      ],
+      "itemNotificationNames": [
+        "APPLE",
+        "banana"
+      ],
+      "itemRules": {
+        "buckets": [
+          "ac-member",
+          "non-ac-member"
+        ],
+        "rejectElse": true
+      },
+      "boosts": [
+        "Gold Boost",
+        "XP Boost"
+      ]
+    },
+    "clear": true,
+    "expected": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {},
+      "itemNames": [],
+      "itemNotificationNames": [],
+      "itemRules": {
+        "buckets": [
+          "ac-member",
+          "non-ac-member"
+        ],
+        "rejectElse": true
+      },
+      "boosts": []
+    }
+  },
+  {
+    "name": "safe integer bounds and reward key collisions",
+    "input": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [
+        2.9,
+        3.1,
+        9007199254740992,
+        -0.1
+      ],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {
+        "2.9": 9.9,
+        "2": 4,
+        " 2.1 ": 8,
+        "0x3": 7,
+        "3": 5,
+        "Infinity": 1
+      },
+      "itemNames": [],
+      "itemNotificationNames": [],
+      "itemRules": {
+        "buckets": [],
+        "rejectElse": false
+      },
+      "boosts": []
+    },
+    "expected": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [
+        2,
+        3
+      ],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {
+        "2": 8,
+        "3": 7
+      },
+      "itemNames": [],
+      "itemNotificationNames": [],
+      "itemRules": {
+        "buckets": [],
+        "rejectElse": false
+      },
+      "boosts": []
+    }
+  },
+  {
+    "name": "JS whitespace and first spelling",
+    "input": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {},
+      "itemNames": [
+        "\ufeff Blade\u00a0",
+        "blade",
+        "\u2028",
+        "\t apple\r"
+      ],
+      "itemNotificationNames": [
+        "BLADE",
+        "other"
+      ],
+      "itemRules": {
+        "buckets": [],
+        "rejectElse": false
+      },
+      "boosts": [
+        "\tXP Boost\r",
+        "xp boost",
+        " Gold Boost "
+      ]
+    },
+    "expected": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {},
+      "itemNames": [
+        "apple",
+        "Blade"
+      ],
+      "itemNotificationNames": [
+        "BLADE"
+      ],
+      "itemRules": {
+        "buckets": [],
+        "rejectElse": false
+      },
+      "boosts": [
+        "Gold Boost",
+        "XP Boost"
+      ]
+    }
+  },
+  {
+    "name": "large reward keys retain numeric order",
+    "input": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [
+        4294967297,
+        4294967296
+      ],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {
+        "4294967297": 9,
+        "4294967296": 8
+      },
+      "itemNames": [],
+      "itemNotificationNames": [],
+      "itemRules": {
+        "buckets": [],
+        "rejectElse": false
+      },
+      "boosts": []
+    },
+    "expected": {
+      "automation": {
+        "boosts": true,
+        "drops": true,
+        "quests": true
+      },
+      "questIds": [
+        4294967296,
+        4294967297
+      ],
+      "questAutoRegister": {
+        "requirements": false,
+        "rewards": false
+      },
+      "questRewards": {
+        "4294967296": 8,
+        "4294967297": 9
+      },
+      "itemNames": [],
+      "itemNotificationNames": [],
+      "itemRules": {
+        "buckets": [],
+        "rejectElse": false
+      },
+      "boosts": []
+    }
+  }
+]
