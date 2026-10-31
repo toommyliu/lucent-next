@@ -1,5 +1,6 @@
 mod common;
 
+use lucent_host::bridge::EventInterests;
 use std::time::Duration;
 
 use lucent_host::testing::{self, ProbeMovie};
@@ -34,7 +35,7 @@ fn logout_reaches_a_fresh_runtime_on_a_logged_in_session() {
             ));
         }
         drop(runtime);
-        let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+        let runtime = Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
         let observed: Value = runtime
             .eval(
                 "logout.js",
@@ -161,7 +162,7 @@ fn restart_stops_the_runtime_on_the_previous_link() {
         Err(RuntimeError::Stopped)
     ));
 
-    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+    let runtime = Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     let echoed = runtime.eval(
         "loaded.js",
         r#"new Promise(resolve => { window.onLoaded = () => resolve(window.swf["probe.echo"](42)); })"#,

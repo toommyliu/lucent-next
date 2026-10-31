@@ -1,7 +1,7 @@
 "use strict";
 (() => {
   var __defProp = Object.defineProperty;
-  var __name = (target2, value) => __defProp(target2, "name", { value, configurable: true });
+  var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
   // packages/runtime/src/host/globals.ts
   var Event = class {
@@ -170,7 +170,7 @@
     }
   }, "format");
   var host = typeof __host === "undefined" ? void 0 : __host;
-  var log = /* @__PURE__ */ __name((level) => (...values2) => host?.log(level, values2.map(format).join(" ")), "log");
+  var log = /* @__PURE__ */ __name((level) => (...values) => host?.log(level, values.map(format).join(" ")), "log");
   var runtimeConsole = Object.freeze({
     log: log("info"),
     info: log("info"),
@@ -826,9 +826,9 @@ ${ind(d)}}`;
         return current;
       }
       const serialized = new Proxy(current, {
-        get(target2, key2) {
-          const value2 = Reflect.get(target2, key2, target2);
-          return Object.getOwnPropertyDescriptor(target2, key2)?.get !== void 0 ? redact(value2) : value2;
+        get(target, key2) {
+          const value2 = Reflect.get(target, key2, target);
+          return Object.getOwnPropertyDescriptor(target, key2)?.get !== void 0 ? redact(value2) : value2;
         }
       });
       ancestors.push(serialized);
@@ -1260,17 +1260,17 @@ ${ind(d)}}`;
     [contAll]: options[contAll]
   }), "makePrimitiveProto");
   var makePrimitive = /* @__PURE__ */ __name((options) => {
-    const Proto4 = makePrimitiveProto(options);
+    const Proto2 = makePrimitiveProto(options);
     const PrimitiveImpl = /* @__PURE__ */ __name(function(value) {
       this[args] = value;
     }, "PrimitiveImpl");
-    PrimitiveImpl.prototype = Proto4;
+    PrimitiveImpl.prototype = Proto2;
     return function(value) {
       return new PrimitiveImpl(value);
     };
   }, "makePrimitive");
   var makeExit = /* @__PURE__ */ __name((options) => {
-    const Proto4 = {
+    const Proto2 = {
       [ExitTypeId]: ExitTypeId,
       _tag: options.op,
       get [options.prop]() {
@@ -1297,7 +1297,7 @@ ${ind(d)}}`;
     const ExitPrimitive = /* @__PURE__ */ __name(function(value) {
       this[args] = value;
     }, "ExitPrimitive");
-    ExitPrimitive.prototype = Proto4;
+    ExitPrimitive.prototype = Proto2;
     return function(value) {
       return new ExitPrimitive(value);
     };
@@ -2103,22 +2103,6 @@ ${ind(d)}}`;
     onSuccess
   }) => isFailure2(self) ? onFailure(self.failure) : onSuccess(self.success));
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Iterable.js
-  var constEmpty = {
-    [Symbol.iterator]() {
-      return constEmptyIterator;
-    }
-  };
-  var constEmptyIterator = {
-    next() {
-      return {
-        done: true,
-        value: void 0
-      };
-    }
-  };
-  var empty2 = /* @__PURE__ */ __name(() => constEmpty, "empty");
-
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Array.js
   var Array2 = globalThis.Array;
   var fromIterable = /* @__PURE__ */ __name((collection) => Array2.isArray(collection) ? collection : Array2.from(collection), "fromIterable");
@@ -2181,7 +2165,7 @@ ${ind(d)}}`;
     bucket.push(value);
     return true;
   }, "hashBucketsAdd");
-  var empty3 = /* @__PURE__ */ __name(() => [], "empty");
+  var empty2 = /* @__PURE__ */ __name(() => [], "empty");
   var of = /* @__PURE__ */ __name((a) => [a], "of");
   var map = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
   var dedupe = /* @__PURE__ */ __name((self) => {
@@ -2198,15 +2182,6 @@ ${ind(d)}}`;
     }
     return out;
   }, "dedupe");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Filter.js
-  var toPredicate = /* @__PURE__ */ __name((self) => (input) => !isFailure2(self(input)), "toPredicate");
-  var has = /* @__PURE__ */ __name((key) => (input) => input.has(key) ? succeed2(input) : fail2(input), "has");
-  var compose = /* @__PURE__ */ dual(2, (left2, right2) => (input) => {
-    const leftOut = left2(input);
-    if (isFailure2(leftOut)) return leftOut;
-    return right2(leftOut.success);
-  });
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Scheduler.js
   var Scheduler = /* @__PURE__ */ Reference("effect/Scheduler", {
@@ -3083,7 +3058,7 @@ ${prefix}}`;
   }));
   var fiberInterruptAll = /* @__PURE__ */ __name((fibers) => withFiber((parent) => {
     const annotations = fiberStackAnnotations(parent);
-    let fiberArr = empty3();
+    let fiberArr = empty2();
     for (const fiber2 of fibers) {
       fiber2.interruptUnsafe(parent.id, annotations);
       fiberArr.push(fiber2);
@@ -3162,7 +3137,7 @@ ${prefix}}`;
   }, "tryPromise");
   var withFiberId = /* @__PURE__ */ __name((f) => withFiber((fiber2) => f(fiber2.id)), "withFiberId");
   var callbackOptions = /* @__PURE__ */ (function() {
-    const Proto4 = /* @__PURE__ */ makePrimitiveProto({
+    const Proto2 = /* @__PURE__ */ makePrimitiveProto({
       op: "Async",
       [evaluate](fiber2) {
         let resumed = false;
@@ -3197,7 +3172,7 @@ ${prefix}}`;
       this.register = register;
       this.withSignal = withSignal;
     }, "AsyncImpl");
-    AsyncImpl.prototype = Proto4;
+    AsyncImpl.prototype = Proto2;
     return function(register, withSignal) {
       return new AsyncImpl(register, withSignal);
     };
@@ -3331,7 +3306,7 @@ ${prefix}}`;
     }
   }, "fromIteratorEagerUnsafe");
   var fromIteratorUnsafe = /* @__PURE__ */ (function() {
-    const Proto4 = /* @__PURE__ */ makePrimitiveProto({
+    const Proto2 = /* @__PURE__ */ makePrimitiveProto({
       op: "Iterator",
       [contA](value, fiber2) {
         const iter = this.iterator;
@@ -3355,7 +3330,7 @@ ${prefix}}`;
       this.iterator = iterator;
       this.initial = initial;
     }, "IteratorImpl");
-    IteratorImpl.prototype = Proto4;
+    IteratorImpl.prototype = Proto2;
     return function(iterator, initial) {
       return new IteratorImpl(iterator, initial);
     };
@@ -3449,10 +3424,9 @@ ${prefix}}`;
   var flatten3 = /* @__PURE__ */ __name((self) => flatMap2(self, identity), "flatten");
   var map2 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
   var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map2(self, f));
-  var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError2(self, f));
+  var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError(self, f));
   var exitInterrupt = /* @__PURE__ */ __name((fiberId2) => exitFailCause(causeInterrupt(fiberId2)), "exitInterrupt");
   var exitIsSuccess = /* @__PURE__ */ __name((self) => self._tag === "Success", "exitIsSuccess");
-  var exitIsFailure = /* @__PURE__ */ __name((self) => self._tag === "Failure", "exitIsFailure");
   var exitFilterCause = /* @__PURE__ */ __name((self) => self._tag === "Failure" ? succeed2(self.cause) : fail2(self), "exitFilterCause");
   var exitVoid = /* @__PURE__ */ exitSucceed(void 0);
   var exitMap = /* @__PURE__ */ dual(2, (self, f) => self._tag === "Success" ? exitSucceed(f(self.value)) : self);
@@ -3527,7 +3501,7 @@ ${prefix}}`;
     return isFailure2(eb) ? failCause(eb.failure) : f(eb.success, cause);
   }));
   var catch_ = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
-  var mapError2 = /* @__PURE__ */ dual(2, (self, f) => catch_(self, (error) => failSync(() => f(error))));
+  var mapError = /* @__PURE__ */ dual(2, (self, f) => catch_(self, (error) => failSync(() => f(error))));
   var orDie = /* @__PURE__ */ __name((self) => catch_(self, die), "orDie");
   var result = /* @__PURE__ */ __name((self) => matchEager(self, {
     onFailure: fail2,
@@ -3549,7 +3523,7 @@ ${prefix}}`;
     return fiber2.succeedWith(continuationMarksStack ? handlers.onSuccess(value) : internalCall(() => handlers.onSuccess(value)));
   }, "matchSuccess");
   var makeMatch = /* @__PURE__ */ __name((op, onFailure) => {
-    const Proto4 = makePrimitiveProto({
+    const Proto2 = makePrimitiveProto({
       op,
       [evaluate]: evaluateCont,
       [contA]: matchSuccess,
@@ -3559,7 +3533,7 @@ ${prefix}}`;
       this[args] = self;
       this.payload = handlers;
     }, "MatchImpl");
-    MatchImpl2.prototype = Proto4;
+    MatchImpl2.prototype = Proto2;
     return MatchImpl2;
   }, "makeMatch");
   var MatchImpl = /* @__PURE__ */ makeMatch("Match", function(cause, fiber2) {
@@ -3723,7 +3697,7 @@ ${prefix}}`;
   var acquireRelease = /* @__PURE__ */ __name((acquire, release, options) => contextWith((context3) => uninterruptibleMask((restore) => flatMap2(scope, (scope3) => tap(options?.interruptible ? restore(acquire) : acquire, (a) => scopeAddFinalizerExit(scope3, (exit3) => provideContext(release(a, exit3), context3)))))), "acquireRelease");
   var addFinalizer = /* @__PURE__ */ __name((finalizer) => flatMap2(scope, (scope3) => contextWith((context3) => scopeAddFinalizerExit(scope3, (exit3) => provideContext(finalizer(exit3), context3)))), "addFinalizer");
   var OnExitImpl = /* @__PURE__ */ (function() {
-    const Proto4 = /* @__PURE__ */ makePrimitiveProto({
+    const Proto2 = /* @__PURE__ */ makePrimitiveProto({
       op: "OnExit",
       [evaluate](fiber2) {
         fiber2._stack.push(this);
@@ -3761,7 +3735,7 @@ ${prefix}}`;
       this.onExit = onExit4;
       this.interruptible = interruptible2;
     }, "OnExitImpl");
-    OnExitImpl2.prototype = Proto4;
+    OnExitImpl2.prototype = Proto2;
     return OnExitImpl2;
   })();
   var onExitPrimitive = /* @__PURE__ */ __name((effect2, onExit4, interruptible2) => new OnExitImpl(effect2, onExit4, interruptible2), "onExitPrimitive");
@@ -4637,7 +4611,6 @@ ${prefix}}`;
   var interrupt2 = exitInterrupt;
   var void_2 = exitVoid;
   var isSuccess3 = exitIsSuccess;
-  var isFailure3 = exitIsFailure;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Deferred.js
   var TypeId5 = "~effect/Deferred";
@@ -4684,7 +4657,6 @@ ${prefix}}`;
     }
     return true;
   }, "doneUnsafe");
-  var into = /* @__PURE__ */ dual(2, (self, deferred) => uninterruptibleMask((restore) => flatMap2(exit(restore(self)), (exit3) => done2(deferred, exit3))));
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/References.js
   var CurrentLogAnnotations2 = CurrentLogAnnotations;
@@ -4701,14 +4673,14 @@ ${prefix}}`;
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Layer.js
   var TypeId6 = "~effect/Layer";
   var MemoMapTypeId = "~effect/Layer/MemoMap";
-  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer7) => {
+  var makeMemoMapEntry = /* @__PURE__ */ __name((memoMap, layer6) => {
     const entry = {
       observers: 0,
       deferred: makeUnsafe2(),
       scope: makeUnsafe3(),
       finalizer: /* @__PURE__ */ __name((exit3) => suspend(() => {
         if (--entry.observers > 0) return void_;
-        memoMap.map.delete(layer7);
+        memoMap.map.delete(layer6);
         return close(entry.scope, exit3);
       }), "finalizer")
     };
@@ -4755,24 +4727,24 @@ ${prefix}}`;
       this.parent = parent;
     }
     map = /* @__PURE__ */ new Map();
-    get(layer7, scope3) {
-      const local = this.map.get(layer7);
+    get(layer6, scope3) {
+      const local = this.map.get(layer6);
       if (local) {
         memoMapObserve(local, scope3);
         return local.deferred.effect ?? _await(local.deferred);
       }
-      return this.parent?.get(layer7, scope3);
+      return this.parent?.get(layer6, scope3);
     }
-    getOrElseMemoize(layer7, scope3, build) {
+    getOrElseMemoize(layer6, scope3, build) {
       return suspend(() => {
         let deferred;
         return onExitPrimitive(suspend(() => {
-          const existing = this.get(layer7, scope3);
+          const existing = this.get(layer6, scope3);
           if (existing) return existing;
-          const entry = makeMemoMapEntry(this, layer7);
+          const entry = makeMemoMapEntry(this, layer6);
           if (!memoMapObserve(entry, scope3)) return build(this, scope3);
           deferred = entry.deferred;
-          this.map.set(layer7, entry);
+          this.map.set(layer6, entry);
           return build(this, entry.scope);
         }), (exit3) => {
           if (deferred) doneUnsafe(deferred, exit3);
@@ -4810,7 +4782,7 @@ ${prefix}}`;
   var effectDiscard = /* @__PURE__ */ __name((effect2) => effectContext(as(effect2, empty())), "effectDiscard");
   var mergeAllEffect = /* @__PURE__ */ __name((layers, memoMap, scope3) => {
     const parentScope = forkUnsafe2(scope3, "parallel");
-    return forEach(layers, (layer7) => layer7.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
+    return forEach(layers, (layer6) => layer6.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
       concurrency: layers.length
     }).pipe(map2((context3) => mergeAll(...context3)));
   }, "mergeAllEffect");
@@ -4824,8 +4796,6 @@ ${prefix}}`;
   var hasInterruptsOnly2 = hasInterruptsOnly;
   var map3 = causeMap;
   var squash = causeSquash;
-  var hasInterrupts2 = hasInterrupts;
-  var filterInterruptors = causeFilterInterruptors;
   var pretty = causePretty;
   var isDone2 = isDone;
   var done3 = done;
@@ -5118,13 +5088,11 @@ ${prefix}}`;
   var await_ = fiberAwait;
   var join = fiberJoin;
   var interrupt4 = fiberInterrupt;
-  var interruptAs = fiberInterruptAs;
-  var interruptAll = fiberInterruptAll;
   var runIn = fiberRunIn;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/ManagedRuntime.js
   var TypeId8 = "~effect/ManagedRuntime";
-  var make5 = /* @__PURE__ */ __name((layer7, options) => {
+  var make5 = /* @__PURE__ */ __name((layer6, options) => {
     const memoMap = options?.memoMap ?? makeMemoMapUnsafe();
     const scope3 = makeUnsafe3("sequential");
     const layerScope = forkUnsafe2(scope3, "sequential");
@@ -5142,7 +5110,7 @@ ${prefix}}`;
     let buildFiber;
     const contextEffect = withFiber2((fiber2) => {
       if (!buildFiber) {
-        buildFiber = runFork2(tap2(buildWithMemoMap(layer7, memoMap, layerScope), (context3) => sync2(() => {
+        buildFiber = runFork2(tap2(buildWithMemoMap(layer6, memoMap, layerScope), (context3) => sync2(() => {
           self.cachedContext = context3;
         })), {
           ...defaultRunOptions,
@@ -5200,245 +5168,6 @@ ${prefix}}`;
     return flatMap3(managed.contextEffect, (context3) => provideContext2(effect2, context3));
   }
   __name(provide2, "provide");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableHashMap.js
-  var TypeId9 = "~effect/MutableHashMap";
-  var MutableHashMapProto = {
-    [TypeId9]: TypeId9,
-    [Symbol.iterator]() {
-      return this.backing[Symbol.iterator]();
-    },
-    toString() {
-      return `MutableHashMap(${format2(Array.from(this))})`;
-    },
-    toJSON() {
-      return {
-        _id: "MutableHashMap",
-        values: toJson(Array.from(this))
-      };
-    },
-    [NodeInspectSymbol]() {
-      return this.toJSON();
-    },
-    pipe() {
-      return pipeArguments(this, arguments);
-    }
-  };
-  var empty4 = /* @__PURE__ */ __name(() => {
-    const self = Object.create(MutableHashMapProto);
-    self.backing = /* @__PURE__ */ new Map();
-    self.buckets = /* @__PURE__ */ new Map();
-    return self;
-  }, "empty");
-  var get2 = /* @__PURE__ */ dual(2, (self, key) => {
-    if (self.backing.has(key)) {
-      return some2(self.backing.get(key));
-    } else if (isSimpleKey(key)) {
-      return none2();
-    }
-    const hash2 = hash(key);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      return none2();
-    }
-    return getFromBucket(self, bucket, key);
-  });
-  var isSimpleKey = /* @__PURE__ */ __name((u) => typeof u !== "object" && typeof u !== "function", "isSimpleKey");
-  var values = /* @__PURE__ */ __name((self) => self.backing.values(), "values");
-  var getFromBucket = /* @__PURE__ */ __name((self, bucket, key) => {
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      if (equals(key, bucket[i])) {
-        const refKey = bucket[i];
-        return some2(self.backing.get(refKey));
-      }
-    }
-    return none2();
-  }, "getFromBucket");
-  var has2 = /* @__PURE__ */ dual(2, (self, key) => isSome2(get2(self, key)));
-  var set = /* @__PURE__ */ dual(3, (self, key, value) => {
-    if (self.backing.has(key) || isSimpleKey(key)) {
-      self.backing.set(key, value);
-      return self;
-    }
-    const hash2 = hash(key);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      self.buckets.set(hash2, [key]);
-      self.backing.set(key, value);
-      return self;
-    }
-    let refKey = getRefKey(bucket, key);
-    if (refKey === void 0) {
-      bucket.push(key);
-      refKey = key;
-    }
-    self.backing.set(refKey, value);
-    return self;
-  });
-  var getRefKey = /* @__PURE__ */ __name((bucket, key) => {
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      if (equals(key, bucket[i])) {
-        return bucket[i];
-      }
-    }
-  }, "getRefKey");
-  var remove = /* @__PURE__ */ dual(2, (self, key_) => {
-    if (isSimpleKey(key_)) {
-      self.backing.delete(key_);
-      return self;
-    }
-    const hash2 = hash(key_);
-    const bucket = self.buckets.get(hash2);
-    if (bucket === void 0) {
-      return self;
-    }
-    for (let i = 0, len = bucket.length; i < len; i++) {
-      const bkey = bucket[i];
-      if (bkey === key_ || equals(key_, bkey)) {
-        self.backing.delete(bkey);
-        bucket.splice(i, 1);
-        break;
-      }
-    }
-    if (bucket.length === 0) {
-      self.buckets.delete(hash2);
-    }
-    return self;
-  });
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/FiberMap.js
-  var TypeId10 = "~effect/FiberMap";
-  var isFiberMap = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId10), "isFiberMap");
-  var Proto2 = {
-    [TypeId10]: TypeId10,
-    [Symbol.iterator]() {
-      if (this.state._tag === "Closed") {
-        return empty2();
-      }
-      return this.state.backing[Symbol.iterator]();
-    },
-    ...PipeInspectableProto,
-    toJSON() {
-      return {
-        _id: "FiberMap",
-        state: this.state
-      };
-    }
-  };
-  var makeUnsafe4 = /* @__PURE__ */ __name((backing, deferred) => {
-    const self = Object.create(Proto2);
-    self.state = {
-      _tag: "Open",
-      backing
-    };
-    self.deferred = deferred;
-    return self;
-  }, "makeUnsafe");
-  var make6 = /* @__PURE__ */ __name(() => acquireRelease2(sync2(() => makeUnsafe4(empty4(), makeUnsafe2())), (map7) => suspend2(() => {
-    const state = map7.state;
-    if (state._tag === "Closed") return void_3;
-    map7.state = {
-      _tag: "Closed"
-    };
-    return interruptAll(values(state.backing)).pipe(into(map7.deferred));
-  })), "make");
-  var internalFiberId = -1;
-  var isInternalInterruption = /* @__PURE__ */ toPredicate(/* @__PURE__ */ compose(filterInterruptors, /* @__PURE__ */ has(internalFiberId)));
-  var setUnsafe = /* @__PURE__ */ dual((args2) => isFiberMap(args2[0]), (self, key, fiber2, options) => {
-    if (self.state._tag === "Closed") {
-      fiber2.interruptUnsafe(internalFiberId);
-      return;
-    }
-    const previous = get2(self.state.backing, key);
-    if (previous._tag === "Some") {
-      if (previous.value === fiber2) {
-        return;
-      } else if (options?.onlyIfMissing === true) {
-        fiber2.interruptUnsafe(internalFiberId);
-        return;
-      }
-    }
-    set(self.state.backing, key, fiber2);
-    if (previous._tag === "Some") {
-      previous.value.interruptUnsafe(internalFiberId);
-    }
-    fiber2.addObserver((exit3) => {
-      if (self.state._tag === "Closed") {
-        return;
-      }
-      const current = get2(self.state.backing, key);
-      if (isSome2(current) && fiber2 === current.value) {
-        remove(self.state.backing, key);
-      }
-      if (isFailure3(exit3) && (options?.propagateInterruption === true ? !isInternalInterruption(exit3.cause) : !hasInterruptsOnly2(exit3.cause))) {
-        doneUnsafe(self.deferred, exit3);
-      }
-    });
-  });
-  var hasUnsafe = /* @__PURE__ */ dual(2, (self, key) => self.state._tag === "Closed" ? false : has2(self.state.backing, key));
-  var remove2 = /* @__PURE__ */ dual(2, (self, key) => suspend2(() => {
-    if (self.state._tag === "Closed") {
-      return void_3;
-    }
-    const fiber2 = get2(self.state.backing, key);
-    if (fiber2._tag === "None") {
-      return void_3;
-    }
-    return interruptAs(fiber2.value, internalFiberId);
-  }));
-  var constInterruptedFiber = /* @__PURE__ */ (function() {
-    let fiber2 = void 0;
-    return () => {
-      if (fiber2 === void 0) {
-        fiber2 = runFork2(interrupt3);
-      }
-      return fiber2;
-    };
-  })();
-  var run = /* @__PURE__ */ __name(function() {
-    const self = arguments[0];
-    if (isEffect2(arguments[2])) {
-      return runImpl(self, arguments[1], arguments[2], arguments[3]);
-    }
-    const key = arguments[1];
-    const options = arguments[2];
-    return (effect2) => runImpl(self, key, effect2, options);
-  }, "run");
-  var runImpl = /* @__PURE__ */ __name((self, key, effect2, options) => withFiber2((parent) => {
-    if (self.state._tag === "Closed") {
-      return interrupt3;
-    } else if (options?.onlyIfMissing === true && hasUnsafe(self, key)) {
-      return sync2(constInterruptedFiber);
-    }
-    const fiber2 = forkUnsafe(parent, effect2, options?.startImmediately ?? true, true);
-    setUnsafe(self, key, fiber2, options);
-    return succeed7(fiber2);
-  }), "runImpl");
-  var runtime = /* @__PURE__ */ __name((self) => () => map4(context2(), (services2) => {
-    const runFork3 = runForkWith2(services2);
-    return (key, effect2, options) => {
-      if (self.state._tag === "Closed") {
-        return constInterruptedFiber();
-      } else if (options?.onlyIfMissing === true && hasUnsafe(self, key)) {
-        return constInterruptedFiber();
-      }
-      const fiber2 = runFork3(effect2, options);
-      setUnsafe(self, key, fiber2, options);
-      return fiber2;
-    };
-  }), "runtime");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Random.js
-  var Random2 = Random;
-  var randomWith = /* @__PURE__ */ __name((f) => withFiber2((fiber2) => succeed7(f(fiber2.getRef(Random2)))), "randomWith");
-  var nextIntBetween = /* @__PURE__ */ __name((min2, max2, options) => {
-    const extra = options?.halfOpen === true ? 0 : 1;
-    return randomWith((r) => {
-      const minInt = Math.ceil(min2);
-      const maxInt = Math.floor(max2);
-      return Math.floor(r.nextDoubleUnsafe() * (maxInt - minInt + extra)) + minInt;
-    });
-  }, "nextIntBetween");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/encoding/Base64.js
   var encode = /* @__PURE__ */ __name((input) => encodeBytes(typeof input === "string" ? encoder.encode(input) : input), "encode");
@@ -5540,9 +5269,9 @@ ${prefix}}`;
   var fromOptionExit = /* @__PURE__ */ __name((option2) => option2._tag === "None" ? missingExit : succeed8(option2.value), "fromOptionExit");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SchemaIssue.js
-  var TypeId11 = "~effect/SchemaIssue/Issue";
+  var TypeId9 = "~effect/SchemaIssue/Issue";
   function isIssue(u) {
-    return hasProperty(u, TypeId11) && u[TypeId11] === TypeId11;
+    return hasProperty(u, TypeId9) && u[TypeId9] === TypeId9;
   }
   __name(isIssue, "isIssue");
   function hasInput(issue) {
@@ -5553,7 +5282,7 @@ ${prefix}}`;
     static {
       __name(this, "IssueNodeImpl");
     }
-    [TypeId11] = TypeId11;
+    [TypeId9] = TypeId9;
     constructor(input, options) {
       if (options?.reportInput === true && input !== missing) {
         this.input = input;
@@ -5933,12 +5662,12 @@ ${prefix}}`;
   __name(decodeBase64, "decodeBase64");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SchemaTransformation.js
-  var TypeId12 = "~effect/SchemaTransformation/Transformation";
+  var TypeId10 = "~effect/SchemaTransformation/Transformation";
   var Transformation = class extends Class {
     static {
       __name(this, "Transformation");
     }
-    [TypeId12] = TypeId12;
+    [TypeId10] = TypeId10;
     _tag = "Transformation";
     decode;
     encode;
@@ -5952,7 +5681,7 @@ ${prefix}}`;
     }
   };
   function isTransformation(u) {
-    return hasProperty(u, TypeId12) && u[TypeId12] === TypeId12;
+    return hasProperty(u, TypeId10) && u[TypeId10] === TypeId10;
   }
   __name(isTransformation, "isTransformation");
   var makeTransformation = /* @__PURE__ */ __name((options) => {
@@ -6023,12 +5752,12 @@ ${prefix}}`;
       this.annotations = annotations;
     }
   };
-  var TypeId13 = "~effect/Schema";
+  var TypeId11 = "~effect/Schema";
   var ASTNodeImpl = class {
     static {
       __name(this, "ASTNodeImpl");
     }
-    [TypeId13] = TypeId13;
+    [TypeId11] = TypeId11;
     annotations;
     checks;
     encoding;
@@ -6056,24 +5785,24 @@ ${prefix}}`;
      * differently when encoding. `undefined` reuses `run`.
      */
     encodingRun;
-    constructor(typeParameters, run3, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
+    constructor(typeParameters, run2, annotations, checks, encoding, context3, encodingChecks, encodingRun) {
       super(annotations, checks, encoding, context3);
       this.typeParameters = typeParameters;
-      this.run = run3;
+      this.run = run2;
       this.encodingChecks = encodingChecks;
       this.encodingRun = encodingRun;
     }
     /** @internal */
     getParser() {
-      let run3;
+      let run2;
       return (input, options) => {
         if (input === missing) return missingExit;
-        return (run3 ??= this.run(this.typeParameters))(input, this, options);
+        return (run2 ??= this.run(this.typeParameters))(input, this, options);
       };
     }
-    _rebuild(recur, checks, encodingChecks, run3, encodingRun) {
+    _rebuild(recur, checks, encodingChecks, run2, encodingRun) {
       const tps = mapOrSame(this.typeParameters, recur);
-      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run3 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run3, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
+      return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run2 === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run2, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
     }
     /** @internal */
     recur(recur) {
@@ -6671,7 +6400,7 @@ ${prefix}}`;
               }
             }
           } else if (parseIndexes) {
-            const keyPairs = empty3();
+            const keyPairs = empty2();
             for (let i = 0; i < indexCount; i++) {
               const index = indexes[i];
               const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record2) : getIndexSignatureKeys(record2, index.is.parameter, options));
@@ -7231,9 +6960,9 @@ ${prefix}}`;
      * Whether the parsing process should be aborted after this check has failed.
      */
     aborted;
-    constructor(run3, annotations = void 0, aborted = false) {
+    constructor(run2, annotations = void 0, aborted = false) {
       super();
-      this.run = run3;
+      this.run = run2;
       this.annotations = annotations;
       this.aborted = aborted;
     }
@@ -7324,9 +7053,9 @@ ${prefix}}`;
   }
   __name(isPattern, "isPattern");
   var bodyOwners = /* @__PURE__ */ new WeakMap();
-  function copy2(ast, changes2) {
-    const out = Object.assign(Object.create(Object.getPrototypeOf(ast)), ast, changes2);
-    if (Reflect.ownKeys(changes2).every((key) => key === "context" || key === "encoding")) {
+  function copy2(ast, changes) {
+    const out = Object.assign(Object.create(Object.getPrototypeOf(ast)), ast, changes);
+    if (Reflect.ownKeys(changes).every((key) => key === "context" || key === "encoding")) {
       bodyOwners.set(out, getContextOwner(ast));
     }
     return out;
@@ -7968,12 +7697,12 @@ ${prefix}}`;
     };
   }
   __name(makeOption, "makeOption");
-  function make7(schema) {
+  function make6(schema) {
     return makeConstructorSync(toType(schema.ast));
   }
-  __name(make7, "make");
+  __name(make6, "make");
   function decodeUnknownEffect(schema, options) {
-    const parser = run2(schema.ast);
+    const parser = run(schema.ast);
     return options === void 0 ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
   }
   __name(decodeUnknownEffect, "decodeUnknownEffect");
@@ -7991,10 +7720,10 @@ ${prefix}}`;
     }
     return succeed7(value);
   }, "getValue");
-  function run2(ast) {
+  function run(ast) {
     return runWithCompiler(normalCompiler, ast);
   }
-  __name(run2, "run");
+  __name(run, "run");
   function parserResult(result2, input) {
     if (result2 === sameExit) {
       return succeed7(input);
@@ -8057,11 +7786,11 @@ ${prefix}}`;
       } : {
         disableChecks: true
       } : options?.parseOptions ?? defaultParseOptions;
-      const make17 = entry.make;
-      if (make17 !== void 0 && input !== missing) {
+      const make15 = entry.make;
+      if (make15 !== void 0 && input !== missing) {
         let output;
         try {
-          output = make17(input, parseOptions);
+          output = make15(input, parseOptions);
         } catch (error) {
           getSchemaIssueOrThrow(die2(error), "Constructor adapter can only throw schema issues");
           throw error;
@@ -8077,12 +7806,12 @@ ${prefix}}`;
   var constructorCompiler = /* @__PURE__ */ __name((ast) => resolve2(ast).makeEffect, "constructorCompiler");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/schema/make.js
-  var TypeId14 = "~effect/Schema/Schema";
+  var TypeId12 = "~effect/Schema/Schema";
   var RebuildOptions = /* @__PURE__ */ Symbol();
   var SchemaProto = {
-    [TypeId14]: TypeId14,
+    [TypeId12]: TypeId12,
     get make() {
-      const value = make7(this);
+      const value = make6(this);
       Object.defineProperty(this, "make", {
         value,
         enumerable: true
@@ -8118,10 +7847,10 @@ ${prefix}}`;
       return this.rebuild(appendChecks(this.ast, checks));
     },
     rebuild(ast) {
-      return make8(ast, this[RebuildOptions]);
+      return make7(ast, this[RebuildOptions]);
     }
   };
-  function make8(ast, options) {
+  function make7(ast, options) {
     function Schema() {
     }
     __name(Schema, "Schema");
@@ -8137,22 +7866,18 @@ ${prefix}}`;
     self.ast = ast;
     return self;
   }
-  __name(make8, "make");
+  __name(make7, "make");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Struct.js
   var lambda = /* @__PURE__ */ __name((f) => f, "lambda");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/schemaError.js
   var SchemaErrorTypeId = "~effect/Schema/SchemaError";
-  function isSchemaError(u) {
-    return hasProperty(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
-  }
-  __name(isSchemaError, "isSchemaError");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Schema.js
   function declareConstructor() {
-    return (typeParameters, run3, annotations) => {
-      return make9(new Declaration(typeParameters.map(getAST), (typeParameters2) => run3(typeParameters2.map((ast) => make9(ast))), annotations));
+    return (typeParameters, run2, annotations) => {
+      return make8(new Declaration(typeParameters.map(getAST), (typeParameters2) => run2(typeParameters2.map((ast) => make8(ast))), annotations));
     };
   }
   __name(declareConstructor, "declareConstructor");
@@ -8192,10 +7917,6 @@ ${prefix}}`;
       return `SchemaError(${this.message})`;
     }
   };
-  function isSchemaError2(u) {
-    return isSchemaError(u);
-  }
-  __name(isSchemaError2, "isSchemaError");
   function fromIssueEffect(self) {
     if (effectIsExit(self)) {
       return fromIssueExit(self);
@@ -8207,32 +7928,6 @@ ${prefix}}`;
     return isSuccess3(exit3) ? exit3 : failCause2(map3(exit3.cause, (issue) => new SchemaError(issue)));
   }
   __name(fromIssueExit, "fromIssueExit");
-  function getSchemaErrorOrThrow(cause, message) {
-    let schemaError;
-    for (const reason of cause.reasons) {
-      if (!isFailReason2(reason) || !isSchemaError2(reason.error)) {
-        throw new globalThis.Error(message, {
-          cause
-        });
-      }
-      schemaError ??= reason.error;
-    }
-    if (schemaError === void 0) {
-      throw new globalThis.Error(message, {
-        cause
-      });
-    }
-    return schemaError;
-  }
-  __name(getSchemaErrorOrThrow, "getSchemaErrorOrThrow");
-  function runSchemaErrorSync(self) {
-    const exit3 = runSyncExit2(self);
-    if (isSuccess3(exit3)) {
-      return exit3.value;
-    }
-    throw getSchemaErrorOrThrow(exit3.cause, "Sync adapter can only throw schema errors");
-  }
-  __name(runSchemaErrorSync, "runSchemaErrorSync");
   function decodeUnknownEffect2(schema, options) {
     const parser = decodeUnknownEffect(schema, options);
     return (input, options2) => {
@@ -8241,19 +7936,12 @@ ${prefix}}`;
   }
   __name(decodeUnknownEffect2, "decodeUnknownEffect");
   var decodeUnknownOption2 = decodeUnknownOption;
-  function decodeUnknownSync(schema, options) {
-    const parser = decodeUnknownEffect2(schema, options);
-    return (input, options2) => {
-      return runSchemaErrorSync(parser(input, options2));
-    };
-  }
-  __name(decodeUnknownSync, "decodeUnknownSync");
-  var make9 = make8;
-  var optionalKey2 = /* @__PURE__ */ lambda((schema) => make9(optionalKey(schema.ast), {
+  var make8 = make7;
+  var optionalKey2 = /* @__PURE__ */ lambda((schema) => make8(optionalKey(schema.ast), {
     schema
   }));
   function Literal2(literal) {
-    const out = make9(new Literal(literal), {
+    const out = make8(new Literal(literal), {
       literal,
       transform(to) {
         return out.pipe(decodeTo2(Literal2(to), {
@@ -8265,14 +7953,14 @@ ${prefix}}`;
     return out;
   }
   __name(Literal2, "Literal");
-  var Unknown2 = /* @__PURE__ */ make9(unknown);
-  var Null2 = /* @__PURE__ */ make9(null_);
-  var String4 = /* @__PURE__ */ make9(string2);
-  var Number5 = /* @__PURE__ */ make9(number2);
-  var Boolean3 = /* @__PURE__ */ make9(boolean);
-  var Void2 = /* @__PURE__ */ make9(void_4);
+  var Unknown2 = /* @__PURE__ */ make8(unknown);
+  var Null2 = /* @__PURE__ */ make8(null_);
+  var String4 = /* @__PURE__ */ make8(string2);
+  var Number5 = /* @__PURE__ */ make8(number2);
+  var Boolean3 = /* @__PURE__ */ make8(boolean);
+  var Void2 = /* @__PURE__ */ make8(void_4);
   function makeStruct(ast, fields) {
-    return make9(ast, {
+    return make8(ast, {
       fields,
       mapFields(f, options) {
         const fields2 = f(this.fields);
@@ -8286,14 +7974,14 @@ ${prefix}}`;
   }
   __name(Struct, "Struct");
   function Record(key, value) {
-    return make9(record(key.ast, value.ast), {
+    return make8(record(key.ast, value.ast), {
       key,
       value
     });
   }
   __name(Record, "Record");
   function makeTuple(ast, elements) {
-    return make9(ast, {
+    return make8(ast, {
       elements,
       mapElements(f, options) {
         const elements2 = f(this.elements);
@@ -8306,11 +7994,11 @@ ${prefix}}`;
     return makeTuple(tuple(elements), elements);
   }
   __name(Tuple, "Tuple");
-  var ArraySchema = /* @__PURE__ */ lambda((schema) => make9(new Arrays(false, [], [schema.ast]), {
+  var ArraySchema = /* @__PURE__ */ lambda((schema) => make8(new Arrays(false, [], [schema.ast]), {
     value: schema
   }));
   function makeUnion(ast, members) {
-    return make9(ast, {
+    return make8(ast, {
       members,
       mapMembers(f, options) {
         const members2 = f(this.members);
@@ -8325,7 +8013,7 @@ ${prefix}}`;
   __name(Union2, "Union");
   function Literals(literals) {
     const members = literals.map(Literal2);
-    return make9(union(members, void 0, void 0), {
+    return make8(union(members, void 0, void 0), {
       literals,
       members,
       mapMembers(f) {
@@ -8343,7 +8031,7 @@ ${prefix}}`;
   var NullOr = /* @__PURE__ */ lambda((self) => Union2([self, Null2]));
   function decodeTo2(to, transformation) {
     return (from) => {
-      return make9(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough3()), {
+      return make8(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough3()), {
         from,
         to
       });
@@ -8351,7 +8039,7 @@ ${prefix}}`;
   }
   __name(decodeTo2, "decodeTo");
   function withConstructorDefault2(defaultValue) {
-    return (schema) => make9(withConstructorDefault(schema.ast, defaultValue), {
+    return (schema) => make8(withConstructorDefault(schema.ast, defaultValue), {
       schema
     });
   }
@@ -8405,7 +8093,7 @@ ${prefix}}`;
     });
   }
   __name(isBase64, "isBase64");
-  var Finite = /* @__PURE__ */ make9(finite);
+  var Finite = /* @__PURE__ */ make8(finite);
   function makeIsGreaterThanOrEqualTo(options) {
     const gte = isGreaterThanOrEqualTo(options.order);
     const formatter = options.formatter ?? format2;
@@ -8730,12 +8418,114 @@ ${prefix}}`;
   var arbitraryMinimumTimeZoneOffset = -12 * 60 * 60 * 1e3;
   var arbitraryMaximumTimeZoneOffset = 14 * 60 * 60 * 1e3;
 
+  // packages/runtime/src/game/flash/contract/Diagnostic.ts
+  var diagnosticTimestamp = /* @__PURE__ */ __name(() => performance.timeOrigin + performance.now(), "diagnosticTimestamp");
+  var makeDiagnostic = /* @__PURE__ */ __name((phase, operation, cause, args2) => ({
+    ...args2 === void 0 ? {} : { arguments: args2 },
+    cause,
+    operation,
+    phase,
+    timestamp: diagnosticTimestamp()
+  }), "makeDiagnostic");
+
+  // packages/runtime/src/game/flash/bridge/DiagnosticSink.ts
+  var noop = {
+    report: /* @__PURE__ */ __name(() => void 0, "report")
+  };
+  var debug = {
+    report: /* @__PURE__ */ __name((phase, operation, cause, args2) => {
+      console.warn(
+        "[flash:diagnostic]",
+        makeDiagnostic(phase, operation, cause, args2)
+      );
+    }, "report")
+  };
+  var DiagnosticSink = class extends Reference(
+    "lucent/renderer/flash/DiagnosticSink",
+    { defaultValue: /* @__PURE__ */ __name(() => noop, "defaultValue") }
+  ) {
+    static {
+      __name(this, "DiagnosticSink");
+    }
+  };
+  var noopLayer = succeed6(DiagnosticSink, noop);
+  var debugLayer = succeed6(DiagnosticSink, debug);
+
+  // packages/runtime/src/game/flash/bridge/Bridge.ts
+  var InvokeFailure = class extends TaggedError2("InvokeFailure") {
+    static {
+      __name(this, "InvokeFailure");
+    }
+  };
+  var makeBridge = /* @__PURE__ */ __name((target) => gen2(function* () {
+    const swf = (target ?? window).swf;
+    const diagnosticSink = yield* DiagnosticSink;
+    const fail7 = /* @__PURE__ */ __name((method, cause, args2) => sync2(
+      () => diagnosticSink.report(
+        "invoke",
+        String(method),
+        cause,
+        method === "auth.login" ? void 0 : args2
+      )
+    ).pipe(as2(none2())), "fail");
+    const invoke = /* @__PURE__ */ __name((method, args2, schema) => try_2({
+      try: /* @__PURE__ */ __name(() => {
+        const candidate = swf[method];
+        if (typeof candidate !== "function") {
+          throw new Error(`Missing Flash method: ${String(method)}`);
+        }
+        return Reflect.apply(candidate, swf, [...args2 ?? []]);
+      }, "try"),
+      catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
+    }).pipe(
+      flatMap3(decodeUnknownEffect2(schema)),
+      map4(some2),
+      catch_2((cause) => fail7(method, cause, args2))
+    ), "invoke");
+    const invokeJson = /* @__PURE__ */ __name((method, args2, schema) => invoke(method, args2, Union2([String4, Unknown2])).pipe(
+      flatMap3(
+        match({
+          onNone: /* @__PURE__ */ __name(() => succeed7(none2()), "onNone"),
+          onSome: /* @__PURE__ */ __name((value) => {
+            if (typeof value !== "string") {
+              return decodeUnknownEffect2(schema)(value).pipe(
+                map4(some2),
+                catch_2((cause) => fail7(method, cause, args2))
+              );
+            }
+            return try_2({
+              try: /* @__PURE__ */ __name(() => JSON.parse(value), "try"),
+              catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
+            }).pipe(
+              flatMap3(decodeUnknownEffect2(schema)),
+              map4(some2),
+              catch_2((cause) => fail7(method, cause, args2))
+            );
+          }, "onSome")
+        })
+      )
+    ), "invokeJson");
+    return {
+      invoke,
+      invokeJson
+    };
+  }), "makeBridge");
+  var Bridge = class extends Service()(
+    "lucent/renderer/flash/Bridge",
+    { make: makeBridge() }
+  ) {
+    static {
+      __name(this, "Bridge");
+    }
+  };
+  var layer = effect(Bridge, Bridge.make);
+
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Latch.js
-  var makeUnsafe5 = makeLatchUnsafe;
+  var makeUnsafe4 = makeLatchUnsafe;
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableList.js
   var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
-  var make10 = /* @__PURE__ */ __name(() => ({
+  var make9 = /* @__PURE__ */ __name(() => ({
     head: void 0,
     tail: void 0,
     length: 0
@@ -8853,12 +8643,12 @@ ${prefix}}`;
     };
     self.length = array2.length;
   }, "filter");
-  var remove3 = /* @__PURE__ */ __name((self, value) => filter3(self, (v) => v !== value), "remove");
+  var remove = /* @__PURE__ */ __name((self, value) => filter3(self, (v) => v !== value), "remove");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/MutableRef.js
-  var TypeId15 = "~effect/MutableRef";
+  var TypeId13 = "~effect/MutableRef";
   var MutableRefProto = {
-    [TypeId15]: TypeId15,
+    [TypeId13]: TypeId13,
     ...PipeInspectableProto,
     toJSON() {
       return {
@@ -8867,21 +8657,21 @@ ${prefix}}`;
       };
     }
   };
-  var make11 = /* @__PURE__ */ __name((value) => {
+  var make10 = /* @__PURE__ */ __name((value) => {
     const ref = Object.create(MutableRefProto);
     ref.current = value;
     return ref;
   }, "make");
-  var set2 = /* @__PURE__ */ dual(2, (self, value) => {
+  var set = /* @__PURE__ */ dual(2, (self, value) => {
     self.current = value;
     return self;
   });
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/PubSub.js
-  var TypeId16 = "~effect/PubSub";
+  var TypeId14 = "~effect/PubSub";
   var SubscriptionTypeId = "~effect/PubSub/Subscription";
-  var make12 = /* @__PURE__ */ __name((options) => sync2(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe5(false), make11(false), options.strategy(), make11(none2()))), "make");
-  var unbounded = /* @__PURE__ */ __name((options) => make12({
+  var make11 = /* @__PURE__ */ __name((options) => sync2(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe4(false), make10(false), options.strategy(), make10(none2()))), "make");
+  var unbounded = /* @__PURE__ */ __name((options) => make11({
     atomicPubSub: /* @__PURE__ */ __name(() => makeAtomicUnbounded(options), "atomicPubSub"),
     strategy: /* @__PURE__ */ __name(() => new DroppingStrategy(), "strategy")
   }), "unbounded");
@@ -8890,7 +8680,7 @@ ${prefix}}`;
     return new UnboundedPubSub(replay && replay > 0 ? new ReplayBuffer(Math.ceil(replay)) : void 0);
   }, "makeAtomicUnbounded");
   var shutdown = /* @__PURE__ */ __name((self) => uninterruptible2(withFiber2((fiber2) => {
-    set2(self.shutdownFlag, true);
+    set(self.shutdownFlag, true);
     return close(self.scope, interrupt2(fiber2.id)).pipe(andThen2(self.strategy.shutdown), when2(self.shutdownHook.open), asVoid2);
   })), "shutdown");
   var publish = /* @__PURE__ */ dual(2, (self, value) => suspend2(() => {
@@ -8903,14 +8693,6 @@ ${prefix}}`;
     }
     return self.strategy.handleSurplus(self.pubsub, self.subscribers, [value], self.shutdownFlag, self.ended);
   }));
-  var publishUnsafe = /* @__PURE__ */ dual(2, (self, value) => {
-    if (self.shutdownFlag.current || isSome2(self.ended.current)) return false;
-    if (self.pubsub.publish(value)) {
-      self.strategy.completeSubscribersUnsafe(self.pubsub, self.subscribers);
-      return true;
-    }
-    return false;
-  });
   var subscribe = /* @__PURE__ */ __name((self) => uninterruptible2(contextWith2((services2) => {
     const localScope = get(services2, Scope);
     const scope3 = forkUnsafe2(self.scope);
@@ -8918,7 +8700,7 @@ ${prefix}}`;
     return addFinalizer2(scope3, unsubscribe(subscription)).pipe(andThen2(addFinalizerExit(localScope, (exit3) => close(scope3, exit3))), as2(subscription));
   })), "subscribe");
   var unsubscribe = /* @__PURE__ */ __name((self) => uninterruptible2(withFiber2((state) => {
-    set2(self.shutdownFlag, true);
+    set(self.shutdownFlag, true);
     return forEach2(takeAll(self.pollers), (d) => interruptWith(d, state.id), {
       discard: true,
       concurrency: "unbounded"
@@ -8972,37 +8754,37 @@ ${prefix}}`;
       return resume(succeed7(self.ended.current.value));
     }
     const deferred = makeUnsafe2();
-    let set4 = self.subscribers.get(self.subscription);
-    if (!set4) {
-      set4 = /* @__PURE__ */ new Set();
-      self.subscribers.set(self.subscription, set4);
+    let set2 = self.subscribers.get(self.subscription);
+    if (!set2) {
+      set2 = /* @__PURE__ */ new Set();
+      self.subscribers.set(self.subscription, set2);
     }
-    set4.add(self.pollers);
+    set2.add(self.pollers);
     append2(self.pollers, deferred);
     self.strategy.completePollersUnsafe(self.pubsub, self.subscribers, self.subscription, self.pollers);
     if (deferred.effect) return resume(deferred.effect);
     deferred.resumes = [resume];
-    return sync2(() => remove3(self.pollers, deferred));
+    return sync2(() => remove(self.pollers, deferred));
   }), "pollForItem");
   var AbsentValue = /* @__PURE__ */ Symbol.for("effect/PubSub/AbsentValue");
   var addSubscribers = /* @__PURE__ */ __name((subscribers, subscription, pollers) => {
     if (!subscribers.has(subscription)) {
       subscribers.set(subscription, /* @__PURE__ */ new Set());
     }
-    const set4 = subscribers.get(subscription);
-    set4.add(pollers);
+    const set2 = subscribers.get(subscription);
+    set2.add(pollers);
   }, "addSubscribers");
   var removeSubscribers = /* @__PURE__ */ __name((subscribers, subscription, pollers) => {
     if (!subscribers.has(subscription)) {
       return;
     }
-    const set4 = subscribers.get(subscription);
-    set4.delete(pollers);
-    if (set4.size === 0) {
+    const set2 = subscribers.get(subscription);
+    set2.delete(pollers);
+    if (set2.size === 0) {
       subscribers.delete(subscription);
     }
   }, "removeSubscribers");
-  var makeSubscriptionUnsafe = /* @__PURE__ */ __name((pubsub, subscribers, strategy, ended) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make10(), makeUnsafe5(false), make11(false), strategy, pubsub.replayWindow(), ended), "makeSubscriptionUnsafe");
+  var makeSubscriptionUnsafe = /* @__PURE__ */ __name((pubsub, subscribers, strategy, ended) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make9(), makeUnsafe4(false), make10(false), strategy, pubsub.replayWindow(), ended), "makeSubscriptionUnsafe");
   var UnboundedPubSub = class {
     static {
       __name(this, "UnboundedPubSub");
@@ -9092,14 +8874,14 @@ ${prefix}}`;
       if (this.unsubscribed) {
         return true;
       }
-      let empty6 = true;
+      let empty4 = true;
       let loop = true;
       while (loop) {
         if (this.subscriberHead === this.self.publisherTail) {
           loop = false;
         } else {
           if (this.subscriberHead.next.value !== AbsentValue) {
-            empty6 = false;
+            empty4 = false;
             loop = false;
           } else {
             this.subscriberHead = this.subscriberHead.next;
@@ -9107,7 +8889,7 @@ ${prefix}}`;
           }
         }
       }
-      return empty6;
+      return empty4;
     }
     size() {
       if (this.unsubscribed) {
@@ -9210,7 +8992,7 @@ ${prefix}}`;
     static {
       __name(this, "PubSubImpl");
     }
-    [TypeId16] = {
+    [TypeId14] = {
       _A: identity
     };
     pubsub;
@@ -9408,108 +9190,8 @@ ${prefix}}`;
     close: /* @__PURE__ */ __name(() => void 0, "close")
   };
 
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Semaphore.js
-  var makeUnsafe6 = /* @__PURE__ */ __name((permits) => new SemaphoreImpl(permits), "makeUnsafe");
-  var waitForPermits = /* @__PURE__ */ __name((self, n, effect2) => callback((resume) => {
-    if (self.free >= n) return resume(effect2);
-    const observer = /* @__PURE__ */ __name(() => {
-      if (self.free < n) return;
-      self.waiters.delete(observer);
-      resume(effect2);
-    }, "observer");
-    self.waiters.add(observer);
-    return sync(() => {
-      self.waiters.delete(observer);
-    });
-  }), "waitForPermits");
-  var SemaphoreImpl = class {
-    static {
-      __name(this, "SemaphoreImpl");
-    }
-    waiters = /* @__PURE__ */ new Set();
-    taken = 0;
-    permits;
-    constructor(permits) {
-      this.permits = permits;
-    }
-    get free() {
-      return this.permits - this.taken;
-    }
-    take(n) {
-      const take4 = suspend(() => {
-        if (this.free < n) {
-          return waitForPermits(this, n, take4);
-        }
-        this.taken += n;
-        return succeed3(n);
-      });
-      return take4;
-    }
-    takeIfAvailable(n) {
-      return suspend(() => {
-        if (this.free < n) return succeed3(false);
-        this.taken += n;
-        return succeed3(true);
-      });
-    }
-    releaseUnsafe(fiber2, n) {
-      this.taken -= n;
-      if (this.waiters.size > 0) {
-        fiber2.currentDispatcher.scheduleTask(() => {
-          for (const observer of this.waiters) {
-            if (this.free <= 0) break;
-            observer();
-          }
-        }, 0);
-      }
-      return this.free;
-    }
-    resize(permits) {
-      return withFiber((fiber2) => {
-        this.permits = permits;
-        if (this.free < 0) return void_;
-        this.releaseUnsafe(fiber2, 0);
-        return void_;
-      });
-    }
-    release(n) {
-      return withFiber((fiber2) => succeed3(this.releaseUnsafe(fiber2, n)));
-    }
-    get releaseAll() {
-      return withFiber((fiber2) => succeed3(this.releaseUnsafe(fiber2, this.taken)));
-    }
-    withPermits(n) {
-      return (self) => uninterruptibleMask((restore) => {
-        const acquire = suspend(() => {
-          if (this.free < n) {
-            const wait = waitForPermits(this, n, void_);
-            return flatMap2(restore(wait), () => acquire);
-          }
-          this.taken += n;
-          return onExitPrimitive(restore(self), () => {
-            this.releaseUnsafe(getCurrentFiber(), n);
-            return void 0;
-          }, true);
-        });
-        return acquire;
-      });
-    }
-    withPermit = /* @__PURE__ */ this.withPermits(1);
-    withPermitsIfAvailable(n) {
-      return (self) => uninterruptibleMask((restore) => {
-        if (this.free < n) return succeedNone;
-        this.taken += n;
-        return onExitPrimitive(restore(asSome(self)), () => {
-          this.releaseUnsafe(getCurrentFiber(), n);
-          return void 0;
-        }, true);
-      });
-    }
-  };
-  var make13 = /* @__PURE__ */ __name((permits) => sync(() => new SemaphoreImpl(permits)), "make");
-
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Queue.js
-  var TypeId17 = "~effect/Queue";
+  var TypeId15 = "~effect/Queue";
   var EnqueueTypeId = "~effect/Queue/Enqueue";
   var DequeueTypeId = "~effect/Queue/Dequeue";
   var variance = {
@@ -9517,7 +9199,7 @@ ${prefix}}`;
     _E: identity
   };
   var QueueProto = {
-    [TypeId17]: variance,
+    [TypeId15]: variance,
     [EnqueueTypeId]: variance,
     [DequeueTypeId]: variance,
     ...PipeInspectableProto,
@@ -9529,12 +9211,12 @@ ${prefix}}`;
       };
     }
   };
-  var make14 = /* @__PURE__ */ __name((options) => withFiber((fiber2) => {
+  var make12 = /* @__PURE__ */ __name((options) => withFiber((fiber2) => {
     const self = Object.create(QueueProto);
     self.dispatcher = fiber2.currentDispatcher;
     self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
     self.strategy = options?.strategy ?? "suspend";
-    self.messages = make10();
+    self.messages = make9();
     self.scheduleRunning = false;
     self.state = {
       _tag: "Open",
@@ -9544,10 +9226,10 @@ ${prefix}}`;
     };
     return succeed3(self);
   }), "make");
-  var bounded = /* @__PURE__ */ __name((capacity) => make14({
+  var bounded = /* @__PURE__ */ __name((capacity) => make12({
     capacity
   }), "bounded");
-  var unbounded2 = /* @__PURE__ */ __name(() => make14(), "unbounded");
+  var unbounded2 = /* @__PURE__ */ __name(() => make12(), "unbounded");
   var offer = /* @__PURE__ */ dual(2, (self, message) => suspend(() => offerUnsafe(self, message) ? exitTrue : self.state._tag === "Open" && self.strategy === "suspend" ? offerOrWait(self, message) : exitFalse));
   var offerUnsafe = /* @__PURE__ */ __name((self, message) => {
     if (self.state._tag !== "Open") {
@@ -9766,11 +9448,111 @@ ${prefix}}`;
     openState.awaiters.clear();
   }, "finalize");
 
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Semaphore.js
+  var makeUnsafe5 = /* @__PURE__ */ __name((permits) => new SemaphoreImpl(permits), "makeUnsafe");
+  var waitForPermits = /* @__PURE__ */ __name((self, n, effect2) => callback((resume) => {
+    if (self.free >= n) return resume(effect2);
+    const observer = /* @__PURE__ */ __name(() => {
+      if (self.free < n) return;
+      self.waiters.delete(observer);
+      resume(effect2);
+    }, "observer");
+    self.waiters.add(observer);
+    return sync(() => {
+      self.waiters.delete(observer);
+    });
+  }), "waitForPermits");
+  var SemaphoreImpl = class {
+    static {
+      __name(this, "SemaphoreImpl");
+    }
+    waiters = /* @__PURE__ */ new Set();
+    taken = 0;
+    permits;
+    constructor(permits) {
+      this.permits = permits;
+    }
+    get free() {
+      return this.permits - this.taken;
+    }
+    take(n) {
+      const take4 = suspend(() => {
+        if (this.free < n) {
+          return waitForPermits(this, n, take4);
+        }
+        this.taken += n;
+        return succeed3(n);
+      });
+      return take4;
+    }
+    takeIfAvailable(n) {
+      return suspend(() => {
+        if (this.free < n) return succeed3(false);
+        this.taken += n;
+        return succeed3(true);
+      });
+    }
+    releaseUnsafe(fiber2, n) {
+      this.taken -= n;
+      if (this.waiters.size > 0) {
+        fiber2.currentDispatcher.scheduleTask(() => {
+          for (const observer of this.waiters) {
+            if (this.free <= 0) break;
+            observer();
+          }
+        }, 0);
+      }
+      return this.free;
+    }
+    resize(permits) {
+      return withFiber((fiber2) => {
+        this.permits = permits;
+        if (this.free < 0) return void_;
+        this.releaseUnsafe(fiber2, 0);
+        return void_;
+      });
+    }
+    release(n) {
+      return withFiber((fiber2) => succeed3(this.releaseUnsafe(fiber2, n)));
+    }
+    get releaseAll() {
+      return withFiber((fiber2) => succeed3(this.releaseUnsafe(fiber2, this.taken)));
+    }
+    withPermits(n) {
+      return (self) => uninterruptibleMask((restore) => {
+        const acquire = suspend(() => {
+          if (this.free < n) {
+            const wait = waitForPermits(this, n, void_);
+            return flatMap2(restore(wait), () => acquire);
+          }
+          this.taken += n;
+          return onExitPrimitive(restore(self), () => {
+            this.releaseUnsafe(getCurrentFiber(), n);
+            return void 0;
+          }, true);
+        });
+        return acquire;
+      });
+    }
+    withPermit = /* @__PURE__ */ this.withPermits(1);
+    withPermitsIfAvailable(n) {
+      return (self) => uninterruptibleMask((restore) => {
+        if (this.free < n) return succeedNone;
+        this.taken += n;
+        return onExitPrimitive(restore(asSome(self)), () => {
+          this.releaseUnsafe(getCurrentFiber(), n);
+          return void 0;
+        }, true);
+      });
+    }
+  };
+  var make13 = /* @__PURE__ */ __name((permits) => sync(() => new SemaphoreImpl(permits)), "make");
+
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Channel.js
-  var TypeId18 = "~effect/Channel";
-  var isChannel = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId18), "isChannel");
+  var TypeId16 = "~effect/Channel";
+  var isChannel = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId16), "isChannel");
   var ChannelProto = {
-    [TypeId18]: {
+    [TypeId16]: {
       _Env: identity,
       _InErr: identity,
       _InElem: identity,
@@ -9817,7 +9599,7 @@ ${prefix}}`;
     const runFork3 = runForkWith2(yield* context2());
     const trackFiber = runIn(forkedScope);
     if (options.unordered) {
-      const semaphore = makeUnsafe6(concurrencyN);
+      const semaphore = makeUnsafe5(concurrencyN);
       const release = constant(semaphore.release(1));
       const handle = matchCauseEffect2({
         onFailure: /* @__PURE__ */ __name((cause) => flatMap3(failCause5(queue, cause), release), "onFailure"),
@@ -9915,7 +9697,7 @@ ${prefix}}`;
   })));
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/internal/stream.js
-  var TypeId19 = "~effect/Stream";
+  var TypeId17 = "~effect/Stream";
   var streamVariance = {
     _R: identity,
     _E: identity,
@@ -9925,7 +9707,7 @@ ${prefix}}`;
     this.channel = channel;
   }, "Stream");
   Stream.prototype = {
-    [TypeId19]: streamVariance,
+    [TypeId17]: streamVariance,
     pipe() {
       return pipeArguments(this, arguments);
     }
@@ -9933,8 +9715,8 @@ ${prefix}}`;
   var fromChannel = /* @__PURE__ */ __name((channel) => new Stream(channel), "fromChannel");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Stream.js
-  var TypeId20 = "~effect/Stream";
-  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId20), "isStream");
+  var TypeId18 = "~effect/Stream";
+  var isStream = /* @__PURE__ */ __name((u) => hasProperty(u, TypeId18), "isStream");
   var fromChannel2 = fromChannel;
   var toChannel = /* @__PURE__ */ __name((stream) => stream.channel, "toChannel");
   var fromQueue = /* @__PURE__ */ __name((queue) => fromChannel2(fromQueueArray(queue)), "fromQueue");
@@ -9951,145 +9733,6 @@ ${prefix}}`;
     });
   }));
   var runDrain2 = /* @__PURE__ */ __name((self) => runDrain(self.channel), "runDrain");
-
-  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/SubscriptionRef.js
-  var TypeId21 = "~effect/SubscriptionRef";
-  var Proto3 = {
-    ...PipeInspectableProto,
-    [TypeId21]: {
-      _A: identity
-    },
-    toJSON() {
-      return {
-        _id: "SubscriptionRef",
-        value: this.value
-      };
-    }
-  };
-  var make15 = /* @__PURE__ */ __name((value) => map4(unbounded({
-    replay: 1
-  }), (pubsub) => {
-    const self = Object.create(Proto3);
-    self.semaphore = makeUnsafe6(1);
-    self.value = value;
-    self.pubsub = pubsub;
-    publishUnsafe(self.pubsub, value);
-    return self;
-  }), "make");
-  var changes = /* @__PURE__ */ __name((self) => fromPubSub(self.pubsub), "changes");
-  var get4 = /* @__PURE__ */ __name((self) => sync2(() => self.value), "get");
-  var setUnsafe2 = /* @__PURE__ */ __name((self, value) => {
-    self.value = value;
-    publishUnsafe(self.pubsub, value);
-  }, "setUnsafe");
-  var set3 = /* @__PURE__ */ dual(2, (self, value) => self.semaphore.withPermit(sync2(() => setUnsafe2(self, value))));
-  var updateAndGet = /* @__PURE__ */ dual(2, (self, update2) => self.semaphore.withPermit(sync2(() => {
-    const newValue = update2(self.value);
-    setUnsafe2(self, newValue);
-    return newValue;
-  })));
-
-  // packages/runtime/src/game/flash/contract/Diagnostic.ts
-  var diagnosticTimestamp = /* @__PURE__ */ __name(() => performance.timeOrigin + performance.now(), "diagnosticTimestamp");
-  var makeDiagnostic = /* @__PURE__ */ __name((phase, operation, cause, args2) => ({
-    ...args2 === void 0 ? {} : { arguments: args2 },
-    cause,
-    operation,
-    phase,
-    timestamp: diagnosticTimestamp()
-  }), "makeDiagnostic");
-
-  // packages/runtime/src/game/flash/bridge/DiagnosticSink.ts
-  var noop = {
-    report: /* @__PURE__ */ __name(() => void 0, "report")
-  };
-  var debug = {
-    report: /* @__PURE__ */ __name((phase, operation, cause, args2) => {
-      console.warn(
-        "[flash:diagnostic]",
-        makeDiagnostic(phase, operation, cause, args2)
-      );
-    }, "report")
-  };
-  var DiagnosticSink = class extends Reference(
-    "lucent/renderer/flash/DiagnosticSink",
-    { defaultValue: /* @__PURE__ */ __name(() => noop, "defaultValue") }
-  ) {
-    static {
-      __name(this, "DiagnosticSink");
-    }
-  };
-  var noopLayer = succeed6(DiagnosticSink, noop);
-  var debugLayer = succeed6(DiagnosticSink, debug);
-
-  // packages/runtime/src/game/flash/bridge/Bridge.ts
-  var InvokeFailure = class extends TaggedError2("InvokeFailure") {
-    static {
-      __name(this, "InvokeFailure");
-    }
-  };
-  var makeBridge = /* @__PURE__ */ __name((target2) => gen2(function* () {
-    const swf = (target2 ?? window).swf;
-    const diagnosticSink = yield* DiagnosticSink;
-    const fail7 = /* @__PURE__ */ __name((method, cause, args2) => sync2(
-      () => diagnosticSink.report(
-        "invoke",
-        String(method),
-        cause,
-        method === "auth.login" ? void 0 : args2
-      )
-    ).pipe(as2(none2())), "fail");
-    const invoke = /* @__PURE__ */ __name((method, args2, schema) => try_2({
-      try: /* @__PURE__ */ __name(() => {
-        const candidate = swf[method];
-        if (typeof candidate !== "function") {
-          throw new Error(`Missing Flash method: ${String(method)}`);
-        }
-        return Reflect.apply(candidate, swf, [...args2 ?? []]);
-      }, "try"),
-      catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
-    }).pipe(
-      flatMap3(decodeUnknownEffect2(schema)),
-      map4(some2),
-      catch_2((cause) => fail7(method, cause, args2))
-    ), "invoke");
-    const invokeJson = /* @__PURE__ */ __name((method, args2, schema) => invoke(method, args2, Union2([String4, Unknown2])).pipe(
-      flatMap3(
-        match({
-          onNone: /* @__PURE__ */ __name(() => succeed7(none2()), "onNone"),
-          onSome: /* @__PURE__ */ __name((value) => {
-            if (typeof value !== "string") {
-              return decodeUnknownEffect2(schema)(value).pipe(
-                map4(some2),
-                catch_2((cause) => fail7(method, cause, args2))
-              );
-            }
-            return try_2({
-              try: /* @__PURE__ */ __name(() => JSON.parse(value), "try"),
-              catch: /* @__PURE__ */ __name((cause) => new InvokeFailure({ cause }), "catch")
-            }).pipe(
-              flatMap3(decodeUnknownEffect2(schema)),
-              map4(some2),
-              catch_2((cause) => fail7(method, cause, args2))
-            );
-          }, "onSome")
-        })
-      )
-    ), "invokeJson");
-    return {
-      invoke,
-      invokeJson
-    };
-  }), "makeBridge");
-  var Bridge = class extends Service()(
-    "lucent/renderer/flash/Bridge",
-    { make: makeBridge() }
-  ) {
-    static {
-      __name(this, "Bridge");
-    }
-  };
-  var layer = effect(Bridge, Bridge.make);
 
   // packages/runtime/src/game/flash/contract/Callback.ts
   var Callback = Union2([
@@ -10376,8 +10019,8 @@ ${prefix}}`;
         return void 0;
     }
   }, "runtimeEvent");
-  var makeGateway = /* @__PURE__ */ __name((target2) => gen2(function* () {
-    const resolvedTarget = target2 ?? window;
+  var makeGateway = /* @__PURE__ */ __name((target) => gen2(function* () {
+    const resolvedTarget = target ?? window;
     const bridge = yield* Bridge;
     const diagnosticSink = yield* DiagnosticSink;
     const scope3 = yield* scope2;
@@ -11901,8 +11544,8 @@ ${prefix}}`;
       if (wasActive && previous.cancellationIssued || !(yield* isEnabled())) {
         return;
       }
-      const target2 = yield* readCombatTarget(bridge);
-      if (target2?.type !== "monster" || target2.monsterMapId !== event.monsterMapId) {
+      const target = yield* readCombatTarget(bridge);
+      if (target?.type !== "monster" || target.monsterMapId !== event.monsterMapId) {
         return;
       }
       yield* stopCombat(bridge);
@@ -11965,7 +11608,7 @@ ${prefix}}`;
         (hydrated) => hydrated ? readItems(host4, "bank") : succeed7([])
       )
     ), "getAll");
-    const get6 = /* @__PURE__ */ __name((selector) => isHydrated(host4, "bank").pipe(
+    const get4 = /* @__PURE__ */ __name((selector) => isHydrated(host4, "bank").pipe(
       flatMap3(
         (hydrated) => hydrated ? readItem(host4, "bank", selector) : succeed7(null)
       )
@@ -12013,7 +11656,7 @@ ${prefix}}`;
         return yield* wait.until(isOpen(), { timeout: "3 seconds" });
       })
     ), "open");
-    const contains = /* @__PURE__ */ __name((selector, quantity) => get6(selector).pipe(
+    const contains = /* @__PURE__ */ __name((selector, quantity) => get4(selector).pipe(
       map4(
         (item) => item !== null && item.quantity >= normalizeItemQuantity(quantity)
       )
@@ -12057,7 +11700,7 @@ ${prefix}}`;
     const withdraw = /* @__PURE__ */ __name((selector) => {
       return gen2(function* () {
         if (!(yield* load())) return false;
-        const bankItem = yield* get6(selector);
+        const bankItem = yield* get4(selector);
         if (bankItem === null) return false;
         if (!(yield* open())) return false;
         const canAccept = bankItem.houseItem ? houseCanAccept(bankItem.itemId, house) : inventory.canAccept(bankItem);
@@ -12097,7 +11740,7 @@ ${prefix}}`;
       return gen2(function* () {
         if (!(yield* open())) return false;
         const inventoryItem = yield* inventory.get(inventorySelector);
-        const bankItem = yield* get6(bankSelector);
+        const bankItem = yield* get4(bankSelector);
         if (inventoryItem === null || bankItem === null || inventoryItem.category === "Class" || inventoryItem.equipped) {
           return false;
         }
@@ -12147,7 +11790,7 @@ ${prefix}}`;
       contains,
       deposit,
       depositBatch,
-      get: get6,
+      get: get4,
       getAll,
       getAvailableSlots,
       getSlots,
@@ -12442,9 +12085,9 @@ ${prefix}}`;
   var normalizeCombatProfile = /* @__PURE__ */ __name((value) => normalizeProfile(value, DEFAULT_COMBAT_PROFILE_ID) ?? genericProfile(), "normalizeCombatProfile");
 
   // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Ref.js
-  var TypeId22 = "~effect/Ref";
+  var TypeId19 = "~effect/Ref";
   var RefProto = {
-    [TypeId22]: {
+    [TypeId19]: {
       _A: identity
     },
     ...PipeInspectableProto,
@@ -12455,13 +12098,13 @@ ${prefix}}`;
       };
     }
   };
-  var makeUnsafe7 = /* @__PURE__ */ __name((value) => {
+  var makeUnsafe6 = /* @__PURE__ */ __name((value) => {
     const self = Object.create(RefProto);
-    self.ref = make11(value);
+    self.ref = make10(value);
     return self;
   }, "makeUnsafe");
-  var make16 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe7(value)), "make");
-  var get5 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
+  var make14 = /* @__PURE__ */ __name((value) => sync2(() => makeUnsafe6(value)), "make");
+  var get3 = /* @__PURE__ */ __name((self) => sync2(() => self.ref.current), "get");
   var modify = /* @__PURE__ */ dual(2, (self, f) => sync2(() => {
     const [b, a] = f(self.ref.current);
     self.ref.current = a;
@@ -12478,13 +12121,13 @@ ${prefix}}`;
     players,
     ...skill5ItemId === void 0 ? {} : { skill5ItemId }
   }), "makeCombatProfileRuntimeDeps");
-  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map4(make16({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
+  var makeCombatProfileCursor = /* @__PURE__ */ __name(() => map4(make14({ index: 0, resetVersion: 0 }), (state) => ({ state })), "makeCombatProfileCursor");
   var resetCombatProfileCursor = /* @__PURE__ */ __name((cursor) => update(cursor.state, (state) => ({
     index: 0,
     resetVersion: state.resetVersion + 1
   })), "resetCombatProfileCursor");
   var makeCombatProfileMessageTriggerState = /* @__PURE__ */ __name(() => gen2(function* () {
-    const state = yield* make16(/* @__PURE__ */ new Map());
+    const state = yield* make14(/* @__PURE__ */ new Map());
     const semaphore = yield* make13(1);
     return {
       semaphore,
@@ -12538,11 +12181,11 @@ ${prefix}}`;
     if (castTarget !== void 0) {
       return auraValue(castTarget.getAura(condition.auraName));
     }
-    const target2 = yield* deps.combat.target.get();
-    if (target2 === null) {
+    const target = yield* deps.combat.target.get();
+    if (target === null) {
       return 0;
     }
-    const aura = target2.type === "monster" ? yield* deps.combat.target.auras.get(condition.auraName) : yield* deps.player.auras.get(condition.auraName);
+    const aura = target.type === "monster" ? yield* deps.combat.target.auras.get(condition.auraName) : yield* deps.player.auras.get(condition.auraName);
     return auraValue(aura);
   }), "getTargetAura");
   var matchesAuraCondition = /* @__PURE__ */ __name((deps, condition, castTarget) => gen2(function* () {
@@ -12640,7 +12283,7 @@ ${prefix}}`;
           castTarget
         );
       }
-      const startState = yield* get5(cursor.state);
+      const startState = yield* get3(cursor.state);
       for (let offset = 0; offset < steps.length; offset += 1) {
         const stepIndex = (startState.index + offset) % steps.length;
         const step = steps[stepIndex];
@@ -12656,7 +12299,7 @@ ${prefix}}`;
         if (prepared === null) {
           continue;
         }
-        const resetVersionBeforeCast = (yield* get5(cursor.state)).resetVersion;
+        const resetVersionBeforeCast = (yield* get3(cursor.state)).resetVersion;
         const cast = yield* castPreparedCombatProfileStep(
           deps,
           step,
@@ -12685,7 +12328,7 @@ ${prefix}}`;
   var castCombatProfileMessageTrigger = /* @__PURE__ */ __name((deps, trigger, triggerIndex, event, state, now = Date.now()) => state.semaphore.withPermits(1)(
     gen2(function* () {
       const cooldownMs = trigger.cooldownMs ?? 0;
-      const lastCast = (yield* get5(state.state)).get(triggerIndex);
+      const lastCast = (yield* get3(state.state)).get(triggerIndex);
       if (lastCast !== void 0 && now - lastCast < cooldownMs) {
         return false;
       }
@@ -12795,7 +12438,7 @@ ${prefix}}`;
       const cursor = yield* makeCombatProfileCursor();
       const messageState = yield* makeCombatProfileMessageTriggerState();
       const actionGate = yield* make13(1);
-      const state = yield* make16({
+      const state = yield* make14({
         generation: 0,
         resetPending: false,
         target: void 0
@@ -12844,11 +12487,11 @@ ${prefix}}`;
               )) {
                 return;
               }
-              const observed = yield* get5(state);
+              const observed = yield* get3(state);
               if (observed.resetPending) return;
               yield* actionGate.withPermits(1)(
                 gen2(function* () {
-                  const current = yield* get5(state);
+                  const current = yield* get3(state);
                   if (current.resetPending || current.generation !== observed.generation) {
                     return;
                   }
@@ -12873,7 +12516,7 @@ ${prefix}}`;
                       return;
                     }
                   }
-                  const beforeCast = yield* get5(state);
+                  const beforeCast = yield* get3(state);
                   if (beforeCast.resetPending || beforeCast.generation !== observed.generation) {
                     return;
                   }
@@ -12899,7 +12542,7 @@ ${prefix}}`;
       }
       const resolveTarget = fn2("CombatProfileSession.resolveTarget")(
         function* (monsters) {
-          const initial = yield* get5(state);
+          const initial = yield* get3(state);
           if (initial.resetPending) return void 0;
           const allowFallback = options.allowTargetFallback ?? true;
           const active = initial.target;
@@ -12991,7 +12634,7 @@ ${prefix}}`;
           );
         }
       );
-      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get5(state).pipe(
+      const leaseIsCurrent = /* @__PURE__ */ __name((lease) => get3(state).pipe(
         map4(
           (current) => !current.resetPending && current.generation === lease.generation && current.target?.monsterMapId === lease.monster.monsterMapId
         )
@@ -13178,9 +12821,9 @@ ${prefix}}`;
     const decoded = decodeActionAcknowledgementsPayload(value);
     if (isNone2(decoded)) return [];
     const acknowledgements = [];
-    const append3 = /* @__PURE__ */ __name((values2, decode2) => {
-      if (!Array.isArray(values2)) return;
-      for (const entry of values2) {
+    const append3 = /* @__PURE__ */ __name((values, decode2) => {
+      if (!Array.isArray(values)) return;
+      for (const entry of values) {
         const acknowledgement = decode2(entry);
         if (acknowledgement !== void 0) acknowledgements.push(acknowledgement);
       }
@@ -13192,7 +12835,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/internal/CombatProfileClass.ts
   var classList = new Intl.ListFormat("en", { type: "disjunction" });
-  var sameClass = /* @__PURE__ */ __name((left2, right2) => left2.localeCompare(right2, void 0, { sensitivity: "accent" }) === 0, "sameClass");
+  var sameClass = /* @__PURE__ */ __name((left, right) => left.localeCompare(right, void 0, { sensitivity: "accent" }) === 0, "sameClass");
   var getCombatProfileClassWarning = fn2(
     "getCombatProfileClassWarning"
   )(function* (deps, profile) {
@@ -13217,7 +12860,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/combatProfileConsumableClaims.ts
   var makeCombatProfileConsumableClaims = /* @__PURE__ */ __name(() => {
-    const semaphore = makeUnsafe6(1);
+    const semaphore = makeUnsafe5(1);
     let state;
     const acquire = fn2("CombatProfileConsumableClaims.acquire")(function* (itemId) {
       return yield* semaphore.withPermit(
@@ -13347,9 +12990,9 @@ ${prefix}}`;
     misc: "inventory.getMiscSlots"
   };
   var makeInventory = /* @__PURE__ */ __name((bridge, host4, house, wait) => {
-    const consumableEquipment = makeUnsafe6(1);
+    const consumableEquipment = makeUnsafe5(1);
     const getAll = /* @__PURE__ */ __name(() => readItems(host4, "inventory"), "getAll");
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host4, "inventory", selector), "get");
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "inventory", selector), "get");
     const getSlots = fn2("Inventory.getSlots")(function* (pool = "bag") {
       if (!(yield* isHydrated(host4, "inventory"))) return 0;
       return yield* bridge.invoke(slotMethods[pool], void 0, WireInt).pipe(map4(getOrElse(() => 0)));
@@ -13366,14 +13009,14 @@ ${prefix}}`;
         return true;
       }
       if (pool === "house") return (yield* house.getAvailableSlots()) > 0;
-      const current = yield* get6(item.itemId);
+      const current = yield* get4(item.itemId);
       if (replacing === void 0 && current !== null && current.quantity < (current.maxStack ?? 1)) {
         return true;
       }
       if (pool === "misc" && current !== null) return true;
       return (yield* getAvailableSlots(pool)) > 0;
     });
-    const contains = /* @__PURE__ */ __name((selector, quantity) => get6(selector).pipe(
+    const contains = /* @__PURE__ */ __name((selector, quantity) => get4(selector).pipe(
       map4(
         (item) => item !== null && item.quantity >= normalizeItemQuantity(quantity)
       )
@@ -13413,7 +13056,7 @@ ${prefix}}`;
       return wearPacket !== null && response?.success === true;
     });
     const wearEffect = fn2("Inventory.wear")(function* (selector) {
-      const item = yield* get6(selector);
+      const item = yield* get4(selector);
       if (item === null || !item.wearable) return false;
       if (item.worn) return true;
       if (!(yield* canUseMemberItem(item.memberOnly))) return false;
@@ -13455,7 +13098,7 @@ ${prefix}}`;
       map4(getOrElse(() => false))
     );
     const equipEffect = fn2("Inventory.equip")(function* (selector, options) {
-      const item = yield* get6(selector);
+      const item = yield* get4(selector);
       if (item === null) return false;
       if (item.category === "Item" && isDirectInventoryConsumable(item.link)) {
         return false;
@@ -13500,7 +13143,7 @@ ${prefix}}`;
     });
     const equip = /* @__PURE__ */ __name((selector, options) => equipEffect(selector, options), "equip");
     const use = fn2("Inventory.use")(function* (selector) {
-      const item = yield* get6(selector);
+      const item = yield* get4(selector);
       if (item === null || !isDirectInventoryUseItem(item.category, item.link)) {
         return false;
       }
@@ -13509,7 +13152,7 @@ ${prefix}}`;
       const sent = yield* bridge.invoke("inventory.use", [{ itemId: item.itemId }], Boolean3).pipe(map4(getOrElse(() => false)));
       if (!sent) return false;
       return yield* wait.until(
-        get6(item.itemId).pipe(
+        get4(item.itemId).pipe(
           map4(
             (current) => current === null || current.quantity < startingQuantity
           )
@@ -13526,7 +13169,7 @@ ${prefix}}`;
           return false;
         }
         const items = yield* getAll();
-        let target2;
+        let target;
         for (const item of items) {
           if (item.category.trim().toLowerCase() === "enhancement") continue;
           const resolution = resolveEnhancementStrategy(
@@ -13538,12 +13181,12 @@ ${prefix}}`;
           if (!resolution.ok || normalized.slot !== void 0 && resolution.strategy.slot !== normalized.slot || !matchesAppliedEnhancement(item, resolution.strategy)) {
             continue;
           }
-          if (target2 === void 0 || (item.enhancement?.level ?? 0) > (target2.enhancement?.level ?? 0)) {
-            target2 = item;
+          if (target === void 0 || (item.enhancement?.level ?? 0) > (target.enhancement?.level ?? 0)) {
+            target = item;
           }
         }
-        if (target2 === void 0) return false;
-        return yield* equip(target2.itemId, options);
+        if (target === void 0) return false;
+        return yield* equip(target.itemId, options);
       }
     );
     const equipByEnhancement = /* @__PURE__ */ __name((selector, options) => equipByEnhancementEffect(selector, options), "equipByEnhancement");
@@ -13554,7 +13197,7 @@ ${prefix}}`;
     ), "getAvailableSlots");
     const unequipConsumable = fn2("Inventory.unequipConsumable")(
       function* (selector) {
-        const item = yield* get6(selector);
+        const item = yield* get4(selector);
         if (item === null || item.category !== "Item") return false;
         const sent = yield* bridge.invoke(
           "inventory.unequipConsumable",
@@ -13563,7 +13206,7 @@ ${prefix}}`;
         ).pipe(map4(getOrElse(() => false)));
         if (!sent) return false;
         yield* host4.command({ kind: "refreshEquippedConsumable" });
-        const current = yield* get6(item.itemId);
+        const current = yield* get4(item.itemId);
         return current?.equipped !== true;
       },
       consumableEquipment.withPermit,
@@ -13575,7 +13218,7 @@ ${prefix}}`;
       contains,
       equip,
       equipByEnhancement,
-      get: get6,
+      get: get4,
       getAll,
       getAvailableSlots,
       getSlots,
@@ -13594,7 +13237,7 @@ ${prefix}}`;
   }), "unavailable");
   var makeCombatProfileConsumables = /* @__PURE__ */ __name((deps) => {
     const claims = makeCombatProfileConsumableClaims();
-    const preflights = makeUnsafe6(1);
+    const preflights = makeUnsafe5(1);
     const prepareUnlocked = fn2("CombatProfileConsumables.prepareUnlocked")(
       function* (profile) {
         if (!profileUsesSkill5(profile)) {
@@ -13700,18 +13343,18 @@ ${prefix}}`;
     });
   }, "normalizeSkillInterval");
   var makeCombat = /* @__PURE__ */ __name((bridge, antiCounter, host4, drops, events, inventory, map7, monsters, player, players, settings, temporary, wait) => {
-    const consumableCasts = makeUnsafe6(1);
+    const consumableCasts = makeUnsafe5(1);
     const targetValue = readCombatTarget(bridge);
     const targetAuras = /* @__PURE__ */ __name((options) => targetValue.pipe(
-      flatMap3((target3) => {
-        if (target3 === null) return succeed7([]);
-        return (target3.type === "monster" ? host4.read({
+      flatMap3((target2) => {
+        if (target2 === null) return succeed7([]);
+        return (target2.type === "monster" ? host4.read({
           kind: "monsterAuras",
-          monsterMapId: target3.monsterMapId,
+          monsterMapId: target2.monsterMapId,
           auraKind: options?.kind ?? null
         }) : host4.read({
           kind: "playerAuras",
-          entityId: target3.entityId,
+          entityId: target2.entityId,
           auraKind: options?.kind ?? null
         })).pipe(map4((auras) => auras.map(toLiveAura)));
       })
@@ -13893,9 +13536,9 @@ ${prefix}}`;
         ).pipe(map4(getOrElse(() => false)));
       });
     }, "attack");
-    const reachHuntTarget = /* @__PURE__ */ __name((target3) => {
-      if (target3 === null || target3.cell === "") return succeed7(null);
-      return player.jumpToCell(target3.cell).pipe(map4((reached) => reached ? target3 : null));
+    const reachHuntTarget = /* @__PURE__ */ __name((target2) => {
+      if (target2 === null || target2.cell === "") return succeed7(null);
+      return player.jumpToCell(target2.cell).pipe(map4((reached) => reached ? target2 : null));
     }, "reachHuntTarget");
     const hunt = /* @__PURE__ */ __name((selector, options) => {
       return monsters.getAll().pipe(
@@ -13908,10 +13551,10 @@ ${prefix}}`;
           for (const monster of matches) {
             cells.set(monster.cell, (cells.get(monster.cell) ?? 0) + 1);
           }
-          const target3 = matches.reduce(
+          const target2 = matches.reduce(
             (best, candidate) => (cells.get(candidate.cell) ?? 0) > (cells.get(best.cell) ?? 0) ? candidate : best
           );
-          return reachHuntTarget(target3);
+          return reachHuntTarget(target2);
         })
       );
     }, "hunt");
@@ -13947,7 +13590,7 @@ ${prefix}}`;
                   {
                     canUseSkill,
                     getConsumableSkillItem,
-                    target: target2,
+                    target,
                     useSkill
                   },
                   player,
@@ -13976,7 +13619,7 @@ ${prefix}}`;
         return session;
       });
     }, "makeKillProfileRuntime");
-    const fight = /* @__PURE__ */ __name((selector, options, runtime3) => {
+    const fight = /* @__PURE__ */ __name((selector, options, runtime2) => {
       const skills = normalizeSkills(options?.skills);
       const skillInterval = normalizeSkillInterval(options?.skillInterval);
       const attackOrder = [...options?.targetPriority ?? [], selector];
@@ -13991,8 +13634,8 @@ ${prefix}}`;
       });
       return forever3(
         gen2(function* () {
-          if (runtime3 !== null) {
-            const result2 = yield* runtime3.runCycle().pipe(orDie2);
+          if (runtime2 !== null) {
+            const result2 = yield* runtime2.runCycle().pipe(orDie2);
             if (result2.kind === "no-target") {
               yield* stopCombat2;
             }
@@ -14003,13 +13646,13 @@ ${prefix}}`;
             yield* sleep2("250 millis");
             return;
           }
-          const target3 = yield* selectTarget;
-          if (target3 === null) {
+          const target2 = yield* selectTarget;
+          if (target2 === null) {
             yield* stopCombat2;
             yield* sleep2("100 millis");
             return;
           }
-          if (!(yield* attack(target3.monsterMapId))) {
+          if (!(yield* attack(target2.monsterMapId))) {
             yield* sleep2("250 millis");
             return;
           }
@@ -14020,7 +13663,7 @@ ${prefix}}`;
         })
       );
     }, "fight");
-    const killWithRuntime = /* @__PURE__ */ __name((selector, options, runtime3) => gen2(function* () {
+    const killWithRuntime = /* @__PURE__ */ __name((selector, options, runtime2) => gen2(function* () {
       const startMap = yield* host4.read({ kind: "map" });
       const available = yield* monsters.getAvailable();
       const monster = available.find(
@@ -14034,7 +13677,7 @@ ${prefix}}`;
           type: "monster-death"
         },
         {
-          trigger: forkScoped2(fight(selector, options, runtime3)).pipe(
+          trigger: forkScoped2(fight(selector, options, runtime2)).pipe(
             as2(true)
           )
         }
@@ -14060,15 +13703,15 @@ ${prefix}}`;
     }), "killWithRuntime");
     const kill = /* @__PURE__ */ __name((selector, options) => scoped2(
       gen2(function* () {
-        const runtime3 = yield* makeKillProfileRuntime(selector, options);
-        return yield* killWithRuntime(selector, options, runtime3);
+        const runtime2 = yield* makeKillProfileRuntime(selector, options);
+        return yield* killWithRuntime(selector, options, runtime2);
       })
     ).pipe(ensuring2(stopCombat2)), "kill");
     const killFor = /* @__PURE__ */ __name((selector, item, requested, source, options) => {
       const wanted = Math.max(1, Math.trunc(requested ?? 1));
       return scoped2(
         gen2(function* () {
-          const runtime3 = yield* makeKillProfileRuntime(selector, options);
+          const runtime2 = yield* makeKillProfileRuntime(selector, options);
           const loop = gen2(function* () {
             while (true) {
               if (yield* source.contains(item, wanted)) return true;
@@ -14076,7 +13719,7 @@ ${prefix}}`;
                 yield* drops.accept(item);
                 if (yield* source.contains(item, wanted)) return true;
               }
-              if (!(yield* killWithRuntime(selector, options, runtime3))) {
+              if (!(yield* killWithRuntime(selector, options, runtime2))) {
                 yield* sleep2("100 millis");
               }
             }
@@ -14100,7 +13743,7 @@ ${prefix}}`;
     ), "getTargetAura");
     const hasTargetAura = /* @__PURE__ */ __name((name, options) => getTargetAura2(name, options).pipe(map4((aura) => aura !== null)), "hasTargetAura");
     const getTarget = /* @__PURE__ */ __name(() => targetValue, "getTarget");
-    const target2 = {
+    const target = {
       auras: {
         get: getTargetAura2,
         getAll: targetAuras,
@@ -14123,7 +13766,7 @@ ${prefix}}`;
       killForItem,
       killForTempItem,
       prepareCombatProfile,
-      target: target2,
+      target,
       useSkill
     };
   }, "makeCombat");
@@ -14183,12 +13826,12 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/api/Drops.ts
   var makeDrops = fnUntraced2(function* (bridge, host4, auth) {
     const operationHost = globalThis.__host;
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host4, "drop", selector), "get");
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "drop", selector), "get");
     const accept = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? operate({ kind: "acceptDrop", selector }, operationHost).pipe(
       map4((answer) => answer.value),
       catch_2(() => succeed7(false))
     ) : succeed7(false), "accept");
-    const contains = /* @__PURE__ */ __name((selector) => get6(selector).pipe(map4((drop) => drop !== null)), "contains");
+    const contains = /* @__PURE__ */ __name((selector) => get4(selector).pipe(map4((drop) => drop !== null)), "contains");
     const getAll = /* @__PURE__ */ __name(() => readItems(host4, "drop"), "getAll");
     const isCustomUiEnabled = /* @__PURE__ */ __name(() => bridge.invoke("drops.isUsingCustomDrops", void 0, Boolean3).pipe(map4(getOrElse(() => false))), "isCustomUiEnabled");
     const reject = /* @__PURE__ */ __name((selector) => gen2(function* () {
@@ -14201,7 +13844,7 @@ ${prefix}}`;
     return {
       accept,
       contains,
-      get: get6,
+      get: get4,
       getAll,
       isCustomUiEnabled,
       reject,
@@ -14264,7 +13907,7 @@ ${prefix}}`;
     const getAll = /* @__PURE__ */ __name(() => readItems(host4, "house"), "getAll");
     const getSlots = /* @__PURE__ */ __name(() => bridge.invoke("house.getSlots", void 0, WireInt).pipe(map4(getOrElse(() => 0))), "getSlots");
     const getUsedSlots = /* @__PURE__ */ __name(() => host4.read({ kind: "items", container: "house" }).pipe(map4((items) => items.length)), "getUsedSlots");
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host4, "house", selector), "get");
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "house", selector), "get");
     const getAvailableSlots = /* @__PURE__ */ __name(() => zipWith2(
       getSlots(),
       getUsedSlots(),
@@ -14272,7 +13915,7 @@ ${prefix}}`;
     ), "getAvailableSlots");
     return {
       contains,
-      get: get6,
+      get: get4,
       getAll,
       getAvailableSlots,
       getSlots,
@@ -14473,7 +14116,7 @@ ${prefix}}`;
         )
       );
     }, "reread");
-    const get6 = /* @__PURE__ */ __name((selector) => getProjected(selector).pipe(
+    const get4 = /* @__PURE__ */ __name((selector) => getProjected(selector).pipe(
       flatMap3(
         (monster) => monster === null ? succeed7(null) : ensureDrops(monster).pipe(
           andThen2(readMonster(monster.monsterMapId))
@@ -14500,7 +14143,7 @@ ${prefix}}`;
     return {
       ensureCurrentCell,
       api: {
-        get: get6,
+        get: get4,
         getAll,
         getAvailable,
         isAvailable
@@ -14581,8 +14224,20 @@ ${prefix}}`;
     const rank = /* @__PURE__ */ __name((cell) => cellKey(cell) === current ? 0 : occupiedCells.has(cellKey(cell)) ? 2 : 1, "rank");
     return cells.filter(
       (cell) => !transitionCells.has(cellKey(cell)) && !aggressiveCells.has(cellKey(cell))
-    ).toSorted((left2, right2) => rank(left2) - rank(right2));
+    ).toSorted((left, right) => rank(left) - rank(right));
   }, "combatExitCells");
+
+  // node_modules/.pnpm/effect@4.0.3/node_modules/effect/dist/Random.js
+  var Random2 = Random;
+  var randomWith = /* @__PURE__ */ __name((f) => withFiber2((fiber2) => succeed7(f(fiber2.getRef(Random2)))), "randomWith");
+  var nextIntBetween = /* @__PURE__ */ __name((min2, max2, options) => {
+    const extra = options?.halfOpen === true ? 0 : 1;
+    return randomWith((r) => {
+      const minInt = Math.ceil(min2);
+      const maxInt = Math.floor(max2);
+      return Math.floor(r.nextDoubleUnsafe() * (maxInt - minInt + extra)) + minInt;
+    });
+  }, "nextIntBetween");
 
   // packages/runtime/src/game/flash/domain/MapTarget.ts
   var minimumPrivateRoom = MINIMUM_PRIVATE_ROOM;
@@ -14610,11 +14265,11 @@ ${prefix}}`;
     maximumRoom
   );
   var withRoomNumber = /* @__PURE__ */ __name((map7, room) => {
-    const target2 = splitRoom(map7);
-    if (target2.roomToken !== void 0 && parseRoom(target2.roomToken) !== void 0) {
-      return target2.map;
+    const target = splitRoom(map7);
+    if (target.roomToken !== void 0 && parseRoom(target.roomToken) !== void 0) {
+      return target.map;
     }
-    return `${target2.name}-${Math.max(1, Math.trunc(room))}`;
+    return `${target.name}-${Math.max(1, Math.trunc(room))}`;
   }, "withRoomNumber");
   var applyRoomPolicy = fn2("applyRoomPolicy")(function* (map7, policy) {
     const trimmed = map7.trim();
@@ -14623,20 +14278,20 @@ ${prefix}}`;
     return withRoomNumber(trimmed, room);
   });
   var parseMapTarget = /* @__PURE__ */ __name((map7) => gen2(function* () {
-    const target2 = splitRoom(map7);
-    if (target2.roomToken === void 0) {
+    const target = splitRoom(map7);
+    if (target.roomToken === void 0) {
       return {
-        map: target2.map,
-        name: target2.name,
+        map: target.map,
+        name: target.name,
         requireExactRoom: false
       };
     }
-    const fixedRoom = parseRoom(target2.roomToken);
+    const fixedRoom = parseRoom(target.roomToken);
     const roomNumber = fixedRoom ?? (yield* randomPrivateRoom);
     const requireExactRoom = fixedRoom === void 0 || fixedRoom >= minimumPrivateRoom && fixedRoom <= maximumRoom;
     return {
-      map: fixedRoom === void 0 ? `${target2.name}-${roomNumber}` : target2.map,
-      name: target2.name,
+      map: fixedRoom === void 0 ? `${target.name}-${roomNumber}` : target.map,
+      name: target.name,
       requireExactRoom,
       roomNumber
     };
@@ -14672,7 +14327,7 @@ ${prefix}}`;
     pe: optionalKey2(NonNegativeWireInt)
   });
   var OutfitPayloads = ArraySchema(OutfitPayload);
-  var sameText = /* @__PURE__ */ __name((left2, right2) => left2.localeCompare(right2, void 0, { sensitivity: "accent" }) === 0, "sameText");
+  var sameText = /* @__PURE__ */ __name((left, right) => left.localeCompare(right, void 0, { sensitivity: "accent" }) === 0, "sameText");
   var findClassItem = /* @__PURE__ */ __name((items, query) => items.find(
     (item) => item.classItem && (query === void 0 ? item.equipped : item.matches(query))
   ), "findClassItem");
@@ -14707,7 +14362,7 @@ ${prefix}}`;
   }), "toOutfit");
   var makePlayer = /* @__PURE__ */ __name((bridge, host4, auth, inventory, map7, wait) => {
     const read = /* @__PURE__ */ __name((method, schema, fallback) => bridge.invoke(method, void 0, schema).pipe(map4(getOrElse(() => fallback))), "read");
-    const get6 = /* @__PURE__ */ __name(() => host4.read({ kind: "me" }).pipe(
+    const get4 = /* @__PURE__ */ __name(() => host4.read({ kind: "me" }).pipe(
       map4((player) => player === null ? null : toLivePlayer(player))
     ), "get");
     const readLocation = /* @__PURE__ */ __name((projected, method) => projected !== "" ? succeed7(projected) : map7.isLoaded().pipe(
@@ -14715,7 +14370,7 @@ ${prefix}}`;
         (loaded) => loaded ? read(method, String4, "") : succeed7("")
       )
     ), "readLocation");
-    const getAuras = /* @__PURE__ */ __name((options) => get6().pipe(
+    const getAuras = /* @__PURE__ */ __name((options) => get4().pipe(
       map4(
         (player) => (player?.auras ?? []).filter(
           (aura) => options?.kind === void 0 || aura.kind === options.kind
@@ -14803,7 +14458,7 @@ ${prefix}}`;
       getAll: getOutfits,
       wear: wearOutfit
     };
-    const getCell = /* @__PURE__ */ __name(() => get6().pipe(
+    const getCell = /* @__PURE__ */ __name(() => get4().pipe(
       flatMap3(
         (current) => readLocation(current?.cell ?? "", "player.getCell")
       )
@@ -14820,18 +14475,18 @@ ${prefix}}`;
     });
     const getGender = /* @__PURE__ */ __name(() => read("player.getGender", String4, ""), "getGender");
     const getGold = /* @__PURE__ */ __name(() => read("player.getGold", WireInt, 0), "getGold");
-    const getHp = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.hp ?? 0)), "getHp");
-    const getLevel = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.level ?? 0)), "getLevel");
-    const getMaxHp = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.maxHp ?? 0)), "getMaxHp");
-    const getMaxMp = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.maxMp ?? 0)), "getMaxMp");
-    const getMp = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.mp ?? 0)), "getMp");
-    const getPad = /* @__PURE__ */ __name(() => get6().pipe(
+    const getHp = /* @__PURE__ */ __name(() => get4().pipe(map4((current) => current?.hp ?? 0)), "getHp");
+    const getLevel = /* @__PURE__ */ __name(() => get4().pipe(map4((current) => current?.level ?? 0)), "getLevel");
+    const getMaxHp = /* @__PURE__ */ __name(() => get4().pipe(map4((current) => current?.maxHp ?? 0)), "getMaxHp");
+    const getMaxMp = /* @__PURE__ */ __name(() => get4().pipe(map4((current) => current?.maxMp ?? 0)), "getMaxMp");
+    const getMp = /* @__PURE__ */ __name(() => get4().pipe(map4((current) => current?.mp ?? 0)), "getMp");
+    const getPad = /* @__PURE__ */ __name(() => get4().pipe(
       flatMap3(
         (current) => readLocation(current?.pad ?? "", "player.getPad")
       )
     ), "getPad");
-    const getState = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.state ?? EntityState.Idle)), "getState");
-    const getPosition = /* @__PURE__ */ __name(() => get6().pipe(
+    const getState = /* @__PURE__ */ __name(() => get4().pipe(map4((current) => current?.state ?? EntityState.Idle)), "getState");
+    const getPosition = /* @__PURE__ */ __name(() => get4().pipe(
       map4((current) => ({
         ...current?.position ?? { x: 0, y: 0 }
       }))
@@ -14841,8 +14496,8 @@ ${prefix}}`;
       return username === "" ? void_3 : bridge.invoke("player.goToPlayer", [username], Void2).pipe(asVoid2);
     }, "goToPlayer");
     const hasActiveBoost = /* @__PURE__ */ __name((boostType) => bridge.invoke("player.hasActiveBoost", [boostType], Boolean3).pipe(map4(getOrElse(() => false))), "hasActiveBoost");
-    const isAfk = /* @__PURE__ */ __name(() => get6().pipe(map4((current) => current?.afk ?? false)), "isAfk");
-    const isAlive = /* @__PURE__ */ __name(() => get6().pipe(
+    const isAfk = /* @__PURE__ */ __name(() => get4().pipe(map4((current) => current?.afk ?? false)), "isAfk");
+    const isAlive = /* @__PURE__ */ __name(() => get4().pipe(
       flatMap3(
         (current) => current !== null ? succeed7(current.alive) : all2([
           read("player.getHp", WireInt, 0),
@@ -14919,9 +14574,9 @@ ${prefix}}`;
       }
       return false;
     });
-    const joinMap = /* @__PURE__ */ __name((target2, options) => gen2(function* () {
+    const joinMap = /* @__PURE__ */ __name((target, options) => gen2(function* () {
       const { cell, pad } = options ?? {};
-      const destination = yield* parseMapTarget(target2);
+      const destination = yield* parseMapTarget(target);
       if (destination.map === "") return false;
       const targetCell = cell ?? (pad === void 0 ? void 0 : "Enter");
       const currentMap = yield* host4.read({ kind: "map" });
@@ -14960,7 +14615,7 @@ ${prefix}}`;
       return yield* jumpToCell(targetCell, pad);
     }), "joinMap");
     const rest = /* @__PURE__ */ __name((options) => gen2(function* () {
-      const current = yield* get6();
+      const current = yield* get4();
       if (current !== null && current.hp >= current.maxHp && current.mp >= current.maxMp)
         return true;
       if (!(yield* wait.forGameAction("rest"))) return false;
@@ -14970,7 +14625,7 @@ ${prefix}}`;
         return false;
       if (options?.waitUntilFull !== true) return true;
       return yield* wait.until(
-        get6().pipe(
+        get4().pipe(
           map4(
             (player) => player !== null && player.hp >= player.maxHp && player.mp >= player.maxMp
           )
@@ -14987,7 +14642,7 @@ ${prefix}}`;
       const started = yield* bridge.invoke("player.walkTo", args2, Boolean3).pipe(map4(getOrElse(() => false)));
       if (!started) return false;
       return yield* wait.until(
-        get6().pipe(
+        get4().pipe(
           map4(
             (current) => current?.position.x === targetX && current.position.y === targetY
           )
@@ -14999,7 +14654,7 @@ ${prefix}}`;
       auras,
       exitCombat,
       factions,
-      get: get6,
+      get: get4,
       getCell,
       getClassName,
       getClassRank,
@@ -15042,7 +14697,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/Players.ts
   var makePlayers = /* @__PURE__ */ __name((host4) => {
-    const get6 = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host4.read({ kind: "player", selector }).pipe(
+    const get4 = /* @__PURE__ */ __name((selector) => isSelectable(selector) ? host4.read({ kind: "player", selector }).pipe(
       map4(
         (player) => player === null ? null : toLivePlayer(player)
       )
@@ -15052,7 +14707,7 @@ ${prefix}}`;
       map4((player) => player === null ? null : toLivePlayer(player))
     ), "getMe");
     return {
-      get: get6,
+      get: get4,
       getAll,
       getMe
     };
@@ -15071,7 +14726,7 @@ ${prefix}}`;
   // packages/runtime/src/game/flash/api/Quests.ts
   var isQuestId = /* @__PURE__ */ __name((questId) => Number.isSafeInteger(questId) && questId > 0, "isQuestId");
   var makeQuests = /* @__PURE__ */ __name((bridge, host4, wait) => {
-    const loads = makeUnsafe6(1);
+    const loads = makeUnsafe5(1);
     let nextLoadAt = 0;
     const read = /* @__PURE__ */ __name((questId) => host4.read({ kind: "quest", id: questId }).pipe(
       map4((quest) => quest === null ? null : toLiveQuest(quest))
@@ -15201,7 +14856,7 @@ ${prefix}}`;
         return event !== null;
       });
     }, "complete");
-    const get6 = /* @__PURE__ */ __name((questId) => {
+    const get4 = /* @__PURE__ */ __name((questId) => {
       if (!isQuestId(questId)) return succeed7(null);
       return read(questId).pipe(
         flatMap3(
@@ -15229,7 +14884,7 @@ ${prefix}}`;
       acceptBatch,
       canComplete,
       complete,
-      get: get6,
+      get: get4,
       getAccepted,
       getAll,
       getMaxTurnIns,
@@ -15271,7 +14926,7 @@ ${prefix}}`;
 
   // packages/runtime/src/game/flash/api/Settings.ts
   var makeSettings = /* @__PURE__ */ __name((host4) => {
-    const get6 = /* @__PURE__ */ __name(() => host4.read({ kind: "settings" }), "get");
+    const get4 = /* @__PURE__ */ __name(() => host4.read({ kind: "settings" }), "get");
     return {
       apply: /* @__PURE__ */ __name((patch) => gen2(function* () {
         for (const field of ["frameRate", "walkSpeed"]) {
@@ -15284,8 +14939,8 @@ ${prefix}}`;
           return yield* die3(new Error("host rejected settings patch"));
         }
       }), "apply"),
-      get: get6,
-      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get6().pipe(map4((state) => state.antiCounterEnabled)), "isAntiCounterEnabled")
+      get: get4,
+      isAntiCounterEnabled: /* @__PURE__ */ __name(() => get4().pipe(map4((state) => state.antiCounterEnabled)), "isAntiCounterEnabled")
     };
   }, "makeSettings");
 
@@ -15305,7 +14960,7 @@ ${prefix}}`;
   var isShopId = /* @__PURE__ */ __name((shopId) => Number.isSafeInteger(shopId) && shopId > 0, "isShopId");
   var selectorFor = /* @__PURE__ */ __name((item) => item.shopItemId === void 0 ? { itemId: item.itemId } : { shopItemId: item.shopItemId }, "selectorFor");
   var makeShops = /* @__PURE__ */ __name((bridge, host4, inventory, wait) => {
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host4, "shop", selector), "get");
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "shop", selector), "get");
     const getCurrent = /* @__PURE__ */ __name(() => host4.read({ kind: "shop" }).pipe(map4((shop) => shop === null ? null : toLiveShop(shop))), "getCurrent");
     const isOpen = /* @__PURE__ */ __name((shopId) => {
       if (shopId !== void 0 && !isShopId(shopId)) {
@@ -15400,7 +15055,7 @@ ${prefix}}`;
         return shop?.id === shopId && open;
       });
     }, "load");
-    const canBuy = /* @__PURE__ */ __name((selector, options) => get6(selector).pipe(
+    const canBuy = /* @__PURE__ */ __name((selector, options) => get4(selector).pipe(
       flatMap3(
         (item) => item === null ? succeed7(false) : bridge.invoke(
           "shops.canBuyItem",
@@ -15409,7 +15064,7 @@ ${prefix}}`;
         ).pipe(map4(getOrElse(() => false)))
       )
     ), "canBuy");
-    const buy = /* @__PURE__ */ __name((selector, options) => get6(selector).pipe(
+    const buy = /* @__PURE__ */ __name((selector, options) => get4(selector).pipe(
       flatMap3((item) => {
         if (item === null) return succeed7(false);
         const requested = normalizeItemQuantity(options?.quantity);
@@ -15480,7 +15135,7 @@ ${prefix}}`;
       );
     }, "sell");
     const getAll = /* @__PURE__ */ __name(() => readItems(host4, "shop"), "getAll");
-    const getMaxBuyQuantity = /* @__PURE__ */ __name((selector) => get6(selector).pipe(
+    const getMaxBuyQuantity = /* @__PURE__ */ __name((selector) => get4(selector).pipe(
       flatMap3(
         (item) => item === null ? succeed7(0) : bridge.invoke("shops.getMaxBuyQuantity", [selectorFor(item)], WireInt).pipe(map4(getOrElse(() => 0)))
       )
@@ -15507,7 +15162,7 @@ ${prefix}}`;
       buy,
       canBuy,
       close: close2,
-      get: get6,
+      get: get4,
       getAll,
       getCurrent,
       getMaxBuyQuantity,
@@ -15525,11 +15180,11 @@ ${prefix}}`;
     const contains = /* @__PURE__ */ __name((selector, quantity) => itemQuantity(host4, "temporary", selector).pipe(
       map4((owned) => owned >= normalizeItemQuantity(quantity))
     ), "contains");
-    const get6 = /* @__PURE__ */ __name((selector) => readItem(host4, "temporary", selector), "get");
+    const get4 = /* @__PURE__ */ __name((selector) => readItem(host4, "temporary", selector), "get");
     const getAll = /* @__PURE__ */ __name(() => readItems(host4, "temporary"), "getAll");
     return {
       contains,
-      get: get6,
+      get: get4,
       getAll
     };
   }, "makeTempInventory");
@@ -15725,283 +15380,6 @@ ${prefix}}`;
     )
   );
 
-  // packages/runtime/src/game/automation/retryLoop.ts
-  var makeRetryAttempt = /* @__PURE__ */ __name((name) => {
-    const failing = /* @__PURE__ */ new Set();
-    return (tick, interval) => suspend2(() => {
-      const token = /* @__PURE__ */ Symbol();
-      const attempt = /* @__PURE__ */ __name(() => suspend2(tick).pipe(
-        tap2(
-          () => sync2(() => {
-            if (failing.delete(token) && failing.size === 0) {
-              console.info(`${name} recovered`);
-            }
-          })
-        ),
-        catchCause2(
-          (cause) => hasInterrupts2(cause) ? interrupt3 : sync2(() => {
-            if (failing.size === 0) {
-              console.warn(`${name} tick failed`, pretty(cause));
-            }
-            failing.add(token);
-          }).pipe(
-            andThen2(sleep2(interval)),
-            andThen2(suspend2(attempt))
-          )
-        )
-      ), "attempt");
-      return attempt().pipe(
-        ensuring2(sync2(() => failing.delete(token)))
-      );
-    });
-  }, "makeRetryAttempt");
-
-  // packages/runtime/src/game/automation/AutoZone.ts
-  var AutoZoneSupportedMap = Literals([
-    "ledgermayne",
-    "moreskulls",
-    "ultradage",
-    "darkcarnax",
-    "astralshrine",
-    "queeniona",
-    "magnumopus"
-  ]);
-  var snapshotState = /* @__PURE__ */ __name((state) => ({ ...state }), "snapshotState");
-  var zones = {
-    astralshrine: {
-      "": [
-        [461, 465],
-        [320, 325]
-      ],
-      A: [
-        [643, 708],
-        [445, 447]
-      ],
-      B: [
-        [199, 287],
-        [181, 205]
-      ]
-    },
-    darkcarnax: {
-      "": [
-        [480, 530],
-        [419, 432]
-      ],
-      A: [
-        [731, 850],
-        [431, 432]
-      ],
-      B: [
-        [54, 155],
-        [431, 432]
-      ]
-    },
-    ledgermayne: {
-      "": [
-        [431, 547],
-        [234, 239]
-      ],
-      A: [
-        [147, 276],
-        [353, 357]
-      ],
-      B: [
-        [727, 852],
-        [353, 356]
-      ]
-    },
-    magnumopus: {
-      "": [
-        [466, 470],
-        [344, 420]
-      ],
-      A: [
-        [682, 813],
-        [367, 384]
-      ],
-      B: [
-        [170, 285],
-        [377, 384]
-      ]
-    },
-    moreskulls: {
-      "": [
-        [778, 806],
-        [358, 361]
-      ],
-      A: [
-        [696, 802],
-        [445, 452]
-      ],
-      B: [
-        [677, 766],
-        [321, 324]
-      ]
-    },
-    ultradage: {
-      "": [
-        [481, 483],
-        [296, 300]
-      ],
-      A: [
-        [49, 164],
-        [406, 412]
-      ],
-      B: [
-        [797, 900],
-        [400, 402]
-      ]
-    }
-  };
-  var positiveCharges = ["Positive Charge", "Positive Charge?"];
-  var negativeCharges = ["Negative Charge", "Negative Charge?"];
-  var left = [
-    [111, 272],
-    [369, 379]
-  ];
-  var right = [
-    [746, 869],
-    [369, 379]
-  ];
-  var target = /* @__PURE__ */ __name((map7, zone, charge) => {
-    if (map7 !== "queeniona") {
-      const range3 = zones[map7]?.[zone];
-      return range3 === void 0 ? void 0 : { kind: "range", range: range3 };
-    }
-    if (zone !== "A" && zone !== "B") {
-      return { kind: "point", x: 490, y: 320 };
-    }
-    const range2 = zone === "A" ? charge === "positive" ? right : charge === "negative" ? left : void 0 : charge === "positive" ? left : charge === "negative" ? right : void 0;
-    return range2 === void 0 ? void 0 : { kind: "range", range: range2 };
-  }, "target");
-  var makeAutoZone = fnUntraced2(function* (api, fibers, initial = { enabled: false, map: void 0 }) {
-    const state = yield* make15(initial);
-    const retry3 = makeRetryAttempt("auto zone");
-    const move = /* @__PURE__ */ __name((destination) => destination.kind === "point" ? api.player.walkTo(destination) : all2({
-      x: nextIntBetween(
-        destination.range[0][0],
-        destination.range[0][1]
-      ),
-      y: nextIntBetween(
-        destination.range[1][0],
-        destination.range[1][1]
-      )
-    }).pipe(
-      flatMap3((position) => api.player.walkTo(position)),
-      asVoid2
-    ), "move");
-    const hasAura = /* @__PURE__ */ __name((names) => forEach2(names, (name) => api.player.auras.get(name)).pipe(
-      map4((auras) => auras.some((aura) => aura !== null))
-    ), "hasAura");
-    const transition = /* @__PURE__ */ __name((map7, zone) => gen2(function* () {
-      if (map7 === "queeniona") yield* sleep2("500 millis");
-      const current = yield* get4(state);
-      const activeMap = yield* api.map.getName();
-      if (!current.enabled || current.map !== map7 || activeMap.localeCompare(map7, void 0, { sensitivity: "accent" }) !== 0) {
-        return;
-      }
-      const positive = map7 === "queeniona" ? yield* hasAura(positiveCharges) : false;
-      const negative = map7 === "queeniona" && !positive ? yield* hasAura(negativeCharges) : false;
-      const destination = target(
-        map7,
-        zone,
-        positive ? "positive" : negative ? "negative" : "none"
-      );
-      if (destination !== void 0) yield* move(destination);
-    }), "transition");
-    const dispose = yield* api.events.on({ type: "zone" }, (event) => {
-      if (event.type !== "zone") return void_3;
-      return get4(state).pipe(
-        flatMap3((current) => {
-          const map7 = current.map;
-          return current.enabled && map7 === event.map ? run(
-            fibers,
-            "auto-zone-transition",
-            retry3(() => transition(map7, event.zone), "500 millis")
-          ).pipe(asVoid2) : void_3;
-        })
-      );
-    });
-    yield* addFinalizer3(() => sync2(dispose));
-    const applyConfig = /* @__PURE__ */ __name((config) => retry3(
-      () => gen2(function* () {
-        const previous = yield* get4(state);
-        const next = { enabled: config.enabled, map: config.map ?? void 0 };
-        yield* set3(state, next);
-        if (previous.map !== next.map || !next.enabled) {
-          yield* remove2(fibers, "auto-zone-transition");
-        }
-      }),
-      "500 millis"
-    ), "applyConfig");
-    const changes2 = changes(state);
-    const getMap = /* @__PURE__ */ __name(() => get4(state).pipe(map4((current) => current.map)), "getMap");
-    const getState = /* @__PURE__ */ __name(() => get4(state).pipe(map4(snapshotState)), "getState");
-    const isEnabled = /* @__PURE__ */ __name(() => get4(state).pipe(map4((current) => current.enabled)), "isEnabled");
-    const setEnabled = /* @__PURE__ */ __name((enabled) => updateAndGet(state, (current) => ({
-      ...current,
-      enabled
-    })).pipe(map4(snapshotState)), "setEnabled");
-    const setMap = /* @__PURE__ */ __name((map7) => {
-      return remove2(fibers, "auto-zone-transition").pipe(
-        andThen2(
-          updateAndGet(state, (current) => ({
-            ...current,
-            map: map7
-          })).pipe(map4(snapshotState))
-        )
-      );
-    }, "setMap");
-    return {
-      applyConfig,
-      changes: changes2,
-      getMap,
-      getState,
-      isEnabled,
-      setEnabled,
-      setMap
-    };
-  });
-  var layer6 = effectDiscard(
-    gen2(function* () {
-      const api = yield* Api;
-      const host4 = yield* HostState;
-      const fibers = yield* make6();
-      const config = yield* host4.read({ kind: "autoZone" });
-      const autoZone = yield* makeAutoZone(api, fibers, {
-        enabled: config.enabled,
-        map: config.map ?? void 0
-      });
-      const runFork3 = yield* runtime(fibers)();
-      const retry3 = makeRetryAttempt("auto zone host read");
-      const decodeConfig = decodeUnknownSync(
-        Struct({
-          enabled: Boolean3,
-          map: NullOr(AutoZoneSupportedMap)
-        })
-      );
-      const refresh = retry3(
-        () => host4.read({ kind: "autoZone" }).pipe(
-          map4(decodeConfig),
-          flatMap3(autoZone.applyConfig)
-        ),
-        "500 millis"
-      );
-      const onChange = /* @__PURE__ */ __name((config2) => {
-        runFork3("auto-zone-config", autoZone.applyConfig(config2));
-      }, "onChange");
-      const onLost = /* @__PURE__ */ __name(() => {
-        runFork3("auto-zone-config", refresh, { onlyIfMissing: true });
-      }, "onLost");
-      window.onAutoZoneChanged = onChange;
-      window.onHostEventsLost = onLost;
-      yield* addFinalizer3(() => sync2(() => {
-        if (window.onAutoZoneChanged === onChange) delete window.onAutoZoneChanged;
-        if (window.onHostEventsLost === onLost) delete window.onHostEventsLost;
-      }));
-    })
-  );
-
   // packages/runtime/src/host/loop.ts
   var host2 = __host;
   var timers = /* @__PURE__ */ new Map();
@@ -16107,7 +15485,7 @@ ${prefix}}`;
   var botLayer = effectDiscard(
     flatMap3(Gateway, (gateway2) => gateway2.start())
   ).pipe(provideMerge(services));
-  var runtime2 = make5(layer6.pipe(provideMerge(botLayer)));
-  runtime2.runSync(void_3);
+  var runtime = make5(botLayer);
+  runtime.runSync(void_3);
   Object.assign(globalThis, { __lucent: Object.freeze({ turn, wake }) });
 })();

@@ -1,3 +1,6 @@
+mod interests;
+pub use interests::{EventInterests, EventKind};
+
 use std::sync::mpsc::{self, RecvTimeoutError, TrySendError};
 use std::sync::{
     Arc, Mutex,
@@ -200,6 +203,7 @@ pub enum ScriptEvent {
 }
 
 pub(crate) struct ScriptEventSender {
+    interests: EventInterests,
     events: Option<EventSender<ScriptEvent>>,
     waker: Arc<Mutex<Option<Waker>>>,
 }
@@ -209,11 +213,15 @@ pub(crate) struct ScriptEvents {
     waker: Arc<Mutex<Option<Waker>>>,
 }
 
-pub(crate) fn script_events(capacity: usize) -> (ScriptEventSender, ScriptEvents) {
+pub(crate) fn script_events(
+    capacity: usize,
+    interests: EventInterests,
+) -> (ScriptEventSender, ScriptEvents) {
     let (sender, events) = event_queue(capacity);
     let waker = Arc::new(Mutex::new(None));
     (
         ScriptEventSender {
+            interests,
             events: Some(sender),
             waker: waker.clone(),
         },
@@ -222,7 +230,14 @@ pub(crate) fn script_events(capacity: usize) -> (ScriptEventSender, ScriptEvents
 }
 
 impl ScriptEventSender {
+    pub(crate) fn accepts(&self, event: &ScriptEvent) -> bool {
+        self.interests.accepts(event)
+    }
+
     pub(crate) fn send(&self, event: ScriptEvent) {
+        if !self.accepts(&event) {
+            return;
+        }
         self.events.as_ref().unwrap().send(event);
         self.wake();
     }
@@ -434,6 +449,112 @@ mod tests {
     }
 
     #[test]
+    fn interested_streams_wake_only_for_selected_events_and_close() {
+        struct Count(std::sync::atomic::AtomicUsize);
+        impl std::task::Wake for Count {
+            fn wake(self: Arc<Self>) {
+                self.0.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        let (producer, events) = script_events(2, crate::automation::AutoZonePolicy::INTERESTS);
+        let count = Arc::new(Count(std::sync::atomic::AtomicUsize::new(0)));
+        events.set_waker(Waker::from(count.clone()));
+        for _ in 0..20_000 {
+            producer.send(ScriptEvent::Loader {
+                event: Event {
+                    name: "onDebug".into(),
+                    args: vec![],
+                },
+                projected: vec![],
+            });
+        }
+        assert_eq!(count.0.load(Ordering::Relaxed), 0);
+        assert_eq!(events.try_recv(), Ok(None));
+        producer.send(ScriptEvent::Loader {
+            event: Event {
+                name: "onExtensionResponse".into(),
+                args: vec![],
+            },
+            projected: vec![ProjectionEvent::Zone {
+                map: "ledgermayne".into(),
+                zone: "A".into(),
+            }],
+        });
+        assert_eq!(count.0.load(Ordering::Relaxed), 1);
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Some(ScriptEvent::Loader { .. }))
+        ));
+        producer.send(ScriptEvent::AutoZoneChanged {
+            config: Default::default(),
+        });
+        assert_eq!(count.0.load(Ordering::Relaxed), 2);
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Some(ScriptEvent::AutoZoneChanged { .. }))
+        ));
+        producer.send(ScriptEvent::Invalidated);
+        assert_eq!(count.0.load(Ordering::Relaxed), 3);
+        assert_eq!(events.try_recv(), Ok(Some(ScriptEvent::Invalidated)));
+        drop(producer);
+        assert_eq!(count.0.load(Ordering::Relaxed), 4);
+        assert_eq!(events.try_recv(), Err(Error::Stopped));
+    }
+
+    #[test]
+    fn consumers_declare_independent_interests_and_mixed_batches_arrive_once() {
+        let (connection, connections) =
+            script_events(4, EventInterests::new(&[EventKind::Connection]));
+        let (combat, combats) = script_events(
+            4,
+            EventInterests::new(&[EventKind::MonsterDeath, EventKind::PlayerDeath]),
+        );
+        let (script, scripts) = script_events(4, EventInterests::ALL);
+        let events = [
+            ScriptEvent::Loader {
+                event: Event {
+                    name: "onDebug".into(),
+                    args: vec![],
+                },
+                projected: vec![],
+            },
+            ScriptEvent::Loader {
+                event: Event {
+                    name: "onConnection".into(),
+                    args: vec![],
+                },
+                projected: vec![],
+            },
+            ScriptEvent::Loader {
+                event: Event {
+                    name: "onExtensionResponse".into(),
+                    args: vec![],
+                },
+                projected: vec![
+                    ProjectionEvent::MonsterDeath { monster_map_id: 3 },
+                    ProjectionEvent::PlayerDeath {
+                        entity_id: 7,
+                        username: "player".into(),
+                    },
+                ],
+            },
+        ];
+        for event in &events {
+            for sender in [&connection, &combat, &script] {
+                sender.send(event.clone());
+            }
+        }
+        assert_eq!(connections.try_recv(), Ok(Some(events[1].clone())));
+        assert_eq!(connections.try_recv(), Ok(None));
+        assert_eq!(combats.try_recv(), Ok(Some(events[2].clone())));
+        assert_eq!(combats.try_recv(), Ok(None));
+        for event in events {
+            assert_eq!(scripts.try_recv(), Ok(Some(event)));
+        }
+        assert_eq!(scripts.try_recv(), Ok(None));
+    }
+
+    #[test]
     fn replies_and_disconnections_wake_after_their_result_is_visible() {
         for disconnected in [false, true] {
             let (reply, pending) = Pending::channel();
@@ -466,7 +587,7 @@ mod tests {
 
     #[test]
     fn the_latest_waker_observes_events_and_disconnection_and_can_register_again() {
-        let (producer, events) = script_events(1);
+        let (producer, events) = script_events(1, EventInterests::ALL);
         let events = Arc::new(Mutex::new(events));
         let (old_sender, old) = mpsc::channel();
         let (sender, current) = mpsc::channel();

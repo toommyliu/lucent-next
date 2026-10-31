@@ -52,7 +52,7 @@ fn native_setters_work_without_a_bot_and_retain_records_across_player_restart() 
         .unwrap();
     let (send, wake) = mpsc::channel();
     let mut policy = ReloginPolicy::new(
-        session.attach().unwrap(),
+        session.attach(ReloginPolicy::INTERESTS).unwrap(),
         Waker::from(Arc::new(Notice(send))),
     );
     let enabled = receive(
@@ -84,8 +84,13 @@ fn publishing_native_records_does_not_wake_unrelated_script_links() {
     }
     let host = testing::headless_host();
     let (mut session, writer) = testing::start_probe(&host, testing::ProbeMovie::new());
-    let observer = session.attach().unwrap();
-    let mut policy = ReloginPolicy::new(session.attach().unwrap(), Waker::noop().clone());
+    let observer = session
+        .attach(lucent_host::bridge::EventInterests::ALL)
+        .unwrap();
+    let mut policy = ReloginPolicy::new(
+        session.attach(ReloginPolicy::INTERESTS).unwrap(),
+        Waker::noop().clone(),
+    );
     session
         .read_projection(|_| ())
         .recv_timeout(Duration::from_secs(5))
@@ -129,7 +134,7 @@ fn loader_connection_events_drive_native_relogin_without_a_bot() {
     let (send, wake) = mpsc::channel();
     let waker = Waker::from(Arc::new(Notice(send)));
     writer.set_waker(waker.clone());
-    let mut policy = ReloginPolicy::new(session.attach().unwrap(), waker);
+    let mut policy = ReloginPolicy::new(session.attach(ReloginPolicy::INTERESTS).unwrap(), waker);
     receive(
         &mut policy,
         &wake,
@@ -206,7 +211,7 @@ fn dropped_connection_events_recover_from_the_current_host_state() {
         .unwrap();
     let (send, wake) = mpsc::channel();
     let mut policy = ReloginPolicy::new(
-        session.attach().unwrap(),
+        session.attach(ReloginPolicy::INTERESTS).unwrap(),
         Waker::from(Arc::new(Notice(send))),
     );
     receive(

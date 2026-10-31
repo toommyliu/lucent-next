@@ -1,5 +1,6 @@
 mod common;
 use common::*;
+use lucent_host::bridge::EventInterests;
 use lucent_protocol::script::ScriptOutcome;
 use lucent_runtime::{Kill, RuntimeError};
 use std::time::Duration;
@@ -542,7 +543,7 @@ fn restarting_the_player_stops_a_run_and_a_new_link_runs_again() {
     assert!(matches!(run.wait(TIMEOUT), Err(RuntimeError::Stopped)));
     drop(run);
     drop(runtime);
-    let link = session.attach().unwrap();
+    let link = session.attach(EventInterests::ALL).unwrap();
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));

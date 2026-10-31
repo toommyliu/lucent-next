@@ -1,3 +1,4 @@
+use lucent_host::bridge::EventInterests;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -97,7 +98,7 @@ fn a_script_waiting_for_a_host_command_is_killed_without_waiting_for_the_player(
         1
     );
     drop(runtime);
-    let runtime = Runtime::start(session.attach().unwrap()).unwrap();
+    let runtime = Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
     assert_eq!(
         runtime
             .eval("after.js", "typeof globalThis.marker")

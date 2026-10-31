@@ -1,4 +1,5 @@
 use super::*;
+use crate::automation::test_logs::Logs;
 use serde_json::json;
 use std::{
     cell::{Cell, RefCell},
@@ -150,7 +151,6 @@ struct Harness {
 }
 impl Default for Harness {
     fn default() -> Self {
-        initialize_log_capture();
         Self {
             host: Host::default(),
             shared: Arc::default(),
@@ -696,27 +696,11 @@ fn failed_background_capture_logs_once_per_streak_and_recovers() {
         .extend([("capture", "error"), ("snapshot", "error")]);
     h.tick();
     h.after(Duration::from_secs(5));
-    assert_eq!(
-        logs.0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|s| s.contains("capture failed"))
-            .count(),
-        1
-    );
+    assert_eq!(logs.count("capture failed"), 1);
     h.policy.connection("OnConnectionLost", h.now);
     h.policy.connection("OnConnection", h.now);
     h.tick();
-    assert_eq!(
-        logs.0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|s| s.contains("capture failed"))
-            .count(),
-        2
-    );
+    assert_eq!(logs.count("capture failed"), 2);
     assert!(
         logs.messages()
             .iter()
@@ -955,62 +939,6 @@ fn a_connection_during_the_player_wait_keeps_the_retry() {
     );
 }
 
-#[derive(Clone, Default)]
-struct Logs(Arc<std::sync::Mutex<Vec<String>>>);
-thread_local! {
-    static LOG_CAPTURE: RefCell<Option<Logs>> = const { RefCell::new(None) };
-}
-struct LogGuard {
-    previous: Option<Logs>,
-}
-impl Drop for LogGuard {
-    fn drop(&mut self) {
-        LOG_CAPTURE.with(|capture| capture.replace(self.previous.take()));
-    }
-}
-fn initialize_log_capture() {
-    static INITIALIZE: std::sync::Once = std::sync::Once::new();
-    INITIALIZE.call_once(|| {
-        use tracing_subscriber::prelude::*;
-        tracing::subscriber::set_global_default(tracing_subscriber::registry().with(LogEvents))
-            .unwrap();
-    });
-}
-impl Logs {
-    fn enter(&self) -> LogGuard {
-        initialize_log_capture();
-        let previous = LOG_CAPTURE.with(|capture| capture.replace(Some(self.clone())));
-        LogGuard { previous }
-    }
-    fn messages(&self) -> Vec<String> {
-        self.0.lock().unwrap().clone()
-    }
-}
-struct LogEvents;
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for LogEvents {
-    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        LOG_CAPTURE.with(|capture| {
-            let capture = capture.borrow();
-            let Some(logs) = capture.as_ref() else {
-                return;
-            };
-            struct Message(String);
-            impl tracing::field::Visit for Message {
-                fn record_debug(
-                    &mut self,
-                    field: &tracing::field::Field,
-                    value: &dyn std::fmt::Debug,
-                ) {
-                    self.0.push_str(&format!("{field}={value:?} "));
-                }
-            }
-            let mut message = Message(String::new());
-            event.record(&mut message);
-            logs.0.lock().unwrap().push(message.0);
-        });
-    }
-}
-
 #[test]
 fn surviving_setters_apply_in_fifo_order() {
     let mut h = Harness::default();
@@ -1126,7 +1054,10 @@ fn unchanged_records_and_setters_do_not_wait_for_a_record_writer() {
     let host = crate::testing::headless_host();
     let (mut session, writer) =
         crate::testing::start_probe(&host, crate::testing::ProbeMovie::new());
-    let mut policy = ReloginPolicy::new(session.attach().unwrap(), Waker::noop().clone());
+    let mut policy = ReloginPolicy::new(
+        session.attach(ReloginPolicy::INTERESTS).unwrap(),
+        Waker::noop().clone(),
+    );
     let shared_records = policy.link.records.auto_relogin.clone();
     let records = shared_records.read();
     let pending = writer.command(Command::SetAutoReloginDelay { delay_ms: 3000.0 });
@@ -1197,4 +1128,42 @@ fn a_replacement_preserves_failure_while_credentials_are_pending() {
     h.policy = Policy::for_player(records.clone(), h.now);
     h.tick();
     assert_eq!(*h.shared.records.read(), records);
+}
+
+#[test]
+fn relogin_events_ignore_unrelated_loaders_and_keep_connection_and_invalidation() {
+    use crate::bridge::{Event, ScriptEvent};
+    struct Counter(std::sync::atomic::AtomicUsize);
+    impl std::task::Wake for Counter {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let (sender, events) = crate::bridge::script_events(2, ReloginPolicy::INTERESTS);
+    let count = Arc::new(Counter(std::sync::atomic::AtomicUsize::new(0)));
+    events.set_waker(Waker::from(count.clone()));
+    for _ in 0..20_000 {
+        sender.send(ScriptEvent::Loader {
+            event: Event {
+                name: "onDebug".into(),
+                args: vec![],
+            },
+            projected: vec![],
+        });
+    }
+    assert_eq!(count.0.load(Ordering::Relaxed), 0);
+    assert_eq!(events.try_recv(), Ok(None));
+    let connection = ScriptEvent::Loader {
+        event: Event {
+            name: "onConnection".into(),
+            args: vec![Value::String("OnConnectionLost".into())],
+        },
+        projected: vec![],
+    };
+    sender.send(connection.clone());
+    sender.send(ScriptEvent::Invalidated);
+    assert_eq!(count.0.load(Ordering::Relaxed), 2);
+    assert_eq!(events.try_recv(), Ok(Some(connection)));
+    assert_eq!(events.try_recv(), Ok(Some(ScriptEvent::Invalidated)));
+    assert_eq!(events.try_recv(), Ok(None));
 }

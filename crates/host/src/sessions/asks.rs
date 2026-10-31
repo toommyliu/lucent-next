@@ -1,5 +1,5 @@
 use super::AttachmentId;
-use crate::bridge::{EVENT_CAPACITY, Error, ScriptEvent};
+use crate::bridge::{EVENT_CAPACITY, Error, EventInterests, ScriptEvent};
 use parking_lot::{Condvar, Mutex};
 use std::{
     collections::{HashMap, VecDeque},
@@ -20,8 +20,8 @@ struct Route {
     asked_by: AttachmentId,
     deadline: Instant,
 }
-#[derive(Default)]
 struct Mailbox {
+    interests: EventInterests,
     items: VecDeque<ScriptEvent>,
     waker: Option<Waker>,
     failed: bool,
@@ -55,6 +55,9 @@ impl State {
         let Some(mailbox) = self.links.get_mut(&to) else {
             return;
         };
+        if !mailbox.interests.accepts(&event) {
+            return;
+        }
         if mailbox.items.len() >= EVENT_CAPACITY {
             mailbox.failed = true;
             mailbox.items.clear();
@@ -143,8 +146,16 @@ impl Drop for Router {
     }
 }
 impl Shared {
-    pub(crate) fn attach(&self, id: AttachmentId) {
-        self.state.lock().links.insert(id, Mailbox::default());
+    pub(crate) fn attach(&self, id: AttachmentId, interests: EventInterests) {
+        self.state.lock().links.insert(
+            id,
+            Mailbox {
+                interests,
+                items: VecDeque::new(),
+                waker: None,
+                failed: false,
+            },
+        );
     }
     pub(crate) fn claim_bot(&self, id: AttachmentId) -> Result<(), Error> {
         let mut state = self.state.lock();
@@ -330,7 +341,9 @@ mod tests {
                 items: (0..EVENT_CAPACITY)
                     .map(|_| ScriptEvent::Invalidated)
                     .collect(),
-                ..Default::default()
+                interests: EventInterests::ALL,
+                waker: None,
+                failed: false,
             },
         );
         for id in 0..3 {

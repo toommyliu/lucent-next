@@ -60,6 +60,10 @@ impl ScriptLink {
         }
     }
 
+    pub(crate) fn inbox(&self) -> Inbox {
+        self.inbox.clone()
+    }
+
     pub fn player_status(&self) -> PlayerStatus {
         PlayerStatus(self.stopped.clone())
     }
@@ -330,6 +334,154 @@ mod tests {
     use std::{sync::mpsc, thread};
 
     #[test]
+    fn auto_zone_invalidation_rereads_the_host_record_without_a_config_event() {
+        let host = testing::headless_host();
+        let (mut session, writer) = testing::start_probe(&host, testing::ProbeMovie::new());
+        let mut link = session
+            .attach(crate::automation::AutoZonePolicy::INTERESTS)
+            .unwrap();
+        let (events, receiver) =
+            crate::bridge::script_events(8, crate::bridge::EventInterests::ALL);
+        link.events = receiver;
+        let mut policy = crate::automation::AutoZonePolicy::new(link, Waker::noop().clone());
+        let now = Instant::now();
+        assert_eq!(policy.advance(now), None);
+        writer
+            .command(
+                serde_json::from_value(serde_json::json!({
+                    "kind":"patchAutoZone", "patch":{"enabled":true,"map":"queeniona"}
+                }))
+                .unwrap(),
+            )
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        events.send(ScriptEvent::Invalidated);
+        assert_eq!(policy.advance(now), None);
+        events.send(ScriptEvent::Loader {
+            event: crate::bridge::Event {
+                name: "onExtensionResponse".into(),
+                args: vec![],
+            },
+            projected: vec![lucent_protocol::event::ProjectionEvent::Zone {
+                map: "queeniona".into(),
+                zone: "".into(),
+            }],
+        });
+        assert_eq!(policy.advance(now), Some(now + Duration::from_millis(500)));
+    }
+
+    #[test]
+    fn projection_and_config_contention_retry_auto_zone_without_a_failure() {
+        let logs = crate::automation::test_logs::Logs::default();
+        let _guard = tracing::dispatcher::set_default(&logs.dispatch());
+        for config_lock in [false, true] {
+            let host = testing::headless_host();
+            let (mut session, writer) = testing::start_probe(
+                &host,
+                testing::ProbeMovie::new()
+                    .responding("player.walkTo", [(serde_json::json!(true), vec![])]),
+            );
+            writer
+                .command(
+                    serde_json::from_value(serde_json::json!({
+                        "kind":"patchAutoZone", "patch":{"enabled":true,"map":"queeniona"}
+                    }))
+                    .unwrap(),
+                )
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+            let mut link = session
+                .attach(crate::automation::AutoZonePolicy::INTERESTS)
+                .unwrap();
+            let projection = link.projection.clone();
+            {
+                let mut state = projection.write();
+                state.packet(&lucent_protocol::Packet::Extension {
+                    command: "moveToArea".into(),
+                    data: serde_json::json!({"cmd":"moveToArea", "areaName":"queeniona-1", "uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}]}),
+                    raw: String::new(), encoding: lucent_protocol::PacketEncoding::Json,
+                }, 0., false);
+                state.world.set_self("player-a");
+                assert!(state.world.get_me().unwrap().data().entity.alive());
+            }
+            let config = link.records.auto_zone.clone();
+            let (events, receiver) =
+                crate::bridge::script_events(8, crate::bridge::EventInterests::ALL);
+            link.events = receiver;
+            let mut policy = crate::automation::AutoZonePolicy::new(link, Waker::noop().clone());
+            let now = Instant::now();
+            if !config_lock {
+                policy.advance(now);
+                events.send(ScriptEvent::Loader {
+                    event: crate::bridge::Event {
+                        name: "onExtensionResponse".into(),
+                        args: vec![],
+                    },
+                    projected: vec![lucent_protocol::event::ProjectionEvent::Zone {
+                        map: "queeniona".into(),
+                        zone: "".into(),
+                    }],
+                });
+                policy.advance(now);
+            }
+            let projection_guard = (!config_lock).then(|| projection.write());
+            let config_guard = config_lock.then(|| config.write());
+            let at = now + Duration::from_millis(500);
+            let before = Instant::now();
+            let next = policy.advance(at).expect("contention must retry");
+            assert!(
+                before.elapsed() < Duration::from_millis(100),
+                "the policy blocked on a writer"
+            );
+            assert!(
+                next > at && next <= at + Duration::from_millis(20),
+                "contention used the failure backoff: {next:?}"
+            );
+            drop(projection_guard);
+            drop(config_guard);
+            if config_lock {
+                assert_eq!(policy.advance(next), None);
+                events.send(ScriptEvent::Loader {
+                    event: crate::bridge::Event {
+                        name: "onExtensionResponse".into(),
+                        args: vec![],
+                    },
+                    projected: vec![lucent_protocol::event::ProjectionEvent::Zone {
+                        map: "queeniona".into(),
+                        zone: "".into(),
+                    }],
+                });
+                policy.advance(next);
+                policy.advance(next + Duration::from_millis(500));
+            } else {
+                policy.advance(next);
+            }
+            writer
+                .call_loader("probe.echo", vec![])
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+            let mut walks = vec![];
+            while let Some(event) = writer.try_event().unwrap() {
+                if let ScriptEvent::Loader { event, .. } = event
+                    && event.name == "onProbeCall"
+                    && event.args.first() == Some(&Value::String("player.walkTo".into()))
+                {
+                    walks.push(event.args);
+                }
+            }
+            assert_eq!(
+                walks,
+                vec![vec![
+                    Value::String("player.walkTo".into()),
+                    Value::List(vec![Value::Number(490.), Value::Number(320.)])
+                ]]
+            );
+        }
+        assert_eq!(logs.count("auto zone tick failed"), 0);
+        assert_eq!(logs.count("auto zone recovered"), 0);
+    }
+
+    #[test]
     fn auto_zone_boot_reads_receive_patches_queued_before_attach() {
         use lucent_protocol::auto_zone::{AutoZoneConfig, AutoZoneMap};
         let host = testing::headless_host();
@@ -347,7 +499,7 @@ mod tests {
             }))
             .unwrap(),
         );
-        let bot_link = session.attach().unwrap();
+        let bot_link = session.attach(crate::bridge::EventInterests::ALL).unwrap();
         let mut query = Some(Query::AutoZone {});
         let boot = bot_link
             .query_for(Duration::from_secs(1), &mut query)
@@ -381,7 +533,7 @@ mod tests {
     fn settings_reads_do_not_wait_for_the_projection() {
         let host = testing::headless_host();
         let mut session = host.start_session(testing::headless_surface()).unwrap();
-        let link = session.attach().unwrap();
+        let link = session.attach(crate::bridge::EventInterests::ALL).unwrap();
         let _projection = link.projection.write();
         let mut query = Some(Query::Settings {});
         let answer = link.query_for(Duration::ZERO, &mut query).unwrap();
@@ -426,7 +578,7 @@ mod tests {
             assert!(std::time::Instant::now() < deadline);
             thread::sleep(Duration::from_millis(1));
         }
-        let observer = session.attach().unwrap();
+        let observer = session.attach(crate::bridge::EventInterests::ALL).unwrap();
         drop(link);
         let id = observer
             .operate(lucent_protocol::operation::Operation::AcceptDrop {
@@ -470,7 +622,7 @@ mod tests {
     fn a_contended_read_times_out_without_calling_its_reader_and_stops_with_its_player() {
         let host = testing::headless_host();
         let mut session = host.start_session(testing::headless_surface()).unwrap();
-        let link = session.attach().unwrap();
+        let link = session.attach(crate::bridge::EventInterests::ALL).unwrap();
         let projection = link.projection.clone();
         let _guard = projection.write();
         let (timed_out, result) = mpsc::channel();

@@ -7,7 +7,7 @@ use io::{
 
 use crate::{
     ScriptLink,
-    bridge::{Error, Pending, Value},
+    bridge::{Error, EventInterests, EventKind, Pending, Value},
     sessions::relogin::{Edit, Request, Shared},
 };
 use lucent_protocol::{
@@ -29,6 +29,8 @@ pub struct ReloginPolicy {
     waker: Waker,
 }
 impl ReloginPolicy {
+    pub const INTERESTS: EventInterests =
+        EventInterests::new(&[EventKind::Connection, EventKind::Invalidated]);
     pub fn new(link: ScriptLink, waker: Waker) -> Self {
         link.set_waker(waker.clone());
         link.records.relogin.set_waker(waker.clone());

@@ -65,7 +65,9 @@ fn credentials_and_status_survive_script_kills_and_player_replacement() {
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));
-    let replacement = session.attach().unwrap();
+    let replacement = session
+        .attach(lucent_host::bridge::EventInterests::ALL)
+        .unwrap();
     testing::wait_loaded(&replacement);
     common::log_in(&replacement);
     let pending = replacement
@@ -105,7 +107,9 @@ fn killing_a_setter_during_capture_cannot_answer_a_later_run() {
     let host = testing::headless_host();
     let (mut session, observer) = testing::start_probe(&host, common::ready_movie());
     common::log_in(&observer);
-    let link = session.attach().unwrap();
+    let link = session
+        .attach(lucent_host::bridge::EventInterests::ALL)
+        .unwrap();
     let (wake, messages) = mpsc::channel();
     let waker = Waker::from(Arc::new(Notice(wake)));
     let mut policy = lucent_host::automation::ReloginPolicy::new(link, waker);

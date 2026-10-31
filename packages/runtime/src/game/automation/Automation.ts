@@ -9,8 +9,6 @@ import { FollowerRpcs } from "../../shared/gameRendererRpc";
 import { Api } from "../flash/api/Api";
 import { makeAutoAttack } from "./AutoAttack";
 import type { AutoAttackState } from "./AutoAttack";
-import { makeAutoZone } from "./AutoZone";
-import type { AutoZoneState } from "./AutoZone";
 import { makeDesktopFollowerPort, makeFollower } from "./Follower";
 import type { FollowerState } from "@lucent/schemas/follower";
 
@@ -20,7 +18,6 @@ export const makeAutomation = Effect.gen(function* () {
   const fibers = yield* FiberMap.make<string>();
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
   const autoAttack = yield* makeAutoAttack(api, fibers);
-  const autoZone = yield* makeAutoZone(api, fibers);
   const follower = yield* makeFollower(api, fibers, makeDesktopFollowerPort());
 
   const observe = <S>(
@@ -38,8 +35,6 @@ export const makeAutomation = Effect.gen(function* () {
   const observeAutoAttack = (listener: (state: AutoAttackState) => void) =>
     observe(autoAttack.changes, listener);
 
-  const observeAutoZone = (listener: (state: AutoZoneState) => void) =>
-    observe(autoZone.changes, listener);
 
   const observeFollower = (listener: (state: FollowerState) => void) =>
     observe(follower.changes, listener);
@@ -49,14 +44,6 @@ export const makeAutomation = Effect.gen(function* () {
     onState: observeAutoAttack,
   };
 
-  const autoZoneApi = {
-    getMap: autoZone.getMap,
-    getState: autoZone.getState,
-    isEnabled: autoZone.isEnabled,
-    onState: observeAutoZone,
-    setEnabled: autoZone.setEnabled,
-    setMap: autoZone.setMap,
-  };
 
   const followerApi = {
     ...follower,
@@ -65,7 +52,6 @@ export const makeAutomation = Effect.gen(function* () {
 
   return {
     autoAttack: autoAttackApi,
-    autoZone: autoZoneApi,
     follower: followerApi,
   };
 });

@@ -1,6 +1,7 @@
 mod common;
 
 use common::TIMEOUT;
+use lucent_host::bridge::EventInterests;
 use lucent_host::testing;
 use lucent_protocol::script::ScriptOutcome;
 use lucent_runtime::{Kill, Runtime, RuntimeError};
@@ -375,7 +376,7 @@ fn a_killed_runs_queued_accepts_never_reach_the_loader() {
     );
     let runtime = Runtime::start(link).unwrap();
     common::ready(&runtime);
-    let control = session.attach().unwrap();
+    let control = session.attach(EventInterests::ALL).unwrap();
     let emit = |data: Value| {
         control
             .call_loader(
@@ -394,7 +395,7 @@ fn a_killed_runs_queued_accepts_never_reach_the_loader() {
         "72":{"ItemID":72,"sName":"Queued B","iQty":1},
         "73":{"ItemID":73,"sName":"Next run","iQty":1}
     }}));
-    let observer = session.attach().unwrap();
+    let observer = session.attach(EventInterests::ALL).unwrap();
     let first = common::started_run(
         &mut session,
         r#"

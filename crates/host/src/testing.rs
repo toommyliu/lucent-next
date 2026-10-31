@@ -147,7 +147,7 @@ pub fn start_probe_without_viewport(host: &Host, movie: ProbeMovie) -> (Session,
     let mut session = host
         .start_movie(headless_surface(), Movie(Arc::from(fixture_swf(&movie))))
         .expect("couldn't start the probe player");
-    let link = session.attach().unwrap();
+    let link = session.attach(crate::bridge::EventInterests::ALL).unwrap();
     (session, link)
 }
 
@@ -737,7 +737,7 @@ mod tests {
     fn restart_reloads_the_movie_and_ends_the_previous_link() {
         let host = headless_host();
         let (mut session, old) = start_probe(&host, ProbeMovie::new());
-        let other = session.attach().unwrap();
+        let other = session.attach(crate::bridge::EventInterests::ALL).unwrap();
         session.restart(headless_surface()).unwrap();
         for stream in [&old, &other] {
             if let Ok(Some(event)) = stream.try_event() {
@@ -758,7 +758,7 @@ mod tests {
             Err(Error::Stopped)
         );
         assert_eq!(old.read(|_| 42), Err(Error::Stopped));
-        let current = session.attach().unwrap();
+        let current = session.attach(crate::bridge::EventInterests::ALL).unwrap();
         assert_eq!(current.id(), old.id());
         drop(old);
         drop(other);
