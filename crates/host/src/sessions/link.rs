@@ -22,7 +22,6 @@ impl PlayerStatus {
 }
 
 pub struct ScriptLink {
-    asks: Arc<super::asks::Shared>,
     id: u64,
     attachment: AttachmentId,
     detached: Arc<AtomicBool>,
@@ -43,10 +42,8 @@ impl ScriptLink {
         records: super::Records,
         player: super::operations::Endpoint,
         operations: Arc<super::operations::Shared>,
-        asks: Arc<super::asks::Shared>,
     ) -> Self {
         Self {
-            asks,
             id,
             attachment,
             detached: Arc::default(),
@@ -73,14 +70,7 @@ impl ScriptLink {
     }
 
     pub fn try_event(&self) -> Result<Option<ScriptEvent>, bridge::Error> {
-        match self.asks.try_event(self.attachment) {
-            Ok(Some(event)) => Ok(Some(event)),
-            Ok(None) => self.events.try_recv(),
-            Err(bridge::Error::Stopped) if self.stopped.load(Ordering::Acquire) => {
-                self.events.try_recv()
-            }
-            Err(error) => Err(error),
-        }
+        self.events.try_recv()
     }
 
     pub fn overflowed(&self) -> bool {
@@ -88,8 +78,7 @@ impl ScriptLink {
     }
 
     pub fn set_waker(&self, waker: Waker) {
-        self.events.set_waker(waker.clone());
-        self.asks.set_waker(self.attachment, waker);
+        self.events.set_waker(waker);
     }
 
     pub(crate) fn relogin_snapshot(&self) -> Pending<crate::automation::relogin::Snapshot> {
@@ -123,29 +112,6 @@ impl ScriptLink {
         self.inbox.call_loader(name, args)
     }
 
-    pub fn claim_bot(&self) -> Result<(), bridge::Error> {
-        self.asks.claim_bot(self.attachment)
-    }
-
-    pub fn ask(&self, payload: serde_json::Value) -> Result<u64, bridge::Error> {
-        if self.stopped.load(Ordering::Acquire) {
-            return Err(bridge::Error::Stopped);
-        }
-        self.asks.ask(self.attachment, payload)
-    }
-    pub fn is_ask_pending(&self, id: u64) -> bool {
-        self.asks.is_pending(self.attachment, id)
-    }
-    pub fn cancel_ask(&self, id: u64) {
-        self.asks.cancel(self.attachment, id);
-    }
-    pub fn answer(
-        &self,
-        id: u64,
-        answer: Result<serde_json::Value, bridge::Error>,
-    ) -> Result<(), bridge::Error> {
-        self.asks.answer(self.attachment, id, answer)
-    }
     pub fn operate(
         &self,
         operation: lucent_protocol::operation::Operation,
@@ -322,7 +288,6 @@ impl Drop for ScriptLink {
     fn drop(&mut self) {
         self.detached.store(true, Ordering::Release);
         self.operations.detach(self.attachment);
-        self.asks.detach(self.attachment);
         self.inbox.post(Msg::Detach(self.attachment));
     }
 }
@@ -499,9 +464,9 @@ mod tests {
             }))
             .unwrap(),
         );
-        let bot_link = session.attach(crate::bridge::EventInterests::ALL).unwrap();
+        let reader = session.attach(crate::bridge::EventInterests::ALL).unwrap();
         let mut query = Some(Query::AutoZone {});
-        let boot = bot_link
+        let boot = reader
             .query_for(Duration::from_secs(1), &mut query)
             .unwrap();
         assert_eq!(
@@ -511,7 +476,7 @@ mod tests {
         release.send(()).unwrap();
         barrier.recv_timeout(Duration::from_secs(5)).unwrap();
         patch.recv_timeout(Duration::from_secs(5)).unwrap();
-        bot_link
+        reader
             .command(
                 serde_json::from_value(serde_json::json!({"kind":"patchAutoZone","patch":{}}))
                     .unwrap(),
@@ -519,7 +484,7 @@ mod tests {
             .recv_timeout(Duration::from_secs(5))
             .unwrap();
         assert_eq!(
-            bot_link.try_event().unwrap(),
+            reader.try_event().unwrap(),
             Some(ScriptEvent::AutoZoneChanged {
                 config: AutoZoneConfig {
                     enabled: true,

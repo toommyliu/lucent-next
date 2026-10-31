@@ -1,67 +1,16 @@
 mod common;
 
-use lucent_host::bridge::EventInterests;
 use std::time::{Duration, Instant};
 
+use lucent_host::ScriptLink;
 use lucent_host::bridge::Value;
 use lucent_host::testing;
-use lucent_host::{ScriptLink, Session};
 use lucent_protocol::command::Command;
-use lucent_runtime::{Bot, Kill, RuntimeError};
+#[cfg(feature = "testing")]
+use lucent_runtime::RuntimeError;
 use serde_json::json;
 
 use common::TIMEOUT;
-
-#[cfg(feature = "testing")]
-#[test]
-fn bot_turns_charge_cpu_time_and_allow_waiting_off_cpu() {
-    let host = testing::headless_host();
-    let (_session, link) = testing::start_probe(&host, common::ready_movie());
-    let mut bot = Bot::start(link).unwrap();
-    assert_eq!(
-        bot.eval(
-            "wait.js",
-            "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300)",
-        )
-        .wait::<String>(TIMEOUT)
-        .unwrap(),
-        "timed-out"
-    );
-    assert!(matches!(
-        bot.eval(
-            "runaway.js",
-            "while (true) { try { while (true) {} } catch {} }"
-        )
-        .wait::<()>(TIMEOUT),
-        Err(RuntimeError::Killed(Kill::Watchdog))
-    ));
-    assert!(matches!(
-        bot.wait(TIMEOUT),
-        Err(RuntimeError::Killed(Kill::Watchdog))
-    ));
-    let cpu = bot.join_cpu_time().unwrap();
-    assert!(
-        cpu >= Duration::from_millis(200),
-        "stopped after {cpu:?} CPU"
-    );
-    assert!(
-        cpu < Duration::from_millis(250),
-        "stopped after {cpu:?} CPU"
-    );
-}
-
-fn start() -> (lucent_host::Host, Session, ScriptLink) {
-    let host = testing::headless_host();
-    let (session, link) = testing::start_probe(
-        &host,
-        common::ready_movie()
-            .recording("settings.setWalkSpeed")
-            .recording("settings.enemyMagnet"),
-    );
-    become_ready(&link);
-    update(&link, json!({"walkSpeed":30,"enemyMagnetEnabled":true}));
-    (host, session, link)
-}
 
 fn become_ready(link: &ScriptLink) {
     for packet in [
@@ -103,83 +52,6 @@ fn drain(link: &ScriptLink) {
 }
 
 #[test]
-fn script_kills_never_restart_the_bot() {
-    let (_host, mut session, observer) = start();
-    drain(&observer);
-    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
-    #[cfg(feature = "testing")]
-    bot.eval("identity.js", "globalThis.identity = { turns: 0 }; null")
-        .wait::<()>(TIMEOUT)
-        .unwrap();
-    for _index in 0..3 {
-        let run = common::start(
-            &mut session,
-            common::loose(&[("loop.js", "export default function* () { while (true) {} }")]),
-            Default::default(),
-        );
-        assert!(matches!(
-            run.wait(TIMEOUT),
-            Err(RuntimeError::Killed(Kill::Watchdog))
-        ));
-        assert!(matches!(
-            bot.wait(Duration::ZERO),
-            Err(RuntimeError::Timeout)
-        ));
-        #[cfg(feature = "testing")]
-        assert_eq!(
-            bot.eval("identity.js", "++identity.turns")
-                .wait::<u32>(TIMEOUT)
-                .unwrap(),
-            _index + 1
-        );
-        drain(&observer);
-    }
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn a_bot_kill_is_terminal_and_its_owner_can_start_another_bot() {
-    for (source, expected) in [
-        ("while (true) {}", Kill::Watchdog),
-        (
-            "const arrays = []; while (true) { arrays.push(new Array(100000).fill(1)); }",
-            Kill::HeapLimit,
-        ),
-    ] {
-        let logs = common::logs::Logs::default();
-        let dispatch = logs.dispatch();
-        let _guard = tracing::dispatcher::set_default(&dispatch);
-        let (_host, mut session, observer) = start();
-        let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
-        assert_eq!(
-            bot.eval(
-                "exports.js",
-                "[typeof __lucent.start, typeof __lucent.stop]"
-            )
-            .wait::<Vec<String>>(TIMEOUT)
-            .unwrap(),
-            vec!["undefined", "undefined"]
-        );
-        let pending = bot.eval("bad-automation.js", source);
-        assert!(
-            matches!(pending.wait::<()>(TIMEOUT), Err(RuntimeError::Killed(kill)) if kill == expected)
-        );
-        assert!(matches!(bot.wait(TIMEOUT), Err(RuntimeError::Killed(kill)) if kill == expected));
-        assert!(matches!(
-            bot.eval("dead.js", "42").wait::<u32>(TIMEOUT),
-            Err(RuntimeError::Stopped)
-        ));
-        drop(bot);
-        assert_eq!(
-            logs.messages(tracing::Level::ERROR),
-            vec!["bot runtime failed"]
-        );
-        drain(&observer);
-        let _replacement = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
-    }
-}
-
-#[test]
 fn only_scripts_react_to_counter_attacks() {
     let host = testing::headless_host();
     let (mut session, observer) = testing::start_probe(
@@ -216,7 +88,10 @@ fn only_scripts_react_to_counter_attacks() {
         let Some(Value::String(method)) = call.args.first() else {
             panic!("missing method")
         };
-        assert!(!method.starts_with("combat."), "bot called {method}");
+        assert!(
+            !method.starts_with("combat."),
+            "idle session called {method}"
+        );
     }
     let run = common::yielding(&mut session);
     counter();
@@ -274,7 +149,7 @@ fn assert_only_scripts_request_monster_drops(local_move: bool) {
         assert_ne!(
             call.args.first(),
             Some(&Value::String("world.requestMonsterDrops".into())),
-            "bot requested monster drops, local_move={local_move}"
+            "idle session requested monster drops, local_move={local_move}"
         );
     }
     let run = common::yielding(&mut session);
@@ -307,46 +182,17 @@ fn only_scripts_request_monster_drops_on_player_location() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn a_throwing_bot_turn_is_terminal() {
-    let (_host, mut session, _observer) = start();
-    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
-    bot.eval(
-        "break-turn.js",
-        r#"
-        Array.prototype.filter = () => { throw new Error("broken bot intrinsic"); };
-        null;
-    "#,
-    )
-    .wait::<()>(TIMEOUT)
-    .unwrap();
-    assert!(
-        matches!(bot.wait(TIMEOUT), Err(RuntimeError::JavaScript(error)) if error.contains("broken bot intrinsic"))
-    );
-}
-
-#[cfg(feature = "testing")]
-#[test]
-fn overflow_logs_identify_the_runtime() {
+fn overflow_logs_identify_the_script_runtime() {
     let logs = common::logs::Logs::default();
     let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
-    let (_host, mut session, _observer) = start();
+    let host = testing::headless_host();
+    let (_session, link) = testing::start_probe(&host, common::ready_movie());
     let flood = r#"
         for (let i = 0; i < 1100; i++) window.swf["probe.emit"]("onDebug", String(i));
         new Promise(() => {});
     "#;
-    let bot = Bot::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
-    assert!(matches!(
-        bot.eval("flood.js", flood).wait::<()>(TIMEOUT),
-        Err(RuntimeError::EventsLost)
-    ));
-    assert!(
-        logs.messages(tracing::Level::ERROR)
-            .iter()
-            .any(|text| text == "bot events overflowed and were lost")
-    );
-    let runtime =
-        lucent_runtime::Runtime::start(session.attach(EventInterests::ALL).unwrap()).unwrap();
+    let runtime = lucent_runtime::Runtime::start(link).unwrap();
     assert!(matches!(
         runtime.eval("flood.js", flood).wait::<()>(TIMEOUT),
         Err(RuntimeError::EventsLost)
