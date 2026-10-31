@@ -1,5 +1,6 @@
 pub mod automation;
 pub mod bridge;
+pub mod game;
 pub mod library;
 mod player;
 pub mod projection;
