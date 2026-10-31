@@ -40,8 +40,13 @@ fn waiting_cooldown_has_deadline_and_revalidates_generation() {
     assert!(h.casts.is_empty());
     h.snapshot.monsters[0].key.generation = 1;
     h.snapshot.skills[1] = SkillReadiness::Ready;
+    h.now = 800;
     let effect = h.advance(ProfileEvent::Tick);
-    assert!(matches!(effect.outcome, Some(Outcome::TargetLost(_))));
+    assert_eq!(
+        effect.outcome,
+        Some(Outcome::Cycle(Cycle::Attacked { cast: false }))
+    );
+    assert_eq!(effect.next_deadline, Some(1050));
     assert!(h.casts.is_empty());
 }
 
@@ -92,11 +97,17 @@ fn late_completions_cannot_advance_new_target() {
     let attack = h.complete(prepare).command.unwrap();
     h.die(1);
     h.snapshot.monsters.remove(0);
-    assert_eq!(h.complete(attack.clone()).command, None);
+    let completed = h.complete(attack.clone());
+    assert_eq!(completed.command, None);
+    assert_eq!(completed.outcome, Some(Outcome::Cycle(Cycle::NoTarget)));
+    assert_eq!(h.advance(ProfileEvent::Tick).command, None);
+    h.now = completed.next_deadline.unwrap();
     let next = h.advance(ProfileEvent::Tick).command.unwrap();
     assert_ne!(attack.id, next.id);
     let skill = h.complete(next).command.unwrap();
-    assert_eq!(h.complete(attack).command, None);
+    let completed = h.complete(attack);
+    assert_eq!(completed.command, None);
+    assert_eq!(completed.outcome, None);
     h.complete(skill);
     assert_eq!(h.casts, [1]);
 }
@@ -111,7 +122,10 @@ fn unconfirmed_target_death_does_not_reset_rotation() {
     h.job.fallback_rank = Some(1);
     let attack = h.advance(ProfileEvent::Tick).command.unwrap();
     h.die(2);
-    assert_eq!(h.complete(attack).command, None);
+    let completed = h.complete(attack);
+    assert_eq!(completed.command, None);
+    assert_eq!(completed.outcome, Some(Outcome::Cycle(Cycle::NoTarget)));
+    h.now = completed.next_deadline.unwrap();
     h.snapshot.monsters.remove(1);
     h.cycle();
     assert_eq!(h.casts, [1, 2]);

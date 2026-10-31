@@ -50,6 +50,9 @@ impl ProfileJob {
                 if !accepted {
                     return Some(self.cycle(Cycle::AttackRejected, now, 0));
                 }
+                if lease.version != self.version {
+                    return Some(self.cycle(Cycle::NoTarget, now, 0));
+                }
                 self.target = TargetState::Selected {
                     lease,
                     confirmation: Confirmation::Confirmed {

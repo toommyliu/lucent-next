@@ -9,18 +9,8 @@ impl ProfileJob {
         expires_at: u64,
         now: u64,
     ) -> ProfileEffects {
-        let allowed = snapshot.alive
-            && snapshot.monsters.iter().any(|monster| {
-                monster.key == lease.key
-                    && monster.attack == AttackEligibility::Allowed
-                    && monster.living()
-            })
-            && skill_available(snapshot, cast.skill, self.skill5_item_id);
-        if !allowed || now >= expires_at {
-            self.rotation.complete(&cast, false);
-            return self.cycle(Cycle::Attacked { cast: false }, now, 0);
-        }
         if cast.readiness == CastReadiness::Wait
+            && now < expires_at
             && snapshot.skills[usize::from(u8::from(cast.skill))] != SkillReadiness::Ready
         {
             let deadline = match snapshot.skills[usize::from(u8::from(cast.skill))] {
@@ -36,6 +26,18 @@ impl ProfileJob {
                 next_deadline: Some(deadline),
                 ..Default::default()
             };
+        }
+        let allowed = self.lease_current(snapshot, lease)
+            && snapshot.alive
+            && snapshot.monsters.iter().any(|monster| {
+                monster.key == lease.key
+                    && monster.attack == AttackEligibility::Allowed
+                    && monster.living()
+            })
+            && skill_available(snapshot, cast.skill, self.skill5_item_id);
+        if !allowed || now >= expires_at {
+            self.rotation.complete(&cast, false);
+            return self.cycle(Cycle::Attacked { cast: false }, now, 0);
         }
         self.issue(
             Action::UseSkill {
@@ -73,11 +75,12 @@ impl ProfileJob {
         let allowed = snapshot.alive
             && skill_available(snapshot, skill, self.skill5_item_id)
             && target.is_none_or(|lease| {
-                snapshot.monsters.iter().any(|monster| {
-                    monster.key == lease.key
-                        && monster.living()
-                        && monster.attack == AttackEligibility::Allowed
-                })
+                self.lease_current(snapshot, lease)
+                    && snapshot.monsters.iter().any(|monster| {
+                        monster.key == lease.key
+                            && monster.living()
+                            && monster.attack == AttackEligibility::Allowed
+                    })
             });
         if !allowed || now >= expires_at {
             self.phase = Phase::Triggering {
@@ -248,18 +251,7 @@ impl ProfileJob {
                 lease,
                 cast,
                 expires_at,
-            } => {
-                if !self.lease_current(snapshot, lease) {
-                    self.lose_target(false);
-                    self.phase = Phase::Ready;
-                    return ProfileEffects {
-                        outcome: Some(Outcome::TargetLost(lease)),
-                        next_deadline: Some(now),
-                        ..Default::default()
-                    };
-                }
-                self.cast_or_wait(snapshot, lease, cast, expires_at, now)
-            }
+            } => self.cast_or_wait(snapshot, lease, cast, expires_at, now),
             Phase::TriggerCooldown {
                 target,
                 index,

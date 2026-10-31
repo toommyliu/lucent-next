@@ -11,6 +11,8 @@ pub use preparation::*;
 pub use rotation::*;
 
 #[cfg(test)]
+mod regression_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod timing_tests;
@@ -259,19 +261,13 @@ impl ProfileJob {
                     matches!(confirmation, Confirmation::Confirmed { .. })
                         && self.profile.reset_skill_index_on_target_death == Some(true),
                 );
-                if !matches!(
-                    self.phase,
-                    Phase::New
-                        | Phase::Pending {
-                            action: Pending::Prepare,
-                            ..
-                        }
-                ) {
-                    self.phase = Phase::Ready;
-                }
                 return ProfileEffects {
                     outcome: Some(Outcome::TargetLost(lease)),
-                    next_deadline: Some(self.next_step.max(now)),
+                    next_deadline: match self.phase {
+                        Phase::Pending { .. } => None,
+                        Phase::Waiting { until } => Some(until),
+                        _ => Some(self.next_step.max(now)),
+                    },
                     ..Default::default()
                 };
             }
@@ -281,9 +277,37 @@ impl ProfileJob {
             self.rotation.reset();
             return ProfileEffects::default();
         }
-        if let ProfileEvent::ObservationFailed(message) = event {
-            self.phase = Phase::Ready;
-            self.next_step = now.saturating_add(RETRY_MS);
+        let oversized = snapshot.monsters.len() > MAX_MONSTERS
+            || snapshot.allies.len() > MAX_ALLIES
+            || snapshot.self_auras.len() > MAX_AURAS
+            || snapshot
+                .monsters
+                .iter()
+                .any(|monster| monster.auras.len() > MAX_AURAS);
+        if !oversized
+            && let Phase::Pending { action, .. } = &self.phase
+            && let Some(lease) = action.target()
+            && lease.version == self.version
+            && !self.lease_current(snapshot, lease)
+        {
+            self.lose_target(false);
+        }
+        let event = match event {
+            ProfileEvent::Completed { id, reply } => {
+                if let Some(effects) = self.complete_action(id, reply, now) {
+                    return effects;
+                }
+                ProfileEvent::Tick
+            }
+            event => event,
+        };
+        let observation_failure = match event {
+            ProfileEvent::ObservationFailed(ref message) => Some(message.clone()),
+            _ if oversized => Some("Combat profile snapshot exceeds limits".into()),
+            _ => None,
+        };
+        if let Some(message) = observation_failure {
+            self.next_step = self.next_step.max(now.saturating_add(RETRY_MS));
             return ProfileEffects {
                 outcome: Some(Outcome::Failure {
                     stage: FailureStage::TargetSelection,
@@ -293,38 +317,7 @@ impl ProfileJob {
                 ..Default::default()
             };
         }
-        if snapshot.monsters.len() > MAX_MONSTERS
-            || snapshot.allies.len() > MAX_ALLIES
-            || snapshot.self_auras.len() > MAX_AURAS
-            || snapshot
-                .monsters
-                .iter()
-                .any(|monster| monster.auras.len() > MAX_AURAS)
-        {
-            return self.advance(
-                snapshot,
-                ProfileEvent::ObservationFailed("Combat profile snapshot exceeds limits".into()),
-                now,
-            );
-        }
-        if let Phase::Pending { action, .. } = &self.phase
-            && let Some(lease) = action.target()
-            && !self.lease_current(snapshot, lease)
-        {
-            self.lose_target(false);
-            self.phase = Phase::Ready;
-            return ProfileEffects {
-                outcome: Some(Outcome::TargetLost(lease)),
-                next_deadline: Some(now.max(self.next_step)),
-                ..Default::default()
-            };
-        }
         match event {
-            ProfileEvent::Completed { id, reply } => {
-                if let Some(effects) = self.complete_action(id, reply, now) {
-                    return effects;
-                }
-            }
             ProfileEvent::Message {
                 observed_version,
                 message,
@@ -335,6 +328,7 @@ impl ProfileJob {
             }
             ProfileEvent::Tick => {}
             ProfileEvent::MonsterDeath(_)
+            | ProfileEvent::Completed { .. }
             | ProfileEvent::ResetRotation
             | ProfileEvent::Cancel
             | ProfileEvent::ObservationFailed(_) => unreachable!(),
