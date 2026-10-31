@@ -17435,14 +17435,7 @@ ${prefix}}`;
       clearQuests: /* @__PURE__ */ __name(() => exposeMutation("clearQuests", environment.clearQuests()), "clearQuests"),
       updateQuestAutoRegister: /* @__PURE__ */ __name((patch) => exposeMutation(
         "updateQuestAutoRegister",
-        environment.getState().pipe(
-          flatMap3(
-            (state) => environment.setQuestAutoRegister({
-              ...state.questAutoRegister,
-              ...patch
-            })
-          )
-        )
+        environment.setQuestAutoRegister(patch)
       ), "updateQuestAutoRegister"),
       addItem: /* @__PURE__ */ __name((name) => exposeMutation("addItem", environment.addItem(name)), "addItem"),
       removeItem: /* @__PURE__ */ __name((name) => exposeMutation("removeItem", environment.removeItem(name)), "removeItem"),
@@ -20938,7 +20931,7 @@ ${prefix}}`;
     const set4 = /* @__PURE__ */ __name((edit) => try_2(() => JSON.parse(host3.command(JSON.stringify({ kind: "updateEnvironment", edit })))), "set");
     const setAutomation = /* @__PURE__ */ __name((capability, enabled) => set4({ kind: "setAutomationEnabled", capability, enabled }), "setAutomation");
     const setDropPolicy = /* @__PURE__ */ __name((patch) => set4({ kind: "updateDropPolicy", patch }), "setDropPolicy");
-    const setQuestAutoRegister = /* @__PURE__ */ __name((options) => set4({ kind: "setQuestAutoRegister", options }), "setQuestAutoRegister");
+    const setQuestAutoRegister = /* @__PURE__ */ __name((options) => set4({ kind: "setQuestAutoRegister", ...options }), "setQuestAutoRegister");
     return {
       ...unavailable2,
       getState,
@@ -20949,8 +20942,8 @@ ${prefix}}`;
       clearQuestReward: /* @__PURE__ */ __name((questId) => set4({ kind: "clearQuestReward", questId: identifier2(questId) }), "clearQuestReward"),
       clearQuests: /* @__PURE__ */ __name(() => set4({ kind: "clearQuests" }), "clearQuests"),
       setQuestAutoRegister,
-      setAutoRegisterRequirements: /* @__PURE__ */ __name((requirements) => getState().pipe(flatMap3((state) => setQuestAutoRegister({ ...state.questAutoRegister, requirements }))), "setAutoRegisterRequirements"),
-      setAutoRegisterRewards: /* @__PURE__ */ __name((rewards) => getState().pipe(flatMap3((state) => setQuestAutoRegister({ ...state.questAutoRegister, rewards }))), "setAutoRegisterRewards"),
+      setAutoRegisterRequirements: /* @__PURE__ */ __name((requirements) => setQuestAutoRegister({ requirements }), "setAutoRegisterRequirements"),
+      setAutoRegisterRewards: /* @__PURE__ */ __name((rewards) => setQuestAutoRegister({ rewards }), "setAutoRegisterRewards"),
       setBoostAutomationEnabled: /* @__PURE__ */ __name((enabled) => setAutomation("boosts", enabled), "setBoostAutomationEnabled"),
       setDropAutomationEnabled: /* @__PURE__ */ __name((enabled) => setAutomation("drops", enabled), "setDropAutomationEnabled"),
       setQuestAutomationEnabled: /* @__PURE__ */ __name((enabled) => setAutomation("quests", enabled), "setQuestAutomationEnabled"),

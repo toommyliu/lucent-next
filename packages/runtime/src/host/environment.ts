@@ -11,7 +11,7 @@ export const makeEnvironmentService = (
   const set = (edit: EnvironmentEdit) => Effect.try(() => JSON.parse(host.command(JSON.stringify({ kind: "updateEnvironment", edit }))) as EnvironmentState);
   const setAutomation = (capability: "boosts" | "drops" | "quests", enabled: boolean) => set({ kind: "setAutomationEnabled", capability, enabled });
   const setDropPolicy: EnvironmentShape["setDropPolicy"] = patch => set({ kind: "updateDropPolicy", patch });
-  const setQuestAutoRegister: EnvironmentShape["setQuestAutoRegister"] = options => set({ kind: "setQuestAutoRegister", options });
+  const setQuestAutoRegister: EnvironmentShape["setQuestAutoRegister"] = options => set({ kind: "setQuestAutoRegister", ...options });
   return {
     ...unavailable,
     getState,
@@ -22,8 +22,8 @@ export const makeEnvironmentService = (
     clearQuestReward: questId => set({ kind: "clearQuestReward", questId: identifier(questId) }),
     clearQuests: () => set({ kind: "clearQuests" }),
     setQuestAutoRegister,
-    setAutoRegisterRequirements: requirements => getState().pipe(Effect.flatMap(state => setQuestAutoRegister({ ...state.questAutoRegister, requirements }))),
-    setAutoRegisterRewards: rewards => getState().pipe(Effect.flatMap(state => setQuestAutoRegister({ ...state.questAutoRegister, rewards }))),
+    setAutoRegisterRequirements: requirements => setQuestAutoRegister({ requirements }),
+    setAutoRegisterRewards: rewards => setQuestAutoRegister({ rewards }),
     setBoostAutomationEnabled: enabled => setAutomation("boosts", enabled),
     setDropAutomationEnabled: enabled => setAutomation("drops", enabled),
     setQuestAutomationEnabled: enabled => setAutomation("quests", enabled),

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
-const base = new Intl.Collator(undefined, { sensitivity: "base" });
-const full = new Intl.Collator();
+const base = new Intl.Collator("en", { sensitivity: "base" });
+const full = new Intl.Collator("en");
 const chars = Array.from({ length: 128 }, (_, i) => String.fromCharCode(i));
 const sorted = [...chars].sort(base.compare);
 let rank = 0;

@@ -93,7 +93,8 @@ pub enum EnvironmentEdit {
     },
     ClearQuests {},
     SetQuestAutoRegister {
-        options: EnvironmentQuestAutoRegister,
+        requirements: Option<bool>,
+        rewards: Option<bool>,
     },
     SetAutomationEnabled {
         capability: EnvironmentAutomationCapability,

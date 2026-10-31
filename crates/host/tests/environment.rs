@@ -40,7 +40,12 @@ fn scripts_use_every_environment_method_and_receive_loaded_quest_targets() {
             check((yield* e.clearQuestReward(3)).questRewards,{802:9});
             check((yield* e.removeQuest(3)).questIds,[802]);
             check((yield* e.updateQuestAutoRegister({requirements:true})).itemNames,["Requirement","Reward Blade"]);
-            check((yield* e.clearItems()).itemNames,["Requirement","Reward Blade"]);
+            check((yield* e.removeItem("Reward Blade")).itemNames,["Requirement"]);
+            check((yield* e.addBoost("XP Boost")).itemNames,["Requirement"]);
+            check((yield* e.clearItems()).itemNames,[]);
+            check((yield* e.addQuest(802)).itemNames,[]);
+            check((yield* e.updateQuestAutoRegister({rewards:false})).itemNames,["Requirement"]);
+            check((yield* e.updateQuestAutoRegister({rewards:true})).itemNames,["Requirement","Reward Blade"]);
             check((yield* e.addQuest(NaN)).questIds,[802]);
             check((yield* e.setQuestReward(3,Infinity)).questIds,[802]);
             check((yield* e.clearQuests()).questIds,[]);
@@ -118,5 +123,76 @@ fn environment_survives_a_killed_script_and_player_restart() {
         serde_json::from_str::<serde_json::Value>(&reader.query(Query::Environment {}).unwrap())
             .unwrap(),
         expected
+    );
+}
+
+#[test]
+fn late_quest_targets_require_a_registration_change() {
+    use lucent_protocol::{command::Command, environment::EnvironmentEdit};
+    let (_host, mut session, runtime) = ready_runtime();
+    let link = session.attach(EventInterests::ALL).unwrap();
+    let edit = |value: serde_json::Value| {
+        let edit: EnvironmentEdit = serde_json::from_value(value).unwrap();
+        let answer: serde_json::Value = serde_json::from_str(
+            &link
+                .command(Command::UpdateEnvironment { edit })
+                .recv_timeout(TIMEOUT)
+                .unwrap(),
+        )
+        .unwrap();
+        answer["itemNames"].clone()
+    };
+    assert_eq!(
+        edit(json!({"kind":"setQuestAutoRegister","requirements":true,"rewards":true})),
+        json!([])
+    );
+    assert_eq!(edit(json!({"kind":"addQuest","questId":802})), json!([]));
+    runtime.eval("late.js", r#"
+        window.swf["probe.emit"]("onExtensionResponse", JSON.stringify({type:"json",dataObj:{cmd:"getQuests",quests:{"802":{
+            QuestID:802,sName:"Late",Rewards:[{ItemID:9,sName:"Late Reward"}],RequiredItems:[]
+        }}}})); null;
+    "#).wait::<()>(TIMEOUT).unwrap();
+    assert_eq!(
+        edit(json!({"kind":"addBoost","name":"XP Boost"})),
+        json!([])
+    );
+    assert_eq!(
+        edit(json!({"kind":"addQuest","questId":803})),
+        json!(["Late Reward"])
+    );
+    assert_eq!(edit(json!({"kind":"clearItems"})), json!([]));
+    assert_eq!(
+        edit(json!({"kind":"setQuestAutoRegister","requirements":false})),
+        json!(["Late Reward"])
+    );
+}
+
+#[test]
+fn concurrent_links_patch_different_auto_register_flags() {
+    use lucent_protocol::{command::Command, environment::EnvironmentEdit};
+    let (_host, mut session, _runtime) = ready_runtime();
+    let requirements = session.attach(EventInterests::ALL).unwrap();
+    let rewards = session.attach(EventInterests::ALL).unwrap();
+    let barrier = std::sync::Barrier::new(2);
+    std::thread::scope(|scope| {
+        for (link, field) in [(requirements, "requirements"), (rewards, "rewards")] {
+            let barrier = &barrier;
+            scope.spawn(move || {
+                let edit: EnvironmentEdit =
+                    serde_json::from_value(json!({"kind":"setQuestAutoRegister",field:true}))
+                        .unwrap();
+                barrier.wait();
+                link.command(Command::UpdateEnvironment { edit })
+                    .recv_timeout(TIMEOUT)
+                    .unwrap();
+            });
+        }
+    });
+    let reader = session.attach(EventInterests::ALL).unwrap();
+    let state: serde_json::Value =
+        serde_json::from_str(&reader.query(Query::Environment {}).unwrap()).unwrap();
+    assert_eq!(
+        state["questAutoRegister"],
+        json!({"requirements":true,"rewards":true})
     );
 }

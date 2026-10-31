@@ -128,7 +128,17 @@ pub(super) fn reduce(state: &mut EnvironmentState, edit: EnvironmentEdit) {
             state.quest_ids.clear();
             state.quest_rewards.clear();
         }
-        SetQuestAutoRegister { options } => state.quest_auto_register = options,
+        SetQuestAutoRegister {
+            requirements,
+            rewards,
+        } => {
+            if let Some(requirements) = requirements {
+                state.quest_auto_register.requirements = requirements;
+            }
+            if let Some(rewards) = rewards {
+                state.quest_auto_register.rewards = rewards;
+            }
+        }
         SetAutomationEnabled {
             capability,
             enabled,
@@ -179,7 +189,11 @@ pub(super) fn reduce(state: &mut EnvironmentState, edit: EnvironmentEdit) {
     normalize(state);
 }
 pub(super) fn apply(state: &mut EnvironmentState, edit: EnvironmentEdit, projection: &Projection) {
+    let before = (state.quest_ids.clone(), state.quest_auto_register.clone());
     reduce(state, edit);
+    if state.quest_ids == before.0 && state.quest_auto_register == before.1 {
+        return;
+    }
     for quest in projection.quests.all() {
         let quest = quest.data();
         if !state.quest_ids.contains(&quest.id) {
@@ -233,6 +247,32 @@ mod tests {
                 "{}",
                 fixture["name"]
             );
+        }
+    }
+    #[test]
+    fn reducer_corpus_matches_the_schema() {
+        let sequences: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../packages/schemas/test-fixtures/environment/reducers.json"
+        ))
+        .unwrap();
+        for sequence in sequences.as_array().unwrap() {
+            let mut state: EnvironmentState =
+                serde_json::from_value(sequence["input"].clone()).unwrap();
+            for step in sequence["steps"].as_array().unwrap() {
+                reduce(
+                    &mut state,
+                    serde_json::from_value(step["edit"].clone()).unwrap(),
+                );
+                let expected: EnvironmentState =
+                    serde_json::from_value(step["expected"].clone()).unwrap();
+                assert_eq!(
+                    state.quest_rewards.keys().collect::<Vec<_>>(),
+                    expected.quest_rewards.keys().collect::<Vec<_>>(),
+                    "{}",
+                    step["edit"]
+                );
+                assert_eq!(state, expected, "{}", step["edit"]);
+            }
         }
     }
     #[test]
