@@ -27,3 +27,4 @@ pub mod script;
 pub mod settings;
 
 pub mod combat_profile;
+pub mod combat_state;

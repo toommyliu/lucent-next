@@ -2,6 +2,7 @@ pub mod auras;
 pub mod auth;
 mod baselines;
 mod combat;
+pub mod combat_state;
 pub(crate) mod commands;
 mod entity;
 mod item;
@@ -55,6 +56,7 @@ pub struct Projection {
     pub quests: quests::QuestStore,
     pub shops: shops::ShopStore,
     pub world: world::WorldStore,
+    combat: combat_state::CounterWindows,
     session_logged_in: bool,
     pub(crate) connected: Option<bool>,
 }
@@ -82,6 +84,7 @@ impl Projection {
     }
 
     pub(crate) fn reset(&mut self) {
+        self.combat = combat_state::CounterWindows::default();
         self.world.clear_area();
         self.world.clear_self();
         self.quests.clear();
@@ -112,6 +115,19 @@ impl Projection {
     }
 
     pub fn packet(
+        &mut self,
+        packet: &Packet,
+        now_ms: f64,
+        bridge_available: bool,
+    ) -> PacketProjection {
+        let result = self.project_packet(packet, now_ms, bridge_available);
+        if let PacketProjection::Applied(output) = &result {
+            self.combat.observe(&output.events, now_ms);
+        }
+        result
+    }
+
+    fn project_packet(
         &mut self,
         packet: &Packet,
         now_ms: f64,
@@ -182,7 +198,11 @@ impl Projection {
             result,
             now_ms,
         );
-        Ok(self.world_result(progress))
+        let result = self.world_result(progress);
+        if let PacketProjection::Applied(output) = &result {
+            self.combat.observe(&output.events, now_ms);
+        }
+        Ok(result)
     }
 
     fn world_result(&self, progress: world::WorldProgress) -> PacketProjection {

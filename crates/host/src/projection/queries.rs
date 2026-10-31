@@ -49,6 +49,16 @@ pub fn answer(
 }
 
 impl Answer for State<'_> {
+    fn combat_state(
+        &self,
+        priorities: Vec<MonsterSelector>,
+    ) -> Vec<lucent_protocol::combat_state::CombatMonsterState> {
+        self.projection.combat_monsters(
+            super::combat_state::now_ms(),
+            &priorities,
+            self.settings.anti_counter_enabled,
+        )
+    }
     fn auto_relogin(&self) -> lucent_protocol::auto_relogin::AutoReloginRecords {
         self.auto_relogin.read().clone()
     }
