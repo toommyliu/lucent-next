@@ -32,6 +32,19 @@ impl Logs {
         tracing::Dispatch::new(tracing_subscriber::registry().with(self.clone()))
     }
 
+    pub(crate) fn enter(&self) -> tracing::dispatcher::DefaultGuard {
+        tracing::dispatcher::set_default(&self.dispatch())
+    }
+
+    pub(crate) fn messages(&self) -> Vec<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, message)| message.clone())
+            .collect()
+    }
+
     pub(crate) fn cause(&self, prefix: &str) -> String {
         self.0
             .lock()

@@ -168,17 +168,6 @@ impl Shared {
         state.bot = Some(id);
         Ok(())
     }
-    pub(crate) fn publish(&self, id: AttachmentId, write: impl FnOnce()) -> Result<(), Error> {
-        let state = self.state.lock();
-        if state.stopped {
-            return Err(Error::Stopped);
-        }
-        if state.bot != Some(id) {
-            return Err(Error::BotPublishDenied);
-        }
-        write();
-        Ok(())
-    }
     pub(crate) fn ask(
         &self,
         asked_by: AttachmentId,

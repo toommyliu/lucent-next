@@ -92,10 +92,6 @@ impl Engine {
                     v8::Function::new(scope, host_is_ask_pending),
                 ),
                 ("answer", v8::Function::new(scope, host_answer)),
-                (
-                    "publishAutoRelogin",
-                    v8::Function::new(scope, host_publish_auto_relogin),
-                ),
                 ("now", v8::Function::new(scope, host_now)),
                 ("log", v8::Function::new(scope, host_log)),
             ] {
@@ -745,25 +741,6 @@ fn host_answer(
     })();
     return_reply(scope, reply, result);
 }
-fn host_publish_auto_relogin(
-    scope: &mut v8::PinScope,
-    args: v8::FunctionCallbackArguments,
-    reply: v8::ReturnValue<v8::Value>,
-) {
-    let Some(json) = args.get(0).to_string(scope) else {
-        return;
-    };
-    let json = json.to_rust_string_lossy(scope);
-    let link = scope.get_slot::<ScriptLink>().unwrap();
-    let result = (|| -> Result<Option<String>, String> {
-        let records = serde_json::from_str(&json).map_err(|error| format!("{error}"))?;
-        link.publish_auto_relogin(records)
-            .map(|_| None)
-            .map_err(|error| error.to_string())
-    })();
-    return_reply(scope, reply, result);
-}
-
 fn host_prepare_operation(
     scope: &mut v8::PinScope,
     _args: v8::FunctionCallbackArguments,
