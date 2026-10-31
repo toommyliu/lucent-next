@@ -13,7 +13,7 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 fn warn_and_fail(message: &str) {
     let host = testing::headless_host();
     let (_session, link) = testing::start_probe(&host, ProbeMovie::new());
-    let runtime = Runtime::start(link).unwrap();
+    let mut runtime = Runtime::start(link).unwrap();
     runtime
         .eval(
             "warning.js",
@@ -30,7 +30,7 @@ fn warn_and_fail(message: &str) {
             .wait::<()>(TIMEOUT),
         Err(RuntimeError::Killed(Kill::Watchdog))
     ));
-    drop(runtime);
+    runtime.join_cpu_time();
 }
 
 #[test]
