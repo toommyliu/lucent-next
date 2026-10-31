@@ -3,7 +3,6 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
 import { makeScriptArmyApi } from "../game/scripting/api/Army";
-import { makeScriptEnvironmentApi } from "../game/scripting/api/Environment";
 import { makeScriptAsyncScope } from "../game/scripting/scriptAsyncScope";
 import { makeScriptFileSystemApi } from "../game/scripting/ScriptFileSystem";
 import { makeScriptRuntimeApi } from "../game/scripting/ScriptRuntime";
@@ -30,7 +29,6 @@ describe("unavailable host services", () => {
       yield* Effect.addFinalizer(() => scope.close);
       const services = unavailableScriptServices;
       const army = makeScriptArmyApi(services.army, scope, () => Effect.void);
-      const environment = makeScriptEnvironmentApi(services.environment);
       const files = makeScriptFileSystemApi(services.fileSystem, scope);
       const http = yield* services.http();
       const script = makeScriptRuntimeApi({
@@ -57,8 +55,8 @@ describe("unavailable host services", () => {
       expect(yield* failure(army.start("farm"))).toBe(
         "The army service is not available yet.",
       );
-      expect(yield* failure(environment.addQuest(802))).toBe(
-        "Environment addQuest failed.",
+      expect(yield* failure(services.environment.syncToAll())).toBe(
+        "The environment service is not available yet.",
       );
       expect(yield* failure(files.readText("farm.txt"))).toBe(
         "Filesystem read-text failed at farm.txt: unavailable.",

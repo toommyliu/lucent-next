@@ -67,9 +67,8 @@ export interface EnvironmentShape {
   ): Effect.Effect<EnvironmentState, unknown>;
   clearQuestReward(questId: number): Effect.Effect<EnvironmentState, unknown>;
   clearQuests(): Effect.Effect<EnvironmentState, unknown>;
-  /** Update both quest auto-registration options at once. */
   setQuestAutoRegister(
-    options: EnvironmentQuestAutoRegisterOptions,
+    options: Partial<EnvironmentQuestAutoRegisterOptions>,
   ): Effect.Effect<EnvironmentState, unknown>;
   setAutoRegisterRequirements(
     enabled: boolean,
@@ -376,8 +375,12 @@ const makeEnvironment = Effect.gen(function* () {
   const setQuestAutoRegister: EnvironmentShape["setQuestAutoRegister"] = (
     options,
   ) =>
-    invokeState("Failed to update Environment quest registration.", () =>
-      bridge.setQuestAutoRegister(options),
+    getState().pipe(
+      Effect.flatMap((state) =>
+        invokeState("Failed to update Environment quest registration.", () =>
+          bridge.setQuestAutoRegister({ ...state.questAutoRegister, ...options }),
+        ),
+      ),
     );
 
   const setBoostAutomationEnabled: EnvironmentShape["setBoostAutomationEnabled"] =

@@ -256,6 +256,7 @@ fn dropping_a_runtime_blocked_in_a_loader_call_returns_promptly() {
                     &Default::default(),
                     &Default::default(),
                     &Default::default(),
+                    &Default::default(),
                     Query::Map {},
                 )
             })
@@ -306,6 +307,7 @@ fn a_killed_script_runs_none_of_its_queued_callbacks() {
             .read_projection(|projection| {
                 answer(
                     projection,
+                    &Default::default(),
                     &Default::default(),
                     &Default::default(),
                     &Default::default(),

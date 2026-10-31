@@ -17435,14 +17435,7 @@ ${prefix}}`;
       clearQuests: /* @__PURE__ */ __name(() => exposeMutation("clearQuests", environment.clearQuests()), "clearQuests"),
       updateQuestAutoRegister: /* @__PURE__ */ __name((patch) => exposeMutation(
         "updateQuestAutoRegister",
-        environment.getState().pipe(
-          flatMap3(
-            (state) => environment.setQuestAutoRegister({
-              ...state.questAutoRegister,
-              ...patch
-            })
-          )
-        )
+        environment.setQuestAutoRegister(patch)
       ), "updateQuestAutoRegister"),
       addItem: /* @__PURE__ */ __name((name) => exposeMutation("addItem", environment.addItem(name)), "addItem"),
       removeItem: /* @__PURE__ */ __name((name) => exposeMutation("removeItem", environment.removeItem(name)), "removeItem"),
@@ -20931,6 +20924,46 @@ ${prefix}}`;
     };
   }, "makeAutoZoneService");
 
+  // packages/runtime/src/host/environment.ts
+  var makeEnvironmentService = /* @__PURE__ */ __name((host3, unavailable2) => {
+    const identifier2 = /* @__PURE__ */ __name((value) => Number.isFinite(value) ? value : 0, "identifier");
+    const getState = /* @__PURE__ */ __name(() => sync2(() => JSON.parse(host3.read('{"kind":"environment"}'))), "getState");
+    const set4 = /* @__PURE__ */ __name((edit) => try_2(() => JSON.parse(host3.command(JSON.stringify({ kind: "updateEnvironment", edit })))), "set");
+    const setAutomation = /* @__PURE__ */ __name((capability, enabled) => set4({ kind: "setAutomationEnabled", capability, enabled }), "setAutomation");
+    const setDropPolicy = /* @__PURE__ */ __name((patch) => set4({ kind: "updateDropPolicy", patch }), "setDropPolicy");
+    const setQuestAutoRegister = /* @__PURE__ */ __name((options) => set4({ kind: "setQuestAutoRegister", ...options }), "setQuestAutoRegister");
+    return {
+      ...unavailable2,
+      getState,
+      clear: /* @__PURE__ */ __name(() => set4({ kind: "clear" }), "clear"),
+      addQuest: /* @__PURE__ */ __name((questId, rewardItemId) => set4({ kind: "addQuest", questId: identifier2(questId), ...rewardItemId === void 0 ? {} : { rewardItemId: identifier2(rewardItemId) } }), "addQuest"),
+      removeQuest: /* @__PURE__ */ __name((questId) => set4({ kind: "removeQuest", questId: identifier2(questId) }), "removeQuest"),
+      setQuestReward: /* @__PURE__ */ __name((questId, rewardItemId) => set4({ kind: "setQuestReward", questId: identifier2(questId), rewardItemId: identifier2(rewardItemId) }), "setQuestReward"),
+      clearQuestReward: /* @__PURE__ */ __name((questId) => set4({ kind: "clearQuestReward", questId: identifier2(questId) }), "clearQuestReward"),
+      clearQuests: /* @__PURE__ */ __name(() => set4({ kind: "clearQuests" }), "clearQuests"),
+      setQuestAutoRegister,
+      setAutoRegisterRequirements: /* @__PURE__ */ __name((requirements) => setQuestAutoRegister({ requirements }), "setAutoRegisterRequirements"),
+      setAutoRegisterRewards: /* @__PURE__ */ __name((rewards) => setQuestAutoRegister({ rewards }), "setAutoRegisterRewards"),
+      setBoostAutomationEnabled: /* @__PURE__ */ __name((enabled) => setAutomation("boosts", enabled), "setBoostAutomationEnabled"),
+      setDropAutomationEnabled: /* @__PURE__ */ __name((enabled) => setAutomation("drops", enabled), "setDropAutomationEnabled"),
+      setQuestAutomationEnabled: /* @__PURE__ */ __name((enabled) => setAutomation("quests", enabled), "setQuestAutomationEnabled"),
+      addItem: /* @__PURE__ */ __name((name) => set4({ kind: "addItem", name }), "addItem"),
+      removeItem: /* @__PURE__ */ __name((name) => set4({ kind: "removeItem", name }), "removeItem"),
+      clearItems: /* @__PURE__ */ __name(() => set4({ kind: "clearItems" }), "clearItems"),
+      setItemNotification: /* @__PURE__ */ __name((name, enabled) => set4({ kind: "setItemNotification", name, enabled }), "setItemNotification"),
+      setItemRules: /* @__PURE__ */ __name((rules) => set4({ kind: "setItemRules", rules: { ...rules, buckets: [...rules.buckets] } }), "setItemRules"),
+      setDropPolicy,
+      setAcceptAcMemberOnlyDrops: /* @__PURE__ */ __name((enabled) => setDropPolicy({ acceptAcMemberOnlyDrops: enabled }), "setAcceptAcMemberOnlyDrops"),
+      setAcceptAcNonMemberDrops: /* @__PURE__ */ __name((enabled) => setDropPolicy({ acceptAcNonMemberDrops: enabled }), "setAcceptAcNonMemberDrops"),
+      setAcceptNonAcMemberOnlyDrops: /* @__PURE__ */ __name((enabled) => setDropPolicy({ acceptNonAcMemberOnlyDrops: enabled }), "setAcceptNonAcMemberOnlyDrops"),
+      setAcceptNonAcNonMemberDrops: /* @__PURE__ */ __name((enabled) => setDropPolicy({ acceptNonAcNonMemberDrops: enabled }), "setAcceptNonAcNonMemberDrops"),
+      setRejectUnregisteredDrops: /* @__PURE__ */ __name((enabled) => setDropPolicy({ rejectUnregisteredDrops: enabled }), "setRejectUnregisteredDrops"),
+      addBoost: /* @__PURE__ */ __name((name) => set4({ kind: "addBoost", name }), "addBoost"),
+      removeBoost: /* @__PURE__ */ __name((name) => set4({ kind: "removeBoost", name }), "removeBoost"),
+      clearBoosts: /* @__PURE__ */ __name(() => set4({ kind: "clearBoosts" }), "clearBoosts")
+    };
+  }, "makeEnvironmentService");
+
   // packages/runtime/src/shared/http.ts
   var SCRIPT_HTTP_MAX_BYTES = 8 * 1024 * 1024;
   var HttpErrorReasonSchema = Literals([
@@ -20999,6 +21032,10 @@ ${prefix}}`;
     const cause = new HostServiceUnavailable("army");
     return fail5(new ErrorClass(cause.message, cause));
   }, "armyFailure");
+  var unavailableEnvironment = /* @__PURE__ */ __name(() => {
+    throw new HostServiceUnavailable("environment");
+  }, "unavailableEnvironment");
+  var environmentHost = typeof __host === "undefined" ? { read: unavailableEnvironment, command: unavailableEnvironment } : { read: __host.read, command: __host.command };
   var unavailableScriptServices = {
     army: {
       equipSet: armyFailure(ArmyError),
@@ -21020,37 +21057,10 @@ ${prefix}}`;
       sync: armyFailure(ArmyError),
       waitForAllInMap: armyFailure(ArmyError)
     },
-    environment: {
-      getState: defect("environment"),
-      clear: failure("environment"),
-      addQuest: failure("environment"),
-      removeQuest: failure("environment"),
-      setQuestReward: failure("environment"),
-      clearQuestReward: failure("environment"),
-      clearQuests: failure("environment"),
-      setQuestAutoRegister: failure("environment"),
-      setAutoRegisterRequirements: failure("environment"),
-      setAutoRegisterRewards: failure("environment"),
-      addItem: failure("environment"),
-      removeItem: failure("environment"),
-      setAcceptAcMemberOnlyDrops: failure("environment"),
-      setAcceptAcNonMemberDrops: failure("environment"),
-      setAcceptNonAcMemberOnlyDrops: failure("environment"),
-      setAcceptNonAcNonMemberDrops: failure("environment"),
-      setRejectUnregisteredDrops: failure("environment"),
-      setDropPolicy: failure("environment"),
-      setItemRules: failure("environment"),
-      clearItems: failure("environment"),
-      addBoost: failure("environment"),
-      removeBoost: failure("environment"),
-      clearBoosts: failure("environment"),
+    environment: makeEnvironmentService(environmentHost, {
       fetchBoosts: failure("environment"),
-      setBoostAutomationEnabled: failure("environment"),
-      setDropAutomationEnabled: failure("environment"),
-      setItemNotification: failure("environment"),
-      setQuestAutomationEnabled: failure("environment"),
       syncToAll: failure("environment")
-    },
+    }),
     fileSystem: {
       exists: reject("fileSystem"),
       list: reject("fileSystem"),

@@ -24,6 +24,7 @@ fn auras(auras: Vec<LiveAura>, kind: Option<AuraKind>) -> Vec<AuraData> {
 }
 
 struct State<'a> {
+    environment: &'a parking_lot::RwLock<lucent_protocol::environment::EnvironmentState>,
     projection: &'a Projection,
     settings: &'a GameSettings,
     auto_relogin: &'a parking_lot::RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>,
@@ -35,10 +36,12 @@ pub fn answer(
     settings: &GameSettings,
     auto_zone: &parking_lot::RwLock<AutoZoneConfig>,
     auto_relogin: &parking_lot::RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>,
+    environment: &parking_lot::RwLock<lucent_protocol::environment::EnvironmentState>,
     query: Query,
 ) -> String {
     lucent_protocol::query::answer(
         &State {
+            environment,
             projection,
             settings,
             auto_zone,
@@ -49,6 +52,9 @@ pub fn answer(
 }
 
 impl Answer for State<'_> {
+    fn environment(&self) -> lucent_protocol::environment::EnvironmentState {
+        self.environment.read().clone()
+    }
     fn combat_state(
         &self,
         priorities: Vec<MonsterSelector>,

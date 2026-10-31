@@ -72,6 +72,7 @@ macro_rules! queries {
 }
 
 queries! {
+    Environment {} => crate::environment::EnvironmentState,
     CombatState { priorities: Vec<MonsterSelector> } => Vec<crate::combat_state::CombatMonsterState>,
     AutoRelogin {} => crate::auto_relogin::AutoReloginRecords,
     AutoZone {} => AutoZoneConfig,
