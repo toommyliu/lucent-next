@@ -463,6 +463,51 @@ mod tests {
     }
 
     #[test]
+    fn input_overflow_clears_packet_combat_facts_before_reads_and_recovery() {
+        let (mut running, bridge, _) = running(2, 16);
+        running.projection.write().auth.username = "player-a".into();
+        let baseline = json!({
+            "cmd":"moveToArea","areaName":"battleon-42",
+            "uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}],
+            "monBranch":[{"MonID":5,"MonMapID":1,"intHP":100,"intState":1}]
+        });
+        extension(&mut running, &bridge, baseline.clone());
+        running.drain_events();
+        extension(
+            &mut running,
+            &bridge,
+            json!({"cmd":"cb","a":[{
+                "cmd":"aura+","tInf":"m:1","aura":{"nam":"Counter Attack","t":"s","dur":2}
+            }]}),
+        );
+        running.drain_events();
+        assert!(read(&mut running, |state| state.combat_monsters(
+            now_ms(),
+            &[],
+            true
+        )[0]
+        .attack_blocked));
+        for _ in 0..3 {
+            queue(&mut running, &bridge, "onDebug", "overflow".into());
+        }
+        assert!(
+            read(&mut running, |state| state.combat_monsters(
+                now_ms(),
+                &[],
+                true
+            ))
+            .is_empty()
+        );
+        extension(&mut running, &bridge, baseline);
+        assert!(!read(&mut running, |state| state.combat_monsters(
+            now_ms(),
+            &[],
+            true
+        )[0]
+        .attack_blocked));
+    }
+
+    #[test]
     fn session_input_overflow_invalidates_before_reads_and_fresh_baselines_recover() {
         let (mut running, bridge, events) = running(2, 16);
         running.projection.write().auth.username = "player-a".into();
