@@ -53,7 +53,9 @@ impl Running {
     pub(super) fn publish(&self, event: ScriptEvent) {
         if let Some(((_, last), rest)) = self.script_events.split_last() {
             for (_, stream) in rest {
-                stream.send(event.clone());
+                if stream.accepts(&event) {
+                    stream.send(event.clone());
+                }
             }
             last.send(event);
         }
@@ -176,7 +178,7 @@ mod tests {
 
     fn running(input: usize, output: usize) -> (Running, Bridge, ScriptEvents) {
         let (bridge, loader_events) = Bridge::with_capacity(input);
-        let (producer, events) = script_events(output);
+        let (producer, events) = script_events(output, crate::bridge::EventInterests::ALL);
         let now = Instant::now();
         (
             Running {

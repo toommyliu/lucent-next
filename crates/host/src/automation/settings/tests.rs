@@ -1,53 +1,6 @@
 use super::*;
-use std::{
-    cell::{Cell, RefCell},
-    sync::{Arc, Mutex},
-};
-use tracing_subscriber::prelude::*;
-
-#[derive(Default, Clone)]
-struct Logs(Arc<Mutex<Vec<(tracing::Level, String)>>>);
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Logs {
-    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        struct Message(String);
-        impl tracing::field::Visit for Message {
-            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-                if field.name() == "message" {
-                    self.0 = format!("{value:?}");
-                }
-            }
-        }
-        let mut message = Message(String::new());
-        event.record(&mut message);
-        self.0
-            .lock()
-            .unwrap()
-            .push((*event.metadata().level(), message.0));
-    }
-}
-impl Logs {
-    fn cause(&self, prefix: &str) -> String {
-        self.0
-            .lock()
-            .unwrap()
-            .iter()
-            .find_map(|(level, msg)| {
-                (*level == tracing::Level::WARN)
-                    .then(|| msg.strip_prefix(prefix))
-                    .flatten()
-                    .map(str::to_owned)
-            })
-            .unwrap_or_default()
-    }
-    fn count(&self, text: &str) -> usize {
-        self.0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(_, msg)| msg.contains(text))
-            .count()
-    }
-}
+use crate::automation::test_logs::Logs;
+use std::cell::{Cell, RefCell};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Boundary {
@@ -169,7 +122,7 @@ fn advance(settings: &mut Settings, host: &Host, now: Instant) -> Instant {
 
 fn retries(boundary: Boundary, fault: Fault) {
     let logs = Logs::default();
-    let dispatch = tracing::Dispatch::new(tracing_subscriber::registry().with(logs.clone()));
+    let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
     let host = Host::default();
     host.faults.borrow_mut().push((boundary, fault.clone()));
@@ -299,7 +252,7 @@ fn settings_policy_uses_player_readiness() {
 #[test]
 fn settings_policy_recovery_waits_for_every_failing_loop() {
     let logs = Logs::default();
-    let dispatch = tracing::Dispatch::new(tracing_subscriber::registry().with(logs.clone()));
+    let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
     let host = Host::default();
     *host.faults.borrow_mut() = vec![
@@ -356,7 +309,7 @@ fn deadlines_follow_completion_and_unanswered_ticks_time_out() {
 #[test]
 fn independent_settings_policies_keep_separate_failure_streaks() {
     let logs = Logs::default();
-    let dispatch = tracing::Dispatch::new(tracing_subscriber::registry().with(logs.clone()));
+    let dispatch = logs.dispatch();
     let _guard = tracing::dispatcher::set_default(&dispatch);
     let first = Host::default();
     let second = Host::default();

@@ -1,7 +1,11 @@
 mod common;
 
 use common::{TIMEOUT, logs::Logs};
-use lucent_host::{ScriptLink, bridge::ScriptEvent, testing};
+use lucent_host::{
+    ScriptLink,
+    bridge::{EventInterests, ScriptEvent},
+    testing,
+};
 use lucent_protocol::{
     bridge::Value, operation::Operation, query::ItemSelector, script::ScriptOutcome,
 };
@@ -78,7 +82,7 @@ fn accepting_session() -> (lucent_host::Session, Runtime, ScriptLink, ScriptLink
     );
     let runtime = Runtime::start(link).unwrap();
     common::ready(&runtime);
-    let control = session.attach().unwrap();
+    let control = session.attach(EventInterests::ALL).unwrap();
     emit(
         &control,
         json!({"cmd":"dropItem","items":{
@@ -87,7 +91,7 @@ fn accepting_session() -> (lucent_host::Session, Runtime, ScriptLink, ScriptLink
             "73":{"ItemID":73,"sName":"Next","iQty":1}
         }}),
     );
-    let observer = session.attach().unwrap();
+    let observer = session.attach(EventInterests::ALL).unwrap();
     (session, runtime, control, observer)
 }
 
@@ -286,7 +290,7 @@ fn stale_and_foreign_run_handles_do_not_cancel_another_recipient() {
             handles.send(id).unwrap();
         }
     });
-    let first_link = session.attach().unwrap();
+    let first_link = session.attach(EventInterests::ALL).unwrap();
     let cancel_first = first_link.operation_canceller();
     let first = lucent_runtime::ScriptRun::start(
         first_link,
@@ -303,7 +307,7 @@ fn stale_and_foreign_run_handles_do_not_cancel_another_recipient() {
     .unwrap();
     let first_id = received.recv_timeout(TIMEOUT).unwrap();
     let mut trace = vec![next_trace(&observer)];
-    let second_link = session.attach().unwrap();
+    let second_link = session.attach(EventInterests::ALL).unwrap();
     let cancel_second = second_link.operation_canceller();
     let second = lucent_runtime::ScriptRun::start(
         second_link,

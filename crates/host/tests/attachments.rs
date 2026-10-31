@@ -1,3 +1,4 @@
+use lucent_host::bridge::EventInterests;
 use std::time::Duration;
 
 use lucent_host::bridge::{Error, Event, ScriptEvent, Value};
@@ -47,7 +48,9 @@ fn initial_config(link: &ScriptLink) {
 fn two_links_see_the_same_events_in_order() {
     let host = testing::headless_host();
     let (mut session, first) = testing::start_probe(&host, ProbeMovie::new());
-    let second = session.attach().expect("a second link attaches");
+    let second = session
+        .attach(EventInterests::ALL)
+        .expect("a second link attaches");
     initial_config(&second);
     for index in 0..1_000 {
         emit(&first, index);
@@ -68,10 +71,14 @@ fn a_dropped_link_is_detached() {
     assert_eq!(count(&session), 1);
     drop(link);
     assert_eq!(count(&session), 0);
-    let survivor = session.attach().expect("a new link attaches");
+    let survivor = session
+        .attach(EventInterests::ALL)
+        .expect("a new link attaches");
     initial_config(&survivor);
     for index in 0..100 {
-        let transient = session.attach().expect("another link attaches");
+        let transient = session
+            .attach(EventInterests::ALL)
+            .expect("another link attaches");
         assert_eq!(count(&session), 2);
         drop(transient);
         assert_eq!(count(&session), 1);
@@ -84,7 +91,9 @@ fn a_dropped_link_is_detached() {
 fn one_links_overflow_leaves_the_other_intact() {
     let host = testing::headless_host();
     let (mut session, stalled) = testing::start_probe(&host, ProbeMovie::new());
-    let draining = session.attach().expect("a second link attaches");
+    let draining = session
+        .attach(EventInterests::ALL)
+        .expect("a second link attaches");
     initial_config(&draining);
     for index in 0..1_100 {
         emit(&draining, index);
@@ -104,7 +113,9 @@ fn one_links_overflow_leaves_the_other_intact() {
 fn replies_belong_to_their_calling_link() {
     let host = testing::headless_host();
     let (mut session, first) = testing::start_probe(&host, ProbeMovie::new());
-    let second = session.attach().expect("a second link attaches");
+    let second = session
+        .attach(EventInterests::ALL)
+        .expect("a second link attaches");
     let abandoned = first.call_loader("probe.echo", vec![Value::String("abandoned".into())]);
     drop(first);
     drop(abandoned);
@@ -117,7 +128,9 @@ fn replies_belong_to_their_calling_link() {
     let abandoned = second.command(lucent_protocol::command::Command::Logout {});
     drop(second);
     drop(abandoned);
-    let third = session.attach().expect("a new link attaches");
+    let third = session
+        .attach(EventInterests::ALL)
+        .expect("a new link attaches");
     assert_eq!(
         third
             .command(lucent_protocol::command::Command::RefreshLoggedIn {})
@@ -137,7 +150,7 @@ fn new_links_receive_config_then_events_after_attach() {
     let host = testing::headless_host();
     let (mut session, first) = testing::start_probe(&host, ProbeMovie::new());
     emit(&first, 0);
-    let second = session.attach().unwrap();
+    let second = session.attach(EventInterests::ALL).unwrap();
     initial_config(&second);
     emit(&first, 1);
     assert_eq!(first.try_event(), Ok(Some(event(0))));
@@ -147,7 +160,7 @@ fn new_links_receive_config_then_events_after_attach() {
     drop(first);
     drop(second);
     assert_eq!(count(&session), 0);
-    let third = session.attach().unwrap();
+    let third = session.attach(EventInterests::ALL).unwrap();
     initial_config(&third);
     emit(&third, 2);
     assert_eq!(third.try_event(), Ok(Some(event(2))));

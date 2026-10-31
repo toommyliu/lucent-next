@@ -1,6 +1,7 @@
 mod common;
 
 use common::{logs::Logs, *};
+use lucent_host::bridge::EventInterests;
 use lucent_host::{ViewEvent, Viewport, testing};
 use lucent_runtime::{ScriptRequest, Supervisor};
 const INFO: tracing::Level = tracing::Level::INFO;
@@ -160,7 +161,7 @@ fn a_restart_ends_the_run_starts_a_new_bot_and_does_not_rerun() {
         .restart_player(&mut session, testing::headless_surface())
         .unwrap();
     logs.wait_for(INFO, "session 1: bot 2 started");
-    let observer = session.attach().unwrap();
+    let observer = session.attach(EventInterests::ALL).unwrap();
     session.send(ViewEvent::Resized(
         Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));
@@ -211,7 +212,7 @@ fn a_script_waiting_for_login_waits_again_after_a_restart() {
         .restart_player(&mut session, testing::headless_surface())
         .unwrap();
     logs.wait_for(INFO, "session 1: bot 2 started");
-    let observer = session.attach().unwrap();
+    let observer = session.attach(EventInterests::ALL).unwrap();
     session.send(ViewEvent::Resized(
         Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));

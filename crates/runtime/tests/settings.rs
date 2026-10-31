@@ -1,5 +1,6 @@
 mod common;
 use common::TIMEOUT;
+use lucent_host::bridge::EventInterests;
 use lucent_host::{ScriptLink, Session, bridge::Value, testing};
 use lucent_protocol::command::Command;
 use lucent_runtime::Supervisor;
@@ -138,10 +139,10 @@ fn the_native_policy_runs_without_a_bot() {
             self.0.unpark();
         }
     }
-    let (_host, mut session, observer) = start();
+    let (_host, _session, observer) = start();
     drain(&observer);
     let mut policy = lucent_host::automation::SettingsPolicy::new(
-        session.attach().unwrap(),
+        &observer,
         Waker::from(Arc::new(Unpark(thread::current()))),
     );
     let deadline = Instant::now() + TIMEOUT;
@@ -181,7 +182,7 @@ fn a_player_restart_rebinds_the_native_policy_to_the_host_settings() {
             .recv_timeout(TIMEOUT),
         Err(lucent_host::bridge::Error::Stopped)
     );
-    let observer = session.attach().unwrap();
+    let observer = session.attach(EventInterests::ALL).unwrap();
     session.send(lucent_host::ViewEvent::Resized(
         lucent_host::Viewport::new(100.0, 100.0, 1.0).unwrap(),
     ));
@@ -200,7 +201,7 @@ fn walk_speed_resends_never_go_backwards() {
     drain(&observer);
     let _supervisor = Supervisor::start(&mut session, None).unwrap();
     next_call(&observer, "settings.setWalkSpeed");
-    let writer = session.attach().unwrap();
+    let writer = session.attach(EventInterests::ALL).unwrap();
     std::thread::scope(|scope| {
         scope.spawn(move || {
             for speed in 31..=130 {
@@ -506,4 +507,17 @@ fn script_kills_leave_the_same_native_settings_policy_running() {
             .count(),
         1
     );
+}
+
+#[test]
+fn the_settings_policy_uses_an_existing_link_without_an_event_attachment() {
+    let (_host, session, observer) = start();
+    let mut policy =
+        lucent_host::automation::SettingsPolicy::new(&observer, std::task::Waker::noop().clone());
+    assert_eq!(
+        session.attached_link_count().recv_timeout(TIMEOUT).unwrap(),
+        1
+    );
+    drop(session);
+    assert_eq!(policy.advance(Instant::now()), None);
 }
