@@ -1,3 +1,4 @@
+import { makeEnvironmentService } from "./environment";
 import * as Effect from "effect/Effect";
 
 import { ArmyError, ArmyLoopTauntError } from "../game/army/ArmyErrors";
@@ -24,6 +25,11 @@ const armyFailure =
     return Effect.fail(new ErrorClass(cause.message, cause));
   };
 
+const unavailableEnvironment = (): never => { throw new HostServiceUnavailable("environment"); };
+const environmentHost = typeof __host === "undefined"
+  ? { read: unavailableEnvironment, command: unavailableEnvironment }
+  : { read: __host.read, command: __host.command };
+
 export const unavailableScriptServices = {
   army: {
     equipSet: armyFailure(ArmyError),
@@ -45,37 +51,10 @@ export const unavailableScriptServices = {
     sync: armyFailure(ArmyError),
     waitForAllInMap: armyFailure(ArmyError),
   },
-  environment: {
-    getState: defect("environment"),
-    clear: failure("environment"),
-    addQuest: failure("environment"),
-    removeQuest: failure("environment"),
-    setQuestReward: failure("environment"),
-    clearQuestReward: failure("environment"),
-    clearQuests: failure("environment"),
-    setQuestAutoRegister: failure("environment"),
-    setAutoRegisterRequirements: failure("environment"),
-    setAutoRegisterRewards: failure("environment"),
-    addItem: failure("environment"),
-    removeItem: failure("environment"),
-    setAcceptAcMemberOnlyDrops: failure("environment"),
-    setAcceptAcNonMemberDrops: failure("environment"),
-    setAcceptNonAcMemberOnlyDrops: failure("environment"),
-    setAcceptNonAcNonMemberDrops: failure("environment"),
-    setRejectUnregisteredDrops: failure("environment"),
-    setDropPolicy: failure("environment"),
-    setItemRules: failure("environment"),
-    clearItems: failure("environment"),
-    addBoost: failure("environment"),
-    removeBoost: failure("environment"),
-    clearBoosts: failure("environment"),
+  environment: makeEnvironmentService(environmentHost, {
     fetchBoosts: failure("environment"),
-    setBoostAutomationEnabled: failure("environment"),
-    setDropAutomationEnabled: failure("environment"),
-    setItemNotification: failure("environment"),
-    setQuestAutomationEnabled: failure("environment"),
     syncToAll: failure("environment"),
-  },
+  }),
   fileSystem: {
     exists: reject("fileSystem"),
     list: reject("fileSystem"),

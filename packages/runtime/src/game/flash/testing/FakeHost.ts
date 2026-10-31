@@ -221,6 +221,8 @@ const findPlayer = (
 
 const answer = (state: FakeHostState, query: Query): unknown => {
   switch (query.kind) {
+    case "environment":
+      throw new Error("Environment state requires the native host");
     case "combatState":
       throw new Error("Combat state requires the native host");
     case "autoRelogin":
@@ -312,6 +314,8 @@ const run = (state: FakeHostState, loader: Loader, command: Command) => {
   };
 
   switch (command.kind) {
+    case "updateEnvironment":
+      throw new Error("Environment mutations require the native host");
     case "refreshCombatState":
       throw new Error("Combat state hydration requires the native host");
     case "setAutoReloginEnabled":
