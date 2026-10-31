@@ -14,6 +14,8 @@ declare global {
     swf(method: string, argsJson: string): string | undefined;
     read(queryJson: string): string;
     command(commandJson: string): string;
+    acquireConsumableClaim(itemJson: string): string;
+    releaseClaim(id: string): void;
     prepareOperation(): string;
     operate(id: string, operationJson: string): void;
     cancelOperation(id: string): void;

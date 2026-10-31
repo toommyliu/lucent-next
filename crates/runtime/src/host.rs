@@ -38,6 +38,23 @@ pub(crate) fn operate(link: &ScriptLink, id: &str, json: &str) -> Result<(), Str
         .map_err(|error| error.to_string())
 }
 
+pub(crate) fn acquire_consumable_claim(link: &ScriptLink, json: &str) -> Result<String, String> {
+    let item: Option<i64> = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    if item.is_some_and(|id| !(1..=9_007_199_254_740_991).contains(&id)) {
+        return Err("invalid consumable item ID".into());
+    }
+    link.acquire_consumable_claim(item)
+        .map(|grant| {
+            grant
+                .map(
+                    |grant| serde_json::json!({ "id": grant.id.to_string(), "first": grant.first }),
+                )
+                .into()
+        })
+        .map(|value: serde_json::Value| value.to_string())
+        .map_err(|error| error.to_string())
+}
+
 pub(crate) fn command(
     link: &ScriptLink,
     interrupt: &Interrupt,

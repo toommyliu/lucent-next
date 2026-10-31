@@ -26,14 +26,18 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(5);
 const STOP_CHECK_INTERVAL: Duration = Duration::from_millis(20);
 const PACKET_TIMEOUT: Duration = Duration::from_secs(10);
 
-type Reply = mpsc::Sender<Result<AcceptResponse, Error>>;
+enum Waiting {
+    Accept(i64, mpsc::Sender<Result<AcceptResponse, Error>>),
+    Equip(i64, mpsc::Sender<Result<(), Error>>),
+}
 
 #[derive(Default)]
 pub(crate) struct Packets(Mutex<PacketState>);
 #[derive(Default)]
 struct PacketState {
     stopped: bool,
-    waiting: Option<(i64, Reply)>,
+    claims: super::claims::Claims,
+    waiting: Option<Waiting>,
 }
 
 struct AcceptResponse {
@@ -51,13 +55,13 @@ impl Packets {
             return Err(Error::Stopped);
         }
         let (reply, receiver) = mpsc::channel();
-        state.waiting = Some((item, reply));
+        state.waiting = Some(Waiting::Accept(item, reply));
         Ok(receiver)
     }
 
     pub(crate) fn packet(&self, packet: &Packet) {
         let mut state = self.0.lock();
-        let Some((id, _)) = &state.waiting else {
+        let Some(waiting) = &state.waiting else {
             return;
         };
         let Packet::Extension {
@@ -68,6 +72,19 @@ impl Packets {
         } = packet
         else {
             return;
+        };
+        if let Waiting::Equip(action, _) = waiting {
+            if command == "seia"
+                && data.get("iRes").and_then(wire_bool) == Some(true)
+                && data.get("o").and_then(|o| o.get("id")).and_then(wire_i64) == Some(*action)
+                && let Some(Waiting::Equip(_, reply)) = state.waiting.take()
+            {
+                let _ = reply.send(Ok(()));
+            }
+            return;
+        }
+        let Waiting::Accept(id, _) = waiting else {
+            unreachable!()
         };
         if command != "getDrop" {
             return;
@@ -97,20 +114,62 @@ impl Packets {
             })
         };
         if let Some(response) = decode() {
-            let (_, reply) = state.waiting.take().unwrap();
+            let Some(Waiting::Accept(_, reply)) = state.waiting.take() else {
+                unreachable!()
+            };
             let _ = reply.send(Ok(response));
         }
     }
 
-    pub(crate) fn invalidate(&self) {
+    fn unsubscribe(&self) {
         self.0.lock().waiting.take();
+    }
+
+    pub(crate) fn binding(&self) -> super::claims::Binding {
+        self.0.lock().claims.binding()
+    }
+
+    pub(crate) fn acquire_claim(
+        &self,
+        owner: super::claims::Owner,
+        binding: super::claims::Binding,
+        item: Option<i64>,
+    ) -> Result<Option<super::claims::ClaimGrant>, Error> {
+        let mut state = self.0.lock();
+        if state.stopped || state.claims.binding() != binding {
+            return Err(Error::Stopped);
+        }
+        state.claims.acquire(
+            owner,
+            super::claims::ClaimResource::ConsumableSlot5 { item },
+        )
+    }
+
+    pub(crate) fn release_claim(&self, owner: super::claims::Owner, id: u64) {
+        self.0.lock().claims.release(owner, id);
+    }
+    pub(crate) fn release_owner(&self, owner: super::claims::Owner) {
+        self.0.lock().claims.release_owner(owner);
+    }
+
+    pub(crate) fn invalidate(&self) {
+        let mut state = self.0.lock();
+        state.waiting.take();
+        state.claims.clear();
     }
 
     pub(crate) fn stop(&self) {
         let mut state = self.0.lock();
         state.stopped = true;
-        if let Some((_, reply)) = state.waiting.take() {
-            let _ = reply.send(Err(Error::Stopped));
+        state.claims.clear();
+        match state.waiting.take() {
+            Some(Waiting::Accept(_, reply)) => {
+                let _ = reply.send(Err(Error::Stopped));
+            }
+            Some(Waiting::Equip(_, reply)) => {
+                let _ = reply.send(Err(Error::Stopped));
+            }
+            None => {}
         }
     }
 }
@@ -151,7 +210,16 @@ impl Endpoint {
             .map_err(|_| Error::ReadPanicked)
     }
     fn wait<T>(&self, operations: &Shared, id: u64, pending: Pending<T>) -> Result<T, Error> {
-        let deadline = Instant::now() + CALL_TIMEOUT;
+        self.wait_until(operations, id, pending, Instant::now() + CALL_TIMEOUT)
+    }
+
+    fn wait_until<T>(
+        &self,
+        operations: &Shared,
+        id: u64,
+        pending: Pending<T>,
+        deadline: Instant,
+    ) -> Result<T, Error> {
         loop {
             self.check()?;
             operations.check(id)?;
@@ -215,7 +283,92 @@ impl Endpoint {
         };
         let response = response?;
         let result = self.accept_subscribed(&drop, quantities, response, operations, id);
-        self.packets.invalidate();
+        self.packets.unsubscribe();
+        result
+    }
+
+    fn equip_consumable(
+        &self,
+        selector: lucent_protocol::query::ItemSelector,
+        operations: &Shared,
+        id: u64,
+    ) -> Result<bool, Error> {
+        let prepared = self.read(operations, id, |projection| {
+            let item = projection
+                .items
+                .resolve(ItemContainer::Inventory, &selector)?;
+            let data = item.data();
+            if data.category != "Item"
+                || matches!(
+                    crate::projection::wire::trim_js(&data.link)
+                        .to_ascii_lowercase()
+                        .as_str(),
+                    "elixir" | "tonic"
+                )
+            {
+                return None;
+            }
+            let action =
+                wire_i64(&serde_json::Value::String(data.meta.clone())).filter(|id| *id > 0)?;
+            let mut state = self.packets.0.lock();
+            if state.stopped {
+                return None;
+            }
+            let (reply, response) = mpsc::channel();
+            state.waiting = Some(Waiting::Equip(action, reply));
+            Some((data.item_id, state.claims.binding(), response))
+        })?;
+        let Some((item, binding, response)) = prepared else {
+            return Ok(false);
+        };
+        let result = (|| {
+            let deadline = Instant::now() + CALL_TIMEOUT;
+            let Some(Some(call)) = operations.issue(id, || {
+                let state = self.packets.0.lock();
+                if state.stopped || state.claims.binding() != binding {
+                    return None;
+                }
+                Some(self.inbox.call_loader(
+                    "inventory.equip",
+                    vec![Value::Object(
+                        [("itemId".into(), Value::Number(item as f64))].into(),
+                    )],
+                ))
+            }) else {
+                return Err(Error::Stopped);
+            };
+            if !matches!(
+                self.wait_until(operations, id, call, deadline)?,
+                Value::Bool(true)
+            ) {
+                return Ok(false);
+            }
+            if !matches!(
+                response.recv_timeout(deadline.saturating_duration_since(Instant::now())),
+                Ok(Ok(()))
+            ) {
+                self.check()?;
+                return Ok(false);
+            }
+            let state = self.packets.0.lock();
+            if state.stopped || state.claims.binding() != binding {
+                return Ok(false);
+            }
+            let (reply, slot) = Pending::channel();
+            self.inbox.post(Msg::Command(
+                lucent_protocol::command::Command::RefreshEquippedConsumable {},
+                reply,
+            ));
+            drop(state);
+            let slot: Option<i64> = serde_json::from_str(
+                &self.wait_until(operations, id, slot, deadline)?,
+            )
+            .map_err(|error| {
+                crate::projection::commands::decode_error("combat.getConsumableSkillItem", error)
+            })?;
+            Ok(slot == Some(item))
+        })();
+        self.packets.unsubscribe();
         result
     }
 
@@ -510,6 +663,10 @@ impl Operations {
                         ScriptEvent::OperationStarted { id: request.id },
                     ));
                     let answer = match &request.operation {
+                        Operation::EquipConsumable { selector } => request
+                            .player
+                            .equip_consumable(selector.clone(), &requests, request.id)
+                            .map(OperationAnswer::EquipConsumable),
                         Operation::AcceptDrop { selector } => request
                             .player
                             .accept(selector.clone(), &requests, request.id)

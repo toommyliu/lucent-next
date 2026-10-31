@@ -23,6 +23,7 @@ impl PlayerStatus {
 
 pub struct ScriptLink {
     asks: Arc<super::asks::Shared>,
+    claim_binding: super::claims::Binding,
     id: u64,
     attachment: AttachmentId,
     detached: Arc<AtomicBool>,
@@ -47,6 +48,7 @@ impl ScriptLink {
     ) -> Self {
         Self {
             asks,
+            claim_binding: player.packets.binding(),
             id,
             attachment,
             detached: Arc::default(),
@@ -182,6 +184,22 @@ impl ScriptLink {
                 packets: self.packets.clone(),
             },
         })
+    }
+
+    pub fn acquire_consumable_claim(
+        &self,
+        item: Option<i64>,
+    ) -> Result<Option<super::ClaimGrant>, bridge::Error> {
+        self.packets.acquire_claim(
+            super::claims::Owner::Script(self.attachment),
+            self.claim_binding,
+            item,
+        )
+    }
+
+    pub fn release_claim(&self, id: u64) {
+        self.packets
+            .release_claim(super::claims::Owner::Script(self.attachment), id);
     }
 
     pub fn cancel_operation(&self, id: u64) {
@@ -321,6 +339,8 @@ impl ScriptLink {
 impl Drop for ScriptLink {
     fn drop(&mut self) {
         self.detached.store(true, Ordering::Release);
+        self.packets
+            .release_owner(super::claims::Owner::Script(self.attachment));
         self.operations.detach(self.attachment);
         self.asks.detach(self.attachment);
         self.inbox.post(Msg::Detach(self.attachment));

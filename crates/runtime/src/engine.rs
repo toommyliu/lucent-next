@@ -85,6 +85,11 @@ impl Engine {
                     "cancelOperation",
                     v8::Function::new(scope, host_cancel_operation),
                 ),
+                (
+                    "acquireConsumableClaim",
+                    v8::Function::new(scope, host_acquire_consumable_claim),
+                ),
+                ("releaseClaim", v8::Function::new(scope, host_release_claim)),
                 ("ask", v8::Function::new(scope, host_ask)),
                 ("cancelAsk", v8::Function::new(scope, host_cancel_ask)),
                 (
@@ -764,6 +769,32 @@ fn host_cancel_operation(
         && let Ok(id) = id.to_rust_string_lossy(scope).parse()
     {
         scope.get_slot::<ScriptLink>().unwrap().cancel_operation(id);
+    }
+}
+
+fn host_acquire_consumable_claim(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    reply: v8::ReturnValue<v8::Value>,
+) {
+    let Some(json) = args.get(0).to_string(scope) else {
+        return;
+    };
+    let json = json.to_rust_string_lossy(scope);
+    let result =
+        host::acquire_consumable_claim(scope.get_slot::<ScriptLink>().unwrap(), &json).map(Some);
+    return_reply(scope, reply, result);
+}
+
+fn host_release_claim(
+    scope: &mut v8::PinScope,
+    args: v8::FunctionCallbackArguments,
+    _reply: v8::ReturnValue<v8::Value>,
+) {
+    if let Some(id) = args.get(0).to_string(scope)
+        && let Ok(id) = id.to_rust_string_lossy(scope).parse()
+    {
+        scope.get_slot::<ScriptLink>().unwrap().release_claim(id);
     }
 }
 
