@@ -1,7 +1,6 @@
 mod reaper;
 pub(crate) mod relogin;
 pub use reaper::reap;
-pub mod asks;
 mod claims;
 mod link;
 pub use claims::ClaimGrant;
@@ -96,10 +95,8 @@ impl Host {
             auto_zone.clone(),
         )?;
         let operations = operations::Operations::start(id).map_err(HostError::OperationThread)?;
-        let asks = asks::Router::start(id).map_err(HostError::OperationThread)?;
         let relogin = Arc::new(relogin::Shared::default());
         Ok(Session {
-            asks,
             auto_relogin: relogin.records.clone(),
             relogin,
             next_attachment: 0,
@@ -142,7 +139,6 @@ impl Host {
 }
 
 pub struct Session {
-    asks: asks::Router,
     auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
     relogin: Arc<relogin::Shared>,
     player: Option<player::Handle>,
@@ -207,11 +203,6 @@ impl Session {
         self.auto_relogin.read().clone()
     }
 
-    #[cfg(feature = "testing")]
-    pub fn pending_ask_count(&self) -> usize {
-        self.asks.shared.count()
-    }
-
     pub fn attach(&mut self, interests: crate::bridge::EventInterests) -> Option<ScriptLink> {
         let player = self.player.as_ref()?;
         let attachment = AttachmentId(self.next_attachment);
@@ -222,7 +213,6 @@ impl Session {
         let inbox = player.inbox.clone();
         let (producer, events) = script_events(EVENT_CAPACITY, interests);
         inbox.post(player::Msg::Attach(attachment, producer));
-        self.asks.shared.attach(attachment, interests);
         Some(ScriptLink::new(
             self.id,
             attachment,
@@ -240,7 +230,6 @@ impl Session {
                 packets: player.operation_packets.clone(),
             },
             self.operations.sender.clone(),
-            self.asks.shared.clone(),
         ))
     }
 
@@ -255,7 +244,6 @@ impl Session {
     }
 
     pub fn restart(&mut self, surface: Surface) -> Result<(), HostError> {
-        self.asks = asks::Router::start(self.id).map_err(HostError::OperationThread)?;
         self.player = None;
         self.surface = surface;
         let player = self.host.spawn_player(

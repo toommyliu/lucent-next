@@ -62,7 +62,6 @@ fn native_setters_work_without_a_bot_and_retain_records_across_player_restart() 
     );
     assert_eq!(enabled["status"]["captured"], true);
     assert_eq!(enabled["status"]["username"], "Hero");
-    assert_eq!(session.pending_ask_count(), 0);
     assert_eq!(
         serde_json::to_value(session.auto_relogin()).unwrap(),
         enabled
@@ -186,7 +185,6 @@ fn loader_connection_events_drive_native_relogin_without_a_bot() {
         session.auto_relogin().status.username.as_deref(),
         Some("Hero")
     );
-    assert_eq!(session.pending_ask_count(), 0);
 }
 
 #[test]

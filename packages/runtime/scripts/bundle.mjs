@@ -9,7 +9,6 @@ const root = join(here, "..", "..", "..");
 const check = process.argv.includes("--check");
 for (const [name, entry] of [
   ["runtime", "host/index.ts"],
-  ["bot", "bot.ts"],
 ]) {
   const outfile = join(root, "assets", `${name}.js`);
   const result = await build({

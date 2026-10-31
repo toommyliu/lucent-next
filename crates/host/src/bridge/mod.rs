@@ -19,22 +19,6 @@ use ruffle_core::external::{CallbackError, ExternalInterfaceProvider, Value as E
 pub enum Error {
     #[error("the player has stopped")]
     Stopped,
-    #[error("No bot is attached")]
-    BotUnavailable,
-    #[error("The bot has stopped")]
-    BotStopped,
-    #[error("The bot request queue is full")]
-    BotQueueFull,
-    #[error("The bot request timed out")]
-    BotRequestTimeout,
-    #[error("A bot is already attached")]
-    BotAlreadyAttached,
-    #[error("Only the attached bot can answer requests")]
-    BotAnswerDenied,
-    #[error("Invalid bot request")]
-    InvalidBotRequest,
-    #[error("The bot request failed")]
-    BotRequestFailed,
     #[error("the player has not received its first viewport")]
     NotReady,
     #[error("the loader has not registered callback {0}")]
@@ -178,13 +162,6 @@ pub(crate) fn invoke(player: &mut Player, name: &str, args: Vec<Value>) -> Resul
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScriptEvent {
-    Ask {
-        request: crate::sessions::asks::Request,
-    },
-    Answer {
-        id: u64,
-        answer: Result<serde_json::Value, Error>,
-    },
     OperationStarted {
         id: u64,
     },
@@ -608,23 +585,5 @@ mod tests {
         assert_eq!(old.try_recv(), Err(mpsc::TryRecvError::Disconnected));
         drop(producer);
         assert_eq!(current.try_recv().unwrap(), Err(Error::Stopped));
-    }
-}
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum BotRequestError {
-    QueueFull,
-    InvalidRequest,
-    Failed,
-}
-
-impl From<BotRequestError> for Error {
-    fn from(error: BotRequestError) -> Self {
-        match error {
-            BotRequestError::QueueFull => Self::BotQueueFull,
-            BotRequestError::InvalidRequest => Self::InvalidBotRequest,
-            BotRequestError::Failed => Self::BotRequestFailed,
-        }
     }
 }

@@ -38,7 +38,6 @@ fn a_trivial_scripts_first_turn_stays_below_half_the_watchdog_budget() {
                 .attach(lucent_host::bridge::EventInterests::ALL)
                 .unwrap(),
             interrupt,
-            super::Bundle::Script,
         )
         .unwrap();
         let entry = ModulePath::loose("trivial.js").unwrap();

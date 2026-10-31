@@ -11,7 +11,7 @@ pub use supervisor::{ScriptControls, ScriptRequest, Supervisor};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicBool, Ordering},
 };
 use std::task::{Wake, Waker};
 use std::thread;
@@ -22,7 +22,7 @@ use lucent_host::bridge::Error as EventError;
 use lucent_protocol::script::{Script, ScriptInputs, ScriptOutcome};
 use serde::de::DeserializeOwned;
 
-use engine::{Bundle, Engine};
+use engine::Engine;
 use interrupt::{Interrupt, Stop};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -63,7 +63,6 @@ pub struct Runtime {
     thread: Option<thread::JoinHandle<()>>,
     terminal: mpsc::Receiver<Result<(), RuntimeError>>,
     ready: mpsc::Receiver<()>,
-    turns: Arc<AtomicU64>,
 }
 
 enum Command {
@@ -114,7 +113,6 @@ pub struct ScriptRun {
 }
 
 enum Execution {
-    Bot,
     Evals,
     Script,
     StartScript {
@@ -122,54 +120,6 @@ enum Execution {
         inputs: ScriptInputs,
         reply: mpsc::Sender<Result<String, RuntimeError>>,
     },
-}
-
-pub struct Bot(Runtime);
-
-impl Bot {
-    pub fn start(link: ScriptLink) -> Result<Self, RuntimeError> {
-        let bot = Self::spawn(link, Waker::noop().clone(), Waker::noop().clone())?;
-        bot.0.wait_ready()?;
-        Ok(bot)
-    }
-
-    pub(crate) fn spawn(
-        link: ScriptLink,
-        ready: Waker,
-        exited: Waker,
-    ) -> Result<Self, RuntimeError> {
-        link.claim_bot()
-            .map_err(|error| RuntimeError::JavaScript(error.to_string()))?;
-        Runtime::spawn(link, Execution::Bot, ready, exited).map(Self)
-    }
-
-    pub fn wait(&self, timeout: Duration) -> Result<(), RuntimeError> {
-        self.0
-            .terminal
-            .recv_timeout(timeout)
-            .map_err(|error| match error {
-                RecvTimeoutError::Timeout => RuntimeError::Timeout,
-                RecvTimeoutError::Disconnected => RuntimeError::Stopped,
-            })?
-    }
-
-    pub(crate) fn take_ready(&self) -> bool {
-        self.0.ready.try_recv().is_ok()
-    }
-
-    pub(crate) fn turns(&self) -> u64 {
-        self.0.turns.load(Ordering::Relaxed)
-    }
-
-    #[cfg(feature = "testing")]
-    pub fn eval(&self, name: impl Into<String>, source: impl Into<String>) -> PendingEval {
-        self.0.eval(name, source)
-    }
-
-    #[cfg(feature = "testing")]
-    pub fn join_cpu_time(&mut self) -> Option<Duration> {
-        self.0.join_cpu_time()
-    }
 }
 
 impl ScriptRun {
@@ -263,14 +213,11 @@ impl Runtime {
         ready_notify: Waker,
         exited: Waker,
     ) -> Result<Self, RuntimeError> {
-        let turns = Arc::new(AtomicU64::new(0));
-        let thread_turns = turns.clone();
         let interrupt = Arc::new(Interrupt::new()?);
         let thread_interrupt = interrupt.clone();
         let (commands, incoming) = mpsc::channel();
         let (ready, boot) = mpsc::channel();
         let (finished, terminal) = mpsc::channel();
-        let bot = matches!(execution, Execution::Bot);
         let player = link.player_status();
         let wake = Arc::new(EventWake {
             commands: commands.clone(),
@@ -304,11 +251,8 @@ impl Runtime {
                 };
                 let result = (|| {
                     link.set_waker(Waker::from(wake.clone()));
-                    let bundle = if bot { Bundle::Bot } else { Bundle::Script };
-                    if !bot {
-                        tracing::debug!("script worker booting");
-                    }
-                    let engine = Engine::new(link, interrupt.clone(), bundle)?;
+                    tracing::debug!("script worker booting");
+                    let engine = Engine::new(link, interrupt.clone())?;
                     run(
                         engine,
                         execution,
@@ -319,7 +263,6 @@ impl Runtime {
                             sender: ready,
                             notify: ready_notify,
                         },
-                        &thread_turns,
                     )
                 })();
                 let result =
@@ -328,12 +271,6 @@ impl Runtime {
                     } else {
                         result
                     };
-                if bot
-                    && let Err(error) = &result
-                    && !matches!(error, RuntimeError::Stopped)
-                {
-                    tracing::error!(%error, "bot runtime failed");
-                }
                 exit.send(result);
                 interrupt.shut_down();
                 let _ = watchdog.join();
@@ -344,7 +281,6 @@ impl Runtime {
             thread: Some(thread),
             terminal,
             ready: boot,
-            turns,
         };
         Ok(runtime)
     }
@@ -435,7 +371,6 @@ fn run(
     wake: &EventWake,
     interrupt: &Arc<Interrupt>,
     ready: Ready,
-    turns: &AtomicU64,
 ) -> Result<(), RuntimeError> {
     if matches!(execution, Execution::StartScript { .. }) {
         interrupt.prepare_script();
@@ -477,11 +412,7 @@ fn run(
             Ok(Command::Wake) => {
                 wake.queued.store(false, Ordering::Release);
                 let Some(items) = take_events(&mut engine) else {
-                    return if matches!(execution, Execution::Bot) {
-                        Err(RuntimeError::Stopped)
-                    } else {
-                        Ok(())
-                    };
+                    return Ok(());
                 };
                 items
             }
@@ -496,9 +427,7 @@ fn run(
         match interrupt.end_turn() {
             None => {}
             Some(Stop::Kill(kill)) => {
-                if !matches!(execution, Execution::Bot) {
-                    tracing::warn!(%kill, "script runtime killed");
-                }
+                tracing::warn!(%kill, "script runtime killed");
                 engine.kill(kill);
                 while let Ok(command) = incoming.try_recv() {
                     if let Command::Eval { reply, .. } = command {
@@ -510,7 +439,6 @@ fn run(
             Some(Stop::Shutdown) => return Ok(()),
         }
         let deadline = turn?;
-        turns.fetch_add(1, Ordering::Relaxed);
         if let Some(ready) = ready.take() {
             ready.send();
             if matches!(execution, Execution::StartScript { .. }) {
@@ -562,91 +490,6 @@ mod tests {
     use lucent_host::bridge::{Event, ScriptEvent, Value};
     use lucent_protocol::{event::ProjectionEvent, operation::OperationAnswer};
     use serde_json::json;
-
-    struct NotifyEnd(mpsc::Sender<()>);
-    impl Wake for NotifyEnd {
-        fn wake(self: Arc<Self>) {
-            let _ = self.0.send(());
-        }
-    }
-
-    #[test]
-    fn a_bot_wakes_its_owner_after_it_ends() {
-        let host = lucent_host::testing::headless_host();
-        let (session, link) =
-            lucent_host::testing::start_probe(&host, lucent_host::testing::ProbeMovie::new());
-        let (notify, wake) = mpsc::channel();
-        let bot = Bot::spawn(
-            link,
-            Waker::noop().clone(),
-            Waker::from(Arc::new(NotifyEnd(notify))),
-        )
-        .unwrap();
-        drop(session);
-        wake.recv_timeout(Duration::from_secs(15)).unwrap();
-        let result = bot.wait(Duration::ZERO);
-        assert!(matches!(result, Err(RuntimeError::Stopped)), "{result:?}");
-    }
-
-    #[test]
-    fn a_bot_reports_readiness_separately_from_exit() {
-        let host = lucent_host::testing::headless_host();
-        let (session, link) =
-            lucent_host::testing::start_probe(&host, lucent_host::testing::ProbeMovie::new());
-        let (notify, wake) = mpsc::channel();
-        let (ready, boot) = mpsc::channel();
-        let bot = Bot::spawn(
-            link,
-            Waker::from(Arc::new(NotifyEnd(ready))),
-            Waker::from(Arc::new(NotifyEnd(notify))),
-        )
-        .unwrap();
-        boot.recv_timeout(Duration::from_secs(15)).unwrap();
-        assert!(bot.take_ready());
-        assert_eq!(wake.try_recv(), Err(mpsc::TryRecvError::Empty));
-        drop(session);
-        wake.recv_timeout(Duration::from_secs(15)).unwrap();
-        assert!(matches!(
-            bot.wait(Duration::ZERO),
-            Err(RuntimeError::Stopped)
-        ));
-    }
-
-    #[test]
-    fn bot_turns_rise_while_it_runs() {
-        let host = lucent_host::testing::headless_host();
-        let (mut session, observer) =
-            lucent_host::testing::start_probe(&host, lucent_host::testing::ProbeMovie::new());
-        let bot = Bot::start(
-            session
-                .attach(lucent_host::bridge::EventInterests::ALL)
-                .unwrap(),
-        )
-        .unwrap();
-        let first = bot.turns();
-        observer
-            .call_loader(
-                "probe.emit",
-                vec![
-                    Value::String("onDebug".into()),
-                    Value::String("turn".into()),
-                ],
-            )
-            .recv_timeout(Duration::from_secs(15))
-            .unwrap();
-        let deadline = Instant::now() + Duration::from_secs(15);
-        while bot.turns() <= first {
-            assert!(
-                Instant::now() < deadline,
-                "bot did not complete another turn"
-            );
-            thread::yield_now();
-        }
-        assert!(matches!(
-            bot.wait(Duration::ZERO),
-            Err(RuntimeError::Timeout)
-        ));
-    }
 
     #[test]
     fn overflow_preserves_answers_and_zones_already_read_in_the_batch() {

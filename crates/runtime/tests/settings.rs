@@ -503,7 +503,7 @@ fn script_kills_leave_the_same_native_settings_policy_running() {
     assert_eq!(
         logs.messages(tracing::Level::INFO)
             .iter()
-            .filter(|line| line.ends_with("bot 1 started"))
+            .filter(|line| line.ends_with("supervisor started"))
             .count(),
         1
     );

@@ -221,7 +221,7 @@ fn runtime_workload() {
             != Some(&Value::String(SETTINGS[0].into()))
         {}
 
-        logs.wait_for(tracing::Level::DEBUG, "session 1: bot 1 ready");
+        logs.wait_for(tracing::Level::INFO, "session 1: supervisor started");
         let mut phases = vec![phase("idle", || thread::sleep(Duration::from_secs(10)))];
 
         let trivial = loose(&[(

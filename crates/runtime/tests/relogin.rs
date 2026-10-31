@@ -30,7 +30,6 @@ fn setters_return_captured_host_records_without_bot_requests() {
         Default::default(),
     );
     assert_eq!(run.wait(TIMEOUT).unwrap(), ScriptOutcome::Completed);
-    assert_eq!(session.pending_ask_count(), 0);
 }
 
 #[test]
@@ -87,7 +86,6 @@ fn credentials_and_status_survive_script_kills_and_player_replacement() {
         )
         .recv_timeout(TIMEOUT)
         .unwrap();
-    assert_eq!(session.pending_ask_count(), 0);
 }
 
 #[test]
@@ -205,5 +203,4 @@ fn killing_a_setter_during_capture_cannot_answer_a_later_run() {
         .recv_timeout(TIMEOUT)
         .unwrap();
     worker.join().unwrap();
-    assert_eq!(session.pending_ask_count(), 0);
 }
