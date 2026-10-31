@@ -178,6 +178,9 @@ impl Running {
                 .snapshot(now_ms())?;
                 Ok(serde_json::to_string(&snapshot).unwrap())
             }
+            Command::UpdateEnvironment { .. } => Err(Error::Unavailable(
+                "environment requires a session record".into(),
+            )),
             Command::SetAutoReloginEnabled { .. }
             | Command::SetAutoReloginDelay { .. }
             | Command::SetAutoReloginServer { .. } => Err(Error::Unavailable(

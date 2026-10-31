@@ -1,4 +1,6 @@
 mod controller;
+mod environment;
+mod environment_order;
 pub use controller::{ScriptControls, ScriptRequest, Supervisor};
 mod reaper;
 pub(crate) mod relogin;
@@ -14,6 +16,7 @@ use lucent_protocol::settings::GameSettings;
 use parking_lot::RwLock;
 
 pub(crate) struct Records {
+    environment: Arc<RwLock<lucent_protocol::environment::EnvironmentState>>,
     settings: Arc<RwLock<GameSettings>>,
     auto_zone: Arc<RwLock<AutoZoneConfig>>,
     pub(crate) auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
@@ -99,6 +102,7 @@ impl Host {
         let operations = operations::Operations::start(id).map_err(HostError::OperationThread)?;
         let relogin = Arc::new(relogin::Shared::default());
         Ok(Session {
+            environment: Arc::default(),
             auto_relogin: relogin.records.clone(),
             relogin,
             next_attachment: 0,
@@ -141,6 +145,7 @@ impl Host {
 }
 
 pub struct Session {
+    environment: Arc<RwLock<lucent_protocol::environment::EnvironmentState>>,
     auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
     relogin: Arc<relogin::Shared>,
     player: Option<player::Handle>,
@@ -220,6 +225,7 @@ impl Session {
             attachment,
             events,
             Records {
+                environment: self.environment.clone(),
                 settings: self.settings.clone(),
                 auto_zone: self.auto_zone.clone(),
                 auto_relogin: self.auto_relogin.clone(),

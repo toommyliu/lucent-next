@@ -191,6 +191,17 @@ impl ScriptLink {
                 .submit(edit, self.detached.clone(), Instant::now())
         };
         let command = match command {
+            Command::UpdateEnvironment { edit } => {
+                if self.stopped.load(Ordering::Acquire) {
+                    return Pending::stopped();
+                }
+                let environment = self.records.environment.clone();
+                return self.inbox.read_projection(move |projection| {
+                    let mut state = environment.write();
+                    super::environment::apply(&mut state, edit, projection);
+                    serde_json::to_string(&*state).unwrap()
+                });
+            }
             Command::SetAutoReloginEnabled { enabled } => return submit(Edit::Enabled(enabled)),
             Command::SetAutoReloginDelay { delay_ms } => return submit(Edit::Delay(delay_ms)),
             Command::SetAutoReloginServer { server } => return submit(Edit::Server(server)),
@@ -219,6 +230,18 @@ impl ScriptLink {
     ) -> Result<String, bridge::Error> {
         if self.stopped.load(Ordering::Acquire) {
             return Err(bridge::Error::Stopped);
+        }
+        if matches!(query, Some(Query::Environment {})) {
+            let state = self
+                .records
+                .environment
+                .try_read_for(timeout)
+                .ok_or(bridge::Error::Timeout)?;
+            if self.stopped.load(Ordering::Acquire) {
+                return Err(bridge::Error::Stopped);
+            }
+            query.take();
+            return Ok(serde_json::to_string(&*state).unwrap());
         }
         if matches!(query, Some(Query::AutoRelogin {})) {
             let records = self
@@ -260,6 +283,7 @@ impl ScriptLink {
                 &settings,
                 &self.records.auto_zone,
                 &self.records.auto_relogin,
+                &self.records.environment,
                 query.take().unwrap(),
             )
         })
