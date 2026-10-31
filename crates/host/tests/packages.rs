@@ -690,3 +690,67 @@ fn wheel_rejects_an_invalid_public_banking_option() {
     );
     assert_eq!(calls(&link), Vec::<Value>::new());
 }
+
+#[test]
+fn consumables_reports_a_purchase_that_does_not_reach_inventory() {
+    let item = json!({"ItemID":900,"ShopItemID":1900,"sName":"Endurance Draught",
+        "sType":"Item","bHouse":1,"iQty":1,"iStk":300,"iCost":10});
+    let movie = common::ready_movie()
+        .constant("world.isActionAvailable", json!(true))
+        .constant("player.getGold", json!(1000))
+        .constant("shops.canBuyItem", json!(true))
+        .responding(
+            "player.joinMap",
+            [response(Value::Null, vec![map("alchemyacademy")])],
+        )
+        .responding(
+            "shops.load",
+            [response(
+                Value::Null,
+                vec![json!({
+                    "cmd":"loadShop","ShopID":2036,"items":[item]
+                })],
+            )],
+        )
+        .responding(
+            "shops.buy",
+            [response(
+                Value::Null,
+                vec![json!({
+                    "cmd":"buyItem","ItemID":900,"CharItemID":2900,"bitSuccess":1,"bBank":0,"iQty":3
+                })],
+            )],
+        );
+    let host = testing::headless_host();
+    let (mut session, link) = testing::start_probe(&host, movie);
+    common::log_in(&link);
+    emit(&link, map("buyhouse"));
+    emit(
+        &link,
+        json!({"cmd":"addItems","items":{"900":{
+            "ItemID":900,"sName":"Endurance Draught","iQty":2
+        }}}),
+    );
+    assert_failed(
+        run(
+            &mut session,
+            consumables(),
+            json!({
+                "potions":["Endurance Draught"],"scrolls":[],"quantity":5
+            }),
+        ),
+        "@lucent/consumables/lib/supplies.js:281:13: The purchase of Endurance Draught did not reach inventory.",
+    );
+    assert_eq!(
+        owned(&link, lucent_protocol::item::ItemContainer::Inventory, 900),
+        Some(2.0)
+    );
+    assert_eq!(
+        calls(&link),
+        vec![
+            json!(["player.joinMap", ["alchemyacademy"]]),
+            json!(["shops.load", [2036.0]]),
+            json!(["shops.buy",[{"shopItemId":1900.0},3.0]]),
+        ]
+    );
+}
