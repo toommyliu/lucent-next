@@ -165,3 +165,280 @@ fn malformed_manifests_report_the_manifest_and_reason() {
         "{error}"
     );
 }
+
+fn sized_file(ws: &Workspace, path: &str, bytes: u64) {
+    ws.write(path, "");
+    fs::OpenOptions::new()
+        .write(true)
+        .open(ws.0.join(path))
+        .unwrap()
+        .set_len(bytes)
+        .unwrap();
+}
+
+fn load_error(ws: &Workspace, spec: &str, reason: &str) {
+    assert_eq!(
+        load_script(spec, &ws.0)
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        format!(
+            "couldn't load script {spec:?}; searched {}: {reason}",
+            ws.0.join("script-packages").display()
+        )
+    );
+}
+
+#[test]
+fn script_file_size_accepts_the_boundary_and_rejects_one_more_byte() {
+    let ws = Workspace::new();
+    sized_file(&ws, "run.js", 16 << 20);
+    assert_eq!(
+        load_script("run.js", &ws.0)
+            .unwrap()
+            .source(&ModulePath::loose("run.js").unwrap())
+            .unwrap()
+            .len(),
+        16 << 20
+    );
+    sized_file(&ws, "run.js", (16 << 20) + 1);
+    load_error(
+        &ws,
+        "run.js",
+        &format!(
+            "Script file exceeds the 16 MiB limit: {}.",
+            ws.0.join("run.js").canonicalize().unwrap().display()
+        ),
+    );
+}
+
+#[test]
+fn manifest_size_accepts_the_boundary_and_rejects_one_more_byte() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    let path = ws.0.join("pkg/package.json");
+    let mut source = fs::read_to_string(&path).unwrap();
+    source.extend(std::iter::repeat_n(' ', (1 << 20) - source.len()));
+    fs::write(&path, &source).unwrap();
+    assert_eq!(Package::read(&ws.0.join("pkg")).unwrap().name, "tools");
+    source.push(' ');
+    fs::write(&path, source).unwrap();
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        "package.json exceeds the 1 MiB limit."
+    );
+}
+
+#[test]
+fn package_file_size_includes_non_source_assets() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    sized_file(&ws, "pkg/asset.bin", 64 << 20);
+    assert_eq!(Package::read(&ws.0.join("pkg")).unwrap().modules.len(), 2);
+    sized_file(&ws, "pkg/asset.bin", (64 << 20) + 1);
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        format!(
+            "File exceeds the 64 MiB limit: {}.",
+            ws.0.join("pkg/asset.bin").display()
+        )
+    );
+}
+
+#[test]
+fn package_total_size_counts_the_manifest_and_all_assets() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    let overhead = ["package.json", "index.js", "scripts/run.js"]
+        .iter()
+        .map(|p| fs::metadata(ws.0.join("pkg").join(p)).unwrap().len())
+        .sum::<u64>();
+    for i in 0..4 {
+        sized_file(
+            &ws,
+            &format!("pkg/{i}.bin"),
+            (64 << 20) - if i == 0 { overhead } else { 0 },
+        );
+    }
+    assert_eq!(Package::read(&ws.0.join("pkg")).unwrap().modules.len(), 2);
+    sized_file(&ws, "pkg/0.bin", (64 << 20) - overhead + 1);
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        "The bundled package exceeds the 256 MiB limit."
+    );
+}
+
+#[test]
+fn package_file_count_stops_before_reading_any_source() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    for i in 0..9_997 {
+        ws.write(&format!("pkg/{i}.bin"), "");
+    }
+    assert_eq!(Package::read(&ws.0.join("pkg")).unwrap().modules.len(), 2);
+    ws.write("pkg/extra.bin", "");
+    fs::write(ws.0.join("pkg/index.js"), [255]).unwrap();
+    fs::write(ws.0.join("pkg/scripts/run.js"), [255]).unwrap();
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        format!(
+            "Directory contains more than 10000 files: {}.",
+            ws.0.join("pkg").display()
+        )
+    );
+}
+
+#[test]
+fn oversized_package_totals_stop_before_reading_any_source() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    fs::write(ws.0.join("pkg/index.js"), [255]).unwrap();
+    fs::write(ws.0.join("pkg/scripts/run.js"), [255]).unwrap();
+    for i in 0..5 {
+        sized_file(&ws, &format!("pkg/{i}.bin"), 64 << 20);
+    }
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        "The bundled package exceeds the 256 MiB limit."
+    );
+}
+
+#[test]
+fn module_path_size_is_measured_in_utf8_bytes() {
+    let ws = Workspace::new();
+    let prefix = format!(
+        "{}/{}/{}/d/",
+        "a".repeat(255),
+        "b".repeat(255),
+        "c".repeat(255)
+    );
+    let boundary = format!("{prefix}{}.jsx", "é".repeat(125));
+    assert_eq!(boundary.len(), 1024);
+    ws.write(
+        "pkg/package.json",
+        &format!(r#"{{"name":"tools","main":"{boundary}","lucent":{{}}}}"#),
+    );
+    assert_eq!(
+        Package::read(&ws.0.join("pkg")).unwrap().main.path(),
+        boundary
+    );
+    let over = format!("{boundary}x");
+    ws.write(
+        "pkg/package.json",
+        &format!(r#"{{"name":"tools","main":"{over}","lucent":{{}}}}"#),
+    );
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        "Module path exceeds the 1 KiB limit."
+    );
+}
+
+#[test]
+fn manifest_module_components_accept_255_bytes_and_reject_256() {
+    let ws = Workspace::new();
+    for (bytes, expected) in [
+        (255, None),
+        (
+            256,
+            Some("Module path component exceeds the 255 bytes limit."),
+        ),
+    ] {
+        let main = format!("{}.js", "é".repeat(126)) + &"x".repeat(bytes - 255);
+        ws.write(
+            "pkg/package.json",
+            &format!(r#"{{"name":"tools","main":"{main}","lucent":{{}}}}"#),
+        );
+        let result = Package::read(&ws.0.join("pkg"));
+        if let Some(expected) = expected {
+            assert_eq!(result.map(|_| ()).unwrap_err().to_string(), expected);
+        } else {
+            assert_eq!(result.unwrap().main.path().len(), 255);
+        }
+    }
+}
+
+#[test]
+fn snapshot_size_counts_sources_across_packages_and_the_loose_entry() {
+    let ws = Workspace::new();
+    ws.package("script-packages/a", "a");
+    ws.package("script-packages/b", "b");
+    for name in ["a", "b"] {
+        sized_file(&ws, &format!("script-packages/{name}/index.js"), 16 << 20);
+        ws.write(&format!("script-packages/{name}/scripts/run.js"), "");
+    }
+    ws.write("run.js", "");
+    assert_eq!(
+        load_script("run.js", &ws.0).unwrap().entry().path(),
+        "run.js"
+    );
+    ws.write("run.js", " ");
+    load_error(
+        &ws,
+        "run.js",
+        "Script sources exceed the 32 MiB execution limit.",
+    );
+}
+
+#[test]
+fn package_javascript_obeys_the_script_file_limit() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    sized_file(&ws, "pkg/index.js", 16 << 20);
+    assert_eq!(Package::read(&ws.0.join("pkg")).unwrap().modules.len(), 2);
+    sized_file(&ws, "pkg/index.js", (16 << 20) + 1);
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        format!(
+            "Script file exceeds the 16 MiB limit: {}.",
+            ws.0.join("pkg/index.js").display()
+        )
+    );
+}
+
+#[test]
+fn package_scripts_apply_the_snapshot_limit_without_workspace_loading() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    sized_file(&ws, "pkg/index.js", 16 << 20);
+    sized_file(&ws, "pkg/scripts/run.js", 16 << 20);
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .unwrap()
+            .script("scripts/run.js")
+            .unwrap()
+            .entry()
+            .path(),
+        "scripts/run.js"
+    );
+    ws.write("pkg/extra.js", " ");
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .unwrap()
+            .script("scripts/run.js")
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        "Script sources exceed the 32 MiB execution limit."
+    );
+}
