@@ -33,7 +33,7 @@ fn target_death_during_cooldown_wait_advances_rotation_after_wait() {
         p["cooldownMode"] = json!("wait-for-cooldown");
         let mut h = Harness::new(p);
         h.snapshot.skills[1] = SkillReadiness::CooldownUntil(800);
-        assert_eq!(h.cycle().next_deadline, Some(800));
+        assert_eq!(h.cycle().next_deadline, Some(850));
         h.now = 100;
         h.snapshot.monsters[0].hp = 0.0;
         if death_event {
@@ -41,18 +41,18 @@ fn target_death_during_cooldown_wait_advances_rotation_after_wait() {
         }
         let waiting = h.advance(ProfileEvent::Tick);
         assert_eq!(waiting.command, None);
-        assert_eq!(waiting.next_deadline, Some(800));
-        h.now = 800;
+        assert_eq!(waiting.next_deadline, Some(850));
+        h.now = 850;
         h.snapshot.skills[1] = SkillReadiness::Ready;
         let failed = h.advance(ProfileEvent::Tick);
         assert_eq!(
             failed.outcome,
             Some(Outcome::Cycle(Cycle::Attacked { cast: false }))
         );
-        assert_eq!(failed.next_deadline, Some(1050));
-        h.now = 1050;
+        assert_eq!(failed.next_deadline, Some(1100));
+        h.now = 1100;
         let effects = h.cycle();
-        h.now = 1050;
+        h.now = 1100;
         let effects = h.reconfirm(effects);
         h.settle(effects);
         assert_eq!(h.casts, [2]);
@@ -87,14 +87,14 @@ fn target_death_during_trigger_cooldown_holds_action_until_ready_or_timeout() {
         h.cycle();
         h.now = 100;
         h.snapshot.skills[4] = SkillReadiness::CooldownUntil(800);
-        assert_eq!(h.emit(message(Some(1))).next_deadline, Some(800));
+        assert_eq!(h.emit(message(Some(1))).next_deadline, Some(850));
         h.now = 300;
         h.snapshot.monsters.remove(0);
         h.die(1);
         let waiting = h.advance(ProfileEvent::Tick);
         assert_eq!(waiting.command, None);
         assert_eq!(waiting.outcome, None);
-        assert_eq!(waiting.next_deadline, Some(800));
+        assert_eq!(waiting.next_deadline, Some(850));
         assert_eq!(h.emit(message(Some(2))).outcome, Some(Outcome::Deferred));
         let resumes_at = ready_at.unwrap_or(5100);
         for now in (800..resumes_at).step_by(50) {

@@ -4,22 +4,26 @@ const MAX_JOBS: usize = 32;
 
 #[derive(Clone, Copy)]
 pub(super) struct GateState {
+    pub(super) binding: Binding,
+    pub(super) recovery: u64,
     pub(super) closed: bool,
+    cleanup_claimed: bool,
     pub(super) engaged: bool,
     pub(super) epoch: u64,
     pub(super) operation: Option<u64>,
 }
 
 pub(crate) struct JobGate {
-    pub(super) binding: Binding,
     pub(super) state: Mutex<GateState>,
 }
 impl JobGate {
     pub(super) fn new(binding: Binding) -> Self {
         Self {
-            binding,
             state: Mutex::new(GateState {
+                binding,
+                recovery: 0,
                 closed: false,
+                cleanup_claimed: false,
                 engaged: false,
                 epoch: 0,
                 operation: None,
@@ -29,14 +33,17 @@ impl JobGate {
     pub(crate) fn open(&self) -> bool {
         !self.state.lock().closed
     }
-    pub(crate) fn allows(&self, cycle: Option<u64>) -> bool {
+    pub(crate) fn allows(&self, cycle: Option<u64>, recovery: u64) -> bool {
         let state = self.state.lock();
-        !state.closed && cycle.is_none_or(|epoch| state.engaged && state.epoch == epoch)
+        !state.closed
+            && state.recovery == recovery
+            && cycle.is_none_or(|epoch| state.engaged && state.epoch == epoch)
     }
     pub(super) fn close(&self) -> bool {
         let mut state = self.state.lock();
-        let stop = !state.closed && (state.engaged || state.epoch != 0);
+        let stop = !state.cleanup_claimed && (state.engaged || state.epoch != 0);
         state.closed = true;
+        state.cleanup_claimed = true;
         stop
     }
 }
@@ -175,7 +182,7 @@ impl ScriptJobs {
         let binding = self.player.packets.binding();
         let mut stop = false;
         for (_, gate) in self.live.lock().drain() {
-            stop |= gate.close() && gate.binding == binding;
+            stop |= gate.close() && gate.state.lock().binding == binding;
         }
         if stop {
             self.player.inbox.post(Msg::StopProfile(binding));

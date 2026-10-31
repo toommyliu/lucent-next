@@ -15,7 +15,9 @@ impl ProfileJob {
             && snapshot.skills[usize::from(u8::from(cast.skill))] != SkillReadiness::Ready
         {
             let deadline = match snapshot.skills[usize::from(u8::from(cast.skill))] {
-                SkillReadiness::CooldownUntil(until) if until > now => until.min(expires_at),
+                SkillReadiness::CooldownUntil(until) if until > now => {
+                    until.saturating_add(50).min(expires_at)
+                }
                 _ => now.saturating_add(50).min(expires_at),
             };
             self.phase = Phase::Cooldown {
@@ -90,7 +92,9 @@ impl ProfileJob {
             && snapshot.skills[usize::from(u8::from(skill))] != SkillReadiness::Ready
         {
             let deadline = match snapshot.skills[usize::from(u8::from(skill))] {
-                SkillReadiness::CooldownUntil(until) if until > now => until.min(expires_at),
+                SkillReadiness::CooldownUntil(until) if until > now => {
+                    until.saturating_add(50).min(expires_at)
+                }
                 _ => now.saturating_add(50).min(expires_at),
             };
             self.phase = Phase::TriggerCooldown {

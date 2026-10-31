@@ -189,7 +189,10 @@ impl Preparing {
                 let item = info.item.unwrap();
                 self.name = item.name.clone();
                 if item.member_only && !info.member {
-                    return self.degrade(format!("Could not equip {}.", self.name));
+                    return self.degrade(format!(
+                        "Could not equip {}. Check its requirements.",
+                        self.name
+                    ));
                 }
                 match request.player.packets.acquire_for_job(request.owner, Some(item.item_id), &request.gate, &request.detached) {
                     Ok(Some(claim)) => {
@@ -245,7 +248,10 @@ impl Preparing {
                     }
                 }
                 if now >= *expires {
-                    return self.degrade(format!("Could not equip {}.", self.name));
+                    return self.degrade(format!(
+                        "Could not equip {}. Check its requirements.",
+                        self.name
+                    ));
                 }
                 if pending.is_none() && now >= *next {
                     let gate = request.gate.state.lock();
@@ -277,16 +283,143 @@ impl Preparing {
                                 self.name
                             ));
                         }
-                        _ => return self.degrade(format!("Could not equip {}.", self.name)),
+                        _ => {
+                            return self.degrade(format!(
+                                "Could not equip {}. Check its requirements.",
+                                self.name
+                            ));
+                        }
                     }
                 }
                 if deadline.is_some_and(|deadline| now >= deadline) {
                     operations.cancel(*owner, *id);
-                    return self.degrade(format!("Could not equip {}.", self.name));
+                    return self.degrade(format!(
+                        "Could not equip {}. Check its requirements.",
+                        self.name
+                    ));
                 }
             }
             State::Done => {}
         }
         None
+    }
+}
+
+#[cfg(all(test, feature = "testing"))]
+mod tests {
+    use super::super::tests::{emit, manual_jobs, start_profile};
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn preparation_preserves_each_consumable_warning() {
+        let (_session, observer, jobs, owner) = manual_jobs();
+        emit(
+            &observer,
+            json!({"cmd":"loadInventoryBig","items":[{"ItemID":100,"sName":"Potion","sType":"Item","sLink":"potion","sMeta":"400","iQty":2}]}),
+        );
+        let item = observer
+            .read(|state| {
+                state
+                    .items
+                    .get(lucent_protocol::item::ItemContainer::Inventory, 100)
+                    .unwrap()
+                    .data()
+                    .clone()
+            })
+            .unwrap();
+        let id = start_profile(&owner, json!({"consumable":"Potion","steps":[{"skill":5}]}));
+        let mut request = jobs.requests.handoff.lock().queue.pop_front().unwrap();
+        let action = request
+            .executor
+            .advance(&ProfileSnapshot::default(), ProfileEvent::Tick, 0)
+            .command
+            .unwrap()
+            .id;
+        let now = Instant::now();
+        let expected_failure = "Could not equip Potion. Check its requirements. Skill 5 will use whichever consumable is equipped.";
+        for (case, expected) in [
+            (
+                "missing",
+                "Potion was not found. Skill 5 will use whichever consumable is equipped.",
+            ),
+            (
+                "invalid",
+                "Potion cannot be equipped. Skill 5 will use whichever consumable is equipped.",
+            ),
+            ("member", expected_failure),
+            ("available", expected_failure),
+            ("rejected", expected_failure),
+            ("error", expected_failure),
+            ("timeout", expected_failure),
+            (
+                "combat",
+                "Could not equip Potion while you were in combat. Skill 5 will use whichever consumable is equipped.",
+            ),
+            (
+                "conflict",
+                "Could not equip Potion because another combat profile controls preflight equipment. Skill 5 will use whichever consumable is equipped.",
+            ),
+        ] {
+            let mut preparing = Preparing::new(action);
+            preparing.name = "Potion".into();
+            preparing.item = Some(100);
+            preparing.state = match case {
+                "missing" | "invalid" | "member" | "conflict" => {
+                    let mut item = item.clone();
+                    item.member_only = case == "member";
+                    if case == "invalid" {
+                        item.link = "none".into();
+                    }
+                    let (reply, pending) = Pending::channel();
+                    reply
+                        .send(Ok(ConsumableInfo {
+                            current: None,
+                            item: (case != "missing").then_some(item),
+                            member: false,
+                        }))
+                        .unwrap();
+                    State::Preflight(pending, now + Duration::from_secs(5))
+                }
+                "available" => State::Available {
+                    pending: None,
+                    next: now,
+                    expires: now,
+                },
+                _ => State::Equip {
+                    id: u64::MAX,
+                    owner: request.owner.attachment,
+                    operations: jobs.link.operations.clone(),
+                    deadline: Some(now),
+                    issued: false,
+                    answer: match case {
+                        "rejected" => Some(Ok(OperationAnswer::EquipConsumable(false))),
+                        "error" => Some(Err(Error::Timeout)),
+                        "combat" => Some(Err(Error::EquipInCombat)),
+                        "timeout" => None,
+                        _ => unreachable!(),
+                    },
+                },
+            };
+            if case == "conflict" {
+                observer
+                    .acquire_consumable_claim(Some(101))
+                    .unwrap()
+                    .unwrap();
+            }
+            let reply = preparing
+                .advance(now, &request, &jobs.link, Waker::noop())
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                reply,
+                Reply::Prepared {
+                    skill5_item_id: None,
+                    warnings: vec![expected.into()]
+                },
+                "{case}"
+            );
+        }
+        owner.jobs.cancel(id);
     }
 }

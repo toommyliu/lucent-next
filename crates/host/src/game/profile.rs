@@ -191,6 +191,25 @@ impl ProfileJob {
         }
     }
 
+    pub(crate) fn invalidate(&mut self, prepare: bool, now: u64) {
+        self.lose_target(false);
+        self.phase = if prepare
+            || matches!(
+                self.phase,
+                Phase::New
+                    | Phase::Pending {
+                        action: Pending::Prepare,
+                        ..
+                    }
+            ) {
+            self.skill5_item_id = None;
+            Phase::New
+        } else {
+            Phase::Ready
+        };
+        self.next_step = now;
+    }
+
     pub fn ready(&self) -> bool {
         matches!(self.phase, Phase::Ready)
     }

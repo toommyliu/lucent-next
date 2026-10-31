@@ -5,7 +5,7 @@ use crate::{
         jobs::{Dispatch, DispatchReply, JobClock, Observation, prepare::ConsumableInfo},
         profile::*,
     },
-    projection::combat_state::{CombatHydration, now_ms},
+    projection::combat_state::{CombatHydration, now_ms, skill_cooldown},
 };
 use lucent_protocol::{
     aura::AuraValue,
@@ -75,6 +75,11 @@ impl Running {
         }
         let at = Instant::now();
         let state = self.projection.read();
+        if state.world.get_me().is_none() {
+            return Err(Error::Unavailable(
+                "combat observation has no player".into(),
+            ));
+        }
         let monsters = state.world.monsters();
         let allies = state.world.players();
         if monsters.len() > MAX_MONSTERS || allies.len() > MAX_ALLIES {
@@ -188,7 +193,7 @@ impl Running {
         })
     }
     fn profile_target_valid(&self, request: &Dispatch) -> bool {
-        if !request.gate.allows(request.cycle)
+        if !request.gate.allows(request.cycle, request.recovery)
             || self.operation_packets.binding() != request.binding
             || self.profile_area != request.area
         {
@@ -222,28 +227,33 @@ impl Running {
             return Ok(DispatchReply::StaleTarget);
         }
         if let Action::UseSkill { skill, .. } = &request.action {
-            let live = self.refresh_combat_state()?;
-            if !matches!(
-                live.skills[usize::from(u8::from(*skill))],
-                SkillCooldown::Ready
-            ) {
+            let remaining = self.command_answer(
+                "combat.getSkillCooldownRemaining",
+                vec![Value::Number(u8::from(*skill).into())],
+            )?;
+            let remaining = crate::projection::wire::wire_number(&remaining).ok_or_else(|| {
+                crate::projection::commands::decode_error(
+                    "combat.getSkillCooldownRemaining",
+                    "expected a numeric cooldown",
+                )
+            })?;
+            if skill_cooldown(remaining) != SkillCooldown::Ready {
                 return Ok(DispatchReply::Accepted(false));
             }
-            if request
-                .target
-                .is_some_and(|target| !live.available_monster_ids.contains(&target.monster_map_id))
-            {
-                return Ok(DispatchReply::StaleTarget);
+            if *skill == lucent_protocol::combat_profile::SkillSlot::Consumable {
+                let slot = self.command_answer("combat.getConsumableSkillItem", vec![])?;
+                if let Some(item) = request.item
+                    && (slot
+                        .get("itemId")
+                        .and_then(crate::projection::wire::wire_i64)
+                        != Some(item)
+                        || slot.get("ready").and_then(serde_json::Value::as_bool) != Some(true))
+                {
+                    return Ok(DispatchReply::Accepted(false));
+                }
             }
-            if *skill == lucent_protocol::combat_profile::SkillSlot::Consumable
-                && let Some(item) = request.item
-                && !live
-                    .consumable
-                    .is_some_and(|slot| slot.item_id == item && slot.ready)
-            {
-                return Ok(DispatchReply::Accepted(false));
-            }
-        } else if let Some(target) = request.target {
+        }
+        if let Some(target) = request.target {
             let available = self.command_answer("world.getAvailableMonsterMapIds", vec![])?;
             if !available.as_array().is_some_and(|ids| {
                 ids.iter()

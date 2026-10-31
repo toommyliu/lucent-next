@@ -5,7 +5,7 @@ use serde_json::json;
 use std::sync::mpsc;
 const TIMEOUT: Duration = Duration::from_secs(10);
 
-fn emit(link: &ScriptLink, data: serde_json::Value) {
+pub(super) fn emit(link: &ScriptLink, data: serde_json::Value) {
     link.call_loader(
         "probe.emit",
         vec![
@@ -42,7 +42,7 @@ fn drain(link: &ScriptLink) -> Vec<String> {
 fn start(link: &ScriptLink) -> JobId {
     start_profile(link, json!({"steps":[{"skill":1}]}))
 }
-fn start_profile(link: &ScriptLink, profile: serde_json::Value) -> JobId {
+pub(super) fn start_profile(link: &ScriptLink, profile: serde_json::Value) -> JobId {
     let deadline = Instant::now() + TIMEOUT;
     let id = loop {
         match link
@@ -89,8 +89,14 @@ fn stale_incarnations_make_no_loader_calls_before_a_fresh_attack() {
             }
         });
         let (completed, completion) = mpsc::channel();
+        let (settle, settled) = mpsc::channel();
+        let settled = Mutex::new(settled);
+        let first_stale = AtomicBool::new(true);
         session.set_profile_action_probe(move |stale| {
-            completed.send(stale).unwrap();
+            let _ = completed.send(stale);
+            if stale && first_stale.swap(false, Ordering::AcqRel) {
+                settled.lock().recv_timeout(TIMEOUT).unwrap();
+            }
         });
         let id = start(&owner);
         barrier.recv_timeout(TIMEOUT).unwrap();
@@ -133,7 +139,15 @@ fn stale_incarnations_make_no_loader_calls_before_a_fresh_attack() {
         if change != "player" {
             assert!(completion.recv_timeout(TIMEOUT).unwrap(), "{change}");
             owner.jobs.cancel(id);
-            assert_eq!(drain(&observer), Vec::<String>::new(), "{change}");
+            settle.send(()).unwrap();
+            let calls = drain(&observer);
+            assert!(
+                calls.iter().all(|name| !matches!(
+                    name.as_str(),
+                    "combat.attackMonster" | "combat.useSkill"
+                )),
+                "{change}: {calls:?}"
+            );
         } else {
             owner = session.attach(EventInterests::ALL).unwrap();
             observer = session.attach(EventInterests::ALL).unwrap();
@@ -266,6 +280,7 @@ fn a_queued_action_rechecks_revocation_on_the_player() {
         Dispatch {
             gate: gate.clone(),
             cycle: Some(0),
+            recovery: 0,
             binding: observation.binding,
             area: observation.area,
             action: Action::Attack(TargetLease { key, version: 1 }),
@@ -356,4 +371,422 @@ fn a_parked_unissued_cast_preserves_the_cursor() {
     owner.jobs.engage(id, true);
     assert_eq!(next_skill(&observer), "1");
     owner.jobs.cancel(id);
+}
+
+#[test]
+fn a_stale_stamped_death_keeps_the_new_incarnation_target() {
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        testing::ProbeMovie::new()
+            .combat_facts()
+            .constant("flash.getGameObjectS", json!("\"player-a\""))
+            .constant("flash.callGameFunction0", json!("true"))
+            .constant("world.getAvailableMonsterMapIds", json!([2]))
+            .responding("combat.attackMonster", [(json!(true), vec![])])
+            .responding("combat.useSkill", [(json!(true), vec![])]),
+    );
+    area(&observer, 1);
+    let link = session.attach(ProfileJobs::INTERESTS).unwrap();
+    let waker = Waker::from(Arc::new(Unpark(std::thread::current())));
+    let mut jobs = ProfileJobs::new(link, waker);
+    let owner = session.attach(EventInterests::ALL).unwrap();
+    let id = start_profile(
+        &owner,
+        json!({"delayMs":50,"resetSkillIndexOnTargetDeath":true,"steps":[{"skill":1},{"skill":2}]}),
+    );
+    drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    emit(
+        &observer,
+        json!({"cmd":"cb","m":{"2":{"intHP":0,"intState":0}}}),
+    );
+    emit(
+        &observer,
+        json!({"cmd":"cb","m":{"2":{"intHP":50,"intState":1}}}),
+    );
+    let mut stale = None;
+    while let Some(event) = jobs.link.try_event().unwrap() {
+        if matches!(event, ScriptEvent::ProfileDeath { .. }) {
+            stale = Some(event);
+        }
+    }
+    let stale = stale.expect("missing stamped death");
+    let calls = drive(&mut jobs, &observer, |_, calls| {
+        calls
+            .iter()
+            .position(|name| name == "combat.attackMonster")
+            .is_some_and(|at| calls[at..].iter().any(|name| name == "combat.useSkill"))
+    });
+    assert!(
+        calls.iter().any(|name| name == "combat.attackMonster"),
+        "{calls:?}"
+    );
+    assert_eq!(
+        jobs.jobs[0].seen.monsters.get(&2).map(|entry| entry.1),
+        Some(1),
+        "the job has not observed the new incarnation"
+    );
+    let version = jobs.jobs[0].request.executor.target_version();
+    jobs.event(stale, Instant::now());
+    assert_eq!(
+        jobs.jobs[0].request.executor.target_version(),
+        version,
+        "a death stamped for the old incarnation dropped the new target"
+    );
+    owner.jobs.cancel(id);
+}
+
+struct Unpark(std::thread::Thread);
+impl std::task::Wake for Unpark {
+    fn wake(self: Arc<Self>) {
+        self.0.unpark();
+    }
+}
+
+fn drive(
+    jobs: &mut ProfileJobs,
+    observer: &ScriptLink,
+    until: impl Fn(&ProfileJobs, &[String]) -> bool,
+) -> Vec<String> {
+    let deadline = Instant::now() + TIMEOUT;
+    let mut calls = Vec::new();
+    loop {
+        assert!(Instant::now() < deadline, "calls: {calls:?}");
+        let next = jobs.advance(Instant::now());
+        while let Some(event) = observer.try_event().unwrap() {
+            if let ScriptEvent::Loader { event, .. } = event
+                && event.name == "onProbeCall"
+                && let Some(Value::String(name)) = event.args.first()
+            {
+                calls.push(name.clone());
+            }
+        }
+        if until(jobs, &calls) {
+            return calls;
+        }
+        std::thread::park_timeout(
+            next.unwrap_or(deadline)
+                .min(deadline)
+                .saturating_duration_since(Instant::now()),
+        );
+    }
+}
+
+pub(super) fn manual_jobs() -> (crate::Session, ScriptLink, ProfileJobs, ScriptLink) {
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        testing::ProbeMovie::new()
+            .combat_facts()
+            .constant("flash.getGameObjectS", json!("\"player-a\""))
+            .constant("flash.callGameFunction0", json!("true"))
+            .constant("world.getAvailableMonsterMapIds", json!([2]))
+            .constant("combat.getConsumableSkillItem", json!(null))
+            .responding("combat.cancelAutoAttack", [(json!(null), vec![])])
+            .responding("combat.cancelTarget", [(json!(null), vec![])])
+            .recording("flash.getGameObject")
+            .recording("combat.getTarget")
+            .recording("combat.getSkillCooldownRemaining")
+            .recording("world.getAvailableMonsterMapIds")
+            .responding("combat.attackMonster", [(json!(true), vec![])])
+            .responding("combat.useSkill", [(json!(true), vec![])]),
+    );
+    area(&observer, 1);
+    let jobs = ProfileJobs::new(
+        session.attach(ProfileJobs::INTERESTS).unwrap(),
+        Waker::from(Arc::new(Unpark(std::thread::current()))),
+    );
+    let owner = session.attach(EventInterests::ALL).unwrap();
+    (session, observer, jobs, owner)
+}
+
+#[test]
+fn a_steady_attack_cast_cycle_uses_twelve_loader_callbacks() {
+    let (_session, observer, mut jobs, owner) = manual_jobs();
+    let id = start(&owner);
+    drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    let calls = drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    assert_eq!(
+        calls,
+        [
+            "flash.getGameObject",
+            "flash.getGameObject",
+            "flash.getGameObject",
+            "flash.getGameObject",
+            "flash.getGameObject",
+            "combat.getTarget",
+            "world.getAvailableMonsterMapIds",
+            "world.getAvailableMonsterMapIds",
+            "combat.attackMonster",
+            "combat.getSkillCooldownRemaining",
+            "world.getAvailableMonsterMapIds",
+            "combat.useSkill"
+        ]
+    );
+    owner.jobs.cancel(id);
+}
+
+#[test]
+fn an_attack_completion_reuses_its_snapshot_and_a_trigger_observes_again() {
+    let (_session, observer, mut jobs, owner) = manual_jobs();
+    let id = start_profile(
+        &owner,
+        json!({"steps":[{"skill":1}], "messageTriggers":[{"messageIncludes":"enrage","skill":4}]}),
+    );
+    drive(&mut jobs, &observer, |jobs, _| {
+        matches!(
+            &jobs.jobs[0].waiting,
+            Waiting::Action {
+                command: Command {
+                    action: Action::Attack(_),
+                    ..
+                },
+                ..
+            }
+        )
+    });
+    drain(&observer);
+    emit(&observer, json!({"cmd":"cb","p":{"player-a":{"intHP":25}}}));
+    let calls = drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    assert!(
+        !calls.iter().any(|name| name == "combat.getTarget"),
+        "{calls:?}"
+    );
+    assert_eq!(jobs.jobs[0].snapshot.hp.current, 100.0);
+    owner.jobs.engage(id, false);
+    emit(
+        &observer,
+        json!({"cmd":"cb","anims":[{"msg":"enrage","animStr":"cast","cInf":"m:2","tInf":"p:7"}]}),
+    );
+    let calls = drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    assert!(
+        calls.iter().any(|name| name == "combat.getTarget"),
+        "{calls:?}"
+    );
+    assert_eq!(jobs.jobs[0].snapshot.hp.current, 25.0);
+    owner.jobs.cancel(id);
+}
+
+#[test]
+fn deferred_message_overflow_keeps_the_newest_messages_and_the_job_alive() {
+    use tracing_subscriber::prelude::*;
+    struct Warnings(Arc<std::sync::atomic::AtomicUsize>);
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Warnings {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() == tracing::Level::WARN
+                && event.metadata().target() == "lucent_host::game::jobs"
+            {
+                self.0.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+    let warnings = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let subscriber = tracing_subscriber::registry().with(Warnings(warnings.clone()));
+    let _subscriber = tracing::subscriber::set_default(subscriber);
+    let (_session, observer, mut jobs, owner) = manual_jobs();
+    let id = start_profile(
+        &owner,
+        json!({"steps":[{"skill":1}], "messageTriggers":[{"messageIncludes":"enrage","skill":4}]}),
+    );
+    drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.attackMonster")
+    });
+    for index in 0..18 {
+        emit(
+            &observer,
+            json!({"cmd":"cb","anims":[{"msg":format!("enrage {index}"),"animStr":"cast","cInf":"m:2","tInf":"p:7"}]}),
+        );
+    }
+    while let Some(event) = jobs.link.try_event().unwrap() {
+        jobs.event(event, Instant::now());
+    }
+    assert!(!jobs.jobs[0].done);
+    assert_eq!(
+        jobs.jobs[0]
+            .messages
+            .iter()
+            .map(|(_, message)| message.text.clone())
+            .collect::<Vec<_>>(),
+        (2..18)
+            .map(|index| format!("enrage {index}"))
+            .collect::<Vec<_>>()
+    );
+    let version = jobs.jobs[0].request.executor.target_version();
+    jobs.jobs[0].feed(
+        ProfileEvent::Message {
+            observed_version: version,
+            message: Message {
+                text: "enrage deferred".into(),
+                monster_map_id: Some(2),
+                source: MessageSource::Animation,
+            },
+        },
+        Instant::now(),
+        jobs.clock,
+        &jobs.link,
+        &jobs.waker,
+    );
+    assert_eq!(jobs.jobs[0].messages.len(), 16);
+    assert_eq!(jobs.jobs[0].messages.front().unwrap().1.text, "enrage 2");
+    assert_eq!(warnings.load(Ordering::Relaxed), 1);
+    owner.jobs.cancel(id);
+}
+
+#[test]
+fn invalidation_abandons_pending_work_without_resetting_the_rotation() {
+    let (_session, observer, mut jobs, owner) = manual_jobs();
+    let id = start_profile(
+        &owner,
+        json!({"steps":[{"skill":1},{"skill":2}], "messageTriggers":[{"messageIncludes":"enrage","skill":4}]}),
+    );
+    drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    assert_eq!(next_skill(&owner), "1");
+    drive(&mut jobs, &observer, |jobs, _| {
+        jobs.jobs[0].request.executor.ready()
+    });
+    let version = jobs.jobs[0].request.executor.target_version();
+    emit(
+        &observer,
+        json!({"cmd":"cb","anims":[{"msg":"enrage","animStr":"cast","cInf":"m:2","tInf":"p:7"}]}),
+    );
+    while let Some(event) = jobs.link.try_event().unwrap() {
+        jobs.event(event, Instant::now());
+    }
+    assert_eq!(jobs.jobs[0].messages.len(), 1);
+    jobs.event(ScriptEvent::Invalidated, Instant::now());
+    assert!(!jobs.jobs[0].done);
+    assert!(jobs.jobs[0].messages.is_empty());
+    assert!(jobs.jobs[0].request.executor.target_version() > version);
+    drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    assert_eq!(next_skill(&owner), "2");
+    owner.jobs.cancel(id);
+}
+
+#[test]
+fn connection_recovery_reacquires_the_ambient_claim_and_rebinds_cleanup() {
+    let (_session, observer, mut jobs, owner) = manual_jobs();
+    start_profile(&owner, json!({"steps":[{"skill":5}]}));
+    drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    assert!(
+        observer
+            .acquire_consumable_claim(Some(101))
+            .unwrap()
+            .is_none()
+    );
+    observer
+        .call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onConnection".into()),
+                Value::String("OnConnection".into()),
+            ],
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let released = observer
+        .acquire_consumable_claim(Some(101))
+        .unwrap()
+        .unwrap();
+    observer.release_claim(released.id);
+    area(&observer, 1);
+    drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    assert!(
+        observer
+            .acquire_consumable_claim(Some(101))
+            .unwrap()
+            .is_none()
+    );
+    drain(&observer);
+    drop(owner);
+    assert_eq!(
+        drain(&observer),
+        ["combat.cancelAutoAttack", "combat.cancelTarget"]
+    );
+    assert!(
+        observer
+            .acquire_consumable_claim(Some(101))
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
+fn repeated_invalidation_does_not_extend_the_observation_failure_bound() {
+    let (_session, observer, mut jobs, owner) = manual_jobs();
+    start(&owner);
+    drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    let started = Instant::now();
+    for elapsed in [0, 4900, 5000] {
+        let now = started + Duration::from_millis(elapsed);
+        jobs.event(ScriptEvent::Invalidated, now);
+        assert!(!jobs.jobs[0].done);
+        let (reply, pending) = Pending::channel();
+        reply
+            .send(Err(Error::Unavailable("combat facts".into())))
+            .unwrap();
+        jobs.jobs[0].waiting = Waiting::Observation {
+            pending,
+            event: ProfileEvent::Tick,
+            deadline: now + Duration::from_secs(5),
+        };
+        jobs.jobs[0].turn(now, jobs.clock, &jobs.link, &jobs.waker);
+        assert_eq!(jobs.jobs[0].done, elapsed == 5000);
+    }
+    observer
+        .call_loader("probe.echo", vec![])
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    let mut failure = None;
+    while let Some(event) = owner.try_event().unwrap() {
+        if let ScriptEvent::JobFailed { error, .. } = event {
+            failure = Some(error);
+        }
+    }
+    assert_eq!(
+        failure.as_deref(),
+        Some(
+            "combat profile observation failed for 5 seconds: the loader has not registered callback combat facts"
+        )
+    );
+}
+
+#[test]
+fn controller_cleanup_leaves_the_parent_stop_for_run_teardown() {
+    let (_session, observer, mut jobs, owner) = manual_jobs();
+    start(&owner);
+    drive(&mut jobs, &observer, |_, calls| {
+        calls.iter().any(|name| name == "combat.useSkill")
+    });
+    drain(&observer);
+    jobs.jobs[0].request.detached.store(true, Ordering::Release);
+    jobs.advance(Instant::now());
+    drop(owner);
+    assert_eq!(
+        drain(&observer),
+        ["combat.cancelAutoAttack", "combat.cancelTarget"]
+    );
 }

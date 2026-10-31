@@ -53,6 +53,7 @@ impl ProbeMovie {
             .game_object("world.GCDTS", serde_json::json!(0))
             .game_object("world.lockdownPots", serde_json::json!(false))
             .constant("combat.getTarget", serde_json::json!(null))
+            .constant("combat.getSkillCooldownRemaining", serde_json::json!(0))
     }
 
     pub fn new() -> Self {
@@ -377,6 +378,7 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
     let record_bodies: Vec<(&str, Vec<u8>)> = movie
         .records
         .iter()
+        .filter(|name| name.as_str() != "flash.getGameObject" || movie.game_objects.is_empty())
         .map(|name| {
             let mut body = vec![
                 push(vec![Value::Str(string(
@@ -551,6 +553,28 @@ fn fixture_swf(movie: &ProbeMovie) -> Vec<u8> {
         .map(|(_, value)| value.to_string())
         .collect();
     let mut object_actions = Vec::new();
+    if movie
+        .records
+        .iter()
+        .any(|name| name == "flash.getGameObject")
+    {
+        object_actions.extend([
+            push(vec![Value::Str(string("path"))]),
+            Action::GetVariable,
+            push(vec![
+                Value::Str(string("flash.getGameObject")),
+                Value::Str(string("onProbeCall")),
+                Value::Int(3),
+            ]),
+        ]);
+        object_actions.extend(external_interface());
+        object_actions.extend([
+            push(vec![Value::Str(string("call"))]),
+            Action::CallMethod,
+            Action::Pop,
+        ]);
+    }
+
     for ((path, _), value) in movie.game_objects.iter().zip(&object_strings) {
         let answer = vec![push(vec![Value::Str(string(value))]), Action::Return];
         object_actions.extend([

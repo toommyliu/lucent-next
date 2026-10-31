@@ -36,17 +36,17 @@ fn waiting_cooldown_has_deadline_and_revalidates_generation() {
     let mut h = Harness::new(json!({"cooldownMode":"wait-for-cooldown","steps":[{"skill":1}]}));
     h.snapshot.skills[1] = SkillReadiness::CooldownUntil(800);
     let effect = h.cycle();
-    assert_eq!(effect.next_deadline, Some(800));
+    assert_eq!(effect.next_deadline, Some(850));
     assert!(h.casts.is_empty());
     h.snapshot.monsters[0].key.generation = 1;
     h.snapshot.skills[1] = SkillReadiness::Ready;
-    h.now = 800;
+    h.now = 850;
     let effect = h.advance(ProfileEvent::Tick);
     assert_eq!(
         effect.outcome,
         Some(Outcome::Cycle(Cycle::Attacked { cast: false }))
     );
-    assert_eq!(effect.next_deadline, Some(1050));
+    assert_eq!(effect.next_deadline, Some(1100));
     assert!(h.casts.is_empty());
 }
 
@@ -56,14 +56,19 @@ fn waiting_cooldown_dispatches_once_ready() {
     h.snapshot.skills[1] = SkillReadiness::CooldownUntil(800);
     h.cycle();
     h.now = 799;
-    assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(800));
-    h.now = 800;
+    assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(850));
+    h.now = 850;
     h.snapshot.skills[1] = SkillReadiness::Ready;
     let effect = h.advance(ProfileEvent::Tick);
-    let effect = h.reconfirm(effect);
+    assert_eq!(effect.next_deadline, Some(1000));
+    assert!(h.casts.is_empty());
+    h.now = 999;
+    assert_eq!(h.advance(ProfileEvent::Tick).command, None);
+    h.now = 1000;
+    let effect = h.advance(ProfileEvent::Tick);
     let effect = h.settle(effect);
     assert_eq!(h.casts, [1]);
-    assert_eq!(effect.next_deadline, Some(1100));
+    assert_eq!(effect.next_deadline, Some(1150));
 }
 
 #[test]
@@ -225,17 +230,22 @@ fn trigger_waits_for_cooldown_and_respects_timeout() {
     h.snapshot.skills[5] = SkillReadiness::CooldownUntil(800);
     let effect = h.emit(message(None));
     assert!(h.casts.is_empty());
-    assert_eq!(effect.next_deadline, Some(800));
-    h.now = 800;
+    assert_eq!(effect.next_deadline, Some(850));
+    h.now = 850;
     h.snapshot.skills[5] = SkillReadiness::Ready;
     let effect = h.advance(ProfileEvent::Tick);
-    let effect = h.reconfirm(effect);
+    assert_eq!(effect.next_deadline, Some(1000));
+    assert!(h.casts.is_empty());
+    h.now = 999;
+    assert_eq!(h.advance(ProfileEvent::Tick).command, None);
+    h.now = 1000;
+    let effect = h.advance(ProfileEvent::Tick);
     h.settle(effect);
     assert_eq!(h.casts, [5]);
     h.snapshot.skills[5] = SkillReadiness::Unavailable;
     let effect = h.emit(message(None));
-    assert_eq!(effect.next_deadline, Some(1000));
-    h.now = 5950;
+    assert_eq!(effect.next_deadline, Some(1050));
+    h.now = 6000;
     let effect = h.advance(ProfileEvent::Tick);
     assert_eq!(effect.command, None);
     assert_eq!(h.casts, [5]);
@@ -255,19 +265,19 @@ fn stale_trigger_cooldown_finishes_before_target_reselection() {
     let effect = h.advance(ProfileEvent::Tick);
     assert_eq!(effect.command, None);
     assert_eq!(effect.outcome, None);
-    assert_eq!(effect.next_deadline, Some(800));
-    h.now = 800;
+    assert_eq!(effect.next_deadline, Some(850));
+    h.now = 850;
     h.snapshot.skills[5] = SkillReadiness::Ready;
     let effect = h.advance(ProfileEvent::Tick);
     assert_eq!(effect.command, None);
     assert_eq!(effect.outcome, None);
-    assert_eq!(effect.next_deadline, Some(800));
+    assert_eq!(effect.next_deadline, Some(850));
     h.advance(ProfileEvent::Tick);
     assert_eq!(
         h.advance(ProfileEvent::Tick).outcome,
         Some(Outcome::Cycle(Cycle::NoTarget))
     );
-    h.now = 1300;
+    h.now = 1350;
     let attack = h.advance(ProfileEvent::Tick).command.unwrap();
     assert!(matches!(attack.action, Action::Attack(_)));
     assert!(h.job.target_version() > observed_version);
@@ -302,13 +312,13 @@ fn cooldown_reconfirmation_retries_if_readiness_changes() {
     assert_eq!(h.cycle().next_deadline, Some(150));
     h.now = 150;
     h.snapshot.skills[1] = SkillReadiness::CooldownUntil(200);
-    assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(200));
-    h.now = 200;
+    assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(250));
+    h.now = 250;
     h.snapshot.skills[1] = SkillReadiness::Ready;
-    assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(350));
-    h.now = 349;
+    assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(400));
+    h.now = 399;
     assert_eq!(h.advance(ProfileEvent::Tick).command, None);
-    h.now = 350;
+    h.now = 400;
     let effects = h.advance(ProfileEvent::Tick);
     h.settle(effects);
     assert_eq!(h.casts, [1]);
@@ -318,7 +328,7 @@ fn cooldown_reconfirmation_retries_if_readiness_changes() {
 fn cooldown_reconfirmation_does_not_extend_the_five_second_bound() {
     let mut h = Harness::new(json!({"cooldownMode":"wait-for-cooldown","steps":[{"skill":1}]}));
     h.snapshot.skills[1] = SkillReadiness::CooldownUntil(4990);
-    assert_eq!(h.cycle().next_deadline, Some(4990));
+    assert_eq!(h.cycle().next_deadline, Some(5000));
     h.now = 4990;
     h.snapshot.skills[1] = SkillReadiness::Ready;
     assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(5000));

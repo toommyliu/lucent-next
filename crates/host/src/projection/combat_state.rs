@@ -112,6 +112,13 @@ impl Skill {
     }
 }
 
+pub(crate) fn skill_cooldown(remaining: f64) -> SkillCooldown {
+    match remaining.trunc() as i64 {
+        remaining_ms if remaining_ms > 0 => SkillCooldown::Cooldown { remaining_ms },
+        _ => SkillCooldown::Ready,
+    }
+}
+
 impl CombatHydration {
     pub fn snapshot(self, now_ms: f64) -> Result<CombatSnapshot, Error> {
         let now_ms = now_ms.floor();
@@ -221,10 +228,7 @@ impl CombatHydration {
         });
         Ok(CombatSnapshot {
             observed_at_ms,
-            skills: remaining.map(|remaining| match remaining.trunc() as i64 {
-                remaining_ms if remaining_ms > 0 => SkillCooldown::Cooldown { remaining_ms },
-                _ => SkillCooldown::Ready,
-            }),
+            skills: remaining.map(skill_cooldown),
             selected_target: target,
             consumable: consumable.map(|(item_id, allowed)| ConsumableReadiness {
                 item_id,

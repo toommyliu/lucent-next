@@ -558,3 +558,53 @@ fn a_missing_global_timestamp_keeps_the_native_profile_ready() {
     let cast = call(&observer, Some(&run), "combat.useSkill");
     assert!(matches!(&cast[1], Value::List(args) if args[0] == Value::String("1".into())));
 }
+
+#[test]
+fn a_reconnected_profile_kill_keeps_fighting_until_death() {
+    let (mut session, observer, _supervisor) = setup();
+    let run = start(
+        &mut session,
+        loose(&[(
+            "fight.js",
+            r#"
+        import * as api from "lucent/api";
+        import * as script from "lucent/script";
+        export default function* () {
+            const killed = yield* api.combat.kill("Frogzard", {profile:{delayMs:50,steps:[{skill:1}]}});
+            yield* script.stop(String(killed));
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    call(&observer, Some(&run), "combat.useSkill");
+    observer
+        .call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onConnection".into()),
+                Value::String("OnConnection".into()),
+            ],
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    log_in(&observer);
+    packet(
+        &observer,
+        json!({"cmd":"moveToArea","areaId":1,"areaName":"test-1",
+        "uoBranch":[{"entID":7,"uoName":"player-a","intHP":100,"intHPMax":100,"intState":1}],
+        "mondef":[{"MonID":1,"strMonName":"Frogzard"}],
+        "monBranch":[{"MonID":1,"MonMapID":2,"intHP":50,"intHPMax":50,"intState":1}]}),
+    );
+    call(&observer, Some(&run), "combat.useSkill");
+    packet(
+        &observer,
+        json!({"cmd":"ct","m":{"2":{"intHP":0,"intState":0}}}),
+    );
+    assert_eq!(
+        run.wait(TIMEOUT).unwrap(),
+        ScriptOutcome::StoppedByScript {
+            reason: Some("true".into())
+        }
+    );
+}

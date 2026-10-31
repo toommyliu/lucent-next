@@ -70,6 +70,7 @@ pub(crate) struct Observation {
 pub(crate) struct Dispatch {
     pub(crate) gate: Arc<JobGate>,
     pub(crate) cycle: Option<u64>,
+    pub(crate) recovery: u64,
     pub(crate) binding: Binding,
     pub(crate) area: u64,
     pub(crate) action: Action,
@@ -152,6 +153,8 @@ struct Job {
     messages: VecDeque<(u64, Message)>,
     next: Option<ProfileEvent>,
     prepared: bool,
+    recovering: bool,
+    overflow_warned: bool,
     item: Option<i64>,
     observation_failure: Option<Instant>,
     done: bool,
@@ -167,6 +170,7 @@ enum Waiting {
         pending: Pending<DispatchReply>,
         command: Command,
         cycle: Option<u64>,
+        recovery: u64,
         deadline: Instant,
     },
     Preparation(prepare::Preparing),
@@ -239,6 +243,8 @@ impl ProfileJobs {
                 messages: VecDeque::new(),
                 next: Some(ProfileEvent::Tick),
                 prepared: false,
+                recovering: false,
+                overflow_warned: false,
                 item: None,
                 observation_failure: None,
                 done: false,
@@ -248,6 +254,12 @@ impl ProfileJobs {
             match self.link.try_event() {
                 Ok(Some(event)) => self.event(event, now),
                 Ok(None) => break,
+                Err(Error::Overflow) => {
+                    for job in &mut self.jobs {
+                        job.recover(now, self.clock);
+                    }
+                    break;
+                }
                 Err(error) => {
                     for job in &mut self.jobs {
                         job.fail(&self.link.inbox(), error.to_string());
@@ -315,25 +327,15 @@ impl ProfileJobs {
                                 .flatten()
                                 .any(|trigger| matches_message(trigger, &message))
                             {
-                                if job.messages.len() == MAX_MESSAGES {
-                                    job.fail(
-                                        &self.link.inbox(),
-                                        "combat profile message queue overflowed".into(),
-                                    );
-                                } else {
-                                    job.messages.push_back((
-                                        job.request.executor.target_version(),
-                                        message,
-                                    ));
-                                }
+                                job.queue_message(
+                                    (job.request.executor.target_version(), message),
+                                    false,
+                                );
                             }
                         }
                     }
                 }
-                ScriptEvent::Invalidated => job.fail(
-                    &self.link.inbox(),
-                    "combat profile projection invalidated".into(),
-                ),
+                ScriptEvent::Invalidated => job.recover(now, self.clock),
                 _ => {
                     if let Waiting::Preparation(preparing) = &mut job.waiting {
                         preparing.event(&event, now);
@@ -356,6 +358,51 @@ impl Drop for ProfileJobs {
 }
 
 impl Job {
+    fn queue_message(&mut self, message: (u64, Message), deferred: bool) {
+        if deferred {
+            self.messages.push_front(message);
+        } else {
+            self.messages.push_back(message);
+        }
+        if self.messages.len() > MAX_MESSAGES {
+            self.messages.pop_front();
+            if !self.overflow_warned {
+                self.overflow_warned = true;
+                tracing::warn!(job = %self.request.id, "combat profile message queue overflowed; oldest message discarded");
+            }
+        }
+    }
+    fn recover(&mut self, now: Instant, clock: JobClock) {
+        let binding = self.request.player.packets.binding();
+        let reprepare = binding != self.request.binding
+            || !self.prepared
+            || matches!(self.waiting, Waiting::Preparation(_));
+        {
+            let mut gate = self.request.gate.state.lock();
+            gate.binding = binding;
+            gate.recovery += 1;
+            gate.operation = None;
+        }
+        if let Waiting::Preparation(preparing) = &mut self.waiting {
+            preparing.cancel();
+        }
+        if reprepare {
+            self.request
+                .player
+                .packets
+                .release_owner(self.request.owner);
+            self.item = None;
+        }
+        self.request.binding = binding;
+        self.waiting = Waiting::None;
+        self.messages.clear();
+        self.seen.monsters.clear();
+        self.snapshot = ProfileSnapshot::default();
+        self.request.executor.invalidate(reprepare, clock.ms(now));
+        self.next = Some(ProfileEvent::Tick);
+        self.due = Some(now);
+        self.recovering = true;
+    }
     fn deadline(&self) -> Option<Instant> {
         match &self.waiting {
             Waiting::Observation { deadline, .. } | Waiting::Action { deadline, .. } => {
@@ -378,7 +425,7 @@ impl Job {
         }
     }
     fn cancel(&mut self) {
-        self.request.gate.close();
+        self.request.gate.state.lock().closed = true;
         self.request
             .player
             .packets
@@ -430,6 +477,9 @@ impl Job {
             self.cancel();
             return;
         }
+        if self.request.player.packets.binding() != self.request.binding {
+            self.recover(now, clock);
+        }
         let engaged = self.request.gate.state.lock().engaged;
         self.request.executor.set_engaged(engaged);
         let mut waiting = std::mem::replace(&mut self.waiting, Waiting::None);
@@ -462,7 +512,7 @@ impl Job {
             } => match pending.try_recv() {
                 Some(Ok(mut observation)) => {
                     if observation.binding != self.request.binding {
-                        self.fail(&link.inbox(), Error::Stopped.to_string());
+                        self.recover(now, clock);
                         return;
                     }
                     self.seen.begin(observation.area);
@@ -475,6 +525,7 @@ impl Job {
                     self.area = observation.area;
                     self.snapshot = observation.snapshot;
                     self.observation_failure = None;
+                    self.recovering = false;
                     self.feed(event.clone(), now, clock, link, waker);
                     return;
                 }
@@ -504,6 +555,7 @@ impl Job {
                 pending,
                 command,
                 cycle,
+                recovery,
                 deadline,
             } => match pending.try_recv() {
                 Some(Ok(reply)) => {
@@ -511,7 +563,7 @@ impl Job {
                         id: command.id,
                         reply: match reply {
                             DispatchReply::StaleTarget => Reply::Abandoned {
-                                target_lost: self.request.gate.allows(*cycle),
+                                target_lost: self.request.gate.allows(*cycle, *recovery),
                             },
                             DispatchReply::Accepted(value) => Reply::Accepted(value),
                         },
@@ -559,7 +611,8 @@ impl Job {
         } else {
             return;
         };
-        let observe = matches!(event, ProfileEvent::Message { .. })
+        let observe = self.recovering
+            || matches!(event, ProfileEvent::Message { .. })
             || (matches!(event, ProfileEvent::Tick) && self.request.executor.needs_observation());
         if observe {
             let state = self.request.gate.state.lock();
@@ -631,7 +684,7 @@ impl Job {
                     message,
                 } = event
                 {
-                    self.messages.push_front((observed_version, message));
+                    self.queue_message((observed_version, message), true);
                 }
             }
             Some(Outcome::Failure { message, .. }) => {
@@ -690,6 +743,7 @@ impl Job {
                         Dispatch {
                             gate: self.request.gate.clone(),
                             cycle,
+                            recovery: state.recovery,
                             binding: self.request.binding,
                             area: self.area,
                             action: action.clone(),
@@ -700,11 +754,13 @@ impl Job {
                         },
                         reply,
                     ));
+                    let recovery = state.recovery;
                     drop(state);
                     self.waiting = Waiting::Action {
                         pending,
                         command,
                         cycle,
+                        recovery,
                         deadline: now + Duration::from_secs(5),
                     };
                 }
