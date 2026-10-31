@@ -263,3 +263,214 @@ fn class_names<'de, D: Deserializer<'de>>(
 fn consumable<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
     trimmed_nonempty_string(deserializer).map(Some)
 }
+
+pub fn normalize_combat_profile(value: &serde_json::Value) -> CombatProfile {
+    normalize_profile(value, Some("generic-base")).unwrap_or_else(generic_profile)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnsupportedCombatProfileVersion(pub f64);
+
+impl std::fmt::Display for UnsupportedCombatProfileVersion {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "Unsupported combat profile library version {}",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for UnsupportedCombatProfileVersion {}
+
+pub fn normalize_combat_profile_library(
+    value: &serde_json::Value,
+) -> Result<CombatProfileLibrary, UnsupportedCombatProfileVersion> {
+    use std::collections::{HashMap, HashSet};
+    if let Some(version) = value["version"].as_f64()
+        && version.fract() == 0.0
+        && version > 1.0
+    {
+        return Err(UnsupportedCombatProfileVersion(version));
+    }
+    let mut profiles: Vec<_> = array(&value["profiles"])
+        .iter()
+        .filter_map(|value| normalize_profile(value, None))
+        .collect();
+    match profiles
+        .iter()
+        .position(|profile| profile.id == "generic-base")
+    {
+        None => profiles.insert(0, generic_profile()),
+        Some(index) => {
+            let generic = profiles.remove(index);
+            profiles.insert(0, generic);
+        }
+    }
+    let reserved: HashSet<_> = profiles.iter().map(|profile| profile.id.clone()).collect();
+    let mut used = HashSet::new();
+    let mut suffixes = HashMap::new();
+    for profile in &mut profiles {
+        if used.insert(profile.id.clone()) {
+            continue;
+        }
+        let suffix = suffixes.entry(profile.id.clone()).or_insert(2_u64);
+        loop {
+            let text = format!("-{suffix}");
+            let id = format!("{}{text}", truncate_utf16(&profile.id, 80 - text.len()));
+            *suffix += 1;
+            if !reserved.contains(&id) && used.insert(id.clone()) {
+                profile.id = id;
+                break;
+            }
+        }
+    }
+    Ok(CombatProfileLibrary {
+        version: 1,
+        profiles,
+    })
+}
+
+fn array(value: &serde_json::Value) -> &[serde_json::Value] {
+    value.as_array().map(Vec::as_slice).unwrap_or_default()
+}
+
+fn normalized_int(value: &serde_json::Value, fallback: u32, max: u32) -> u32 {
+    value
+        .as_f64()
+        .map(|value| value.trunc().clamp(0.0, f64::from(max)) as u32)
+        .unwrap_or(fallback)
+}
+
+fn truncate_utf16(value: &str, limit: usize) -> String {
+    let mut length = 0;
+    value
+        .chars()
+        .take_while(|character| {
+            length += character.len_utf16();
+            length <= limit
+        })
+        .collect()
+}
+
+fn normalized_string(value: &serde_json::Value, limit: usize) -> Option<String> {
+    let trimmed = trim_nonempty::<serde_json::Error>(value.as_str()?.to_owned()).ok()?;
+    Some(truncate_utf16(&trimmed, limit)).filter(|value| !value.is_empty())
+}
+
+fn normalized_enum<T: serde::de::DeserializeOwned>(value: &serde_json::Value) -> Option<T> {
+    serde_json::from_value(value.clone()).ok()
+}
+
+fn normalized_condition(value: &serde_json::Value) -> Option<CombatProfileCondition> {
+    let op = normalized_enum(&value["op"]).unwrap_or(CombatProfileComparison::LessThanOrEqual);
+    if let Some(kind) = normalized_enum(&value["type"]) {
+        let unit = normalized_enum(&value["unit"]).unwrap_or(CombatProfileThresholdUnit::Percent);
+        let max = match unit {
+            CombatProfileThresholdUnit::Percent => 100,
+            CombatProfileThresholdUnit::Value => 999_999,
+        };
+        return Some(CombatProfileCondition::Stat(CombatProfileStatCondition {
+            kind,
+            op,
+            value: normalized_int(&value["value"], 0, max),
+            unit,
+        }));
+    }
+    Some(CombatProfileCondition::Aura(CombatProfileAuraCondition {
+        kind: normalized_enum(&value["type"])?,
+        aura_name: normalized_string(&value["auraName"], 80)?,
+        op,
+        value: normalized_int(&value["value"], 0, 999),
+    }))
+}
+
+fn normalized_skill(value: &serde_json::Value) -> Option<SkillSlot> {
+    value
+        .as_f64()
+        .and_then(|number| SkillSlot::try_from(number.trunc().clamp(0.0, 5.0)).ok())
+}
+
+fn normalized_step(value: &serde_json::Value) -> Option<CombatProfileStep> {
+    let wait = normalized_int(&value["waitMs"], 0, 60_000);
+    Some(CombatProfileStep {
+        skill: normalized_skill(&value["skill"])?,
+        conditions: array(&value["conditions"])
+            .iter()
+            .filter_map(normalized_condition)
+            .collect(),
+        priority: (value["priority"].as_bool() == Some(true)).then_some(true),
+        cooldown_mode: normalized_enum(&value["cooldownMode"]),
+        wait_ms: (wait > 0).then_some(wait),
+    })
+}
+
+fn normalized_trigger(value: &serde_json::Value) -> Option<CombatProfileMessageTrigger> {
+    let cooldown = normalized_int(&value["cooldownMs"], 0, 60_000);
+    Some(CombatProfileMessageTrigger {
+        message_includes: normalized_string(&value["messageIncludes"], 160)?,
+        skill: normalized_skill(&value["skill"])?,
+        source: normalized_enum(&value["source"]).unwrap_or(CombatProfileMessageTriggerSource::Any),
+        cooldown_ms: (cooldown > 0).then_some(cooldown),
+    })
+}
+
+fn normalize_profile(
+    value: &serde_json::Value,
+    fallback_id: Option<&str>,
+) -> Option<CombatProfile> {
+    value.as_object()?;
+    let class_names: Vec<_> = array(&value["classNames"])
+        .iter()
+        .filter_map(|value| normalized_string(value, 80))
+        .collect();
+    let triggers: Vec<_> = array(&value["messageTriggers"])
+        .iter()
+        .filter_map(normalized_trigger)
+        .collect();
+    Some(CombatProfile {
+        id: normalized_string(&value["id"], 80).or_else(|| fallback_id.map(str::to_owned))?,
+        label: normalized_string(&value["label"], 80).unwrap_or_else(|| "Profile".into()),
+        class_names: (!class_names.is_empty()).then_some(class_names),
+        consumable: normalized_string(&value["consumable"], 80),
+        delay_ms: normalized_int(&value["delayMs"], 150, 60_000),
+        cooldown_mode: normalized_enum(&value["cooldownMode"])
+            .unwrap_or(CombatProfileCooldownMode::UseIfReady),
+        reset_skill_index_on_target_death: (value["resetSkillIndexOnTargetDeath"].as_bool()
+            == Some(true))
+        .then_some(true),
+        steps: array(&value["steps"])
+            .iter()
+            .filter_map(normalized_step)
+            .collect(),
+        message_triggers: (!triggers.is_empty()).then_some(triggers),
+    })
+}
+
+fn generic_profile() -> CombatProfile {
+    CombatProfile {
+        id: "generic-base".into(),
+        label: "Generic".into(),
+        class_names: None,
+        consumable: None,
+        delay_ms: 150,
+        cooldown_mode: CombatProfileCooldownMode::UseIfReady,
+        reset_skill_index_on_target_death: None,
+        message_triggers: None,
+        steps: [
+            SkillSlot::Skill1,
+            SkillSlot::Skill2,
+            SkillSlot::Skill3,
+            SkillSlot::Skill4,
+        ]
+        .into_iter()
+        .map(|skill| CombatProfileStep {
+            skill,
+            conditions: Vec::new(),
+            priority: None,
+            cooldown_mode: None,
+            wait_ms: None,
+        })
+        .collect(),
+    }
+}
