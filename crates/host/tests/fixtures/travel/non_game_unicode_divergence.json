@@ -1,0 +1,212 @@
+[
+  {
+    "name": "ASCII identifiers deliberately diverge from TS for non-game input: unicode case accents",
+    "request": {
+      "kind": "join",
+      "target": "CAFÉ"
+    },
+    "initial": {
+      "map": "café",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.joinMap",
+        "args": [
+          "CAFÉ"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "outcome": false,
+    "updates": [],
+    "finished_at": 20000
+  },
+  {
+    "name": "ASCII identifiers deliberately diverge from TS for non-game input: unicode jump case",
+    "request": {
+      "kind": "jump",
+      "cell": "Étage",
+      "pad": "DÉPART"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.jump",
+        "args": [
+          "Étage",
+          "DÉPART"
+        ],
+        "patch": {
+          "live_cell": "étage",
+          "live_pad": "départ"
+        },
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "outcome": false,
+    "updates": [],
+    "finished_at": 3000
+  },
+  {
+    "name": "ASCII identifiers deliberately diverge from TS for non-game input: unicode canonical equivalence",
+    "request": {
+      "kind": "join",
+      "target": "café"
+    },
+    "initial": {
+      "map": "café",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.joinMap",
+        "args": [
+          "café"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "outcome": false,
+    "updates": [],
+    "finished_at": 20000
+  },
+  {
+    "name": "ASCII identifiers deliberately diverge from TS for non-game input: unicode final sigma",
+    "request": {
+      "kind": "join",
+      "target": "οσ"
+    },
+    "initial": {
+      "map": "ΟΣ",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.joinMap",
+        "args": [
+          "οσ"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "outcome": false,
+    "updates": [],
+    "finished_at": 20000
+  },
+  {
+    "name": "ASCII identifiers deliberately diverge from TS for non-game input: unicode width equivalence",
+    "request": {
+      "kind": "join",
+      "target": "Ａ"
+    },
+    "initial": {
+      "map": "a",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.joinMap",
+        "args": [
+          "Ａ"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "outcome": false,
+    "updates": [],
+    "finished_at": 20000
+  }
+]

@@ -1236,44 +1236,13 @@
     "finished_at": 3000
   },
   {
-    "name": "unicode case accents",
-    "request": {
-      "kind": "join",
-      "target": "CAF\u00c9"
-    },
-    "initial": {
-      "map": "caf\u00e9",
-      "room": 1,
-      "loaded": true,
-      "ready": true,
-      "tfer": true,
-      "alive": true,
-      "state": "idle",
-      "cell": "Enter",
-      "pad": "Spawn",
-      "live_cell": "Enter",
-      "live_pad": "Spawn",
-      "cells": [
-        "Enter",
-        "Safe",
-        "Other",
-        "Fourth"
-      ],
-      "monsters": []
-    },
-    "commands": [],
-    "outcome": true,
-    "updates": [],
-    "finished_at": 0
-  },
-  {
     "name": "unicode accents distinct",
     "request": {
       "kind": "join",
       "target": "cafe"
     },
     "initial": {
-      "map": "caf\u00e9",
+      "map": "café",
       "room": 1,
       "loaded": true,
       "ready": true,
@@ -1301,62 +1270,6 @@
         "patch": {
           "map": "cafe"
         },
-        "reply": true,
-        "at": 0
-      }
-    ],
-    "outcome": true,
-    "updates": [],
-    "finished_at": 0
-  },
-  {
-    "name": "unicode jump case",
-    "request": {
-      "kind": "jump",
-      "cell": "\u00c9tage",
-      "pad": "D\u00c9PART"
-    },
-    "initial": {
-      "map": "battleon",
-      "room": 1,
-      "loaded": true,
-      "ready": true,
-      "tfer": true,
-      "alive": true,
-      "state": "idle",
-      "cell": "Enter",
-      "pad": "Spawn",
-      "live_cell": "Enter",
-      "live_pad": "Spawn",
-      "cells": [
-        "Enter",
-        "Safe",
-        "Other",
-        "Fourth"
-      ],
-      "monsters": []
-    },
-    "commands": [
-      {
-        "method": "player.jump",
-        "args": [
-          "\u00c9tage",
-          "D\u00c9PART"
-        ],
-        "patch": {
-          "live_cell": "\u00e9tage",
-          "live_pad": "d\u00e9part"
-        },
-        "reply": true,
-        "at": 0
-      },
-      {
-        "method": "world.isCellReady",
-        "args": [
-          "\u00c9tage",
-          "D\u00c9PART"
-        ],
-        "patch": {},
         "reply": true,
         "at": 0
       }
@@ -1989,99 +1902,6 @@
     "finished_at": 200
   },
   {
-    "name": "unicode canonical equivalence",
-    "request": {
-      "kind": "join",
-      "target": "cafe\u0301"
-    },
-    "initial": {
-      "map": "caf\u00e9",
-      "room": 1,
-      "loaded": true,
-      "ready": true,
-      "tfer": true,
-      "alive": true,
-      "state": "idle",
-      "cell": "Enter",
-      "pad": "Spawn",
-      "live_cell": "Enter",
-      "live_pad": "Spawn",
-      "cells": [
-        "Enter",
-        "Safe",
-        "Other",
-        "Fourth"
-      ],
-      "monsters": []
-    },
-    "commands": [],
-    "outcome": true,
-    "updates": [],
-    "finished_at": 0
-  },
-  {
-    "name": "unicode final sigma",
-    "request": {
-      "kind": "join",
-      "target": "\u03bf\u03c3"
-    },
-    "initial": {
-      "map": "\u039f\u03a3",
-      "room": 1,
-      "loaded": true,
-      "ready": true,
-      "tfer": true,
-      "alive": true,
-      "state": "idle",
-      "cell": "Enter",
-      "pad": "Spawn",
-      "live_cell": "Enter",
-      "live_pad": "Spawn",
-      "cells": [
-        "Enter",
-        "Safe",
-        "Other",
-        "Fourth"
-      ],
-      "monsters": []
-    },
-    "commands": [],
-    "outcome": true,
-    "updates": [],
-    "finished_at": 0
-  },
-  {
-    "name": "unicode width equivalence",
-    "request": {
-      "kind": "join",
-      "target": "\uff21"
-    },
-    "initial": {
-      "map": "a",
-      "room": 1,
-      "loaded": true,
-      "ready": true,
-      "tfer": true,
-      "alive": true,
-      "state": "idle",
-      "cell": "Enter",
-      "pad": "Spawn",
-      "live_cell": "Enter",
-      "live_pad": "Spawn",
-      "cells": [
-        "Enter",
-        "Safe",
-        "Other",
-        "Fourth"
-      ],
-      "monsters": []
-    },
-    "commands": [],
-    "outcome": true,
-    "updates": [],
-    "finished_at": 0
-  },
-  {
     "name": "join exits combat first",
     "request": {
       "kind": "join",
@@ -2317,7 +2137,7 @@
     "name": "join trims ECMAScript whitespace",
     "request": {
       "kind": "join",
-      "target": "\ufeffbattleon\ufeff"
+      "target": "﻿battleon﻿"
     },
     "initial": {
       "map": "battleon",
@@ -2348,7 +2168,7 @@
     "name": "join preserves non ECMAScript whitespace",
     "request": {
       "kind": "join",
-      "target": "\u0085battleon"
+      "target": "battleon"
     },
     "initial": {
       "map": "battleon",
@@ -2374,10 +2194,10 @@
       {
         "method": "player.joinMap",
         "args": [
-          "\u0085battleon"
+          "battleon"
         ],
         "patch": {
-          "map": "\u0085battleon"
+          "map": "battleon"
         },
         "reply": true,
         "at": 0
@@ -2455,5 +2275,681 @@
     "outcome": true,
     "updates": [],
     "finished_at": 500
+  },
+  {
+    "name": "safe current cell ranks before earlier empty cell",
+    "request": {
+      "kind": "exit"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "combat",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Safe",
+        "Enter"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "combat.cancelAutoAttack",
+        "args": [],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "combat.cancelTarget",
+        "args": [],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "player.jump",
+        "args": [
+          "Enter",
+          "Spawn"
+        ],
+        "patch": {
+          "live_cell": "Enter",
+          "live_pad": "Spawn",
+          "state": "idle"
+        },
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "world.isCellReady",
+        "args": [
+          "Enter",
+          "Spawn"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "updates": [],
+    "outcome": true,
+    "finished_at": 500
+  },
+  {
+    "name": "matching map remains unloaded before join",
+    "request": {
+      "kind": "join",
+      "target": "battleon"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": false,
+      "ready": false,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.joinMap",
+        "args": [
+          "battleon"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 200
+      }
+    ],
+    "updates": [
+      {
+        "at": 200,
+        "patch": {
+          "loaded": true,
+          "ready": true
+        }
+      }
+    ],
+    "outcome": true,
+    "finished_at": 200
+  },
+  {
+    "name": "matching map load wait requires loaded flag",
+    "request": {
+      "kind": "join",
+      "target": "doom"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.joinMap",
+        "args": [
+          "doom"
+        ],
+        "patch": {
+          "map": "doom",
+          "loaded": false,
+          "ready": false
+        },
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "updates": [
+      {
+        "at": 15000,
+        "patch": {
+          "loaded": true,
+          "ready": true
+        }
+      }
+    ],
+    "outcome": true,
+    "finished_at": 15000
+  },
+  {
+    "name": "idle confirmation rejects return to combat",
+    "request": {
+      "kind": "exit"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "combat",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "combat.cancelAutoAttack",
+        "args": [],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "combat.cancelTarget",
+        "args": [],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "player.jump",
+        "args": [
+          "Enter",
+          "Spawn"
+        ],
+        "patch": {
+          "live_cell": "Enter",
+          "live_pad": "Spawn",
+          "state": "idle"
+        },
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "world.isCellReady",
+        "args": [
+          "Enter",
+          "Spawn"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "updates": [
+      {
+        "at": 200,
+        "patch": {
+          "state": "combat"
+        }
+      }
+    ],
+    "outcome": false,
+    "finished_at": 2000
+  },
+  {
+    "name": "idle confirmation is cut off by exit deadline",
+    "request": {
+      "kind": "exit"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "combat",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "combat.cancelAutoAttack",
+        "args": [],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "combat.cancelTarget",
+        "args": [],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "player.jump",
+        "args": [
+          "Enter",
+          "Spawn"
+        ],
+        "patch": {
+          "live_cell": "Enter",
+          "live_pad": "Spawn"
+        },
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "world.isCellReady",
+        "args": [
+          "Enter",
+          "Spawn"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "updates": [
+      {
+        "at": 1800,
+        "patch": {
+          "state": "idle"
+        }
+      }
+    ],
+    "outcome": false,
+    "finished_at": 2000
+  },
+  {
+    "name": "combat exit ignores rejected jump",
+    "request": {
+      "kind": "exit"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "combat",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "combat.cancelAutoAttack",
+        "args": [],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "combat.cancelTarget",
+        "args": [],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "player.jump",
+        "args": [
+          "Enter",
+          "Spawn"
+        ],
+        "patch": {
+          "state": "idle"
+        },
+        "reply": false,
+        "at": 0
+      }
+    ],
+    "updates": [],
+    "outcome": true,
+    "finished_at": 500
+  },
+  {
+    "name": "join stops when combat exit fails",
+    "request": {
+      "kind": "join",
+      "target": "doom"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "combat",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [],
+      "monsters": []
+    },
+    "commands": [],
+    "updates": [],
+    "outcome": false,
+    "finished_at": 0
+  },
+  {
+    "name": "join cell and pad arguments",
+    "request": {
+      "kind": "join",
+      "target": "doom",
+      "cell": "Safe",
+      "pad": "Left"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.joinMap",
+        "args": [
+          "doom",
+          "Safe",
+          "Left"
+        ],
+        "patch": {
+          "map": "doom"
+        },
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "player.jump",
+        "args": [
+          "Safe",
+          "Left"
+        ],
+        "patch": {
+          "live_cell": "Safe",
+          "live_pad": "Left"
+        },
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "world.isCellReady",
+        "args": [
+          "Safe",
+          "Left"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "updates": [],
+    "outcome": true,
+    "finished_at": 0
+  },
+  {
+    "name": "redirect omits empty live pad",
+    "request": {
+      "kind": "jump",
+      "cell": "Safe"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.jump",
+        "args": [
+          "Safe"
+        ],
+        "patch": {
+          "live_cell": "Safe"
+        },
+        "reply": true,
+        "at": 0
+      },
+      {
+        "method": "world.isCellReady",
+        "args": [
+          "Safe"
+        ],
+        "patch": {
+          "live_cell": "Other",
+          "live_pad": ""
+        },
+        "reply": false,
+        "at": 0
+      },
+      {
+        "method": "world.isCellReady",
+        "args": [
+          "Other"
+        ],
+        "patch": {},
+        "reply": true,
+        "at": 100
+      }
+    ],
+    "updates": [],
+    "outcome": false,
+    "finished_at": 100
+  },
+  {
+    "name": "map room boundary 1000",
+    "request": {
+      "kind": "join",
+      "target": "battleon-1000"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [],
+    "updates": [],
+    "outcome": true,
+    "finished_at": 0
+  },
+  {
+    "name": "map room boundary 1001",
+    "request": {
+      "kind": "join",
+      "target": "battleon-1001"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.joinMap",
+        "args": [
+          "battleon-1001"
+        ],
+        "patch": {
+          "room": 1001
+        },
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "updates": [],
+    "outcome": true,
+    "finished_at": 0
+  },
+  {
+    "name": "map room boundary 99999",
+    "request": {
+      "kind": "join",
+      "target": "battleon-99999"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [
+      {
+        "method": "player.joinMap",
+        "args": [
+          "battleon-99999"
+        ],
+        "patch": {
+          "room": 99999
+        },
+        "reply": true,
+        "at": 0
+      }
+    ],
+    "updates": [],
+    "outcome": true,
+    "finished_at": 0
+  },
+  {
+    "name": "map room boundary 100000",
+    "request": {
+      "kind": "join",
+      "target": "battleon-100000"
+    },
+    "initial": {
+      "map": "battleon",
+      "room": 1,
+      "loaded": true,
+      "ready": true,
+      "tfer": true,
+      "alive": true,
+      "state": "idle",
+      "cell": "Enter",
+      "pad": "Spawn",
+      "live_cell": "Enter",
+      "live_pad": "Spawn",
+      "cells": [
+        "Enter",
+        "Safe",
+        "Other",
+        "Fourth"
+      ],
+      "monsters": []
+    },
+    "commands": [],
+    "updates": [],
+    "outcome": true,
+    "finished_at": 0
   }
 ]

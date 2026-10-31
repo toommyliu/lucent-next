@@ -1,15 +1,5 @@
-use icu_collator::{
-    Collator,
-    options::{CollatorOptions, Strength},
-};
-use icu_locale_core::locale;
-
 pub(super) fn same_text(left: &str, right: &str) -> bool {
-    let mut options = CollatorOptions::default();
-    options.strength = Some(Strength::Secondary);
-    let collator =
-        Collator::try_new(locale!("en").into(), options).expect("compiled collation data");
-    collator.compare(left, right).is_eq()
+    left.eq_ignore_ascii_case(right)
 }
 
 pub(super) fn trim(text: &str) -> &str {

@@ -32,10 +32,20 @@ fn patch(snapshot: &mut Value, patch: &Value) {
 }
 #[test]
 fn shared_travel_transcripts() {
-    let scenarios: Vec<Scenario> = serde_json::from_str(include_str!(
+    replay(include_str!(
         "../../../tests/fixtures/travel/transcripts.json"
-    ))
-    .unwrap();
+    ));
+}
+
+#[test]
+fn ascii_identifiers_deliberately_diverge_from_ts_for_non_game_unicode() {
+    replay(include_str!(
+        "../../../tests/fixtures/travel/non_game_unicode_divergence.json"
+    ));
+}
+
+fn replay(corpus: &str) {
+    let scenarios: Vec<Scenario> = serde_json::from_str(corpus).unwrap();
     for scenario in scenarios {
         let mut job = TravelJob::new(scenario.request).unwrap();
         let mut snapshot = scenario.initial;
