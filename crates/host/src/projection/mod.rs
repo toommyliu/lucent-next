@@ -56,13 +56,17 @@ pub struct Projection {
     pub shops: shops::ShopStore,
     pub world: world::WorldStore,
     session_logged_in: bool,
+    pub(crate) connected: Option<bool>,
 }
 
 impl Projection {
     pub fn connection(&mut self, status: &str) -> ProjectionOutput {
         match status {
-            "OnConnectionLost" | "OnConnectionFailed" => self.auth.logged_in = false,
-            "OnConnection" => {}
+            "OnConnectionLost" | "OnConnectionFailed" => {
+                self.auth.logged_in = false;
+                self.connected = Some(false);
+            }
+            "OnConnection" => self.connected = Some(true),
             _ => return ProjectionOutput::default(),
         }
         let logout = self.session_logged_in;

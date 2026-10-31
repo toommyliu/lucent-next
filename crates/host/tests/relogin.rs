@@ -183,3 +183,69 @@ fn loader_connection_events_drive_native_relogin_without_a_bot() {
     );
     assert_eq!(session.pending_ask_count(), 0);
 }
+
+#[test]
+fn dropped_connection_events_recover_from_the_current_host_state() {
+    use lucent_host::bridge::Value as BridgeValue;
+    let host = testing::headless_host();
+    let (mut session, writer) = testing::start_probe(
+        &host,
+        testing::ProbeMovie::new()
+            .constant("auth.login", json!(null))
+            .constant("auth.isLoggedIn", json!(false))
+            .constant("world.isLoaded", json!(false))
+            .constant("player.isLoaded", json!(false))
+            .constant("flash.isNull", json!(true)),
+    );
+    writer
+        .command(Command::Login {
+            username: "Hero".into(),
+            password: "pw".into(),
+        })
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap();
+    let (send, wake) = mpsc::channel();
+    let mut policy = ReloginPolicy::new(
+        session.attach().unwrap(),
+        Waker::from(Arc::new(Notice(send))),
+    );
+    receive(
+        &mut policy,
+        &wake,
+        writer.command(Command::SetAutoReloginDelay { delay_ms: 0.0 }),
+    );
+    receive(
+        &mut policy,
+        &wake,
+        writer.command(Command::SetAutoReloginEnabled { enabled: true }),
+    );
+    for _ in 0..1025 {
+        writer
+            .call_loader(
+                "probe.emit",
+                vec![
+                    BridgeValue::String("onConnection".into()),
+                    BridgeValue::String("OnConnectionLost".into()),
+                ],
+            )
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+    }
+    let until = Instant::now() + Duration::from_secs(5);
+    loop {
+        let deadline = policy.advance(Instant::now());
+        if session.auto_relogin().status.attempts_remaining == Some(3.0) {
+            break;
+        }
+        assert!(
+            Instant::now() < until,
+            "lost connection did not resume recovery after event overflow"
+        );
+        let _ = wake.recv_timeout(
+            deadline
+                .unwrap_or(until)
+                .min(until)
+                .saturating_duration_since(Instant::now()),
+        );
+    }
+}

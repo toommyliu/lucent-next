@@ -93,6 +93,7 @@ impl ScriptLink {
             .read_projection(|projection| crate::automation::relogin::Snapshot {
                 username: projection.auth.username.clone(),
                 password: projection.auth.password.clone(),
+                connected: projection.connected,
                 logged_in: projection.auth.logged_in,
                 ready: projection.current_readiness().missing.is_empty(),
                 servers: projection

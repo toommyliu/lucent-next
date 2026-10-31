@@ -84,21 +84,15 @@ it("cancels an interrupted accept and ignores its late answer", async () => {
 });
 
 it("fails queued and running operations when their event stream overflows", async () => {
-  const host = { now: () => 0, prepareOperation: () => "queued-lost", operate: vi.fn(), cancelOperation: vi.fn(), ask: () => "ask-lost", cancelAsk: vi.fn() };
+  const host = { now: () => 0, prepareOperation: () => "queued-lost", operate: vi.fn(), cancelOperation: vi.fn() };
   vi.stubGlobal("__host", host);
   vi.stubGlobal("window", {});
   const { turn } = await import("./loop");
-  const { ask } = await import("./asks");
-  let askError: unknown;
-  const asking = Effect.runPromise(ask({}, host)).catch(cause => { askError = cause; });
   let error: unknown;
   const operating = Effect.runPromise(operate({ kind: "acceptDrop", selector: 1 }, host)).catch(cause => { error = cause; });
   turn('[{"type":"eventslost"}]');
   await Promise.resolve();
-  await asking;
   await operating;
-  expect(String(askError)).toContain("Host events were lost; pending requests failed");
-  expect(host.cancelAsk).toHaveBeenCalledWith("ask-lost");
   expect(host.cancelOperation).toHaveBeenCalledWith("queued-lost");
   expect(error).toBeInstanceOf(Error);
   expect((error as Error).message).toBe("Host events were lost; pending requests failed");

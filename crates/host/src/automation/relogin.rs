@@ -50,7 +50,10 @@ impl ReloginPolicy {
                         self.policy.connection(status, now);
                     }
                 }
-                Ok(Some(_)) | Err(Error::Overflow) => {}
+                Err(Error::Overflow) | Ok(Some(crate::bridge::ScriptEvent::Invalidated)) => {
+                    self.policy.resynchronize(now)
+                }
+                Ok(Some(_)) => {}
                 Ok(None) => break,
                 Err(_) => return None,
             }
@@ -58,7 +61,6 @@ impl ReloginPolicy {
         }
         let shared = self.link.records.relogin.clone();
         let at = self.policy.advance(&self.link, &shared, &self.waker, now);
-        *self.link.records.auto_relogin.write() = self.policy.records.clone();
         if draining { Some(now) } else { at }
     }
 }
@@ -101,9 +103,10 @@ impl Setter {
     }
 }
 #[derive(Default)]
-enum Recovery {
+enum RecoveryState {
     #[default]
     Idle,
+    AwaitingSession,
     WaitingCredentials(Instant),
     Delay(Instant),
     Attempt {
@@ -135,25 +138,139 @@ enum Recovery {
     PlayerCheck,
     Logout {
         reply: Wait<String>,
-        detail: String,
+        cause: LogoutCause,
     },
-    Backoff(Instant),
+    Backoff {
+        at: Instant,
+        delay: Duration,
+    },
     Failed,
+}
+enum LogoutCause {
+    ServerFull(String),
+    PlayerUnready,
+}
+impl LogoutCause {
+    fn detail(&self) -> &str {
+        match self {
+            Self::ServerFull(detail) => detail,
+            Self::PlayerUnready => "Player did not become ready",
+        }
+    }
+}
+#[derive(Default)]
+struct Recovery {
+    state: RecoveryState,
+    attempt: u8,
+    fresh_login: bool,
+}
+impl Recovery {
+    fn phase(&self) -> Phase {
+        match &self.state {
+            RecoveryState::Idle => Phase::Armed,
+            RecoveryState::AwaitingSession | RecoveryState::WaitingCredentials(_) => {
+                Phase::AwaitingSession
+            }
+            RecoveryState::Delay(_) | RecoveryState::Attempt { .. } => Phase::WaitingDelay,
+            RecoveryState::Kick(_) if self.attempt > 0 => Phase::Backoff {
+                delay_ms: (5_u64 << (self.attempt - 1)) as f64 * 1000.0,
+            },
+            RecoveryState::Kick(_) => Phase::WaitingDelay,
+            RecoveryState::KickDuration(_) | RecoveryState::WaitingKick { .. } => {
+                Phase::WaitingKick
+            }
+            RecoveryState::Login(_) => Phase::LoggingIn,
+            RecoveryState::Outcome(_) | RecoveryState::Manual(_) => Phase::AwaitingServerSelect,
+            RecoveryState::Select { .. }
+            | RecoveryState::SelectionResult { .. }
+            | RecoveryState::SelectAgain { .. } => Phase::SelectingServer,
+            RecoveryState::Player(_) | RecoveryState::PlayerCheck => Phase::AwaitingPlayerReady,
+            RecoveryState::Logout {
+                cause: LogoutCause::ServerFull(_),
+                ..
+            } => Phase::SelectingServer,
+            RecoveryState::Logout {
+                cause: LogoutCause::PlayerUnready,
+                ..
+            } => Phase::AwaitingPlayerReady,
+            RecoveryState::Backoff { delay, .. } => Phase::Backoff {
+                delay_ms: delay.as_secs_f64() * 1000.0,
+            },
+            RecoveryState::Failed => Phase::Failed,
+        }
+    }
+}
+#[derive(Default)]
+struct Credentials {
+    work: CaptureWork,
+    failing: bool,
+}
+impl Credentials {
+    fn schedule(&mut self, at: Instant) {
+        if !matches!(self.work, CaptureWork::Running { .. }) {
+            self.work = CaptureWork::Scheduled(at);
+        }
+    }
+}
+#[derive(Default)]
+enum CaptureWork {
+    #[default]
+    Idle,
+    Scheduled(Instant),
+    Running {
+        capture: Box<Capture>,
+        deadline: Instant,
+    },
+}
+#[derive(Default)]
+struct Observer {
+    work: ObservationWork,
+    watch_until: Option<Instant>,
+}
+#[derive(Default)]
+enum ObservationWork {
+    #[default]
+    Idle,
+    Scheduled {
+        at: Instant,
+        resynchronize: bool,
+    },
+    Running {
+        observation: Box<Observation>,
+        resynchronize: bool,
+    },
+}
+impl Observer {
+    fn schedule(&mut self, at: Instant) {
+        if !matches!(self.work, ObservationWork::Running { .. }) {
+            self.work = ObservationWork::Scheduled {
+                at,
+                resynchronize: false,
+            };
+        }
+    }
+    fn start(&mut self, host: &impl ReloginHost, waker: &Waker, now: Instant) {
+        self.work = ObservationWork::Running {
+            observation: Box::new(Observation::new(host, waker, now)),
+            resynchronize: false,
+        };
+    }
+    fn deadline(&self) -> Option<Instant> {
+        match &self.work {
+            ObservationWork::Idle => None,
+            ObservationWork::Scheduled { at, .. } => Some(*at),
+            ObservationWork::Running { observation, .. } => Some(observation.deadline),
+        }
+    }
 }
 #[derive(Default)]
 struct Policy {
     records: AutoReloginRecords,
     setter: Option<Setter>,
-    capture: Option<Capture>,
-    capture_at: Option<Instant>,
-    observation: Option<Observation>,
-    observe_at: Option<Instant>,
+    credentials: Credentials,
+    observer: Observer,
     observed: Observed,
     recovery: Recovery,
-    attempt: u8,
-    watch_until: Option<Instant>,
-    fresh_login: bool,
-    capture_failing: bool,
 }
 impl Policy {
     fn for_player(records: AutoReloginRecords, now: Instant) -> Self {
@@ -161,26 +278,59 @@ impl Policy {
             .status
             .attempts_remaining
             .map_or(0, |left| 3 - (left as u8).min(3));
-        let recovery = if !records.config.enabled || !records.status.captured {
-            Recovery::Idle
+        let recovery = if !records.config.enabled {
+            RecoveryState::Idle
         } else {
             match records.status.phase {
-                Phase::Armed | Phase::AwaitingSession => Recovery::Idle,
-                Phase::Failed => Recovery::Failed,
-                Phase::WaitingDelay => Recovery::Delay(now),
-                Phase::Backoff { delay_ms } => {
-                    Recovery::Backoff(now + Duration::from_secs_f64(delay_ms / 1000.0))
-                }
-                _ => Recovery::Attempt { resume: false },
+                Phase::Failed => RecoveryState::Failed,
+                Phase::AwaitingSession => RecoveryState::AwaitingSession,
+                _ if !records.status.captured => RecoveryState::Idle,
+                Phase::Armed => RecoveryState::Idle,
+                Phase::WaitingDelay => RecoveryState::Delay(now),
+                Phase::Backoff { delay_ms } => RecoveryState::Backoff {
+                    at: now + Duration::from_secs_f64(delay_ms / 1000.0),
+                    delay: Duration::from_secs_f64(delay_ms / 1000.0),
+                },
+                _ => RecoveryState::Attempt { resume: false },
             }
         };
-        let observe_at = (!matches!(recovery, Recovery::Idle | Recovery::Failed)).then_some(now);
+        let observer = if !matches!(
+            recovery,
+            RecoveryState::Idle | RecoveryState::AwaitingSession | RecoveryState::Failed
+        ) {
+            Observer {
+                work: ObservationWork::Scheduled {
+                    at: now,
+                    resynchronize: false,
+                },
+                watch_until: None,
+            }
+        } else {
+            Observer::default()
+        };
         Self {
             records,
-            attempt,
-            recovery,
-            observe_at,
+            recovery: Recovery {
+                state: recovery,
+                attempt,
+                fresh_login: false,
+            },
+            observer,
             ..Self::default()
+        }
+    }
+    fn publish(&mut self, shared: &Shared) {
+        self.records.status.phase = self.recovery.phase();
+        if *shared.records.read() != self.records {
+            *shared.records.write() = self.records.clone();
+        }
+    }
+    fn resynchronize(&mut self, now: Instant) {
+        if self.records.config.enabled {
+            self.observer.work = ObservationWork::Scheduled {
+                at: now,
+                resynchronize: true,
+            };
         }
     }
     fn connection(&mut self, status: &str, now: Instant) {
@@ -189,60 +339,53 @@ impl Policy {
         }
         match status {
             "OnConnectionLost" | "OnConnectionFailed"
-                if matches!(self.recovery, Recovery::Idle) =>
+                if matches!(
+                    self.recovery.state,
+                    RecoveryState::Idle | RecoveryState::AwaitingSession
+                ) =>
             {
-                self.capture_failing = false;
-                self.recovery = if self.records.status.captured {
-                    Recovery::Delay(now)
+                self.credentials.failing = false;
+                self.recovery.state = if self.records.status.captured {
+                    RecoveryState::Delay(now)
                 } else {
-                    self.capture_at = Some(now);
-                    Recovery::WaitingCredentials(now)
-                };
-                self.records.status.phase = if self.records.status.captured {
-                    Phase::WaitingDelay
-                } else {
-                    Phase::AwaitingSession
+                    self.credentials.schedule(now);
+                    RecoveryState::WaitingCredentials(now)
                 };
                 self.records.status.attempts_remaining = None;
                 self.records.status.last_error = None;
                 self.observed = Observed::default();
-                self.observe_at = Some(now);
-                self.observation = None;
+                self.observer.work = ObservationWork::Idle;
+                self.observer.schedule(now);
             }
             "OnConnection" => {
-                self.watch_until = Some(now + Duration::from_secs(10));
-                self.observe_at = Some(now);
+                self.observer.watch_until = Some(now + Duration::from_secs(10));
+                self.observer.schedule(now);
                 if !self.records.status.captured {
-                    self.capture_at = Some(now);
+                    self.credentials.schedule(now);
                 }
             }
             _ => {}
         }
     }
     fn armed(&mut self) {
-        self.fresh_login = false;
-        self.records.status.phase = Phase::Armed;
+        self.recovery.fresh_login = false;
         self.records.status.attempts_remaining = None;
         self.records.status.last_error = None;
-        self.recovery = Recovery::Idle;
-        self.observation = None;
-        self.observe_at = None;
-        self.watch_until = None;
+        self.recovery.state = RecoveryState::Idle;
+        self.observer = Observer::default();
     }
     fn fail(&mut self, detail: &str, retryable: bool, now: Instant) {
         self.records.status.last_error = Some(sentence(detail));
-        if retryable && self.attempt < 3 {
-            let delay = 5_u64 << self.attempt;
-            self.records.status.phase = Phase::Backoff {
-                delay_ms: delay as f64 * 1000.0,
+        if retryable && self.recovery.attempt < 3 {
+            let delay = 5_u64 << self.recovery.attempt;
+            self.recovery.state = RecoveryState::Backoff {
+                at: now + Duration::from_secs(delay),
+                delay: Duration::from_secs(delay),
             };
-            self.recovery = Recovery::Backoff(now + Duration::from_secs(delay));
         } else {
-            self.records.status.phase = Phase::Failed;
             self.records.status.attempts_remaining = retryable.then_some(0.0);
-            self.recovery = Recovery::Failed;
-            self.observation = None;
-            self.observe_at = None;
+            self.recovery.state = RecoveryState::Failed;
+            self.observer.work = ObservationWork::Idle;
         }
     }
     fn captured(
@@ -253,49 +396,50 @@ impl Policy {
         let (username, password, ready) = result?;
         if !self.records.status.captured {
             if username.is_empty() || password.is_empty() {
-                self.records.status.phase = if ready {
-                    Phase::Armed
-                } else {
-                    Phase::AwaitingSession
-                };
+                if !matches!(self.recovery.state, RecoveryState::WaitingCredentials(_)) {
+                    self.recovery.state = if ready {
+                        RecoveryState::Idle
+                    } else {
+                        RecoveryState::AwaitingSession
+                    };
+                }
             } else {
                 self.records.status.captured = true;
                 self.records.status.last_error = None;
                 self.records.status.attempts_remaining = None;
                 self.records.status.username = Some(username.clone());
                 *shared.credentials.lock() = Some((username, password));
-                if let Recovery::WaitingCredentials(start) = self.recovery {
-                    self.recovery = Recovery::Delay(start);
-                    self.records.status.phase = Phase::WaitingDelay;
+                if let RecoveryState::WaitingCredentials(start) = self.recovery.state {
+                    self.recovery.state = RecoveryState::Delay(start);
                 } else {
-                    self.records.status.phase = Phase::Armed;
-                    self.recovery = Recovery::Idle;
+                    self.recovery.state = RecoveryState::Idle;
                 }
             }
         }
         Ok(())
     }
-    fn recovery_deadline(&self) -> Option<Instant> {
-        match &self.recovery {
-            Recovery::Idle
-            | Recovery::Failed
-            | Recovery::WaitingCredentials(_)
-            | Recovery::PlayerCheck
-            | Recovery::SelectionResult { .. } => None,
-            Recovery::Delay(start) => {
+    fn recovery_deadline(&self, now: Instant) -> Option<Instant> {
+        match &self.recovery.state {
+            RecoveryState::Idle
+            | RecoveryState::AwaitingSession
+            | RecoveryState::Failed
+            | RecoveryState::WaitingCredentials(_)
+            | RecoveryState::PlayerCheck
+            | RecoveryState::SelectionResult { .. } => None,
+            RecoveryState::Delay(start) => {
                 Some(*start + Duration::from_secs_f64(self.records.config.delay_ms / 1000.0))
             }
-            Recovery::Attempt { .. } => Some(Instant::now()),
-            Recovery::Kick(wait) | Recovery::KickDuration(wait) => Some(wait.deadline),
-            Recovery::Login(wait) => Some(wait.deadline),
-            Recovery::Outcome(at)
-            | Recovery::Manual(at)
-            | Recovery::Player(at)
-            | Recovery::Backoff(at) => Some(*at),
-            Recovery::Select { reply, expires } => Some(reply.deadline.min(*expires)),
-            Recovery::SelectAgain { at, .. } => Some(*at),
-            Recovery::Logout { reply, .. } => Some(reply.deadline),
-            Recovery::WaitingKick { until, next, check } => Some(
+            RecoveryState::Attempt { .. } => Some(now),
+            RecoveryState::Kick(wait) | RecoveryState::KickDuration(wait) => Some(wait.deadline),
+            RecoveryState::Login(wait) => Some(wait.deadline),
+            RecoveryState::Outcome(at) | RecoveryState::Manual(at) | RecoveryState::Player(at) => {
+                Some(*at)
+            }
+            RecoveryState::Backoff { at, .. } => Some(*at),
+            RecoveryState::Select { reply, expires } => Some(reply.deadline.min(*expires)),
+            RecoveryState::SelectAgain { at, .. } => Some(*at),
+            RecoveryState::Logout { reply, .. } => Some(reply.deadline),
+            RecoveryState::WaitingKick { until, next, check } => Some(
                 check
                     .as_ref()
                     .map_or((*until).min(*next), |reply| reply.deadline.min(*until)),
@@ -309,24 +453,25 @@ impl Policy {
         waker: &Waker,
         now: Instant,
     ) -> Option<Instant> {
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let deadline = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.transition(host, shared, waker, now)
         })) {
             Ok(at) => at,
-            Err(_) => {
-                tracing::error!("auto relogin transition panicked");
+            Err(panic) => {
+                tracing::error!("auto relogin transition panicked: {}", panic_message(panic));
                 self.fail("Auto relogin failed unexpectedly.", false, now);
-                self.capture = None;
+                self.credentials.work = CaptureWork::Idle;
                 if self.records.config.enabled && !self.records.status.captured {
-                    self.capture_at = Some(now + REPLY_TIMEOUT);
+                    self.credentials.schedule(now + REPLY_TIMEOUT);
                 }
                 if let Some(mut setter) = self.setter.take() {
                     setter.answer(Err(Error::ReadPanicked));
                 }
-                *shared.records.write() = self.records.clone();
                 Some(now)
             }
-        }
+        };
+        self.publish(shared);
+        deadline
     }
     fn transition(
         &mut self,
@@ -335,65 +480,84 @@ impl Policy {
         waker: &Waker,
         now: Instant,
     ) -> Option<Instant> {
-        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.setters(host, shared, waker, now)
-        }))
-        .is_err()
-        {
-            tracing::warn!("auto relogin setter panicked");
+        })) {
+            tracing::warn!("auto relogin setter panicked: {}", panic_message(panic));
             if let Some(mut setter) = self.setter.take() {
                 setter.answer(Err(Error::ReadPanicked));
             }
             if self.records.config.enabled && !self.records.status.captured {
-                self.capture_at = Some(now + REPLY_TIMEOUT);
+                self.credentials.schedule(now + REPLY_TIMEOUT);
             }
         }
         if self.records.config.enabled {
-            if !self.records.status.captured && self.capture.is_none() && self.capture_at.is_none()
-            {
-                self.capture_at = Some(now);
+            if !self.records.status.captured && matches!(self.credentials.work, CaptureWork::Idle) {
+                self.credentials.schedule(now);
             }
-            if self.capture_at.is_some_and(|at| at <= now)
-                && self.capture.is_none()
+            if matches!(self.credentials.work, CaptureWork::Scheduled(at) if at <= now)
                 && self.setter.is_none()
             {
-                self.capture = Some(Capture::new(host, waker, now));
-                self.capture_at = None;
+                self.credentials.work = CaptureWork::Running {
+                    capture: Box::new(Capture::new(host, waker, now)),
+                    deadline: now + REPLY_TIMEOUT,
+                };
             }
-            if let Some(capture) = &mut self.capture
+            if let CaptureWork::Running { capture, .. } = &mut self.credentials.work
                 && let Some(result) = capture.poll(now)
             {
-                self.capture = None;
+                self.credentials.work = CaptureWork::Idle;
                 match self.captured(result, shared) {
-                    Ok(()) => self.capture_failing = false,
+                    Ok(()) => self.credentials.failing = false,
                     Err(error) => {
-                        if !self.capture_failing {
+                        if !self.credentials.failing {
                             tracing::warn!("auto relogin capture failed: {error}");
                         }
-                        self.capture_failing = true;
+                        self.credentials.failing = true;
                     }
                 }
                 if !self.records.status.captured {
-                    self.capture_at = Some(now + REPLY_TIMEOUT);
+                    self.credentials.schedule(now + REPLY_TIMEOUT);
                 }
             }
-            if self.observe_at.is_some_and(|at| at <= now) && self.observation.is_none() {
-                self.observation = Some(Observation::new(host, waker, now));
-                self.observe_at = None;
+            if let ObservationWork::Scheduled { at, resynchronize } = self.observer.work
+                && at <= now
+            {
+                self.observer.work = ObservationWork::Running {
+                    observation: Box::new(Observation::new(host, waker, now)),
+                    resynchronize,
+                };
             }
-            if let Some(observation) = &mut self.observation
+            if let ObservationWork::Running {
+                observation,
+                resynchronize,
+            } = &mut self.observer.work
                 && let Some(observed) = observation.poll(now)
             {
+                let resynchronize = *resynchronize;
+                self.observer.work = ObservationWork::Idle;
                 self.observed = observed;
-                self.observation = None;
                 if self.observed.ready {
                     self.armed();
-                } else if !matches!(self.recovery, Recovery::Idle | Recovery::Failed)
-                    || self.watch_until.is_some_and(|at| at > now)
-                {
-                    self.observe_at = Some(now + POLL);
                 } else {
-                    self.watch_until = None;
+                    if resynchronize {
+                        match self.observed.connected {
+                            Some(false) => self.connection("OnConnectionLost", now),
+                            Some(true) => self.connection("OnConnection", now),
+                            None => {}
+                        }
+                    }
+                    if !matches!(
+                        self.recovery.state,
+                        RecoveryState::Idle
+                            | RecoveryState::AwaitingSession
+                            | RecoveryState::Failed
+                    ) || self.observer.watch_until.is_some_and(|at| at > now)
+                    {
+                        self.observer.schedule(now + POLL);
+                    } else {
+                        self.observer.watch_until = None;
+                    }
                 }
             }
             for _ in 0..16 {
@@ -417,11 +581,13 @@ impl Policy {
         });
         [
             (self.setter.is_none() && shared.has_pending()).then_some(now),
-            self.recovery_deadline(),
-            self.observe_at,
-            self.observation.as_ref().map(|o| o.deadline),
-            self.capture_at.filter(|_| self.setter.is_none()),
-            self.capture.as_ref().map(|_| now + REPLY_TIMEOUT),
+            self.recovery_deadline(now),
+            self.observer.deadline(),
+            match &self.credentials.work {
+                CaptureWork::Idle => None,
+                CaptureWork::Scheduled(at) => self.setter.is_none().then_some(*at),
+                CaptureWork::Running { deadline, .. } => Some(*deadline),
+            },
             setter_at,
         ]
         .into_iter()
@@ -451,8 +617,7 @@ impl Policy {
                             self.records.status.captured = false;
                             self.records.status.username = None;
                             *shared.credentials.lock() = None;
-                            self.capture = None;
-                            self.capture_at = None;
+                            self.credentials.work = CaptureWork::Idle;
                             SetterWork::Immediate
                         }
                         Edit::Enabled(true) => {
@@ -519,10 +684,10 @@ impl Policy {
                     if observed.ready {
                         self.armed();
                     } else {
-                        self.attempt = 0;
-                        self.fresh_login = false;
-                        self.recovery = Recovery::Attempt { resume: true };
-                        self.observe_at = Some(now);
+                        self.recovery.attempt = 0;
+                        self.recovery.fresh_login = false;
+                        self.recovery.state = RecoveryState::Attempt { resume: true };
+                        self.observer.schedule(now);
                     }
                     self.observed = observed;
                     Ok(())
@@ -556,9 +721,9 @@ impl Policy {
             }
             if let Some(result) = result {
                 if self.records.config.enabled && !self.records.status.captured {
-                    self.capture_at = Some(now + REPLY_TIMEOUT);
+                    self.credentials.schedule(now + REPLY_TIMEOUT);
                 }
-                *shared.records.write() = self.records.clone();
+                self.publish(shared);
                 setter.answer(result.map(|()| serde_json::to_string(&self.records).unwrap()));
             } else {
                 self.setter = Some(setter);
@@ -573,9 +738,8 @@ impl Policy {
             self.records.status.last_error = None;
             if self.records.config.enabled
                 && self.records.status.captured
-                && matches!(self.recovery, Recovery::Failed)
+                && matches!(self.recovery.state, RecoveryState::Failed)
             {
-                self.records.status.phase = Phase::WaitingDelay;
                 self.records.status.attempts_remaining = None;
                 return true;
             }
@@ -589,68 +753,64 @@ impl Policy {
         waker: &Waker,
         now: Instant,
     ) -> bool {
-        let state = std::mem::take(&mut self.recovery);
-        self.recovery = match state {
-            Recovery::Delay(start)
+        let state = std::mem::take(&mut self.recovery.state);
+        self.recovery.state = match state {
+            RecoveryState::Delay(start)
                 if now
                     >= start + Duration::from_secs_f64(self.records.config.delay_ms / 1000.0) =>
             {
-                self.attempt = 0;
-                Recovery::Attempt { resume: false }
+                self.recovery.attempt = 0;
+                RecoveryState::Attempt { resume: false }
             }
-            Recovery::Attempt { resume } => {
-                self.records.status.attempts_remaining = Some(f64::from(3 - self.attempt));
+            RecoveryState::Attempt { resume } => {
+                self.records.status.attempts_remaining = Some(f64::from(3 - self.recovery.attempt));
                 self.records.status.last_error = None;
                 if resume && self.observed.select {
-                    self.records.status.phase = Phase::AwaitingServerSelect;
-                    Recovery::Manual(now + Duration::from_millis(250))
+                    RecoveryState::Manual(now + Duration::from_millis(250))
                 } else {
-                    Recovery::Kick(Wait::new(
+                    RecoveryState::Kick(Wait::new(
                         host.call("auth.isTemporarilyKicked", vec![]),
                         waker,
                         now,
                     ))
                 }
             }
-            Recovery::Kick(reply) => match reply.poll(now) {
-                Some(Ok(Value::Bool(true))) => {
-                    self.records.status.phase = Phase::WaitingKick;
-                    Recovery::KickDuration(Wait::new(
-                        host.call(
-                            "flash.getGameObject",
-                            vec![Value::String("mcLogin.warning.n".into())],
-                        ),
-                        waker,
-                        now,
-                    ))
-                }
+            RecoveryState::Kick(reply) => match reply.poll(now) {
+                Some(Ok(Value::Bool(true))) => RecoveryState::KickDuration(Wait::new(
+                    host.call(
+                        "flash.getGameObject",
+                        vec![Value::String("mcLogin.warning.n".into())],
+                    ),
+                    waker,
+                    now,
+                )),
                 Some(_) => {
                     return self.login(host, shared, waker, now);
                 }
                 None => {
-                    self.recovery = Recovery::Kick(reply);
+                    self.recovery.state = RecoveryState::Kick(reply);
                     return false;
                 }
             },
-            Recovery::KickDuration(reply) => match reply.poll(now) {
+            RecoveryState::KickDuration(reply) => match reply.poll(now) {
                 Some(result) => {
                     let json = result.ok().and_then(loader_json);
                     let seconds = json
                         .and_then(|v| v.as_f64())
                         .filter(|n| n.is_finite() && *n > 0.0)
                         .map_or(60.0, |n| n.ceil().min(70.0));
-                    Recovery::WaitingKick {
+                    RecoveryState::WaitingKick {
                         until: now + Duration::from_secs(70),
                         next: now + Duration::from_secs_f64((seconds + 1.0).min(70.0)),
                         check: None,
                     }
                 }
                 None => {
-                    self.recovery = Recovery::KickDuration(reply);
+                    self.recovery.state = RecoveryState::KickDuration(reply);
                     return false;
                 }
             },
-            Recovery::WaitingKick {
+            RecoveryState::WaitingKick {
                 until,
                 next,
                 mut check,
@@ -671,7 +831,7 @@ impl Policy {
                         self.fail("Login could not be submitted", true, now);
                         return true;
                     }
-                    self.recovery = Recovery::WaitingKick {
+                    self.recovery.state = RecoveryState::WaitingKick {
                         until,
                         next: (now + Duration::from_secs(5)).min(until),
                         check,
@@ -682,45 +842,41 @@ impl Policy {
                     self.fail("Login could not be submitted", true, now);
                     return true;
                 }
-                self.recovery = Recovery::WaitingKick { until, next, check };
+                self.recovery.state = RecoveryState::WaitingKick { until, next, check };
                 return false;
             }
-            Recovery::Login(reply) => match reply.poll(now) {
+            RecoveryState::Login(reply) => match reply.poll(now) {
                 Some(Ok(json)) if json == "true" => {
-                    self.records.status.phase = Phase::AwaitingServerSelect;
-                    Recovery::Outcome(now + Duration::from_secs(15))
+                    RecoveryState::Outcome(now + Duration::from_secs(15))
                 }
                 Some(_) => {
                     self.fail("Login could not be submitted", true, now);
                     return true;
                 }
                 None => {
-                    self.recovery = Recovery::Login(reply);
+                    self.recovery.state = RecoveryState::Login(reply);
                     return false;
                 }
             },
-            Recovery::Outcome(expires) => {
+            RecoveryState::Outcome(expires) => {
                 if self.observed.logged_in {
-                    self.records.status.phase = Phase::AwaitingPlayerReady;
-                    Recovery::Player(now + Duration::from_secs(10))
+                    RecoveryState::Player(now + Duration::from_secs(10))
                 } else if self.observed.select {
-                    self.fresh_login = false;
-                    Recovery::Manual(now + Duration::from_millis(250))
+                    self.recovery.fresh_login = false;
+                    RecoveryState::Manual(now + Duration::from_millis(250))
                 } else if now >= expires {
                     self.fail("Login did not reach server selection", true, now);
                     return true;
                 } else {
-                    self.recovery = Recovery::Outcome(expires);
+                    self.recovery.state = RecoveryState::Outcome(expires);
                     return false;
                 }
             }
-            Recovery::Manual(at) if now >= at => {
+            RecoveryState::Manual(at) if now >= at => {
                 if self.observed.logged_in {
-                    self.records.status.phase = Phase::AwaitingPlayerReady;
-                    Recovery::Player(now + Duration::from_secs(10))
+                    RecoveryState::Player(now + Duration::from_secs(10))
                 } else if let Some(server) = &self.records.config.server {
-                    self.records.status.phase = Phase::SelectingServer;
-                    Recovery::Select {
+                    RecoveryState::Select {
                         reply: Wait::new(
                             host.call("auth.connectTo", vec![Value::String(server.clone())]),
                             waker,
@@ -733,34 +889,34 @@ impl Policy {
                     return false;
                 }
             }
-            Recovery::Select { reply, expires } => match reply.poll(now) {
+            RecoveryState::Select { reply, expires } => match reply.poll(now) {
                 Some(result) => {
-                    self.observation = Some(Observation::new(host, waker, now));
-                    self.observe_at = None;
-                    Recovery::SelectionResult {
+                    self.observer.start(host, waker, now);
+                    RecoveryState::SelectionResult {
                         value: result.ok().and_then(selection),
                         expires,
                     }
                 }
                 None => {
-                    self.recovery = Recovery::Select { reply, expires };
+                    self.recovery.state = RecoveryState::Select { reply, expires };
                     return false;
                 }
             },
-            Recovery::SelectionResult { value, expires } if self.observation.is_none() => {
+            RecoveryState::SelectionResult { value, expires }
+                if !matches!(self.observer.work, ObservationWork::Running { .. }) =>
+            {
                 if self.observed.logged_in
                     || value
                         .as_ref()
                         .is_some_and(|s| s.status == SelectionStatus::Selected)
                 {
-                    self.records.status.phase = Phase::AwaitingPlayerReady;
-                    Recovery::Player(now + Duration::from_secs(10))
+                    RecoveryState::Player(now + Duration::from_secs(10))
                 } else if value
                     .as_ref()
                     .is_none_or(|s| s.status == SelectionStatus::NotReady)
                     && now < expires
                 {
-                    Recovery::SelectAgain {
+                    RecoveryState::SelectAgain {
                         at: now + POLL,
                         expires,
                     }
@@ -772,10 +928,10 @@ impl Policy {
                         .as_ref()
                         .is_some_and(|s| s.reason.as_deref() == Some("full"))
                     {
-                        self.fresh_login = true;
-                        Recovery::Logout {
+                        self.recovery.fresh_login = true;
+                        RecoveryState::Logout {
                             reply: Wait::new(host.command(Command::Logout {}), waker, now),
-                            detail: detail.to_owned(),
+                            cause: LogoutCause::ServerFull(detail.to_owned()),
                         }
                     } else {
                         self.fail(
@@ -789,9 +945,9 @@ impl Policy {
                     }
                 }
             }
-            Recovery::SelectAgain { at, expires } if now >= at => {
+            RecoveryState::SelectAgain { at, expires } if now >= at => {
                 if let Some(server) = &self.records.config.server {
-                    Recovery::Select {
+                    RecoveryState::Select {
                         reply: Wait::new(
                             host.call("auth.connectTo", vec![Value::String(server.clone())]),
                             waker,
@@ -804,20 +960,23 @@ impl Policy {
                     return false;
                 }
             }
-            Recovery::Player(expires) if now >= expires => {
-                self.observation = Some(Observation::new(host, waker, now));
-                self.observe_at = None;
-                Recovery::PlayerCheck
+            RecoveryState::Player(expires) if now >= expires => {
+                self.observer.start(host, waker, now);
+                RecoveryState::PlayerCheck
             }
-            Recovery::PlayerCheck if self.observation.is_none() => Recovery::Logout {
-                reply: Wait::new(host.command(Command::Logout {}), waker, now),
-                detail: "Player did not become ready".into(),
-            },
-            Recovery::Logout { reply, detail } => match reply.poll(now) {
+            RecoveryState::PlayerCheck
+                if !matches!(self.observer.work, ObservationWork::Running { .. }) =>
+            {
+                RecoveryState::Logout {
+                    reply: Wait::new(host.command(Command::Logout {}), waker, now),
+                    cause: LogoutCause::PlayerUnready,
+                }
+            }
+            RecoveryState::Logout { reply, cause } => match reply.poll(now) {
                 Some(result) => {
                     self.fail(
                         if matches!(result, Ok(ref json) if json == "null") {
-                            &detail
+                            cause.detail()
                         } else {
                             "Logout could not be submitted"
                         },
@@ -827,18 +986,18 @@ impl Policy {
                     return true;
                 }
                 None => {
-                    self.recovery = Recovery::Logout { reply, detail };
+                    self.recovery.state = RecoveryState::Logout { reply, cause };
                     return false;
                 }
             },
-            Recovery::Backoff(at) if now >= at => {
-                self.attempt += 1;
-                Recovery::Attempt {
-                    resume: self.observed.select && !self.fresh_login,
+            RecoveryState::Backoff { at, .. } if now >= at => {
+                self.recovery.attempt += 1;
+                RecoveryState::Attempt {
+                    resume: self.observed.select && !self.recovery.fresh_login,
                 }
             }
             other => {
-                self.recovery = other;
+                self.recovery.state = other;
                 return false;
             }
         };
@@ -855,8 +1014,8 @@ impl Policy {
             self.fail("Username and password are required", false, now);
             return false;
         };
-        self.records.status.phase = Phase::LoggingIn;
-        self.recovery = Recovery::Login(Wait::new(
+
+        self.recovery.state = RecoveryState::Login(Wait::new(
             host.command(Command::Login { username, password }),
             waker,
             now,
@@ -884,5 +1043,13 @@ fn sentence(detail: &str) -> String {
     }
     text
 }
+fn panic_message(panic: Box<dyn std::any::Any + Send>) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|text| (*text).to_owned())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests;

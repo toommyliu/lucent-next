@@ -7,6 +7,7 @@ use std::{task::Waker, time::Instant};
 pub(crate) struct Snapshot {
     pub username: String,
     pub password: String,
+    pub connected: Option<bool>,
     pub logged_in: bool,
     pub ready: bool,
     pub servers: Vec<String>,
@@ -65,6 +66,7 @@ pub(super) struct Observation {
 }
 #[derive(Default)]
 pub(super) struct Observed {
+    pub(super) connected: Option<bool>,
     pub(super) ready: bool,
     pub(super) logged_in: bool,
     pub(super) select: bool,
@@ -112,6 +114,7 @@ impl Observation {
             .and_then(|json| serde_json::from_str::<bool>(json).ok())
             .unwrap_or_else(|| self.snapshot.value().is_some_and(|s| s.logged_in));
         Some(Observed {
+            connected: self.snapshot.value().and_then(|s| s.connected),
             logged_in,
             ready: logged_in
                 && self.snapshot.value().is_some_and(|s| s.ready)

@@ -6692,9 +6692,9 @@ ${prefix}}`;
       }, "makeFallback");
       if (indexCount) return makeFallback();
       let fallback;
-      const resume = /* @__PURE__ */ __name((state, index, pending2) => {
+      const resume = /* @__PURE__ */ __name((state, index, pending) => {
         const property = properties[index];
-        return flatMap3(exit2(pending2), (exit3) => {
+        return flatMap3(exit2(pending), (exit3) => {
           const terminal = stepProperty(state, property, exit3);
           if (terminal) return terminal;
           const done4 = /* @__PURE__ */ __name(() => succeed8(state.out), "done");
@@ -14141,17 +14141,17 @@ ${prefix}}`;
       return;
     }
     const cancel = /* @__PURE__ */ __name(() => {
-      const pending2 = operations.get(id);
-      if (pending2 === void 0) return;
+      const pending = operations.get(id);
+      if (pending === void 0) return;
       operations.delete(id);
-      clearTimeout(pending2.timeout);
+      clearTimeout(pending.timeout);
       host4.cancelOperation(id);
     }, "cancel");
     const complete = /* @__PURE__ */ __name((answer, error) => {
-      const pending2 = operations.get(id);
-      if (pending2 === void 0) return;
+      const pending = operations.get(id);
+      if (pending === void 0) return;
       operations.delete(id);
-      clearTimeout(pending2.timeout);
+      clearTimeout(pending.timeout);
       resume(answer === null ? fail5(new Error(error ?? "The host operation failed")) : succeed7(answer));
     }, "complete");
     const fail7 = /* @__PURE__ */ __name((cause) => {
@@ -14167,16 +14167,16 @@ ${prefix}}`;
     return sync2(cancel);
   }), "operate");
   var startOperation = /* @__PURE__ */ __name((id) => {
-    const pending2 = operations.get(id);
-    if (pending2 === void 0 || pending2.timeout !== void 0) return;
-    pending2.timeout = setTimeout(() => {
-      pending2.fail(new Error("The host operation timed out"));
+    const pending = operations.get(id);
+    if (pending === void 0 || pending.timeout !== void 0) return;
+    pending.timeout = setTimeout(() => {
+      pending.fail(new Error("The host operation timed out"));
     }, 35e3);
   }, "startOperation");
   var completeOperation = /* @__PURE__ */ __name((id, answer, error) => operations.get(id)?.complete(answer, error), "completeOperation");
   var failOperations = /* @__PURE__ */ __name((cause) => {
-    for (const pending2 of operations.values()) {
-      pending2.fail(cause);
+    for (const pending of operations.values()) {
+      pending.fail(cause);
     }
   }, "failOperations");
 
@@ -16002,21 +16002,6 @@ ${prefix}}`;
     })
   );
 
-  // packages/runtime/src/host/asks.ts
-  var pending = /* @__PURE__ */ new Map();
-  var completeAsk = /* @__PURE__ */ __name((id, answer, error) => {
-    const resolve3 = pending.get(id);
-    pending.delete(id);
-    resolve3?.complete(answer, error);
-  }, "completeAsk");
-  var failAsks = /* @__PURE__ */ __name((cause) => {
-    for (const request of pending.values()) {
-      request.cancel();
-      request.complete(null, cause.message);
-    }
-    pending.clear();
-  }, "failAsks");
-
   // packages/runtime/src/host/loop.ts
   var host2 = __host;
   var timers = /* @__PURE__ */ new Map();
@@ -16059,12 +16044,7 @@ ${prefix}}`;
       if (item.type === "eventslost") {
         const error = new Error("Host events were lost; pending requests failed");
         failOperations(error);
-        failAsks(error);
         invoke(() => window.onHostEventsLost?.());
-      } else if (item.type === "ask") {
-        invoke(() => window.onBotAsk?.(item.id, item.payload));
-      } else if (item.type === "answer") {
-        completeAsk(item.id, item.answer, item.error);
       } else if (item.type === "operationstarted") {
         startOperation(item.id);
       } else if (item.type === "loader") {

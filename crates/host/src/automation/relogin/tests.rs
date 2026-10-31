@@ -68,6 +68,7 @@ impl ReloginHost for Host {
         reply(Ok(Snapshot {
             username: self.username.borrow().clone(),
             password: self.password.borrow().clone(),
+            connected: Some(self.logged_in.get()),
             logged_in: self.logged_in.get(),
             ready: self.ready.get(),
             servers: vec!["Artix".into()],
@@ -149,6 +150,7 @@ struct Harness {
 }
 impl Default for Harness {
     fn default() -> Self {
+        initialize_log_capture();
         Self {
             host: Host::default(),
             shared: Arc::default(),
@@ -318,8 +320,17 @@ fn login_failures_back_off_for_three_retries_then_remain_failed() {
         Phase::Backoff { delay_ms: 5000.0 }
     );
     assert_eq!(h.policy.records.status.attempts_remaining, Some(3.0));
-    for delay in [5, 10, 20] {
-        h.after(Duration::from_secs(delay));
+    for (attempt, delay) in [5, 10, 20].into_iter().enumerate() {
+        assert_eq!(
+            h.policy.records.status.phase,
+            Phase::Backoff {
+                delay_ms: delay as f64 * 1000.0
+            }
+        );
+        h.after(Duration::from_millis(delay * 1000 - 1));
+        assert_eq!(h.host.count("login"), attempt + 1);
+        h.after(Duration::from_millis(1));
+        assert_eq!(h.host.count("login"), attempt + 2);
     }
     assert_eq!(h.host.count("login"), 4);
     assert_eq!(h.policy.records.status.phase, Phase::Failed);
@@ -401,6 +412,12 @@ fn account_restrictions_are_terminal_and_a_changed_server_retries_immediately() 
     h.after(Duration::from_millis(250));
     assert_eq!(h.policy.records.status.phase, Phase::Failed);
     assert_eq!(h.policy.records.status.attempts_remaining, None);
+    assert_eq!(
+        h.policy.records.status.last_error.as_deref(),
+        Some("Account is not authorized for member-only servers.")
+    );
+    h.after(Duration::from_secs(60));
+    assert_eq!(h.host.count("auth.connectTo"), 1);
     h.set(Edit::Server(Some("Artix".into()))).unwrap();
     assert_eq!(h.policy.records.status.phase, Phase::Failed);
     h.host
@@ -423,12 +440,28 @@ fn connected_but_unready_players_log_out_before_retrying() {
     h.after(POLL);
     h.after(Duration::from_millis(250));
     assert_eq!(h.policy.records.status.phase, Phase::AwaitingPlayerReady);
-    h.after(Duration::from_secs(10));
-    assert_eq!(h.host.count("logout"), 1);
-    assert_eq!(
-        h.policy.records.status.phase,
-        Phase::Backoff { delay_ms: 5000.0 }
-    );
+    for attempt in 0..4 {
+        h.after(Duration::from_secs(10));
+        assert_eq!(h.host.count("logout"), attempt + 1);
+        assert_eq!(
+            h.policy.records.status.last_error.as_deref(),
+            Some("Player did not become ready.")
+        );
+        if attempt < 3 {
+            assert_eq!(
+                h.policy.records.status.phase,
+                Phase::Backoff {
+                    delay_ms: (5 << attempt) as f64 * 1000.0
+                }
+            );
+            h.after(Duration::from_secs(5 << attempt));
+            h.after(POLL);
+            h.after(Duration::from_millis(250));
+        }
+    }
+    assert_eq!(h.policy.records.status.phase, Phase::Failed);
+    assert_eq!(h.policy.records.status.attempts_remaining, Some(0.0));
+    assert_eq!(h.host.count("login"), 4);
 }
 #[test]
 fn temporary_kicks_wait_until_clear_and_manual_readiness_wins() {
@@ -486,13 +519,10 @@ fn logged_in_refresh_failures_use_cached_auth_and_successful_connections_do_not_
     }
 }
 #[test]
-fn readiness_reply_errors_are_not_success_and_a_hung_login_is_bounded() {
+fn a_hung_login_is_bounded() {
     let mut h = Harness::default();
     h.enabled();
-    h.host
-        .failures
-        .borrow_mut()
-        .extend([("login", "hold"), ("player.isLoaded", "error")]);
+    h.host.failures.borrow_mut().push(("login", "hold"));
     h.lost();
     assert_eq!(h.policy.records.status.phase, Phase::LoggingIn);
     h.after(REPLY_TIMEOUT);
@@ -593,9 +623,16 @@ fn malformed_capture_records_fail_once_and_free_the_next_setter() {
 }
 #[test]
 fn native_boundary_panics_fail_the_caller_and_allow_the_next_setter() {
+    let logs = Logs::default();
+    let _guard = logs.enter();
     let mut h = Harness::default();
     h.host.failures.borrow_mut().push(("servers", "panic"));
     assert!(h.set(Edit::Server(Some("Artix".into()))).is_err());
+    assert!(
+        logs.messages()
+            .iter()
+            .any(|s| s.contains("setter panicked: broken native boundary"))
+    );
     h.host.failures.borrow_mut().clear();
     assert_eq!(
         h.set(Edit::Server(Some(" artix ".into()))).unwrap()["config"]["server"],
@@ -649,35 +686,8 @@ fn a_persistent_temporary_kick_is_bounded_before_retry() {
 
 #[test]
 fn failed_background_capture_logs_once_per_streak_and_recovers() {
-    use tracing_subscriber::prelude::*;
-    #[derive(Clone, Default)]
-    struct Logs(Arc<std::sync::Mutex<Vec<String>>>);
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Logs {
-        fn on_event(
-            &self,
-            event: &tracing::Event<'_>,
-            _: tracing_subscriber::layer::Context<'_, S>,
-        ) {
-            struct Message(String);
-            impl tracing::field::Visit for Message {
-                fn record_debug(
-                    &mut self,
-                    field: &tracing::field::Field,
-                    value: &dyn std::fmt::Debug,
-                ) {
-                    if field.name() == "message" {
-                        self.0 = format!("{value:?}");
-                    }
-                }
-            }
-            let mut message = Message(String::new());
-            event.record(&mut message);
-            self.0.lock().unwrap().push(message.0);
-        }
-    }
     let logs = Logs::default();
-    let subscriber = tracing_subscriber::registry().with(logs.clone());
-    let _guard = tracing::subscriber::set_default(subscriber);
+    let _guard = logs.enter();
     let mut h = Harness::default();
     h.policy.records.config.enabled = true;
     h.host
@@ -707,6 +717,12 @@ fn failed_background_capture_logs_once_per_streak_and_recovers() {
             .count(),
         2
     );
+    assert!(
+        logs.messages()
+            .iter()
+            .filter(|s| s.contains("capture failed"))
+            .all(|s| s.contains("capture failed: the projection read panicked"))
+    );
     h.host.failures.borrow_mut().clear();
     h.after(Duration::from_secs(5));
     assert!(h.policy.records.status.captured);
@@ -731,10 +747,17 @@ fn a_repeated_enable_returns_readiness_after_automation_acts() {
 
 #[test]
 fn a_recovery_panic_ends_the_attempt_without_refilling_retries() {
+    let logs = Logs::default();
+    let _guard = logs.enter();
     let mut h = Harness::default();
     h.enabled();
     h.host.failures.borrow_mut().push(("login", "panic"));
     h.lost();
+    assert!(
+        logs.messages()
+            .iter()
+            .any(|s| s.contains("transition panicked: broken native boundary"))
+    );
     assert_eq!(h.policy.records.status.phase, Phase::Failed);
     assert_eq!(h.policy.records.status.attempts_remaining, None);
     assert_eq!(
@@ -877,4 +900,301 @@ fn failed_commands_cannot_reuse_a_full_servers_stale_selection() {
     assert_eq!(h.host.count("login"), 4);
     assert_eq!(h.host.count("auth.connectTo"), 1);
     assert_eq!(h.policy.records.status.phase, Phase::Failed);
+}
+
+#[test]
+fn setter_wakes_observe_the_answered_records() {
+    struct Check {
+        shared: Arc<Shared>,
+        seen: std::sync::Mutex<Vec<AutoReloginRecords>>,
+    }
+    impl std::task::Wake for Check {
+        fn wake(self: Arc<Self>) {
+            let records = self.shared.records.read().clone();
+            self.seen.lock().unwrap().push(records);
+        }
+    }
+    let mut h = Harness::default();
+    for edit in [
+        Edit::Delay(7000.0),
+        Edit::Server(Some(" artix ".into())),
+        Edit::Enabled(true),
+        Edit::Enabled(false),
+    ] {
+        let pending = h
+            .shared
+            .submit(edit, Arc::new(AtomicBool::new(false)), h.now);
+        let check = Arc::new(Check {
+            shared: h.shared.clone(),
+            seen: Default::default(),
+        });
+        pending.set_waker(Waker::from(check.clone()));
+        h.tick();
+        let answer: AutoReloginRecords =
+            serde_json::from_str(&pending.recv_timeout(Duration::ZERO).unwrap()).unwrap();
+        assert_eq!(check.seen.lock().unwrap().first(), Some(&answer));
+    }
+}
+
+#[test]
+fn a_connection_during_the_player_wait_keeps_the_retry() {
+    let mut h = Harness::default();
+    h.enabled();
+    h.host.connect_ready.set(false);
+    h.lost();
+    h.after(POLL);
+    h.after(Duration::from_millis(250));
+    assert_eq!(h.policy.records.status.phase, Phase::AwaitingPlayerReady);
+    h.policy.connection("OnConnection", h.now);
+    h.tick();
+    h.after(Duration::from_secs(10));
+    assert_eq!(h.host.count("logout"), 1);
+    assert_eq!(
+        h.policy.records.status.phase,
+        Phase::Backoff { delay_ms: 5000.0 }
+    );
+}
+
+#[derive(Clone, Default)]
+struct Logs(Arc<std::sync::Mutex<Vec<String>>>);
+thread_local! {
+    static LOG_CAPTURE: RefCell<Option<Logs>> = const { RefCell::new(None) };
+}
+struct LogGuard {
+    previous: Option<Logs>,
+}
+impl Drop for LogGuard {
+    fn drop(&mut self) {
+        LOG_CAPTURE.with(|capture| capture.replace(self.previous.take()));
+    }
+}
+fn initialize_log_capture() {
+    static INITIALIZE: std::sync::Once = std::sync::Once::new();
+    INITIALIZE.call_once(|| {
+        use tracing_subscriber::prelude::*;
+        tracing::subscriber::set_global_default(tracing_subscriber::registry().with(LogEvents))
+            .unwrap();
+    });
+}
+impl Logs {
+    fn enter(&self) -> LogGuard {
+        initialize_log_capture();
+        let previous = LOG_CAPTURE.with(|capture| capture.replace(Some(self.clone())));
+        LogGuard { previous }
+    }
+    fn messages(&self) -> Vec<String> {
+        self.0.lock().unwrap().clone()
+    }
+}
+struct LogEvents;
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for LogEvents {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        LOG_CAPTURE.with(|capture| {
+            let capture = capture.borrow();
+            let Some(logs) = capture.as_ref() else {
+                return;
+            };
+            struct Message(String);
+            impl tracing::field::Visit for Message {
+                fn record_debug(
+                    &mut self,
+                    field: &tracing::field::Field,
+                    value: &dyn std::fmt::Debug,
+                ) {
+                    self.0.push_str(&format!("{field}={value:?} "));
+                }
+            }
+            let mut message = Message(String::new());
+            event.record(&mut message);
+            logs.0.lock().unwrap().push(message.0);
+        });
+    }
+}
+
+#[test]
+fn surviving_setters_apply_in_fifo_order() {
+    let mut h = Harness::default();
+    let requests: Vec<_> = [1000.0, 7000.0, 9000.0]
+        .into_iter()
+        .map(|delay| h.shared.submit(Edit::Delay(delay), Arc::default(), h.now))
+        .collect();
+    h.tick();
+    for (request, expected) in requests.into_iter().zip([1000.0, 7000.0, 9000.0]) {
+        let records: AutoReloginRecords =
+            serde_json::from_str(&request.recv_timeout(Duration::ZERO).unwrap()).unwrap();
+        assert_eq!(records.config.delay_ms, expected);
+    }
+    assert_eq!(h.shared.records.read().config.delay_ms, 9000.0);
+}
+
+#[test]
+fn disabling_during_boot_capture_discards_the_late_credentials() {
+    let mut h = Harness::default();
+    h.policy.records.config.enabled = true;
+    h.host.failures.borrow_mut().push(("capture", "hold"));
+    h.tick();
+    assert_eq!(h.host.count("capture"), 1);
+    h.set(Edit::Enabled(false)).unwrap();
+    let _ = h
+        .host
+        .held
+        .borrow_mut()
+        .pop()
+        .unwrap()
+        .send(Ok("{\"username\":\"Hero\",\"password\":\"pw\"}".into()));
+    h.host.failures.borrow_mut().clear();
+    h.after(REPLY_TIMEOUT);
+    assert!(!h.shared.records.read().status.captured);
+    assert!(h.shared.credentials.lock().is_none());
+    assert_eq!(h.shared.records.read().status.username, None);
+    h.host.username.replace(String::new());
+    h.host.password.replace(String::new());
+    h.set(Edit::Enabled(true)).unwrap();
+    assert_eq!(h.host.count("capture"), 2);
+    assert!(!h.policy.records.status.captured);
+    assert!(h.shared.credentials.lock().is_none());
+    h.host.username.replace("Hero".into());
+    h.host.password.replace("pw".into());
+    h.after(REPLY_TIMEOUT);
+    assert!(h.policy.records.status.captured);
+}
+
+#[test]
+fn readiness_errors_prevent_arming_a_logged_in_player() {
+    let mut h = Harness::default();
+    h.enabled();
+    h.host
+        .failures
+        .borrow_mut()
+        .push(("player.isLoaded", "error"));
+    h.lost();
+    h.after(POLL);
+    h.after(Duration::from_millis(250));
+    assert!(h.host.logged_in.get());
+    assert!(h.host.ready.get());
+    h.after(POLL);
+    assert_eq!(h.policy.records.status.phase, Phase::AwaitingPlayerReady);
+    h.after(Duration::from_secs(10));
+    assert_eq!(h.host.count("logout"), 1);
+    assert_eq!(
+        h.policy.records.status.phase,
+        Phase::Backoff { delay_ms: 5000.0 }
+    );
+}
+
+#[test]
+fn a_full_login_keeps_passwords_out_of_every_log_message() {
+    let logs = Logs::default();
+    let _guard = logs.enter();
+    let mut h = Harness::default();
+    h.enabled();
+    h.lost();
+    h.after(POLL);
+    h.after(Duration::from_millis(250));
+    h.after(POLL);
+    assert_eq!(h.host.count("login"), 1);
+    assert_eq!(h.host.count("auth.connectTo"), 1);
+    assert_eq!(h.policy.records.status.phase, Phase::Armed);
+    assert!(
+        logs.messages().iter().all(|s| !s.contains("pw")),
+        "{:?}",
+        logs.messages()
+    );
+}
+
+#[test]
+fn cached_credential_fallback_does_not_warn() {
+    let logs = Logs::default();
+    let _guard = logs.enter();
+    let mut h = Harness::default();
+    h.host.failures.borrow_mut().push(("capture", "error"));
+    h.enabled();
+    h.lost();
+    h.after(POLL);
+    h.after(Duration::from_millis(250));
+    h.after(POLL);
+    assert_eq!(h.policy.records.status.phase, Phase::Armed);
+    assert!(
+        logs.messages().iter().all(|s| !s.contains("auto relogin")),
+        "{:?}",
+        logs.messages()
+    );
+}
+
+#[test]
+fn unchanged_records_and_setters_do_not_wait_for_a_record_writer() {
+    let host = crate::testing::headless_host();
+    let (mut session, writer) =
+        crate::testing::start_probe(&host, crate::testing::ProbeMovie::new());
+    let mut policy = ReloginPolicy::new(session.attach().unwrap(), Waker::noop().clone());
+    let shared_records = policy.link.records.auto_relogin.clone();
+    let records = shared_records.read();
+    let pending = writer.command(Command::SetAutoReloginDelay { delay_ms: 3000.0 });
+    let (send, receive) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        policy.advance(Instant::now());
+        send.send(()).unwrap();
+    });
+    let finished = receive.recv_timeout(REPLY_TIMEOUT);
+    drop(records);
+    worker.join().unwrap();
+    finished.unwrap();
+    let answer: AutoReloginRecords =
+        serde_json::from_str(&pending.recv_timeout(Duration::ZERO).unwrap()).unwrap();
+    assert_eq!(answer.config.delay_ms, 3000.0);
+}
+
+#[test]
+fn immediate_recovery_uses_the_supplied_clock() {
+    let mut h = Harness::default();
+    h.enabled();
+    h.now += Duration::from_secs(60);
+    h.policy.recovery.state = RecoveryState::Attempt { resume: false };
+    assert_eq!(h.policy.recovery_deadline(h.now), Some(h.now));
+}
+
+#[test]
+fn pending_logouts_report_the_recovery_they_are_finishing() {
+    for full in [true, false] {
+        let mut h = Harness::default();
+        h.enabled();
+        h.host.failures.borrow_mut().push(("logout", "hold"));
+        if full {
+            h.host.selection.replace(
+                json!({"ok":false,"status":"blocked","reason":"full","message":"Server is full"}),
+            );
+        } else {
+            h.host.connect_ready.set(false);
+        }
+        h.lost();
+        h.after(POLL);
+        h.after(Duration::from_millis(250));
+        if !full {
+            h.after(Duration::from_secs(10));
+        }
+        assert_eq!(h.host.count("logout"), 1);
+        assert_eq!(
+            h.policy.records.status.phase,
+            if full {
+                Phase::SelectingServer
+            } else {
+                Phase::AwaitingPlayerReady
+            }
+        );
+    }
+}
+
+#[test]
+fn a_replacement_preserves_failure_while_credentials_are_pending() {
+    let mut h = Harness::default();
+    h.policy.records.config.enabled = true;
+    h.host.failures.borrow_mut().push(("capture", "panic"));
+    h.tick();
+    assert_eq!(h.policy.records.status.phase, Phase::Failed);
+    let records = h.policy.records.clone();
+    h.host.failures.borrow_mut().clear();
+    h.host.failures.borrow_mut().push(("capture", "hold"));
+    h.policy = Policy::for_player(records.clone(), h.now);
+    h.tick();
+    assert_eq!(*h.shared.records.read(), records);
 }
