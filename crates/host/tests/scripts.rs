@@ -631,3 +631,52 @@ fn a_throwing_turn_does_not_stop_a_script_timer() {
         ScriptOutcome::Completed
     );
 }
+
+#[test]
+fn invalid_inputs_exports_report_the_script_name() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    let outcome = start(
+        &mut session,
+        loose(&[(
+            "invalid.js",
+            "export const inputs = 42; export default function* () {}",
+        )]),
+        Default::default(),
+    )
+    .wait(TIMEOUT)
+    .unwrap();
+    match outcome {
+        ScriptOutcome::Failed { message, .. } => {
+            assert_eq!(message, "invalid.js has an invalid inputs export.")
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn generator_errors_keep_the_script_frame_and_cause_stack() {
+    let (_host, mut session, _runtime) = ready_runtime();
+    let script = loose(&[(
+        "throw.js",
+        "export default function* () {\n  throw new Error('outer failure', { cause: new Error('inner failure') });\n}",
+    )]);
+    let outcome = start(&mut session, script, Default::default())
+        .wait(TIMEOUT)
+        .unwrap();
+    match outcome {
+        ScriptOutcome::Failed { message, details } => {
+            assert_eq!(message, "throw.js:2:9: outer failure");
+            let details = details.unwrap();
+            assert!(
+                details.starts_with("Error: outer failure\n    at default (throw.js:2:9)"),
+                "{details}"
+            );
+            assert!(
+                details
+                    .contains("\nCaused by:\nError: inner failure\n    at default (throw.js:2:45)"),
+                "{details}"
+            );
+        }
+        other => panic!("{other:?}"),
+    }
+}
