@@ -221,6 +221,8 @@ const findPlayer = (
 
 const answer = (state: FakeHostState, query: Query): unknown => {
   switch (query.kind) {
+    case "combatState":
+      throw new Error("Combat state requires the native host");
     case "autoRelogin":
       return { config: { enabled: false, delayMs: 3000, server: null }, status: { phase: { tag: "armed" }, attemptsRemaining: null, lastError: null, username: null, captured: false } };
     case "autoZone":
@@ -310,6 +312,8 @@ const run = (state: FakeHostState, loader: Loader, command: Command) => {
   };
 
   switch (command.kind) {
+    case "refreshCombatState":
+      throw new Error("Combat state hydration requires the native host");
     case "patchAutoZone":
       state.autoZone = {
         enabled: command.patch.enabled ?? state.autoZone.enabled,

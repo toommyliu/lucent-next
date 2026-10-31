@@ -2,6 +2,7 @@ pub mod auras;
 pub mod auth;
 mod baselines;
 mod combat;
+pub mod combat_state;
 pub(crate) mod commands;
 mod entity;
 mod item;
@@ -55,6 +56,8 @@ pub struct Projection {
     pub quests: quests::QuestStore,
     pub shops: shops::ShopStore,
     pub world: world::WorldStore,
+    combat: combat_state::CombatStore,
+    packet_revision: u64,
     session_logged_in: bool,
 }
 
@@ -78,6 +81,7 @@ impl Projection {
     }
 
     pub(crate) fn reset(&mut self) {
+        self.combat = combat_state::CombatStore::default();
         self.world.clear_area();
         self.world.clear_self();
         self.quests.clear();
@@ -108,6 +112,27 @@ impl Projection {
     }
 
     pub fn packet(
+        &mut self,
+        packet: &Packet,
+        now_ms: f64,
+        bridge_available: bool,
+    ) -> PacketProjection {
+        let scope = self.combat_scope();
+        self.packet_revision = self
+            .packet_revision
+            .checked_add(1)
+            .expect("packet revision exhausted");
+        let result = self.project_packet(packet, now_ms, bridge_available);
+        if !scope.same_world(self.combat_scope()) {
+            self.combat = combat_state::CombatStore::default();
+        }
+        if let PacketProjection::Applied(output) = &result {
+            self.combat.observe(&output.events, now_ms);
+        }
+        result
+    }
+
+    fn project_packet(
         &mut self,
         packet: &Packet,
         now_ms: f64,
@@ -178,7 +203,11 @@ impl Projection {
             result,
             now_ms,
         );
-        Ok(self.world_result(progress))
+        let result = self.world_result(progress);
+        if let PacketProjection::Applied(output) = &result {
+            self.combat.observe(&output.events, now_ms);
+        }
+        Ok(result)
     }
 
     fn world_result(&self, progress: world::WorldProgress) -> PacketProjection {

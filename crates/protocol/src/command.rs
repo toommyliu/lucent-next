@@ -36,6 +36,7 @@ macro_rules! commands {
 }
 
 commands! {
+    RefreshCombatState {} => crate::combat_state::CombatSnapshot,
     PatchAutoZone { patch: AutoZonePatch } => AutoZoneConfig,
     UpdateSettings { patch: SettingsPatch } => GameSettings,
     ReapplySettings { actions_only: bool } => (),

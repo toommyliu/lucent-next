@@ -72,6 +72,7 @@ macro_rules! queries {
 }
 
 queries! {
+    CombatState { priorities: Vec<MonsterSelector> } => crate::combat_state::CombatSnapshot,
     AutoRelogin {} => crate::auto_relogin::AutoReloginRecords,
     AutoZone {} => AutoZoneConfig,
     Settings {} => GameSettings,

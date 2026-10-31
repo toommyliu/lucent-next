@@ -365,6 +365,7 @@ impl LivePlayer {
 #[derive(Debug)]
 pub struct MonsterRecord {
     pub data: MonsterData,
+    pub generation: u64,
     pub auras: AuraState,
     pub drops: IndexMap<i64, MonsterDrop>,
 }
@@ -378,12 +379,16 @@ impl LiveMonster {
         }
         Self(Arc::new(RwLock::new(MonsterRecord {
             data,
+            generation: 0,
             auras,
             drops: IndexMap::new(),
         })))
     }
     pub fn data(&self) -> MonsterData {
         self.0.read().unwrap().data.clone()
+    }
+    pub fn generation(&self) -> u64 {
+        self.0.read().unwrap().generation
     }
     pub fn same_instance(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
@@ -417,7 +422,14 @@ impl LiveMonster {
         write_aura_state: bool,
     ) -> Vec<AuraDelta> {
         let mut record = self.0.write().unwrap();
+        let was_alive = record.data.entity.alive();
         update(&mut record.data);
+        if !was_alive && record.data.entity.alive() {
+            record.generation = record
+                .generation
+                .checked_add(1)
+                .expect("monster generation exhausted");
+        }
         let state = record.data.entity.state;
         if write_aura_state {
             record.auras.write_monster_state(state)
@@ -426,7 +438,7 @@ impl LiveMonster {
         }
     }
     pub(crate) fn replace(&self, data: MonsterData) {
-        self.0.write().unwrap().data = data;
+        self.update(|current| *current = data, false);
     }
     pub fn replace_drops(&self, drops: &[MonsterDrop]) {
         let mut record = self.0.write().unwrap();

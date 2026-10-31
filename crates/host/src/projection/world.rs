@@ -160,6 +160,7 @@ pub struct MonsterWrite {
 #[derive(Debug, Default)]
 pub struct WorldStore {
     pub map: MapState,
+    pub(crate) area_revision: u64,
     cells: Option<ScopedList<MapState>>,
     cell_pads: Option<ScopedList<CellScope>>,
     pub self_name: String,
@@ -326,6 +327,10 @@ impl WorldStore {
         self.self_entity_id = None;
     }
     pub fn clear_area(&mut self) {
+        self.area_revision = self
+            .area_revision
+            .checked_add(1)
+            .expect("area revision exhausted");
         self.map = MapState::default();
         self.cells = None;
         self.cell_pads = None;

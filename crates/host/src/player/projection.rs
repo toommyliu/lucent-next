@@ -463,6 +463,63 @@ mod tests {
     }
 
     #[test]
+    fn input_overflow_clears_combat_observations_before_reads_and_recovery() {
+        use crate::projection::combat_state::CombatHydration;
+        use lucent_protocol::combat_state::{CombatTarget, SkillCooldown};
+        let (mut running, bridge, _) = running(2, 16);
+        running.projection.write().auth.username = "player-a".into();
+        extension(
+            &mut running,
+            &bridge,
+            json!({
+                "cmd":"moveToArea","areaName":"battleon-42",
+                "uoBranch":[{"entID":7,"uoName":"player-a","intHP":100}],
+                "monBranch":[{"MonID":5,"MonMapID":1,"intHP":100,"intState":1}]
+            }),
+        );
+        running.drain_events();
+        extension(
+            &mut running,
+            &bridge,
+            json!({"cmd":"cb","a":[{
+                "cmd":"aura+","tInf":"m:1","aura":{"nam":"Counter Attack","t":"s","dur":2}
+            }]}),
+        );
+        running.drain_events();
+        let scope = {
+            let mut state = running.projection.write();
+            let scope = state.combat_scope();
+            state.hydrate_combat(scope, CombatHydration {
+                actions: json!([null,null,null,null,null,{"cd":0,"ts":0,"ref":"i1","sArg1":42,"isOK":true}]),
+                haste: json!(0), global_cooldown: json!(0), global_used_at: json!(0),
+                potions_locked: json!(false), target: json!({"type":"monster","monsterMapId":1}),
+                available_monster_ids: json!([1]),
+            }, now_ms()).unwrap();
+            let observed = state.combat_snapshot(now_ms(), &[], true);
+            assert_eq!(observed.skills[0], SkillCooldown::Ready);
+            assert!(observed.monsters[0].attack_blocked);
+            assert!(observed.consumable.unwrap().ready);
+            scope
+        };
+        for _ in 0..3 {
+            queue(&mut running, &bridge, "onDebug", "overflow".into());
+        }
+        let cleared = read(&mut running, |state| {
+            state.combat_snapshot(now_ms(), &[], true)
+        });
+        assert_eq!(
+            cleared.skills,
+            std::array::from_fn(|_| SkillCooldown::Unavailable)
+        );
+        assert_eq!(cleared.selected_target, CombatTarget::Unavailable);
+        assert_eq!(cleared.observed_at_ms, None);
+        assert_eq!(cleared.consumable, None);
+        assert!(cleared.monsters.is_empty());
+        area(&mut running, &bridge);
+        assert!(read(&mut running, move |state| state.combat_scope() != scope));
+    }
+
+    #[test]
     fn session_input_overflow_invalidates_before_reads_and_fresh_baselines_recover() {
         let (mut running, bridge, events) = running(2, 16);
         running.projection.write().auth.username = "player-a".into();

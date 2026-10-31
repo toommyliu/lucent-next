@@ -1,0 +1,223 @@
+[
+  {
+    "name": "global and action cooldowns",
+    "hydration": {
+      "haste": 0.5,
+      "globalCooldown": 200,
+      "globalUsedAt": 1000,
+      "potionsLocked": false,
+      "target": null,
+      "availableMonsterIds": [
+        1,
+        2
+      ],
+      "actions": [
+        {
+          "cd": 1000,
+          "ts": 500
+        },
+        null,
+        null,
+        null,
+        null,
+        {
+          "cd": 500,
+          "ts": 1000,
+          "ref": "i1",
+          "sArg1": "42",
+          "isOK": true,
+          "skillLock": false,
+          "lock": false
+        }
+      ]
+    },
+    "nowMs": 1000,
+    "skills": [
+      {
+        "status": "cooldown",
+        "remainingMs": 200
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "cooldown",
+        "remainingMs": 250
+      }
+    ],
+    "consumable": {
+      "itemId": 42,
+      "ready": false
+    }
+  },
+  {
+    "name": "cooldowns expire",
+    "hydration": {
+      "haste": 0.5,
+      "globalCooldown": 200,
+      "globalUsedAt": 1000,
+      "potionsLocked": false,
+      "target": null,
+      "availableMonsterIds": [
+        1,
+        2
+      ],
+      "actions": [
+        {
+          "cd": 1000,
+          "ts": 500
+        },
+        null,
+        null,
+        null,
+        null,
+        {
+          "cd": 500,
+          "ts": 1000,
+          "ref": "i1",
+          "sArg1": "42",
+          "isOK": true,
+          "skillLock": false,
+          "lock": false
+        }
+      ]
+    },
+    "nowMs": 1250,
+    "skills": [
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      }
+    ],
+    "consumable": {
+      "itemId": 42,
+      "ready": true
+    }
+  },
+  {
+    "name": "fractional remainder distinguishes slot readiness",
+    "hydration": {
+      "haste": 0.5,
+      "globalCooldown": 0,
+      "globalUsedAt": 1000,
+      "potionsLocked": false,
+      "target": null,
+      "availableMonsterIds": [
+        1,
+        2
+      ],
+      "actions": [
+        {
+          "cd": 1,
+          "OldCD": 1200,
+          "ts": 1000
+        },
+        null,
+        null,
+        null,
+        null,
+        {
+          "cd": 1001,
+          "ts": 1000,
+          "ref": "i1",
+          "sArg1": "42",
+          "isOK": true,
+          "skillLock": false,
+          "lock": false
+        }
+      ]
+    },
+    "nowMs": 1500.5,
+    "skills": [
+      {
+        "status": "cooldown",
+        "remainingMs": 99
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      }
+    ],
+    "consumable": {
+      "itemId": 42,
+      "ready": false
+    }
+  },
+  {
+    "name": "negative haste is bounded",
+    "hydration": {
+      "haste": -3,
+      "globalCooldown": 0,
+      "globalUsedAt": 1000,
+      "potionsLocked": false,
+      "target": null,
+      "availableMonsterIds": [
+        1,
+        2
+      ],
+      "actions": [
+        {
+          "cd": "1000",
+          "ts": "1000"
+        }
+      ]
+    },
+    "nowMs": 1000,
+    "skills": [
+      {
+        "status": "cooldown",
+        "remainingMs": 2000
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      },
+      {
+        "status": "ready"
+      }
+    ],
+    "consumable": null
+  }
+]

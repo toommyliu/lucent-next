@@ -10,7 +10,9 @@ use serde_json::{Value as Json, json};
 use super::Running;
 use crate::bridge::{self, Error, Value};
 use crate::projection::{
-    Projection, commands,
+    Projection,
+    combat_state::{CombatHydration, now_ms},
+    commands,
     world::{MonsterLookup, monster_lookup},
 };
 
@@ -144,6 +146,47 @@ impl Running {
 
     pub(super) fn command(&mut self, command: Command) -> Result<String, Error> {
         match command {
+            Command::RefreshCombatState {} => {
+                self.drain_events();
+                let scope = self.projection.write().begin_combat_hydration();
+                let mut read = |path: &str| -> Result<Json, Error> {
+                    let raw: String = commands::decode(
+                        "flash.getGameObject",
+                        self.command_answer(
+                            "flash.getGameObject",
+                            vec![Value::String(path.into())],
+                        )?,
+                    )?;
+                    serde_json::from_str(&raw)
+                        .map_err(|error| commands::decode_error("flash.getGameObject", error))
+                };
+                let actions = read("world.actions.active")?;
+                let haste = read("world.myAvatar.dataLeaf.sta.$tha")?;
+                let global_cooldown = read("world.GCD")?;
+                let global_used_at = read("world.GCDTS")?;
+                let potions_locked = read("world.lockdownPots")?;
+                let target = self.command_answer("combat.getTarget", vec![])?;
+                let available_monster_ids =
+                    self.command_answer("world.getAvailableMonsterMapIds", vec![])?;
+                let anti_counter_enabled = self.settings.read().anti_counter_enabled;
+                self.commit_command(|projection| {
+                    let now = now_ms();
+                    projection.hydrate_combat(
+                        scope,
+                        CombatHydration {
+                            actions,
+                            haste,
+                            global_cooldown,
+                            global_used_at,
+                            potions_locked,
+                            target,
+                            available_monster_ids,
+                        },
+                        now,
+                    )?;
+                    Ok(projection.combat_snapshot(now, &[], anti_counter_enabled))
+                })
+            }
             Command::PatchAutoZone { patch } => Ok(super::patch_auto_zone(
                 &self.auto_zone,
                 patch,
