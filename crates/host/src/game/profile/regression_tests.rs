@@ -51,7 +51,10 @@ fn target_death_during_cooldown_wait_advances_rotation_after_wait() {
         );
         assert_eq!(failed.next_deadline, Some(1050));
         h.now = 1050;
-        h.cycle();
+        let effects = h.cycle();
+        h.now = 1050;
+        let effects = h.reconfirm(effects);
+        h.settle(effects);
         assert_eq!(h.casts, [2]);
     }
 }
@@ -307,18 +310,16 @@ fn successful_trigger_records_cooldown_after_target_death() {
         );
         h.cycle();
         h.now = 100;
-        let cast = h
-            .advance(ProfileEvent::Message {
-                observed_version: h.job.target_version(),
-                message: message(Some(1)),
-            })
-            .command
-            .unwrap();
+        let effect = h.advance(ProfileEvent::Message {
+            observed_version: h.job.target_version(),
+            message: message(Some(1)),
+        });
+        let cast = h.reconfirm(effect).command.unwrap();
         h.snapshot.monsters[0].hp = 0.0;
         if death_event {
             h.die(1);
         }
-        h.now = 200;
+        h.now = 300;
         h.complete(cast);
         h.emit(message(Some(2)));
         assert_eq!(h.casts, [1, 5]);

@@ -3,7 +3,7 @@ pub use controller::{ScriptControls, ScriptRequest, Supervisor};
 mod reaper;
 pub(crate) mod relogin;
 pub use reaper::reap;
-mod claims;
+pub(crate) mod claims;
 mod link;
 pub use claims::ClaimGrant;
 pub(crate) mod operations;
@@ -14,7 +14,8 @@ use lucent_protocol::settings::GameSettings;
 use parking_lot::RwLock;
 
 pub(crate) struct Records {
-    settings: Arc<RwLock<GameSettings>>,
+    pub(crate) jobs: Arc<crate::game::jobs::JobRequests>,
+    pub(crate) settings: Arc<RwLock<GameSettings>>,
     auto_zone: Arc<RwLock<AutoZoneConfig>>,
     pub(crate) auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
     pub(crate) relogin: Arc<relogin::Shared>,
@@ -99,6 +100,7 @@ impl Host {
         let operations = operations::Operations::start(id).map_err(HostError::OperationThread)?;
         let relogin = Arc::new(relogin::Shared::default());
         Ok(Session {
+            jobs: Arc::default(),
             auto_relogin: relogin.records.clone(),
             relogin,
             next_attachment: 0,
@@ -141,6 +143,7 @@ impl Host {
 }
 
 pub struct Session {
+    jobs: Arc<crate::game::jobs::JobRequests>,
     auto_relogin: Arc<RwLock<lucent_protocol::auto_relogin::AutoReloginRecords>>,
     relogin: Arc<relogin::Shared>,
     player: Option<player::Handle>,
@@ -156,6 +159,29 @@ pub struct Session {
 }
 
 impl Session {
+    #[cfg(feature = "testing")]
+    pub fn live_profile_job_count(&self) -> usize {
+        self.jobs.len()
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn set_profile_observation_probe(
+        &self,
+        probe: impl Fn(std::time::Duration) + Send + Sync + 'static,
+    ) {
+        *self.jobs.observation_probe.lock() = Some(Arc::new(probe));
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn set_profile_action_probe(&self, probe: impl Fn(bool) + Send + Sync + 'static) {
+        *self.jobs.action_probe.lock() = Some(Arc::new(probe));
+    }
+
+    #[cfg(feature = "testing")]
+    pub fn set_profile_dispatch_probe(&self, probe: impl Fn(u64, bool) + Send + Sync + 'static) {
+        *self.jobs.dispatch_probe.lock() = Some(Arc::new(probe));
+    }
+
     #[cfg(feature = "testing")]
     pub fn attached_link_count(&self) -> crate::bridge::Pending<usize> {
         let (reply, pending) = crate::bridge::Pending::channel();
@@ -220,6 +246,7 @@ impl Session {
             attachment,
             events,
             Records {
+                jobs: self.jobs.clone(),
                 settings: self.settings.clone(),
                 auto_zone: self.auto_zone.clone(),
                 auto_relogin: self.auto_relogin.clone(),
