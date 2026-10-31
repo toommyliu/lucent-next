@@ -21,7 +21,7 @@
     "vendor:zed": "tsx scripts/vendor-zed.ts",
     "bundle:runtime": "pnpm --filter @lucent/runtime bundle",
     "check:runtime-bundle": "pnpm --filter @lucent/runtime check:bundle",
-    "measure:runtime": "cargo test --release -p lucent-runtime --test workload -- --ignored --nocapture"
+    "measure:runtime": "cargo test --release -p lucent-host --features testing --test workload -- --ignored --nocapture"
   },
   "devDependencies": {
     "@effect/platform-node": "4.0.3",

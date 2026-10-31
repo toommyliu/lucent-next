@@ -8,6 +8,7 @@ publish.workspace = true
 testing = ["dep:swf", "dep:wgpu"]
 
 [dependencies]
+v8 = "152.2"
 lucent-protocol.workspace = true
 ruffle_core.workspace = true
 ruffle_frontend_utils.workspace = true
@@ -29,7 +30,7 @@ url = "2.5"
 parking_lot = "0.12"
 indexmap = "2"
 regex = "1"
-serde = "1"
+serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -43,3 +44,6 @@ lucent-host = { path = ".", features = ["testing"] }
 tokio = { version = "1", features = ["test-util"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 wgpu = { version = "30", features = ["noop"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+libc = "0.2"

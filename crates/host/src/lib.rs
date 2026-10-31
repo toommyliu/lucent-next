@@ -18,3 +18,6 @@ pub use sessions::{Host, HostError, PlayerStatus, ScriptLink, Session};
 
 #[cfg(feature = "testing")]
 pub mod testing;
+
+pub mod scripting;
+pub use sessions::{ScriptControls, ScriptRequest, Supervisor};

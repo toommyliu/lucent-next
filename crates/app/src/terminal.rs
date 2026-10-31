@@ -1,4 +1,4 @@
-use lucent_runtime::ScriptControls;
+use lucent_host::ScriptControls;
 use std::io::{self, BufRead};
 
 pub fn spawn(controls: ScriptControls) -> io::Result<()> {

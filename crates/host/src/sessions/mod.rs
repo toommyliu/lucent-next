@@ -1,3 +1,5 @@
+mod controller;
+pub use controller::{ScriptControls, ScriptRequest, Supervisor};
 mod reaper;
 pub(crate) mod relogin;
 pub use reaper::reap;
