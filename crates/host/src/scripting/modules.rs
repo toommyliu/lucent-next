@@ -104,9 +104,14 @@ fn compile<'s>(
     tc: &mut v8::PinnedRef<'s, v8::TryCatch<'_, '_, v8::HandleScope<'_>>>,
     script: &Script,
     path: &ModulePath,
+    total: &mut usize,
 ) -> Result<v8::Local<'s, v8::Module>, String> {
-    let source =
-        v8::String::new(tc, script.source(path).unwrap()).ok_or("Script source is too large")?;
+    let source = script.source(path).unwrap();
+    if source.len() > crate::library::SNAPSHOT_MAX_BYTES - *total {
+        return Err("Script sources exceed the 16 MiB execution limit.".into());
+    }
+    *total += source.len();
+    let source = v8::String::new(tc, source).ok_or("Script source is too large")?;
     let name = v8::String::new(tc, &resource(path)).unwrap();
     let origin = origin(tc, name, true);
     let mut source = v8::script_compiler::Source::new(source, Some(&origin));
@@ -125,7 +130,8 @@ fn graph<'s>(
     script: &Script,
     builtins: v8::Local<v8::Object>,
 ) -> Result<v8::Local<'s, v8::Module>, String> {
-    let entry = compile(tc, script, script.entry())?;
+    let mut total = 0;
+    let entry = compile(tc, script, script.entry(), &mut total)?;
     let mut modules = BTreeMap::from([(script.entry().clone(), entry)]);
     let mut queue = VecDeque::from([script.entry().clone()]);
     let mut synthetic = HashMap::new();
@@ -185,7 +191,7 @@ fn graph<'s>(
                     )
                 })?;
                 if !modules.contains_key(target) {
-                    let module = compile(tc, script, target)?;
+                    let module = compile(tc, script, target, &mut total)?;
                     modules.insert(target.clone(), module);
                     queue.push_back(target.clone());
                 }
@@ -270,71 +276,4 @@ fn message_text(
         message.get_start_column() + 1,
         exception.to_rust_string_lossy(scope)
     )
-}
-
-pub(crate) fn initialize() {
-    static PLATFORM: std::sync::Once = std::sync::Once::new();
-    PLATFORM.call_once(|| {
-        let platform = v8::new_default_platform(0, false).make_shared();
-        v8::V8::initialize_platform(platform);
-        v8::V8::initialize();
-    });
-}
-
-pub(crate) fn check_sources(script: &Script) -> Result<(), String> {
-    initialize();
-    let mut isolate = v8::Isolate::new(v8::CreateParams::default().heap_limits(0, 64 << 20));
-    let handle = isolate.thread_safe_handle();
-    isolate.add_near_heap_limit_callback(
-        source_heap_limit,
-        (&handle as *const v8::IsolateHandle).cast_mut().cast(),
-    );
-    let result = (|| {
-        let mut seen = std::collections::BTreeSet::new();
-        let mut queue = VecDeque::from([script.entry()]);
-        let mut total = 0;
-        while let Some(path) = queue.pop_front() {
-            if !seen.insert(path) {
-                continue;
-            }
-            total += script.source(path).unwrap().len();
-            if total > crate::library::SNAPSHOT_MAX_BYTES {
-                return Err("Script sources exceed the 16 MiB execution limit.".into());
-            }
-            v8::scope!(let scope, &mut isolate);
-            let context = v8::Context::new(scope, Default::default());
-            let scope = &mut v8::ContextScope::new(scope, context);
-            v8::tc_scope!(let tc, scope);
-            let module = match compile(tc, script, path) {
-                Ok(module) => module,
-                Err(_) if tc.is_execution_terminating() => {
-                    return Err("Script source analysis exceeded the 64 MiB heap limit.".into());
-                }
-                Err(_) => continue,
-            };
-            let requests = module.get_module_requests();
-            for index in 0..requests.length() {
-                let request =
-                    v8::Local::<v8::ModuleRequest>::try_from(requests.get(tc, index).unwrap())
-                        .unwrap();
-                let specifier = request.get_specifier().to_rust_string_lossy(tc);
-                if let Some(target) = script.resolve(path, &specifier) {
-                    queue.push_back(target);
-                }
-            }
-        }
-        Ok(())
-    })();
-    isolate.remove_near_heap_limit_callback(source_heap_limit, 0);
-    result
-}
-
-unsafe extern "C" fn source_heap_limit(
-    data: *mut std::ffi::c_void,
-    current: usize,
-    _: usize,
-) -> usize {
-    let handle = unsafe { &*data.cast::<v8::IsolateHandle>() };
-    handle.terminate_execution();
-    current.saturating_add(64 << 20)
 }

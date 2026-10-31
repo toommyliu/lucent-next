@@ -1,7 +1,7 @@
 mod common;
 
 use lucent_host::library::{Package, load_script};
-use lucent_protocol::script::ModulePath;
+use lucent_protocol::script::{ModulePath, Script, ScriptOutcome};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -383,6 +383,22 @@ fn padded_source(ws: &Workspace, path: &str, prefix: &str, bytes: usize) {
     ws.write(path, &source);
 }
 
+fn outcome(script: Script) -> ScriptOutcome {
+    let (_host, mut session, _runtime) = common::ready_runtime();
+    common::start(&mut session, script, Default::default())
+        .wait(common::TIMEOUT)
+        .unwrap()
+}
+
+fn source_limit(script: Script) {
+    match outcome(script) {
+        ScriptOutcome::Failed { message, .. } => {
+            assert_eq!(message, "Script sources exceed the 16 MiB execution limit.");
+        }
+        other => panic!("expected a source limit failure, got {other:?}"),
+    }
+}
+
 #[test]
 fn snapshot_counts_only_reachable_sources_once_across_packages() {
     let ws = Workspace::new();
@@ -392,7 +408,7 @@ fn snapshot_counts_only_reachable_sources_once_across_packages() {
     padded_source(
         &ws,
         "script-packages/a/index.js",
-        "export * from 'b';",
+        "export * from 'b'; import 'b'; export default function* () {}",
         8 << 20,
     );
     padded_source(
@@ -409,22 +425,18 @@ fn snapshot_counts_only_reachable_sources_once_across_packages() {
     );
     ws.write("run.js", "export default function* () {}");
     assert_eq!(
-        load_script("run.js", &ws.0).unwrap().entry().path(),
-        "run.js"
+        outcome(load_script("run.js", &ws.0).unwrap()),
+        ScriptOutcome::Completed
     );
     assert_eq!(
-        load_script("a/index.js", &ws.0).unwrap().entry().path(),
-        "index.js"
+        outcome(load_script("a/index.js", &ws.0).unwrap()),
+        ScriptOutcome::Completed
     );
     ws.write(
         "run.js",
         "import 'a'; import 'b'; export default function* () {}",
     );
-    load_error(
-        &ws,
-        "run.js",
-        "Script sources exceed the 16 MiB execution limit.",
-    );
+    source_limit(load_script("run.js", &ws.0).unwrap());
 }
 
 #[test]
@@ -463,13 +475,13 @@ fn package_scripts_apply_the_reachable_snapshot_limit() {
         8 << 20,
     );
     assert_eq!(
-        Package::read(&ws.0.join("pkg"))
-            .unwrap()
-            .script("scripts/run.js")
-            .unwrap()
-            .entry()
-            .path(),
-        "scripts/run.js"
+        outcome(
+            Package::read(&ws.0.join("pkg"))
+                .unwrap()
+                .script("scripts/run.js")
+                .unwrap()
+        ),
+        ScriptOutcome::Completed
     );
     padded_source(
         &ws,
@@ -477,14 +489,11 @@ fn package_scripts_apply_the_reachable_snapshot_limit() {
         "export * from './scripts/run';",
         (8 << 20) + 1,
     );
-    assert_eq!(
+    source_limit(
         Package::read(&ws.0.join("pkg"))
             .unwrap()
             .script("scripts/run.js")
-            .map(|_| ())
-            .unwrap_err()
-            .to_string(),
-        "Script sources exceed the 16 MiB execution limit."
+            .unwrap(),
     );
 }
 
@@ -579,13 +588,13 @@ fn snapshot_follows_escaped_imports_but_ignores_import_text_and_dynamic_imports(
     padded_source(&ws, "pkg/scripts/run.js", entry, 8 << 20);
     padded_source(&ws, "pkg/scripts/extra.js", "export {};", 16 << 20);
     assert_eq!(
-        Package::read(&ws.0.join("pkg"))
-            .unwrap()
-            .script("scripts/run.js")
-            .unwrap()
-            .entry()
-            .path(),
-        "scripts/run.js"
+        outcome(
+            Package::read(&ws.0.join("pkg"))
+                .unwrap()
+                .script("scripts/run.js")
+                .unwrap()
+        ),
+        ScriptOutcome::Completed
     );
     padded_source(
         &ws,
@@ -593,14 +602,11 @@ fn snapshot_follows_escaped_imports_but_ignores_import_text_and_dynamic_imports(
         "export const value = 42;",
         (8 << 20) + 1,
     );
-    assert_eq!(
+    source_limit(
         Package::read(&ws.0.join("pkg"))
             .unwrap()
             .script("scripts/run.js")
-            .map(|_| ())
-            .unwrap_err()
-            .to_string(),
-        "Script sources exceed the 16 MiB execution limit."
+            .unwrap(),
     );
 }
 
@@ -617,4 +623,44 @@ fn loaded_reachable_graph_runs_with_the_runtime_module_resolver() {
             .unwrap(),
         lucent_protocol::script::ScriptOutcome::Completed
     );
+}
+
+fn mixed_source_limit(files: usize) {
+    let mut modules = std::collections::BTreeMap::new();
+    for i in 0..files {
+        let mut source = if i == 0 {
+            let mut entry = format!(
+                "export default function* () {{ if (globalThis.count !== {files}) throw new Error('missing module'); }}\n"
+            );
+            for j in 1..files {
+                entry.push_str(&format!("import './{j}.js';\n"));
+            }
+            entry
+        } else {
+            String::new()
+        };
+        source.push_str("globalThis.count = (globalThis.count ?? 0) + 1;\n/*Ā");
+        let bytes = (24 << 20) / files;
+        source.extend(std::iter::repeat_n(' ', bytes - source.len() - 2));
+        source.push_str("*/");
+        modules.insert(ModulePath::loose(format!("{i}.js")).unwrap(), source);
+    }
+    source_limit(
+        Script::new(
+            ModulePath::loose("0.js").unwrap(),
+            modules,
+            Default::default(),
+        )
+        .unwrap(),
+    );
+}
+
+#[test]
+fn four_mixed_sources_fail_the_run_without_a_heap_kill() {
+    mixed_source_limit(4);
+}
+
+#[test]
+fn eight_mixed_sources_fail_the_run_without_a_heap_kill() {
+    mixed_source_limit(8);
 }

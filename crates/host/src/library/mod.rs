@@ -86,7 +86,7 @@ impl Package {
 
     pub fn script(self, entry: &str) -> Result<Script, LoadError> {
         validate_module_path(entry)?;
-        checked_script(Script::new(
+        Ok(Script::new(
             ModulePath::in_package(&self.name, entry)?,
             self.modules,
             [(self.name, self.main)].into(),
@@ -164,7 +164,7 @@ fn load(spec: &str, cwd: &Path, root: &Path) -> Result<Script, LoadError> {
         table.insert(package.name, package.main);
         modules.extend(package.modules);
     }
-    checked_script(Script::new(entry, modules, table)?)
+    Ok(Script::new(entry, modules, table)?)
 }
 
 fn insert_package(
@@ -300,11 +300,6 @@ fn module_name(path: &Path) -> Result<String, LoadError> {
         .ok_or_else(|| PathError::InvalidPath(path.to_string_lossy().into_owned()))?;
     validate_module_path(&name)?;
     Ok(name)
-}
-
-fn checked_script(script: Script) -> Result<Script, LoadError> {
-    crate::scripting::check_sources(&script).map_err(LoadError::Limit)?;
-    Ok(script)
 }
 
 fn canonicalize(path: &Path) -> Result<PathBuf, LoadError> {

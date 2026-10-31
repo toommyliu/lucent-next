@@ -1,5 +1,5 @@
 use std::ffi::c_void;
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, Once, mpsc};
 use std::time::{Duration, Instant};
 
 use crate::ScriptLink;
@@ -36,7 +36,12 @@ pub(crate) struct Engine {
 
 impl Engine {
     pub(crate) fn new(link: ScriptLink, interrupt: Arc<Interrupt>) -> Result<Self, RuntimeError> {
-        modules::initialize();
+        static PLATFORM: Once = Once::new();
+        PLATFORM.call_once(|| {
+            let platform = v8::new_default_platform(0, false).make_shared();
+            v8::V8::initialize_platform(platform);
+            v8::V8::initialize();
+        });
         let mut isolate = v8::Isolate::new(v8::CreateParams::default().heap_limits(0, HEAP_LIMIT));
         isolate.add_near_heap_limit_callback(
             near_heap_limit,
