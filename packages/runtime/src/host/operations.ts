@@ -64,6 +64,15 @@ export const operate = (
     return Effect.sync(cancel);
   });
 
+export const setOperationResponsibility = (id: string, responsible: boolean): void => {
+  const pending = operations.get(id);
+  if (pending === undefined || pending.started) return;
+  clearTimeout(pending.timeout);
+  pending.timeout = responsible
+    ? setTimeout(() => pending.fail(new Error("The equip permit timed out")), 5_000)
+    : undefined;
+};
+
 export const startOperation = (id: string, issued = false): void => {
   const pending = operations.get(id);
   if (pending === undefined || pending.started || (pending.requiresIssuance && !issued)) return;

@@ -669,7 +669,18 @@ fn an_incompatible_profile_starts_while_the_first_preflight_equip_is_pending() {
 fn a_shared_holder_retries_after_the_first_preflight_times_out_or_is_killed() {
     for kill in [false, true] {
         let (mut session, _runtime, control, observer) = combat_setup(false, false);
+        let (entered, waiting) = std::sync::mpsc::channel();
+        let (release, blocked) = std::sync::mpsc::channel();
+        let blocked = std::sync::Mutex::new(blocked);
+        let once = std::sync::atomic::AtomicBool::new(false);
+        control.set_operation_probe(move |_, issued| {
+            if issued && !once.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                entered.send(()).unwrap();
+                blocked.lock().unwrap().recv_timeout(TIMEOUT).unwrap();
+            }
+        });
         let first = holder(&mut session, "\"Potion\"");
+        waiting.recv_timeout(TIMEOUT).unwrap();
         assert_eq!(
             next_trace(&observer),
             json!(["inventory.equip",[{"itemId":100.0}]])
@@ -677,7 +688,7 @@ fn a_shared_holder_retries_after_the_first_preflight_times_out_or_is_killed() {
         let shared_observer = session.attach(EventInterests::ALL).unwrap();
         let shared = holder(&mut session, "\"Potion\"");
         common::await_event(&shared_observer, "onDebug", Some(&shared));
-        if kill {
+        {
             let deadline = Instant::now() + TIMEOUT;
             loop {
                 assert!(
@@ -691,12 +702,18 @@ fn a_shared_holder_retries_after_the_first_preflight_times_out_or_is_killed() {
                     break;
                 }
             }
+        }
+        if kill {
             first.kill();
             assert!(matches!(
                 first.wait(TIMEOUT),
                 Err(RuntimeError::Killed(Kill::Requested))
             ));
         }
+        if !kill {
+            assert_eq!(trace_within(&observer, Duration::from_secs(6)), None);
+        }
+        release.send(()).unwrap();
         assert_eq!(
             next_trace(&observer),
             json!(["inventory.equip",[{"itemId":100.0}]])

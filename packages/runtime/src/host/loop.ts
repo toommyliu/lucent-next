@@ -5,7 +5,7 @@ import type {
   ScriptOutcome,
 } from "@lucent/game/protocol";
 
-import { completeOperation, startOperation, failOperations } from "./operations";
+import { completeOperation, startOperation, failOperations, setOperationResponsibility } from "./operations";
 
 import type { ScriptSource } from "../game/scripting/ScriptRunner";
 
@@ -42,6 +42,7 @@ declare global {
 }
 
 type ScriptEvent =
+  | { type: "operationresponsibility"; id: string; responsible: boolean }
   | { type: "operationstarted" | "operationissued"; id: string }
   | {
       type: "loader";
@@ -120,6 +121,8 @@ export const turn = (itemsJson: string): string[] => {
       const error = new Error("Host events were lost; pending requests failed");
       failOperations(error);
       invoke(() => window.onHostEventsLost?.());
+    } else if (item.type === "operationresponsibility") {
+      setOperationResponsibility(item.id, item.responsible);
     } else if (item.type === "operationstarted") {
       startOperation(item.id);
     } else if (item.type === "operationissued") {

@@ -114,6 +114,10 @@ fn wait<T>(pending: Pending<T>, interrupt: &Interrupt) -> Result<T, String> {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub(crate) enum Item {
     EventsLost,
+    OperationResponsibility {
+        id: String,
+        responsible: bool,
+    },
     OperationStarted {
         id: String,
     },
@@ -139,6 +143,12 @@ pub(crate) enum Item {
 impl From<ScriptEvent> for Item {
     fn from(event: ScriptEvent) -> Self {
         match event {
+            ScriptEvent::OperationResponsibility { id, responsible } => {
+                Item::OperationResponsibility {
+                    id: id.to_string(),
+                    responsible,
+                }
+            }
             ScriptEvent::OperationStarted { id } => Item::OperationStarted { id: id.to_string() },
             ScriptEvent::OperationIssued { id } => Item::OperationIssued { id: id.to_string() },
             ScriptEvent::AutoZoneChanged { config } => Item::AutoZone { config },

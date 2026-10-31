@@ -162,6 +162,10 @@ pub(crate) fn invoke(player: &mut Player, name: &str, args: Vec<Value>) -> Resul
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScriptEvent {
+    OperationResponsibility {
+        id: u64,
+        responsible: bool,
+    },
     OperationStarted {
         id: u64,
     },

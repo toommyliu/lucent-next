@@ -532,11 +532,42 @@ impl Lifecycle {
     }
 }
 
+struct ClaimPreparation {
+    request: Arc<Request>,
+    binding: super::claims::Binding,
+    item: i64,
+    waiting: bool,
+}
+
 #[derive(Default)]
 struct Queue {
     entries: HashMap<u64, Lifecycle>,
     fifo: VecDeque<u64>,
+    preparations: Vec<ClaimPreparation>,
     stopped: bool,
+}
+
+impl Queue {
+    fn update_preparations(&mut self) {
+        self.preparations
+            .retain(|entry| self.entries.contains_key(&entry.request.id));
+        for index in 0..self.preparations.len() {
+            let entry = &self.preparations[index];
+            let waiting = self.preparations[..index]
+                .iter()
+                .any(|earlier| earlier.binding == entry.binding && earlier.item == entry.item);
+            if entry.waiting && !waiting {
+                entry.request.player.inbox.post(Msg::OperationAnswer(
+                    entry.request.attachment,
+                    ScriptEvent::OperationResponsibility {
+                        id: entry.request.id,
+                        responsible: true,
+                    },
+                ));
+                self.preparations[index].waiting = false;
+            }
+        }
+    }
 }
 
 #[cfg(feature = "testing")]
@@ -588,7 +619,40 @@ impl Shared {
             return Err(Error::Stopped);
         }
         let id = request.id;
-        *pending = Some(Arc::new(request));
+        let request = Arc::new(request);
+        *pending = Some(request.clone());
+        if let Operation::PrepareConsumableClaim { claim } = &request.operation {
+            let preparation = claim.parse().ok().and_then(|claim| {
+                request
+                    .player
+                    .packets
+                    .0
+                    .lock()
+                    .claims
+                    .preparation(super::claims::Owner::Script(request.attachment), claim)
+            });
+            if let Some((item, binding, _)) = preparation {
+                let waiting = queue
+                    .preparations
+                    .iter()
+                    .any(|entry| entry.binding == binding && entry.item == item);
+                if waiting {
+                    request.player.inbox.post(Msg::OperationAnswer(
+                        request.attachment,
+                        ScriptEvent::OperationResponsibility {
+                            id,
+                            responsible: false,
+                        },
+                    ));
+                }
+                queue.preparations.push(ClaimPreparation {
+                    request,
+                    binding,
+                    item,
+                    waiting,
+                });
+            }
+        }
         queue.fifo.push_back(id);
         self.ready.notify_one();
         Ok(())
@@ -601,6 +665,7 @@ impl Shared {
             if matches!(entry, Lifecycle::Settled) {
                 queue.entries.remove(&id);
                 queue.fifo.retain(|queued| *queued != id);
+                queue.update_preparations();
             }
         }
     }
@@ -613,6 +678,7 @@ impl Shared {
         });
         let Queue { entries, fifo, .. } = &mut *queue;
         fifo.retain(|id| entries.contains_key(id));
+        queue.update_preparations();
     }
 
     fn next(&self) -> Option<Arc<Request>> {
@@ -687,6 +753,7 @@ impl Shared {
                 },
             ));
         }
+        queue.update_preparations();
     }
 
     #[cfg(feature = "testing")]
@@ -769,6 +836,7 @@ impl Drop for Operations {
             queue.stopped = true;
             queue.fifo.clear();
             queue.entries.clear();
+            queue.preparations.clear();
             self.sender.ready.notify_one();
         }
         if let Some(thread) = self.thread.take() {

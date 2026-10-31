@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import * as Effect from "effect/Effect";
 
 import { makeFakeApi, makeFakeHostState } from "../game/flash/testing/FakeHost";
-import { operate, completeOperation, startOperation } from "./operations";
+import { operate, completeOperation, startOperation, setOperationResponsibility } from "./operations";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -121,4 +121,37 @@ it("cancels a reserved handle when submission fails", async () => {
   await expect(Effect.runPromise(operate({ kind: "acceptDrop", selector: 70 }, host))).rejects.toThrow("submission failed");
   expect(host.cancelOperation).toHaveBeenCalledExactlyOnceWith("failed");
   completeOperation("failed", { kind: "acceptDrop", value: true }, null);
+});
+
+
+it("bounds a shared equip only after it takes responsibility", async () => {
+  vi.useFakeTimers();
+  const host = { prepareOperation: () => "shared", operate: vi.fn(), cancelOperation: vi.fn() };
+  let error: unknown;
+  const finished = Effect.runPromise(operate({ kind: "prepareConsumableClaim", claim: "1" }, host))
+    .catch(cause => { error = cause; });
+  setOperationResponsibility("shared", false);
+  await vi.advanceTimersByTimeAsync(6_000);
+  expect(error).toBeUndefined();
+  expect(host.cancelOperation).not.toHaveBeenCalled();
+  setOperationResponsibility("shared", true);
+  await vi.advanceTimersByTimeAsync(4_999);
+  expect(error).toBeUndefined();
+  await vi.advanceTimersByTimeAsync(1);
+  await finished;
+  expect(error).toBeInstanceOf(Error);
+  expect(host.cancelOperation).toHaveBeenCalledExactlyOnceWith("shared");
+});
+
+it("settles a successful shared equip without issuing another equip", async () => {
+  vi.useFakeTimers();
+  const host = { prepareOperation: () => "ready", operate: vi.fn(), cancelOperation: vi.fn() };
+  const finished = Effect.runPromise(operate({ kind: "prepareConsumableClaim", claim: "1" }, host));
+  setOperationResponsibility("ready", false);
+  await vi.advanceTimersByTimeAsync(6_000);
+  setOperationResponsibility("ready", true);
+  completeOperation("ready", { kind: "equipConsumable", value: true }, null);
+  expect(await finished).toEqual({ kind: "equipConsumable", value: true });
+  expect(host.cancelOperation).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
 });

@@ -5258,6 +5258,12 @@ ${prefix}}`;
     }
     return sync2(cancel);
   }), "operate");
+  var setOperationResponsibility = /* @__PURE__ */ __name((id, responsible) => {
+    const pending = operations.get(id);
+    if (pending === void 0 || pending.started) return;
+    clearTimeout(pending.timeout);
+    pending.timeout = responsible ? setTimeout(() => pending.fail(new Error("The equip permit timed out")), 5e3) : void 0;
+  }, "setOperationResponsibility");
   var startOperation = /* @__PURE__ */ __name((id, issued = false) => {
     const pending = operations.get(id);
     if (pending === void 0 || pending.started || pending.requiresIssuance && !issued) return;
@@ -5317,6 +5323,8 @@ ${prefix}}`;
         const error = new Error("Host events were lost; pending requests failed");
         failOperations(error);
         invoke(() => window.onHostEventsLost?.());
+      } else if (item.type === "operationresponsibility") {
+        setOperationResponsibility(item.id, item.responsible);
       } else if (item.type === "operationstarted") {
         startOperation(item.id);
       } else if (item.type === "operationissued") {
