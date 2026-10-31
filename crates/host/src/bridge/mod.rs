@@ -165,6 +165,9 @@ pub enum ScriptEvent {
     OperationStarted {
         id: u64,
     },
+    OperationIssued {
+        id: u64,
+    },
     AutoZoneChanged {
         config: lucent_protocol::auto_zone::AutoZoneConfig,
     },

@@ -22,7 +22,6 @@ impl PlayerStatus {
 }
 
 pub struct ScriptLink {
-    claim_binding: super::claims::Binding,
     id: u64,
     attachment: AttachmentId,
     detached: Arc<AtomicBool>,
@@ -45,7 +44,6 @@ impl ScriptLink {
         operations: Arc<super::operations::Shared>,
     ) -> Self {
         Self {
-            claim_binding: player.packets.binding(),
             id,
             attachment,
             detached: Arc::default(),
@@ -156,11 +154,8 @@ impl ScriptLink {
         &self,
         item: Option<i64>,
     ) -> Result<Option<super::ClaimGrant>, bridge::Error> {
-        self.packets.acquire_claim(
-            super::claims::Owner::Script(self.attachment),
-            self.claim_binding,
-            item,
-        )
+        self.packets
+            .acquire_claim(super::claims::Owner::Script(self.attachment), item)
     }
 
     pub fn release_claim(&self, id: u64) {

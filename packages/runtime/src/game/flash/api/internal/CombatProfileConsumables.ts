@@ -1,11 +1,9 @@
 import type { CombatProfile } from "@lucent/schemas/combatProfiles";
-import { EntityState } from "@lucent/game";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 
 import { acquireConsumableClaim } from "../../../../host/claims";
 import { isDirectInventoryConsumable, type Inventory } from "../Inventory";
-import type { Player } from "../Player";
 
 interface ConsumableSkillItem {
   readonly itemId: number;
@@ -13,8 +11,7 @@ interface ConsumableSkillItem {
 
 interface Dependencies {
   readonly getConsumableSkillItem: () => Effect.Effect<ConsumableSkillItem | null>;
-  readonly inventory: Pick<Inventory, "equip" | "get">;
-  readonly player: Pick<Player, "getState">;
+  readonly inventory: Pick<Inventory, "equipClaimedConsumable" | "get">;
 }
 
 export interface CombatProfileConsumablePreparation {
@@ -82,27 +79,11 @@ export const makeCombatProfileConsumables = (deps: Dependencies) => {
               `Could not equip ${item.name} because another combat profile controls preflight equipment. Skill 5 will use whichever consumable is equipped.`,
             );
           }
-          if (!claim.first) {
-            return {
-              release: claim.release,
-              skill5ItemId: item.itemId,
-            };
-          }
-
-          const current = yield* deps.getConsumableSkillItem();
-          if (current?.itemId !== item.itemId) {
-            if ((yield* deps.player.getState()) !== EntityState.Idle) {
-              yield* claim.release;
-              return unavailable(
-                `Could not equip ${item.name} while you were in combat. Skill 5 will use whichever consumable is equipped.`,
-              );
-            }
-            if (!(yield* deps.inventory.equip(item.itemId))) {
-              yield* claim.release;
-              return unavailable(
-                `Could not equip ${item.name}. Check its requirements. Skill 5 will use whichever consumable is equipped.`,
-              );
-            }
+          if (!(yield* deps.inventory.equipClaimedConsumable(item.itemId, claim.id))) {
+            yield* claim.release;
+            return unavailable(
+              `Could not equip ${item.name}. Check its requirements. Skill 5 will use whichever consumable is equipped.`,
+            );
           }
 
           return {

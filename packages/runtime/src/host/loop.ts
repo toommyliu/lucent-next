@@ -42,7 +42,7 @@ declare global {
 }
 
 type ScriptEvent =
-  | { type: "operationstarted"; id: string }
+  | { type: "operationstarted" | "operationissued"; id: string }
   | {
       type: "loader";
       name: string;
@@ -122,6 +122,8 @@ export const turn = (itemsJson: string): string[] => {
       invoke(() => window.onHostEventsLost?.());
     } else if (item.type === "operationstarted") {
       startOperation(item.id);
+    } else if (item.type === "operationissued") {
+      startOperation(item.id, true);
     } else if (item.type === "loader") {
       invoke(() => {
         const callback: unknown = Reflect.get(window, item.name);

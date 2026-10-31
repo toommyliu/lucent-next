@@ -192,16 +192,31 @@ export const makeInventory = (
   const wear = (selector: ItemQuery) => wearEffect(selector);
 
   const operationHost = globalThis.__host;
-  const equipConsumable = (itemId: number) =>
-    operate({ kind: "equipConsumable", selector: itemId }, operationHost).pipe(
-      consumableEquipment.withPermit,
-      Effect.map((answer) => answer.value),
-      Effect.catch(() => Effect.succeed(false)),
-    );
+  const equipConsumable = (itemId: number, claim?: string) =>
+    Effect.scoped(Effect.gen(function* () {
+      const deadline = Date.now() + 5_000;
+      const permit = yield* Effect.acquireRelease(
+        consumableEquipment.take(1).pipe(Effect.timeoutOption("5 seconds")),
+        (permit) => Option.isSome(permit) ? consumableEquipment.release(1) : Effect.void,
+        { interruptible: true },
+      );
+      if (Option.isNone(permit)) return false;
+      return yield* operate(
+        claim === undefined
+          ? { kind: "equipConsumable", selector: itemId }
+          : { kind: "prepareConsumableClaim", claim },
+        operationHost,
+        deadline,
+      ).pipe(
+        Effect.map((answer) => answer.value),
+        Effect.catch(() => Effect.succeed(false)),
+      );
+    }));
 
   const equipEffect = Effect.fn("Inventory.equip")(function* (
     selector: ItemQuery,
     options?: EquipOptions,
+    claim?: string,
   ) {
     const item = yield* get(selector);
     if (item === null) return false;
@@ -219,7 +234,7 @@ export const makeInventory = (
     if (needsEquip) {
       if (!(yield* wait.forGameAction("equipItem"))) return false;
       if (item.category === "Item") {
-        const equipped = yield* equipConsumable(item.itemId);
+        const equipped = yield* equipConsumable(item.itemId, claim);
         if (!equipped) return false;
       } else {
         const userId = yield* getLocalUserId();
@@ -361,6 +376,7 @@ export const makeInventory = (
     contains,
     equip,
     equipByEnhancement,
+    equipClaimedConsumable: (itemId: number, claim: string) => equipEffect(itemId, undefined, claim),
     get,
     getAll,
     getAvailableSlots,

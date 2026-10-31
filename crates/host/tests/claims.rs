@@ -41,7 +41,9 @@ fn ambient_claims_share_and_connection_changes_and_player_restart_release_holder
         )
         .recv_timeout(Duration::from_secs(5))
         .unwrap();
-    assert!(first.acquire_consumable_claim(Some(100)).is_err());
+    let rebound = first.acquire_consumable_claim(Some(100)).unwrap().unwrap();
+    assert!(rebound.first);
+    first.release_claim(rebound.id);
     let fresh = session.attach(EventInterests::ALL).unwrap();
     assert!(
         fresh

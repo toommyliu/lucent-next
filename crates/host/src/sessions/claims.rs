@@ -22,6 +22,13 @@ pub(crate) enum ClaimResource {
     ConsumableSlot5 { item: Option<i64> },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Preparation {
+    Unchecked,
+    EquipRequired,
+    Ready,
+}
+
 struct HeldClaim {
     owner: Owner,
     binding: Binding,
@@ -36,6 +43,7 @@ pub struct ClaimGrant {
 pub(crate) struct Claims {
     binding: Binding,
     holders: HashMap<u64, HeldClaim>,
+    preparation: Preparation,
     next: u64,
 }
 
@@ -48,6 +56,7 @@ impl Default for Claims {
                 connection: 0,
             },
             holders: HashMap::new(),
+            preparation: Preparation::Unchecked,
             next: 0,
         }
     }
@@ -75,6 +84,9 @@ impl Claims {
             return Err(Error::Overflow);
         }
         let first = self.holders.is_empty();
+        if first {
+            self.preparation = Preparation::Unchecked;
+        }
         self.next = self.next.checked_add(1).ok_or(Error::Overflow)?;
         self.holders.insert(
             self.next,
@@ -88,6 +100,35 @@ impl Claims {
             id: self.next,
             first,
         }))
+    }
+
+    pub(crate) fn preparation(&self, owner: Owner, id: u64) -> Option<(i64, Binding, Preparation)> {
+        let held = self.holders.get(&id)?;
+        if held.owner != owner || held.binding != self.binding {
+            return None;
+        }
+        let ClaimResource::ConsumableSlot5 { item: Some(item) } = held.resource else {
+            return None;
+        };
+        Some((item, held.binding, self.preparation))
+    }
+
+    pub(crate) fn set_preparation(
+        &mut self,
+        binding: Binding,
+        item: i64,
+        preparation: Preparation,
+    ) -> bool {
+        if binding != self.binding
+            || !self
+                .holders
+                .values()
+                .any(|held| held.resource == ClaimResource::ConsumableSlot5 { item: Some(item) })
+        {
+            return false;
+        }
+        self.preparation = preparation;
+        true
     }
 
     pub(crate) fn release(&mut self, owner: Owner, id: u64) {
@@ -106,6 +147,7 @@ impl Claims {
 
     pub(crate) fn clear(&mut self) {
         self.holders.clear();
+        self.preparation = Preparation::Unchecked;
         self.binding.connection += 1;
     }
 }
@@ -113,6 +155,43 @@ impl Claims {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_preparation_survives_owner_release_and_rejects_stale_or_foreign_holders() {
+        let mut claims = Claims::default();
+        let a = Owner::Script(super::super::AttachmentId(1));
+        let b = Owner::Script(super::super::AttachmentId(2));
+        let resource = ClaimResource::ConsumableSlot5 { item: Some(100) };
+        let first = claims.acquire(a, resource).unwrap().unwrap();
+        let shared = claims.acquire(b, resource).unwrap().unwrap();
+        let binding = claims.binding();
+        assert_eq!(claims.preparation(b, first.id), None);
+        assert!(claims.set_preparation(binding, 100, Preparation::EquipRequired));
+        claims.release_owner(a);
+        assert_eq!(
+            claims.preparation(b, shared.id),
+            Some((100, binding, Preparation::EquipRequired))
+        );
+        assert!(claims.set_preparation(binding, 100, Preparation::Ready));
+        assert_eq!(
+            claims.preparation(b, shared.id),
+            Some((100, binding, Preparation::Ready))
+        );
+        claims.release(b, shared.id);
+        let next = claims.acquire(a, resource).unwrap().unwrap();
+        assert_eq!(
+            claims.preparation(a, next.id),
+            Some((100, binding, Preparation::Unchecked))
+        );
+        claims.clear();
+        assert_eq!(claims.preparation(a, next.id), None);
+        let fresh = claims.acquire(b, resource).unwrap().unwrap();
+        assert!(!claims.set_preparation(binding, 100, Preparation::Ready));
+        assert_eq!(
+            claims.preparation(b, fresh.id),
+            Some((100, claims.binding(), Preparation::Unchecked))
+        );
+    }
 
     #[test]
     fn compatible_holders_share_until_the_last_release_and_stale_releases_do_nothing() {

@@ -12,10 +12,10 @@ export const acquireConsumableClaim = (
       readonly first: boolean;
     } | null;
     return grant === null
-      ? { acquired: false, first: false, release: Effect.void }
+      ? { acquired: false as const, release: Effect.void }
       : {
-          acquired: true,
-          first: grant.first,
+          acquired: true as const,
+          id: grant.id,
           release: Effect.sync(() => host.releaseClaim(grant.id)),
         };
   });

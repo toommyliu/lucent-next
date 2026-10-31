@@ -117,6 +117,9 @@ pub(crate) enum Item {
     OperationStarted {
         id: String,
     },
+    OperationIssued {
+        id: String,
+    },
     AutoZone {
         config: lucent_protocol::auto_zone::AutoZoneConfig,
     },
@@ -137,6 +140,7 @@ impl From<ScriptEvent> for Item {
     fn from(event: ScriptEvent) -> Self {
         match event {
             ScriptEvent::OperationStarted { id } => Item::OperationStarted { id: id.to_string() },
+            ScriptEvent::OperationIssued { id } => Item::OperationIssued { id: id.to_string() },
             ScriptEvent::AutoZoneChanged { config } => Item::AutoZone { config },
             ScriptEvent::Loader { event, projected } => Item::Loader {
                 name: event.name,

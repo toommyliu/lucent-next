@@ -14,7 +14,7 @@ use serde_json::json;
 use std::{
     sync::Arc,
     task::{Wake, Waker},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 fn emit(link: &ScriptLink, data: serde_json::Value) {
@@ -40,6 +40,8 @@ fn setup(confirm: bool) -> (Session, Runtime, ScriptLink, ScriptLink) {
     };
     session_with(
         common::ready_movie()
+            .constant("drops.accept", json!(true))
+            .recording("drops.accept")
             .constant("combat.getConsumableSkillItem", json!({"itemId":100}))
             .responding("inventory.equip", [(json!(true), responses)])
             .constant("world.isActionAvailable", json!(true))
@@ -65,6 +67,10 @@ fn session_with(movie: testing::ProbeMovie) -> (Session, Runtime, ScriptLink, Sc
 }
 
 fn next_trace(link: &ScriptLink) -> serde_json::Value {
+    trace_within(link, TIMEOUT).expect("missing equip trace")
+}
+
+fn trace_within(link: &ScriptLink, wait: Duration) -> Option<serde_json::Value> {
     struct Unpark(std::thread::Thread);
     impl Wake for Unpark {
         fn wake(self: Arc<Self>) {
@@ -72,13 +78,15 @@ fn next_trace(link: &ScriptLink) -> serde_json::Value {
         }
     }
     link.set_waker(Waker::from(Arc::new(Unpark(std::thread::current()))));
-    let deadline = Instant::now() + TIMEOUT;
+    let deadline = Instant::now() + wait;
     loop {
         match link.try_event().unwrap() {
             Some(ScriptEvent::Loader { event, .. }) if event.name == "onProbeCall" => {
                 if matches!(event.args.first(), Some(Value::String(method)) if matches!(method.as_str(), "inventory.equip" | "inventory.unequipConsumable"))
                 {
-                    return lucent_protocol::bridge::to_json(Value::List(event.args)).unwrap();
+                    return Some(
+                        lucent_protocol::bridge::to_json(Value::List(event.args)).unwrap(),
+                    );
                 }
             }
             Some(ScriptEvent::Loader { event, .. }) if event.name == "onExtensionResponse" => {
@@ -87,13 +95,15 @@ fn next_trace(link: &ScriptLink) -> serde_json::Value {
                 };
                 let packet: serde_json::Value = serde_json::from_str(raw).unwrap();
                 if packet["dataObj"]["cmd"] == "seia" {
-                    return json!(["seia", packet["dataObj"]["o"]["id"]]);
+                    return Some(json!(["seia", packet["dataObj"]["o"]["id"]]));
                 }
             }
             Some(_) => {}
             None => {
                 let remaining = deadline.saturating_duration_since(Instant::now());
-                assert!(!remaining.is_zero(), "missing equip trace");
+                if remaining.is_zero() {
+                    return None;
+                }
                 std::thread::park_timeout(remaining);
             }
         }
@@ -203,6 +213,16 @@ fn an_issued_equip_settles_after_its_fiber_times_out() {
     let logs = Logs::default();
     let _dispatch = tracing::dispatcher::set_default(&logs.dispatch());
     let (mut session, _runtime, control, observer) = setup(false);
+    let (entered, waiting) = std::sync::mpsc::channel();
+    let (release, blocked) = std::sync::mpsc::channel();
+    let blocked = std::sync::Mutex::new(blocked);
+    let once = std::sync::atomic::AtomicBool::new(false);
+    control.set_operation_probe(move |_, issued| {
+        if issued && !once.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            entered.send(()).unwrap();
+            blocked.lock().unwrap().recv_timeout(TIMEOUT).unwrap();
+        }
+    });
     let run = common::start(
         &mut session,
         common::loose(&[(
@@ -227,11 +247,14 @@ fn an_issued_equip_settles_after_its_fiber_times_out() {
         )]),
         Default::default(),
     );
+    waiting.recv_timeout(TIMEOUT).unwrap();
     assert_eq!(
         next_trace(&observer),
         json!(["inventory.equip",[{"itemId":100.0}]])
     );
     logs.wait_for(tracing::Level::INFO, "issued equip timed out true");
+    release.send(()).unwrap();
+    assert_eq!(trace_within(&observer, Duration::from_millis(300)), None);
     emit(&control, json!({"cmd":"seia","iRes":1,"o":{"id":400}}));
     assert_eq!(
         [next_trace(&observer), next_trace(&observer)],
@@ -326,6 +349,7 @@ fn combat_setup(ambient: bool, confirm: bool) -> (Session, Runtime, ScriptLink, 
         &host,
         common::ready_movie()
             .constant("world.isActionAvailable", json!(true))
+            .recording("world.isActionAvailable")
             .constant("world.getAvailableMonsterMapIds", json!([2]))
             .recording("world.getAvailableMonsterMapIds")
             .constant("combat.attackMonster", json!(true))
@@ -639,4 +663,164 @@ fn an_incompatible_profile_starts_while_the_first_preflight_equip_is_pending() {
             .unwrap()
             .first
     );
+}
+
+#[test]
+fn a_shared_holder_retries_after_the_first_preflight_times_out_or_is_killed() {
+    for kill in [false, true] {
+        let (mut session, _runtime, control, observer) = combat_setup(false, false);
+        let first = holder(&mut session, "\"Potion\"");
+        assert_eq!(
+            next_trace(&observer),
+            json!(["inventory.equip",[{"itemId":100.0}]])
+        );
+        let shared_observer = session.attach(EventInterests::ALL).unwrap();
+        let shared = holder(&mut session, "\"Potion\"");
+        common::await_event(&shared_observer, "onDebug", Some(&shared));
+        if kill {
+            let deadline = Instant::now() + TIMEOUT;
+            loop {
+                assert!(
+                    Instant::now() < deadline,
+                    "shared preflight did not check the equip action"
+                );
+                let event = common::await_event(&shared_observer, "onProbeCall", Some(&shared));
+                if lucent_protocol::bridge::to_json(Value::List(event.args)).unwrap()
+                    == json!(["world.isActionAvailable", "equipItem"])
+                {
+                    break;
+                }
+            }
+            first.kill();
+            assert!(matches!(
+                first.wait(TIMEOUT),
+                Err(RuntimeError::Killed(Kill::Requested))
+            ));
+        }
+        assert_eq!(
+            next_trace(&observer),
+            json!(["inventory.equip",[{"itemId":100.0}]])
+        );
+        emit(&control, json!({"cmd":"seia","iRes":1,"o":{"id":400}}));
+        assert_eq!(next_trace(&observer), json!(["seia", 400]));
+        loop {
+            let event = common::await_event(&shared_observer, "onProbeCall", Some(&shared));
+            if event.args.first() == Some(&Value::String("world.getAvailableMonsterMapIds".into()))
+            {
+                break;
+            }
+        }
+        assert!(
+            control
+                .acquire_consumable_claim(Some(101))
+                .unwrap()
+                .is_none()
+        );
+        first.kill();
+        let _ = first.wait(TIMEOUT);
+        drop(first);
+        assert!(
+            control
+                .acquire_consumable_claim(Some(101))
+                .unwrap()
+                .is_none()
+        );
+        shared.kill();
+        let _ = shared.wait(TIMEOUT);
+        drop(shared);
+        assert!(
+            control
+                .acquire_consumable_claim(Some(101))
+                .unwrap()
+                .unwrap()
+                .first
+        );
+    }
+}
+
+#[test]
+fn a_consumable_caller_stops_waiting_after_five_seconds_before_issuance() {
+    let (mut session, _runtime, control, observer) = setup(false);
+    emit(
+        &control,
+        json!({"cmd":"dropItem","items":{"70":{"ItemID":70,"sName":"Blocker","iQty":1}}}),
+    );
+    control
+        .operate(Operation::AcceptDrop {
+            selector: ItemSelector::Id(70.),
+        })
+        .unwrap();
+    loop {
+        let event = common::await_event(&observer, "onProbeCall", None);
+        if event.args.first() == Some(&Value::String("drops.accept".into())) {
+            break;
+        }
+    }
+    let started = Instant::now();
+    let run = equip(&mut session, 101, "bounded equip submitted");
+    assert_eq!(
+        run.wait(Duration::from_secs(7)).unwrap(),
+        ScriptOutcome::StoppedByScript {
+            reason: Some("false".into())
+        }
+    );
+    assert!(started.elapsed() >= Duration::from_secs(5));
+    emit(
+        &control,
+        json!({"cmd":"getDrop","ItemID":70,"bSuccess":false}),
+    );
+    let next = equip(&mut session, 100, "successor submitted");
+    assert_eq!(
+        next_trace(&observer),
+        json!(["inventory.equip",[{"itemId":100.0}]])
+    );
+    emit(&control, json!({"cmd":"seia","iRes":1,"o":{"id":400}}));
+    assert_eq!(
+        next.wait(TIMEOUT).unwrap(),
+        ScriptOutcome::StoppedByScript {
+            reason: Some("true".into())
+        }
+    );
+}
+
+#[test]
+fn interrupting_a_local_equip_permit_wait_does_not_wait_for_the_holder() {
+    let (mut session, _runtime, control, observer) = setup(false);
+    let run = common::start(
+        &mut session,
+        common::loose(&[(
+            "local.js",
+            r#"
+        import { Effect, Option } from "effect";
+        import * as api from "lucent/api";
+        import * as script from "lucent/script";
+        export default function* () {
+            yield* Effect.raceFirst(
+                api.inventory.equip(100),
+                Effect.gen(function* () {
+                    yield* api.packet.once({command:"next",direction:"extension",encoding:"json"});
+                    const next = yield* api.inventory.equip(101).pipe(Effect.timeoutOption("20 millis"));
+                    yield* script.stop(String(Option.isNone(next)));
+                }),
+            );
+        }
+    "#,
+        )]),
+        Default::default(),
+    );
+    assert_eq!(
+        next_trace(&observer),
+        json!(["inventory.equip",[{"itemId":100.0}]])
+    );
+    emit(&control, json!({"cmd":"next"}));
+    let outcome = run.wait(Duration::from_secs(1));
+    emit(&control, json!({"cmd":"seia","iRes":1,"o":{"id":400}}));
+    assert_eq!(
+        outcome.unwrap(),
+        ScriptOutcome::StoppedByScript {
+            reason: Some("true".into())
+        }
+    );
+    assert_eq!(next_trace(&observer), json!(["seia", 400]));
+    assert_eq!(trace_within(&observer, Duration::from_millis(300)), None);
 }

@@ -8,6 +8,7 @@ pub enum EventKind {
     Invalidated,
     AutoZoneChanged,
     OperationStarted,
+    OperationIssued,
     Operation,
     Login,
     Logout,
@@ -55,6 +56,7 @@ impl EventInterests {
         }
         let kind = match event {
             ScriptEvent::OperationStarted { .. } => EventKind::OperationStarted,
+            ScriptEvent::OperationIssued { .. } => EventKind::OperationIssued,
             ScriptEvent::Operation { .. } => EventKind::Operation,
             ScriptEvent::AutoZoneChanged { .. } => EventKind::AutoZoneChanged,
             ScriptEvent::Invalidated => EventKind::Invalidated,

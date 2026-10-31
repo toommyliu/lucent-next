@@ -200,7 +200,6 @@ export const makeCombat = (
   const prepareCombatProfileConsumable = makeCombatProfileConsumables({
     getConsumableSkillItem,
     inventory,
-    player,
   }).prepare;
 
   const prepareCombatProfile = Effect.fn("Combat.prepareCombatProfile")(

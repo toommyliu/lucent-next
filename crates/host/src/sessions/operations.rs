@@ -125,18 +125,13 @@ impl Packets {
         self.0.lock().waiting.take();
     }
 
-    pub(crate) fn binding(&self) -> super::claims::Binding {
-        self.0.lock().claims.binding()
-    }
-
     pub(crate) fn acquire_claim(
         &self,
         owner: super::claims::Owner,
-        binding: super::claims::Binding,
         item: Option<i64>,
     ) -> Result<Option<super::claims::ClaimGrant>, Error> {
         let mut state = self.0.lock();
-        if state.stopped || state.claims.binding() != binding {
+        if state.stopped {
             return Err(Error::Stopped);
         }
         state.claims.acquire(
@@ -161,7 +156,6 @@ impl Packets {
     pub(crate) fn stop(&self) {
         let mut state = self.0.lock();
         state.stopped = true;
-        state.claims.clear();
         match state.waiting.take() {
             Some(Waiting::Accept(_, reply)) => {
                 let _ = reply.send(Err(Error::Stopped));
@@ -287,11 +281,73 @@ impl Endpoint {
         result
     }
 
+    fn prepare_consumable_claim(
+        &self,
+        claim: &str,
+        owner: super::claims::Owner,
+        operations: &Shared,
+        id: u64,
+    ) -> Result<bool, Error> {
+        let claim = claim.parse().map_err(|_| Error::Stopped)?;
+        let preparation = self.packets.0.lock().claims.preparation(owner, claim);
+        let Some((item, binding, preparation)) = preparation else {
+            return Ok(false);
+        };
+        let slot: Option<i64> = match preparation {
+            super::claims::Preparation::Ready => return Ok(true),
+            super::claims::Preparation::Unchecked => {
+                let (reply, slot) = Pending::channel();
+                self.inbox.post(Msg::Command(
+                    lucent_protocol::command::Command::RefreshEquippedConsumable {},
+                    reply,
+                ));
+                serde_json::from_str(&self.wait(operations, id, slot)?).map_err(|error| {
+                    crate::projection::commands::decode_error(
+                        "combat.getConsumableSkillItem",
+                        error,
+                    )
+                })?
+            }
+            super::claims::Preparation::EquipRequired => None,
+        };
+        if slot != Some(item) {
+            let idle = self.read(operations, id, |projection| {
+                projection.world.get_me().is_some_and(|player| {
+                    player.snapshot_data().data.entity.state
+                        == lucent_protocol::world::EntityState::Idle
+                })
+            })?;
+            if !idle
+                || !self.packets.0.lock().claims.set_preparation(
+                    binding,
+                    item,
+                    super::claims::Preparation::EquipRequired,
+                )
+            {
+                return Ok(false);
+            }
+            if !self.equip_consumable(
+                lucent_protocol::query::ItemSelector::Id(item as f64),
+                operations,
+                id,
+                Some(binding),
+            )? {
+                return Ok(false);
+            }
+        }
+        Ok(self.packets.0.lock().claims.set_preparation(
+            binding,
+            item,
+            super::claims::Preparation::Ready,
+        ))
+    }
+
     fn equip_consumable(
         &self,
         selector: lucent_protocol::query::ItemSelector,
         operations: &Shared,
         id: u64,
+        binding: Option<super::claims::Binding>,
     ) -> Result<bool, Error> {
         let prepared = self.read(operations, id, |projection| {
             let item = projection
@@ -311,7 +367,7 @@ impl Endpoint {
             let action =
                 wire_i64(&serde_json::Value::String(data.meta.clone())).filter(|id| *id > 0)?;
             let mut state = self.packets.0.lock();
-            if state.stopped {
+            if state.stopped || binding.is_some_and(|binding| binding != state.claims.binding()) {
                 return None;
             }
             let (reply, response) = mpsc::channel();
@@ -593,8 +649,23 @@ impl Shared {
         let result = {
             let mut queue = self.queue.lock();
             let entry = queue.entries.get_mut(&id)?;
+            let request = match entry {
+                Lifecycle::Queued { request, .. } => request.clone(),
+                _ => None,
+            };
             if !entry.issue() {
                 return None;
+            }
+            if let Some(request) = request
+                && matches!(
+                    request.operation,
+                    Operation::EquipConsumable { .. } | Operation::PrepareConsumableClaim { .. }
+                )
+            {
+                request.player.inbox.post(Msg::OperationAnswer(
+                    request.attachment,
+                    ScriptEvent::OperationIssued { id },
+                ));
             }
             dispatch()
         };
@@ -663,9 +734,18 @@ impl Operations {
                         ScriptEvent::OperationStarted { id: request.id },
                     ));
                     let answer = match &request.operation {
+                        Operation::PrepareConsumableClaim { claim } => request
+                            .player
+                            .prepare_consumable_claim(
+                                claim,
+                                super::claims::Owner::Script(request.attachment),
+                                &requests,
+                                request.id,
+                            )
+                            .map(OperationAnswer::EquipConsumable),
                         Operation::EquipConsumable { selector } => request
                             .player
-                            .equip_consumable(selector.clone(), &requests, request.id)
+                            .equip_consumable(selector.clone(), &requests, request.id, None)
                             .map(OperationAnswer::EquipConsumable),
                         Operation::AcceptDrop { selector } => request
                             .player

@@ -5216,7 +5216,7 @@ ${prefix}}`;
 
   // packages/runtime/src/host/operations.ts
   var operations = /* @__PURE__ */ new Map();
-  var operate = /* @__PURE__ */ __name((operation, host3) => callback2((resume) => {
+  var operate = /* @__PURE__ */ __name((operation, host3, queueDeadline = Date.now() + 5e3) => callback2((resume) => {
     let id;
     let json2;
     try {
@@ -5244,7 +5244,13 @@ ${prefix}}`;
       cancel();
       resume(fail5(cause));
     }, "fail");
-    operations.set(id, { complete, fail: fail7 });
+    const requiresIssuance = operation.kind === "equipConsumable" || operation.kind === "prepareConsumableClaim";
+    operations.set(id, {
+      complete,
+      fail: fail7,
+      requiresIssuance,
+      timeout: requiresIssuance ? setTimeout(() => fail7(new Error("The equip permit timed out")), Math.max(0, queueDeadline - Date.now())) : void 0
+    });
     try {
       host3.operate(id, json2);
     } catch (cause) {
@@ -5252,9 +5258,11 @@ ${prefix}}`;
     }
     return sync2(cancel);
   }), "operate");
-  var startOperation = /* @__PURE__ */ __name((id) => {
+  var startOperation = /* @__PURE__ */ __name((id, issued = false) => {
     const pending = operations.get(id);
-    if (pending === void 0 || pending.timeout !== void 0) return;
+    if (pending === void 0 || pending.started || pending.requiresIssuance && !issued) return;
+    pending.started = true;
+    clearTimeout(pending.timeout);
     pending.timeout = setTimeout(() => {
       pending.fail(new Error("The host operation timed out"));
     }, 35e3);
@@ -5311,6 +5319,8 @@ ${prefix}}`;
         invoke(() => window.onHostEventsLost?.());
       } else if (item.type === "operationstarted") {
         startOperation(item.id);
+      } else if (item.type === "operationissued") {
+        startOperation(item.id, true);
       } else if (item.type === "loader") {
         invoke(() => {
           const callback3 = Reflect.get(window, item.name);
@@ -13661,9 +13671,9 @@ ${prefix}}`;
     const grant = JSON.parse(
       host3.acquireConsumableClaim(JSON.stringify(itemId ?? null))
     );
-    return grant === null ? { acquired: false, first: false, release: void_3 } : {
+    return grant === null ? { acquired: false, release: void_3 } : {
       acquired: true,
-      first: grant.first,
+      id: grant.id,
       release: sync2(() => host3.releaseClaim(grant.id))
     };
   }), "acquireConsumableClaim");
@@ -14421,12 +14431,24 @@ ${prefix}}`;
     });
     const wear = /* @__PURE__ */ __name((selector) => wearEffect(selector), "wear");
     const operationHost = globalThis.__host;
-    const equipConsumable = /* @__PURE__ */ __name((itemId) => operate({ kind: "equipConsumable", selector: itemId }, operationHost).pipe(
-      consumableEquipment.withPermit,
-      map5((answer) => answer.value),
-      catch_2(() => succeed7(false))
-    ), "equipConsumable");
-    const equipEffect = fn2("Inventory.equip")(function* (selector, options) {
+    const equipConsumable = /* @__PURE__ */ __name((itemId, claim) => scoped2(gen2(function* () {
+      const deadline = Date.now() + 5e3;
+      const permit = yield* acquireRelease2(
+        consumableEquipment.take(1).pipe(timeoutOption2("5 seconds")),
+        (permit2) => isSome2(permit2) ? consumableEquipment.release(1) : void_3,
+        { interruptible: true }
+      );
+      if (isNone2(permit)) return false;
+      return yield* operate(
+        claim === void 0 ? { kind: "equipConsumable", selector: itemId } : { kind: "prepareConsumableClaim", claim },
+        operationHost,
+        deadline
+      ).pipe(
+        map5((answer) => answer.value),
+        catch_2(() => succeed7(false))
+      );
+    })), "equipConsumable");
+    const equipEffect = fn2("Inventory.equip")(function* (selector, options, claim) {
       const item = yield* get5(selector);
       if (item === null) return false;
       if (item.category === "Item" && isDirectInventoryConsumable(item.link)) {
@@ -14439,7 +14461,7 @@ ${prefix}}`;
       if (needsEquip) {
         if (!(yield* wait.forGameAction("equipItem"))) return false;
         if (item.category === "Item") {
-          const equipped = yield* equipConsumable(item.itemId);
+          const equipped = yield* equipConsumable(item.itemId, claim);
           if (!equipped) return false;
         } else {
           const userId = yield* getLocalUserId();
@@ -14545,6 +14567,7 @@ ${prefix}}`;
       contains,
       equip,
       equipByEnhancement,
+      equipClaimedConsumable: /* @__PURE__ */ __name((itemId, claim) => equipEffect(itemId, void 0, claim), "equipClaimedConsumable"),
       get: get5,
       getAll,
       getAvailableSlots,
@@ -14600,26 +14623,11 @@ ${prefix}}`;
                 `Could not equip ${item.name} because another combat profile controls preflight equipment. Skill 5 will use whichever consumable is equipped.`
               );
             }
-            if (!claim.first) {
-              return {
-                release: claim.release,
-                skill5ItemId: item.itemId
-              };
-            }
-            const current = yield* deps.getConsumableSkillItem();
-            if (current?.itemId !== item.itemId) {
-              if ((yield* deps.player.getState()) !== EntityState.Idle) {
-                yield* claim.release;
-                return unavailable(
-                  `Could not equip ${item.name} while you were in combat. Skill 5 will use whichever consumable is equipped.`
-                );
-              }
-              if (!(yield* deps.inventory.equip(item.itemId))) {
-                yield* claim.release;
-                return unavailable(
-                  `Could not equip ${item.name}. Check its requirements. Skill 5 will use whichever consumable is equipped.`
-                );
-              }
+            if (!(yield* deps.inventory.equipClaimedConsumable(item.itemId, claim.id))) {
+              yield* claim.release;
+              return unavailable(
+                `Could not equip ${item.name}. Check its requirements. Skill 5 will use whichever consumable is equipped.`
+              );
             }
             return {
               release: claim.release,
@@ -14700,8 +14708,7 @@ ${prefix}}`;
     ), "getConsumableSkillItem");
     const prepareCombatProfileConsumable = makeCombatProfileConsumables({
       getConsumableSkillItem,
-      inventory,
-      player
+      inventory
     }).prepare;
     const prepareCombatProfile = fn2("Combat.prepareCombatProfile")(
       function* (profile) {

@@ -5,6 +5,7 @@ use crate::query::ItemSelector;
 pub enum Operation {
     AcceptDrop { selector: ItemSelector },
     EquipConsumable { selector: ItemSelector },
+    PrepareConsumableClaim { claim: String },
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, ts_rs::TS)]
