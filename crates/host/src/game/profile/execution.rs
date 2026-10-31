@@ -72,6 +72,25 @@ impl ProfileJob {
             .as_ref()
             .expect("trigger state belongs to profile")[index]
             .skill;
+        if now < expires_at
+            && snapshot.skills[usize::from(u8::from(skill))] != SkillReadiness::Ready
+        {
+            let deadline = match snapshot.skills[usize::from(u8::from(skill))] {
+                SkillReadiness::CooldownUntil(until) if until > now => until.min(expires_at),
+                _ => now.saturating_add(50).min(expires_at),
+            };
+            self.phase = Phase::TriggerCooldown {
+                target,
+                index,
+                started,
+                message,
+                expires_at,
+            };
+            return ProfileEffects {
+                next_deadline: Some(deadline),
+                ..Default::default()
+            };
+        }
         let allowed = snapshot.alive
             && skill_available(snapshot, skill, self.skill5_item_id)
             && target.is_none_or(|lease| {
@@ -90,23 +109,6 @@ impl ProfileJob {
             };
             return ProfileEffects {
                 next_deadline: Some(now),
-                ..Default::default()
-            };
-        }
-        if snapshot.skills[usize::from(u8::from(skill))] != SkillReadiness::Ready {
-            let deadline = match snapshot.skills[usize::from(u8::from(skill))] {
-                SkillReadiness::CooldownUntil(until) if until > now => until.min(expires_at),
-                _ => now.saturating_add(50).min(expires_at),
-            };
-            self.phase = Phase::TriggerCooldown {
-                target,
-                index,
-                started,
-                message,
-                expires_at,
-            };
-            return ProfileEffects {
-                next_deadline: Some(deadline),
                 ..Default::default()
             };
         }
@@ -258,28 +260,17 @@ impl ProfileJob {
                 started,
                 message,
                 expires_at,
-            } => {
-                if let Some(lease) = target.filter(|lease| !self.lease_current(snapshot, *lease)) {
-                    self.lose_target(false);
-                    self.phase = Phase::Ready;
-                    return ProfileEffects {
-                        outcome: Some(Outcome::TargetLost(lease)),
-                        next_deadline: Some(now),
-                        ..Default::default()
-                    };
-                }
-                self.trigger_or_wait(
-                    snapshot,
-                    Pending::Trigger {
-                        target,
-                        index,
-                        started,
-                        message,
-                    },
-                    expires_at,
-                    now,
-                )
-            }
+            } => self.trigger_or_wait(
+                snapshot,
+                Pending::Trigger {
+                    target,
+                    index,
+                    started,
+                    message,
+                },
+                expires_at,
+                now,
+            ),
             Phase::Triggering {
                 target,
                 index,

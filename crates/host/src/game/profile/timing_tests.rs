@@ -293,7 +293,7 @@ fn trigger_waits_for_cooldown_and_respects_timeout() {
 }
 
 #[test]
-fn stale_trigger_cooldown_invalidates_queued_messages() {
+fn stale_trigger_cooldown_finishes_before_target_reselection() {
     let mut p = trigger_profile();
     p["steps"] = rotation_profile()["steps"].clone();
     let mut h = Harness::new(p);
@@ -302,9 +302,25 @@ fn stale_trigger_cooldown_invalidates_queued_messages() {
     h.snapshot.skills[5] = SkillReadiness::CooldownUntil(800);
     h.emit(message(Some(1)));
     h.snapshot.monsters[0].key.generation = 1;
-    h.now = 800;
+    h.now = 300;
     let effect = h.advance(ProfileEvent::Tick);
-    assert!(matches!(effect.outcome, Some(Outcome::TargetLost(_))));
+    assert_eq!(effect.command, None);
+    assert_eq!(effect.outcome, None);
+    assert_eq!(effect.next_deadline, Some(800));
+    h.now = 800;
+    h.snapshot.skills[5] = SkillReadiness::Ready;
+    let effect = h.advance(ProfileEvent::Tick);
+    assert_eq!(effect.command, None);
+    assert_eq!(effect.outcome, None);
+    assert_eq!(effect.next_deadline, Some(800));
+    h.advance(ProfileEvent::Tick);
+    assert_eq!(
+        h.advance(ProfileEvent::Tick).outcome,
+        Some(Outcome::Cycle(Cycle::NoTarget))
+    );
+    h.now = 1300;
+    let attack = h.advance(ProfileEvent::Tick).command.unwrap();
+    assert!(matches!(attack.action, Action::Attack(_)));
     assert!(h.job.target_version() > observed_version);
     assert_eq!(
         h.advance(ProfileEvent::Message {

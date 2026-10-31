@@ -76,6 +76,76 @@ fn target_death_during_post_cast_wait_preserves_both_delays() {
     assert_eq!(h.casts, [1, 2]);
 }
 
+#[test]
+fn target_death_during_trigger_cooldown_holds_action_until_ready_or_timeout() {
+    for ready_at in [Some(1000), None] {
+        let mut h = Harness::new(json!({"delayMs":120,"steps":[{"skill":1}],
+            "messageTriggers":[{"messageIncludes":"enrage","skill":4}]}));
+        h.cycle();
+        h.now = 100;
+        h.snapshot.skills[4] = SkillReadiness::CooldownUntil(800);
+        assert_eq!(h.emit(message(Some(1))).next_deadline, Some(800));
+        h.now = 300;
+        h.snapshot.monsters.remove(0);
+        h.die(1);
+        let waiting = h.advance(ProfileEvent::Tick);
+        assert_eq!(waiting.command, None);
+        assert_eq!(waiting.outcome, None);
+        assert_eq!(waiting.next_deadline, Some(800));
+        assert_eq!(h.emit(message(Some(2))).outcome, Some(Outcome::Deferred));
+        let resumes_at = ready_at.unwrap_or(5100);
+        for now in (800..resumes_at).step_by(50) {
+            h.now = now;
+            let waiting = h.advance(ProfileEvent::Tick);
+            assert_eq!(waiting.command, None);
+            assert_eq!(waiting.next_deadline, Some(now + 50));
+        }
+        h.now = resumes_at;
+        if ready_at.is_some() {
+            h.snapshot.skills[4] = SkillReadiness::Ready;
+        }
+        let failed = h.advance(ProfileEvent::Tick);
+        assert_eq!(failed.command, None);
+        assert_eq!(failed.next_deadline, Some(resumes_at));
+        h.advance(ProfileEvent::Tick);
+        h.cycle();
+        assert_eq!(h.attacks, [1, 2]);
+        assert_eq!(h.casts, [1, 1]);
+        assert_eq!(h.now, resumes_at + 120);
+    }
+}
+
+#[test]
+fn successful_cast_after_target_death_preserves_post_cast_wait() {
+    for death_event in [false, true] {
+        let mut h = Harness::new(json!({"delayMs":120,
+            "steps":[{"skill":1,"waitMs":400},{"skill":2}]}));
+        let prepare = h.advance(ProfileEvent::Tick).command.unwrap();
+        let attack = h.complete(prepare).command.unwrap();
+        let cast = h.complete(attack).command.unwrap();
+        h.now = 100;
+        h.snapshot.monsters[0].hp = 0.0;
+        if death_event {
+            h.die(1);
+        }
+        h.now = 200;
+        let completed = h.complete(cast);
+        assert_eq!(completed.command, None);
+        assert_eq!(completed.outcome, None);
+        assert_eq!(completed.next_deadline, Some(600));
+        h.now = 599;
+        assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(600));
+        h.now = 600;
+        assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(720));
+        h.now = 719;
+        assert_eq!(h.advance(ProfileEvent::Tick).command, None);
+        h.now = 720;
+        h.cycle();
+        assert_eq!(h.attacks, [1, 2]);
+        assert_eq!(h.casts, [1, 2]);
+    }
+}
+
 fn fail_observation(h: &mut Harness, oversized: bool) {
     let effect = if oversized {
         let saved = h.snapshot.clone();
