@@ -4,6 +4,7 @@ mod engine;
 mod host;
 mod interrupt;
 mod modules;
+pub(crate) use modules::check_sources;
 
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{

@@ -12,7 +12,7 @@ const MANIFEST_MAX_BYTES: u64 = 1 << 20;
 const PACKAGE_FILE_MAX_BYTES: u64 = 64 << 20;
 const PACKAGE_MAX_BYTES: u64 = 256 << 20;
 const PACKAGE_MAX_FILES: usize = 10_000;
-const SNAPSHOT_MAX_BYTES: usize = 32 << 20;
+pub(crate) const SNAPSHOT_MAX_BYTES: usize = 16 << 20;
 
 #[derive(Debug, thiserror::Error)]
 pub enum LoadError {
@@ -86,8 +86,7 @@ impl Package {
 
     pub fn script(self, entry: &str) -> Result<Script, LoadError> {
         validate_module_path(entry)?;
-        check_snapshot(self.modules.values())?;
-        Ok(Script::new(
+        checked_script(Script::new(
             ModulePath::in_package(&self.name, entry)?,
             self.modules,
             [(self.name, self.main)].into(),
@@ -165,8 +164,7 @@ fn load(spec: &str, cwd: &Path, root: &Path) -> Result<Script, LoadError> {
         table.insert(package.name, package.main);
         modules.extend(package.modules);
     }
-    check_snapshot(modules.values())?;
-    Ok(Script::new(entry, modules, table)?)
+    checked_script(Script::new(entry, modules, table)?)
 }
 
 fn insert_package(
@@ -179,12 +177,6 @@ fn insert_package(
             return Err(LoadError::Duplicate(package.name));
         }
     } else {
-        check_snapshot(
-            packages
-                .values()
-                .flat_map(|(_, package)| package.modules.values())
-                .chain(package.modules.values()),
-        )?;
         packages.insert(package.name.clone(), (dir, package));
     }
     Ok(())
@@ -203,6 +195,15 @@ fn package_spec(spec: &str) -> Option<(&str, &str)> {
 }
 
 fn manifest(path: &Path) -> Result<serde_json::Value, LoadError> {
+    if !fs::symlink_metadata(path)
+        .map_err(|error| read_error(path, error))?
+        .is_file()
+    {
+        return Err(LoadError::Manifest {
+            path: path.to_owned(),
+            reason: "package.json must be a file.".into(),
+        });
+    }
     serde_json::from_str(&read_source(
         path,
         MANIFEST_MAX_BYTES,
@@ -261,7 +262,7 @@ fn read_modules(
             inventory.bytes += bytes;
             if inventory.bytes > PACKAGE_MAX_BYTES {
                 return Err(LoadError::Limit(
-                    "The bundled package exceeds the 256 MiB limit.".into(),
+                    "The package exceeds the 256 MiB limit.".into(),
                 ));
             }
             let relative = module_name(path.strip_prefix(root).unwrap())?;
@@ -301,17 +302,9 @@ fn module_name(path: &Path) -> Result<String, LoadError> {
     Ok(name)
 }
 
-fn check_snapshot<'a>(sources: impl Iterator<Item = &'a String>) -> Result<(), LoadError> {
-    let mut total = 0;
-    for source in sources {
-        total += source.len();
-        if total > SNAPSHOT_MAX_BYTES {
-            return Err(LoadError::Limit(
-                "Script sources exceed the 32 MiB execution limit.".into(),
-            ));
-        }
-    }
-    Ok(())
+fn checked_script(script: Script) -> Result<Script, LoadError> {
+    crate::scripting::check_sources(&script).map_err(LoadError::Limit)?;
+    Ok(script)
 }
 
 fn canonicalize(path: &Path) -> Result<PathBuf, LoadError> {

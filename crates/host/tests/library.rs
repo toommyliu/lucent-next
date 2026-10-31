@@ -1,3 +1,5 @@
+mod common;
+
 use lucent_host::library::{Package, load_script};
 use lucent_protocol::script::ModulePath;
 use std::{
@@ -246,7 +248,7 @@ fn package_file_size_includes_non_source_assets() {
             .to_string(),
         format!(
             "File exceeds the 64 MiB limit: {}.",
-            ws.0.join("pkg/asset.bin").display()
+            ws.0.join("pkg").join("asset.bin").display()
         )
     );
 }
@@ -273,7 +275,7 @@ fn package_total_size_counts_the_manifest_and_all_assets() {
             .map(|_| ())
             .unwrap_err()
             .to_string(),
-        "The bundled package exceeds the 256 MiB limit."
+        "The package exceeds the 256 MiB limit."
     );
 }
 
@@ -314,7 +316,7 @@ fn oversized_package_totals_stop_before_reading_any_source() {
             .map(|_| ())
             .unwrap_err()
             .to_string(),
-        "The bundled package exceeds the 256 MiB limit."
+        "The package exceeds the 256 MiB limit."
     );
 }
 
@@ -375,25 +377,53 @@ fn manifest_module_components_accept_255_bytes_and_reject_256() {
     }
 }
 
+fn padded_source(ws: &Workspace, path: &str, prefix: &str, bytes: usize) {
+    let mut source = prefix.to_owned();
+    source.extend(std::iter::repeat_n(' ', bytes - source.len()));
+    ws.write(path, &source);
+}
+
 #[test]
-fn snapshot_size_counts_sources_across_packages_and_the_loose_entry() {
+fn snapshot_counts_only_reachable_sources_once_across_packages() {
     let ws = Workspace::new();
-    ws.package("script-packages/a", "a");
-    ws.package("script-packages/b", "b");
-    for name in ["a", "b"] {
-        sized_file(&ws, &format!("script-packages/{name}/index.js"), 16 << 20);
-        ws.write(&format!("script-packages/{name}/scripts/run.js"), "");
+    for name in ["a", "b", "unused"] {
+        ws.package(&format!("script-packages/{name}"), name);
     }
-    ws.write("run.js", "");
+    padded_source(
+        &ws,
+        "script-packages/a/index.js",
+        "export * from 'b';",
+        8 << 20,
+    );
+    padded_source(
+        &ws,
+        "script-packages/b/index.js",
+        "import 'a'; export const b = 1;",
+        8 << 20,
+    );
+    padded_source(
+        &ws,
+        "script-packages/unused/index.js",
+        "export {};",
+        16 << 20,
+    );
+    ws.write("run.js", "export default function* () {}");
     assert_eq!(
         load_script("run.js", &ws.0).unwrap().entry().path(),
         "run.js"
     );
-    ws.write("run.js", " ");
+    assert_eq!(
+        load_script("a/index.js", &ws.0).unwrap().entry().path(),
+        "index.js"
+    );
+    ws.write(
+        "run.js",
+        "import 'a'; import 'b'; export default function* () {}",
+    );
     load_error(
         &ws,
         "run.js",
-        "Script sources exceed the 32 MiB execution limit.",
+        "Script sources exceed the 16 MiB execution limit.",
     );
 }
 
@@ -411,17 +441,27 @@ fn package_javascript_obeys_the_script_file_limit() {
             .to_string(),
         format!(
             "Script file exceeds the 16 MiB limit: {}.",
-            ws.0.join("pkg/index.js").display()
+            ws.0.join("pkg").join("index.js").display()
         )
     );
 }
 
 #[test]
-fn package_scripts_apply_the_snapshot_limit_without_workspace_loading() {
+fn package_scripts_apply_the_reachable_snapshot_limit() {
     let ws = Workspace::new();
     ws.package("pkg", "tools");
-    sized_file(&ws, "pkg/index.js", 16 << 20);
-    sized_file(&ws, "pkg/scripts/run.js", 16 << 20);
+    padded_source(
+        &ws,
+        "pkg/index.js",
+        "export * from './scripts/run';",
+        8 << 20,
+    );
+    padded_source(
+        &ws,
+        "pkg/scripts/run.js",
+        "import '../index.js'; export default function* () {}",
+        8 << 20,
+    );
     assert_eq!(
         Package::read(&ws.0.join("pkg"))
             .unwrap()
@@ -431,7 +471,12 @@ fn package_scripts_apply_the_snapshot_limit_without_workspace_loading() {
             .path(),
         "scripts/run.js"
     );
-    ws.write("pkg/extra.js", " ");
+    padded_source(
+        &ws,
+        "pkg/index.js",
+        "export * from './scripts/run';",
+        (8 << 20) + 1,
+    );
     assert_eq!(
         Package::read(&ws.0.join("pkg"))
             .unwrap()
@@ -439,6 +484,137 @@ fn package_scripts_apply_the_snapshot_limit_without_workspace_loading() {
             .map(|_| ())
             .unwrap_err()
             .to_string(),
-        "Script sources exceed the 32 MiB execution limit."
+        "Script sources exceed the 16 MiB execution limit."
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinked_package_manifests_are_rejected() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    fs::rename(ws.0.join("pkg/package.json"), ws.0.join("manifest.json")).unwrap();
+    std::os::unix::fs::symlink(ws.0.join("manifest.json"), ws.0.join("pkg/package.json")).unwrap();
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        format!(
+            "{} is not a Lucent package manifest: package.json must be a file.",
+            ws.0.join("pkg").join("package.json").display()
+        )
+    );
+}
+
+#[cfg(any(target_os = "macos", windows))]
+#[test]
+fn walked_and_loose_components_are_limited_in_utf8_bytes() {
+    let ws = Workspace::new();
+    for extra in ["", "x"] {
+        let name = format!("{}{}.js", "é".repeat(126), extra);
+        ws.write(&name, "export default function* () {}");
+        if extra.is_empty() {
+            assert_eq!(load_script(&name, &ws.0).unwrap().entry().path(), name);
+        } else {
+            load_error(
+                &ws,
+                &name,
+                "Module path component exceeds the 255 bytes limit.",
+            );
+        }
+        fs::remove_file(ws.0.join(&name)).unwrap();
+        ws.package("pkg", "tools");
+        ws.write(&format!("pkg/{name}"), "export {};");
+        if extra.is_empty() {
+            assert_eq!(Package::read(&ws.0.join("pkg")).unwrap().modules.len(), 3);
+        } else {
+            assert_eq!(
+                Package::read(&ws.0.join("pkg"))
+                    .map(|_| ())
+                    .unwrap_err()
+                    .to_string(),
+                "Module path component exceeds the 255 bytes limit."
+            );
+        }
+        fs::remove_file(ws.0.join("pkg").join(name)).unwrap();
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn walked_paths_enforce_one_kib_on_linux_with_long_os_paths() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    let prefix = format!("{}/", "a".repeat(200)).repeat(5);
+    let boundary = format!("{prefix}{}.js", "b".repeat(16));
+    assert_eq!(boundary.len(), 1024);
+    ws.write(&format!("pkg/{boundary}"), "export {};");
+    assert_eq!(Package::read(&ws.0.join("pkg")).unwrap().modules.len(), 3);
+    fs::remove_file(ws.0.join("pkg").join(&boundary)).unwrap();
+    ws.write(&format!("pkg/{boundary}x"), "");
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        "Module path exceeds the 1 KiB limit."
+    );
+    let loose = format!("{prefix}run.js");
+    ws.write(&loose, "export default function* () {}");
+    assert_eq!(load_script(&loose, &ws.0).unwrap().entry().path(), "run.js");
+}
+
+#[test]
+fn snapshot_follows_escaped_imports_but_ignores_import_text_and_dynamic_imports() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    padded_source(&ws, "pkg/index.js", "export const value = 42;", 8 << 20);
+    let entry = r#"import '../index\u002ejs';
+        const text = "import './extra.js'";
+        const template = `export * from './extra.js'`;
+        const regex = /import 'extra'/;
+        if (false) import('./extra.js');
+        export default function* () {}"#;
+    padded_source(&ws, "pkg/scripts/run.js", entry, 8 << 20);
+    padded_source(&ws, "pkg/scripts/extra.js", "export {};", 16 << 20);
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .unwrap()
+            .script("scripts/run.js")
+            .unwrap()
+            .entry()
+            .path(),
+        "scripts/run.js"
+    );
+    padded_source(
+        &ws,
+        "pkg/index.js",
+        "export const value = 42;",
+        (8 << 20) + 1,
+    );
+    assert_eq!(
+        Package::read(&ws.0.join("pkg"))
+            .unwrap()
+            .script("scripts/run.js")
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        "Script sources exceed the 16 MiB execution limit."
+    );
+}
+
+#[test]
+fn loaded_reachable_graph_runs_with_the_runtime_module_resolver() {
+    let ws = Workspace::new();
+    ws.package("pkg", "tools");
+    ws.write("pkg/scripts/run.js", "import { value } from '../index'; export default function* () { if (value !== 42) throw new Error('wrong module'); }");
+    let script = load_script("pkg/scripts/run.js", &ws.0).unwrap();
+    let (_host, mut session, _runtime) = common::ready_runtime();
+    assert_eq!(
+        common::start(&mut session, script, Default::default())
+            .wait(std::time::Duration::from_secs(5))
+            .unwrap(),
+        lucent_protocol::script::ScriptOutcome::Completed
     );
 }
