@@ -29,8 +29,6 @@ pub enum Error {
     BotRequestTimeout,
     #[error("A bot is already attached")]
     BotAlreadyAttached,
-    #[error("Only the attached bot can publish auto relogin records")]
-    BotPublishDenied,
     #[error("Only the attached bot can answer requests")]
     BotAnswerDenied,
     #[error("Invalid bot request")]

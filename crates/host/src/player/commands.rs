@@ -178,6 +178,11 @@ impl Running {
                 .snapshot(now_ms())?;
                 Ok(serde_json::to_string(&snapshot).unwrap())
             }
+            Command::SetAutoReloginEnabled { .. }
+            | Command::SetAutoReloginDelay { .. }
+            | Command::SetAutoReloginServer { .. } => Err(Error::Unavailable(
+                "auto relogin requires a session controller".into(),
+            )),
             Command::PatchAutoZone { patch } => Ok(super::patch_auto_zone(
                 &self.auto_zone,
                 patch,

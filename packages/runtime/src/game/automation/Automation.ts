@@ -9,8 +9,6 @@ import { FollowerRpcs } from "../../shared/gameRendererRpc";
 import { Api } from "../flash/api/Api";
 import { makeAutoAttack } from "./AutoAttack";
 import type { AutoAttackState } from "./AutoAttack";
-import { makeAutoRelogin } from "./AutoRelogin";
-import type { AutoReloginState } from "./AutoRelogin";
 import { makeDesktopFollowerPort, makeFollower } from "./Follower";
 import type { FollowerState } from "@lucent/schemas/follower";
 
@@ -20,7 +18,6 @@ export const makeAutomation = Effect.gen(function* () {
   const fibers = yield* FiberMap.make<string>();
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
   const autoAttack = yield* makeAutoAttack(api, fibers);
-  const autoRelogin = yield* makeAutoRelogin(api, fibers);
   const follower = yield* makeFollower(api, fibers, makeDesktopFollowerPort());
 
   const observe = <S>(
@@ -38,8 +35,6 @@ export const makeAutomation = Effect.gen(function* () {
   const observeAutoAttack = (listener: (state: AutoAttackState) => void) =>
     observe(autoAttack.changes, listener);
 
-  const observeAutoRelogin = (listener: (state: AutoReloginState) => void) =>
-    observe(autoRelogin.changes, listener);
 
   const observeFollower = (listener: (state: FollowerState) => void) =>
     observe(follower.changes, listener);
@@ -49,17 +44,6 @@ export const makeAutomation = Effect.gen(function* () {
     onState: observeAutoAttack,
   };
 
-  const autoReloginApi = {
-    getDelayMs: autoRelogin.getDelayMs,
-    getServer: autoRelogin.getServer,
-    getState: autoRelogin.getState,
-    isEnabled: autoRelogin.isEnabled,
-    onState: observeAutoRelogin,
-    runLogin: autoRelogin.runLogin,
-    setDelay: autoRelogin.setDelay,
-    setEnabled: autoRelogin.setEnabled,
-    setServer: autoRelogin.setServer,
-  };
 
   const followerApi = {
     ...follower,
@@ -68,7 +52,6 @@ export const makeAutomation = Effect.gen(function* () {
 
   return {
     autoAttack: autoAttackApi,
-    autoRelogin: autoReloginApi,
     follower: followerApi,
   };
 });

@@ -37,6 +37,9 @@ macro_rules! commands {
 
 commands! {
     RefreshCombatState {} => crate::combat_state::CombatSnapshot,
+    SetAutoReloginEnabled { enabled: bool } => crate::auto_relogin::AutoReloginRecords,
+    SetAutoReloginDelay { delay_ms: f64 } => crate::auto_relogin::AutoReloginRecords,
+    SetAutoReloginServer { server: Option<String> } => crate::auto_relogin::AutoReloginRecords,
     PatchAutoZone { patch: AutoZonePatch } => AutoZoneConfig,
     UpdateSettings { patch: SettingsPatch } => GameSettings,
     ReapplySettings { actions_only: bool } => (),

@@ -11,7 +11,7 @@ use std::{
 
 use lucent_host::{
     HostError, ScriptLink, Session, Surface,
-    automation::{AutoZonePolicy, SettingsPolicy},
+    automation::{AutoZonePolicy, ReloginPolicy, SettingsPolicy},
     bridge, reap,
 };
 use lucent_protocol::script::{Script, ScriptOutcome};
@@ -77,6 +77,7 @@ enum Msg {
 struct Player {
     bot: ScriptLink,
     watch: Option<ScriptLink>,
+    relogin: Option<ScriptLink>,
     auto_zone: Option<ScriptLink>,
 }
 
@@ -115,6 +116,7 @@ impl Supervisor {
             bots_started: 0,
             next_run: 0,
             settings: None,
+            relogin: None,
             auto_zone: None,
             deadline: None,
         };
@@ -179,6 +181,7 @@ fn attach(session: &mut Session, has_script: bool) -> Option<Player> {
     Some(Player {
         bot,
         watch,
+        relogin: Some(session.attach(ReloginPolicy::INTERESTS)?),
         auto_zone: Some(session.attach(AutoZonePolicy::INTERESTS)?),
     })
 }
@@ -206,6 +209,7 @@ struct Supervision {
     bots_started: u32,
     next_run: u64,
     settings: Option<SettingsPolicy>,
+    relogin: Option<ReloginPolicy>,
     auto_zone: Option<AutoZonePolicy>,
     deadline: Option<Instant>,
 }
@@ -360,6 +364,10 @@ impl Supervision {
             player.auto_zone.take().unwrap(),
             Waker::from(self.notify.clone()),
         ));
+        self.relogin = Some(ReloginPolicy::new(
+            player.relogin.take().unwrap(),
+            Waker::from(self.notify.clone()),
+        ));
         self.install_player(player);
     }
 
@@ -452,6 +460,13 @@ impl Supervision {
             .settings
             .as_mut()
             .and_then(|settings| settings.advance(Instant::now()));
+        if let Some(at) = self
+            .relogin
+            .as_mut()
+            .and_then(|policy| policy.advance(Instant::now()))
+        {
+            self.deadline = Some(self.deadline.map_or(at, |deadline| deadline.min(at)));
+        }
         self.deadline = self
             .deadline
             .into_iter()
