@@ -29,6 +29,8 @@ tracing = "0.1"
 url = "2.5"
 parking_lot = "0.12"
 indexmap = "2"
+icu_collator = "2.1"
+icu_locale_core = "2.1"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
