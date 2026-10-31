@@ -146,6 +146,50 @@ fn successful_cast_after_target_death_preserves_post_cast_wait() {
     }
 }
 
+#[test]
+fn observation_failure_during_post_cast_wait_keeps_earlier_deadline() {
+    for oversized in [false, true] {
+        for (fails_at, expected_deadline) in [(100, 350), (300, 400)] {
+            let mut h = Harness::new(json!({"delayMs":120,
+                "steps":[{"skill":1,"waitMs":400},{"skill":2}]}));
+            h.cycle();
+            h.now = fails_at;
+            let saved = h.snapshot.clone();
+            let event = if oversized {
+                h.snapshot.monsters = vec![monster(1, None); MAX_MONSTERS + 1];
+                ProfileEvent::Tick
+            } else {
+                ProfileEvent::ObservationFailed("unavailable".into())
+            };
+            let failed = h.advance(event);
+            h.snapshot = saved;
+            assert!(matches!(
+                failed.outcome,
+                Some(Outcome::Failure {
+                    stage: FailureStage::TargetSelection,
+                    ..
+                })
+            ));
+            assert_eq!(failed.command, None);
+            assert_eq!(failed.next_deadline, Some(expected_deadline));
+            h.now = expected_deadline;
+            let effect = h.advance(ProfileEvent::Tick);
+            assert_eq!(effect.command, None);
+            if fails_at == 100 {
+                assert_eq!(effect.next_deadline, Some(400));
+                h.now = 400;
+                assert_eq!(h.advance(ProfileEvent::Tick).next_deadline, Some(520));
+            } else {
+                assert_eq!(effect.next_deadline, Some(520));
+            }
+            h.now = 520;
+            h.cycle();
+            assert_eq!(h.attacks, [1, 1]);
+            assert_eq!(h.casts, [1, 2]);
+        }
+    }
+}
+
 fn fail_observation(h: &mut Harness, oversized: bool) {
     let effect = if oversized {
         let saved = h.snapshot.clone();

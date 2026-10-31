@@ -313,7 +313,10 @@ impl ProfileJob {
                     stage: FailureStage::TargetSelection,
                     message,
                 }),
-                next_deadline: Some(self.next_step),
+                next_deadline: Some(match self.phase {
+                    Phase::Waiting { until } => until.min(self.next_step),
+                    _ => self.next_step,
+                }),
                 ..Default::default()
             };
         }
