@@ -4,7 +4,6 @@ resolver = "3"
 members = [
     "crates/host",
     "crates/protocol",
-    "crates/runtime",
     "crates/ui",
     "crates/app",
 ]
@@ -17,7 +16,6 @@ version = "0.0.0"
 [workspace.dependencies]
 lucent-host = { path = "crates/host" }
 lucent-protocol = { path = "crates/protocol" }
-lucent-runtime = { path = "crates/runtime" }
 lucent-ui = { path = "crates/ui" }
 
 gpui = { git = "https://github.com/zed-industries/zed", rev = "1a246efd7e1b83ab568ec5e3e6c1a43a42e1abba", default-features = false, features = ["wayland", "x11"] }

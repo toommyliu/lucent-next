@@ -27,7 +27,7 @@ impl Logs {
     pub(crate) fn dispatch(&self) -> tracing::Dispatch {
         static INIT: Once = Once::new();
         INIT.call_once(|| {
-            tracing::subscriber::set_global_default(tracing_subscriber::registry()).unwrap();
+            let _ = tracing::subscriber::set_global_default(tracing_subscriber::registry());
         });
         tracing::Dispatch::new(tracing_subscriber::registry().with(self.clone()))
     }

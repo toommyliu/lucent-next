@@ -6,7 +6,6 @@ publish.workspace = true
 
 [dependencies]
 lucent-host.workspace = true
-lucent-runtime.workspace = true
 gpui.workspace = true
 gpui_platform.workspace = true
 anyhow = "1"

@@ -4026,7 +4026,6 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "lucent-host",
- "lucent-runtime",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
  "objc2-core-graphics",
@@ -4048,6 +4047,7 @@ dependencies = [
  "async-task",
  "encoding_rs",
  "indexmap",
+ "libc",
  "lucent-host",
  "lucent-protocol",
  "objc2 0.6.5",
@@ -4067,6 +4067,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "v8",
  "wgpu",
 ]
 
@@ -4078,21 +4079,6 @@ dependencies = [
  "serde",
  "serde_json",
  "ts-rs",
-]
-
-[[package]]
-name = "lucent-runtime"
-version = "0.0.0"
-dependencies = [
- "libc",
- "lucent-host",
- "lucent-protocol",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tracing",
- "tracing-subscriber",
- "v8",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 mod game_window;
 mod terminal;
 
-use lucent_runtime::ScriptRequest;
+use lucent_host::ScriptRequest;
 use std::ffi::OsString;
 
 use lucent_host::Host;
@@ -11,7 +11,7 @@ fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,lucent_runtime::script=debug")),
+                .unwrap_or_else(|_| EnvFilter::new("info,lucent_host::scripting::script=debug")),
         )
         .init();
 

@@ -1,4 +1,4 @@
-#[path = "../../runtime/tests/common/logs.rs"]
+#[path = "common/logs.rs"]
 mod logs;
 
 use lucent_host::{

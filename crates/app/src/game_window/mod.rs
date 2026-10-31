@@ -8,7 +8,7 @@ use gpui::{
     WindowHandle, WindowOptions, div, px, rgb, size,
 };
 use lucent_host::Host;
-use lucent_runtime::ScriptRequest;
+use lucent_host::ScriptRequest;
 
 use player_view::{PlayerView, PlayerViewError};
 

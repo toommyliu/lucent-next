@@ -16,7 +16,8 @@ use gpui::{
 };
 use lucent_host::{Host, HostError, Ime, Session, ViewEvent};
 
-use lucent_runtime::{RuntimeError, ScriptRequest, Supervisor};
+use lucent_host::scripting::RuntimeError;
+use lucent_host::{ScriptRequest, Supervisor};
 use native::NativeView;
 
 #[derive(Debug, thiserror::Error)]
