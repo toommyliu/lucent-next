@@ -210,3 +210,76 @@ fn an_already_logged_in_player_runs_without_another_login_event() {
         ]
     );
 }
+
+#[test]
+fn a_skill_five_profile_queued_before_connection_completes_after_login() {
+    use lucent_protocol::bridge::Value;
+    use serde_json::json;
+
+    let logs = Logs::default();
+    let dispatch = logs.dispatch();
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let host = testing::headless_host();
+    let (mut session, observer) = testing::start_probe(
+        &host,
+        ready_movie()
+            .constant("world.isActionAvailable", json!(true))
+            .constant("world.getAvailableMonsterMapIds", json!([2]))
+            .constant("combat.getConsumableSkillItem", json!(null))
+            .responding(
+                "combat.attackMonster",
+                [(
+                    json!(true),
+                    vec![(
+                        "packetFromServer".into(),
+                        json!({"t":"xt","b":{"o":{"cmd":"ct","m":{"2":{"intHP":0,"intState":0}}}}})
+                            .to_string(),
+                    )],
+                )],
+            ),
+    );
+    let (request, _) = ScriptRequest::new(loose(&[(
+        "fight.js",
+        r#"
+        import * as api from "lucent/api";
+        export default function* () {
+            const killed = yield* api.combat.kill("Frogzard", { profile: { steps: [{ skill: 5 }] } });
+            console.log("profile killed " + killed);
+        }
+    "#,
+    )]));
+    let _supervisor = Supervisor::start(&mut session, Some(request)).unwrap();
+    logs.wait_for(INFO, "session 1: fight.js is waiting for login");
+    observer
+        .call_loader(
+            "probe.emit",
+            vec![
+                Value::String("onConnection".into()),
+                Value::String("OnConnection".into()),
+            ],
+        )
+        .recv_timeout(TIMEOUT)
+        .unwrap();
+    for data in [
+        json!({"cmd":"moveToArea","areaId":1,"areaName":"test-1",
+            "uoBranch":[{"entID":7,"uoName":"player-a","intHP":100,"intHPMax":100,"intState":1}],
+            "mondef":[{"MonID":1,"strMonName":"Frogzard"}],
+            "monBranch":[{"MonID":1,"MonMapID":2,"intHP":50,"intHPMax":50}]}),
+        json!({"cmd":"loadInventoryBig","items":[],"hitems":[{"ItemID":2,"sName":"Home","sType":"House","bEquip":1}]}),
+    ] {
+        observer
+            .call_loader(
+                "probe.emit",
+                vec![
+                    Value::String("onExtensionResponse".into()),
+                    Value::String(json!({"type":"json","dataObj":data}).to_string()),
+                ],
+            )
+            .recv_timeout(TIMEOUT)
+            .unwrap();
+    }
+    logs.wait_for(tracing::Level::DEBUG, "session 1: script worker reaped");
+    assert_eq!(session_lines(&logs, WARN), Vec::<String>::new());
+    assert!(logs.messages(INFO).contains(&"profile killed true".into()));
+    assert!(session_lines(&logs, INFO).contains(&"session 1: fight.js completed".into()));
+}

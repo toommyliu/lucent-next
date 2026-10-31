@@ -1,7 +1,9 @@
 mod reaper;
 pub(crate) mod relogin;
 pub use reaper::reap;
+mod claims;
 mod link;
+pub use claims::ClaimGrant;
 pub(crate) mod operations;
 pub use link::{PlayerStatus, ScriptLink};
 

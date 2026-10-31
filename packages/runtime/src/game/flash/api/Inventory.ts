@@ -5,10 +5,11 @@ import {
 } from "@lucent/game";
 import type { InventoryPool, ItemQuery, LiveItem } from "@lucent/game";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+
+import { operate } from "../../../host/operations";
 
 import {
   EquipEnhancementSelectorSchema,
@@ -37,13 +38,6 @@ const EquipResponse = Schema.Struct({
 });
 const decodeWearResponse = Schema.decodeUnknownOption(WearResponse);
 const decodeEquipResponse = Schema.decodeUnknownOption(EquipResponse);
-const decodeConsumableEquipResponse = Schema.decodeUnknownOption(
-  Schema.Struct({
-    iRes: WireBoolean,
-    o: Schema.optionalKey(Schema.Struct({ id: PositiveWireInt })),
-  }),
-);
-const decodeConsumableActionId = Schema.decodeUnknownOption(PositiveWireInt);
 const decodeEquipEnhancementSelector = Schema.decodeUnknownOption(
   EquipEnhancementSelectorSchema,
 );
@@ -197,54 +191,32 @@ export const makeInventory = (
   });
   const wear = (selector: ItemQuery) => wearEffect(selector);
 
-  const equipConsumable = Effect.fn("Inventory.equipConsumable")(
-    function* (itemId: number, actionId: number) {
-      const response = yield* Effect.scoped(
-        Effect.gen(function* () {
-          const disconnected = yield* wait
-            .forEvent({ type: "connection", status: "OnConnectionLost" })
-            .pipe(Effect.forkScoped({ startImmediately: true }));
-          return yield* Effect.raceFirst(
-            Fiber.join(disconnected).pipe(Effect.as(null)),
-            wait.forPacket(
-              {
-                command: "seia",
-                direction: "extension",
-                encoding: "json",
-                predicate: (candidate) => {
-                  const decoded = decodeConsumableEquipResponse(
-                    packetData(candidate),
-                  );
-                  // seia loads an action definition, shared by items with the same
-                  // sMeta. A late reply for another action must not finish this equip.
-                  return (
-                    Option.isSome(decoded) &&
-                    decoded.value.iRes &&
-                    decoded.value.o?.id === actionId
-                  );
-                },
-              },
-              {
-                trigger: bridge
-                  .invoke("inventory.equip", [{ itemId }], Schema.Boolean)
-                  .pipe(Effect.map(Option.getOrElse(() => false))),
-              },
-            ),
-          );
-        }),
+  const operationHost = globalThis.__host;
+  const equipConsumable = (itemId: number, claim?: string) =>
+    Effect.scoped(Effect.gen(function* () {
+      const deadline = Date.now() + 5_000;
+      const permit = yield* Effect.acquireRelease(
+        consumableEquipment.take(1).pipe(Effect.timeoutOption("5 seconds")),
+        (permit) => Option.isSome(permit) ? consumableEquipment.release(1) : Effect.void,
+        { interruptible: true },
       );
-      if (response === null) return false;
-      const slot = yield* host.command({ kind: "refreshEquippedConsumable" });
-      return Option.isSome(slot) && slot.value === itemId;
-    },
-    consumableEquipment.withPermit,
-    Effect.timeoutOption("5 seconds"),
-    Effect.map(Option.getOrElse(() => false)),
-  );
+      if (Option.isNone(permit)) return false;
+      return yield* operate(
+        claim === undefined
+          ? { kind: "equipConsumable", selector: itemId }
+          : { kind: "prepareConsumableClaim", claim },
+        operationHost,
+        deadline,
+      ).pipe(
+        Effect.map((answer) => answer.value),
+        Effect.catch(() => Effect.succeed(false)),
+      );
+    }));
 
   const equipEffect = Effect.fn("Inventory.equip")(function* (
     selector: ItemQuery,
     options?: EquipOptions,
+    claim?: string,
   ) {
     const item = yield* get(selector);
     if (item === null) return false;
@@ -262,9 +234,7 @@ export const makeInventory = (
     if (needsEquip) {
       if (!(yield* wait.forGameAction("equipItem"))) return false;
       if (item.category === "Item") {
-        const actionId = decodeConsumableActionId(item.meta);
-        if (Option.isNone(actionId)) return false;
-        const equipped = yield* equipConsumable(item.itemId, actionId.value);
+        const equipped = yield* equipConsumable(item.itemId, claim);
         if (!equipped) return false;
       } else {
         const userId = yield* getLocalUserId();
@@ -406,6 +376,7 @@ export const makeInventory = (
     contains,
     equip,
     equipByEnhancement,
+    equipClaimedConsumable: (itemId: number, claim: string) => equipEffect(itemId, undefined, claim),
     get,
     getAll,
     getAvailableSlots,

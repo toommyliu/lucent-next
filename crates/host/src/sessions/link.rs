@@ -150,6 +150,19 @@ impl ScriptLink {
         })
     }
 
+    pub fn acquire_consumable_claim(
+        &self,
+        item: Option<i64>,
+    ) -> Result<Option<super::ClaimGrant>, bridge::Error> {
+        self.packets
+            .acquire_claim(super::claims::Owner::Script(self.attachment), item)
+    }
+
+    pub fn release_claim(&self, id: u64) {
+        self.packets
+            .release_claim(super::claims::Owner::Script(self.attachment), id);
+    }
+
     pub fn cancel_operation(&self, id: u64) {
         self.operations.cancel(self.attachment, id);
     }
@@ -287,6 +300,8 @@ impl ScriptLink {
 impl Drop for ScriptLink {
     fn drop(&mut self) {
         self.detached.store(true, Ordering::Release);
+        self.packets
+            .release_owner(super::claims::Owner::Script(self.attachment));
         self.operations.detach(self.attachment);
         self.inbox.post(Msg::Detach(self.attachment));
     }

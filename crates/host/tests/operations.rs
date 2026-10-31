@@ -73,7 +73,10 @@ fn operation_result(link: &ScriptLink, id: u64) -> Result<bool, lucent_host::bri
         } = try_next_for(link, deadline.saturating_duration_since(Instant::now()))?
         {
             assert_eq!(current, id);
-            return answer.map(|OperationAnswer::AcceptDrop(value)| value);
+            return answer.map(|answer| match answer {
+                OperationAnswer::AcceptDrop(value) => value,
+                other => panic!("unexpected operation answer: {other:?}"),
+            });
         }
     }
 }

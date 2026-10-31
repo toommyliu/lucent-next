@@ -1,11 +1,9 @@
 import type { CombatProfile } from "@lucent/schemas/combatProfiles";
-import { EntityState } from "@lucent/game";
 import * as Effect from "effect/Effect";
-import * as Semaphore from "effect/Semaphore";
+import * as Exit from "effect/Exit";
 
-import { makeCombatProfileConsumableClaims } from "../../../combatProfileConsumableClaims";
+import { acquireConsumableClaim } from "../../../../host/claims";
 import { isDirectInventoryConsumable, type Inventory } from "../Inventory";
-import type { Player } from "../Player";
 
 interface ConsumableSkillItem {
   readonly itemId: number;
@@ -13,13 +11,11 @@ interface ConsumableSkillItem {
 
 interface Dependencies {
   readonly getConsumableSkillItem: () => Effect.Effect<ConsumableSkillItem | null>;
-  readonly inventory: Pick<Inventory, "equip" | "get">;
-  readonly player: Pick<Player, "getState">;
+  readonly inventory: Pick<Inventory, "equipClaimedConsumable" | "get">;
 }
 
 export interface CombatProfileConsumablePreparation {
   readonly release: Effect.Effect<void>;
-  /** Guards skill 5 when preflight prepared a specific item. */
   readonly skill5ItemId?: number;
   readonly warning?: string;
 }
@@ -34,12 +30,9 @@ const unavailable = (warning: string): CombatProfileConsumablePreparation => ({
   warning,
 });
 
-/** Coordinates preflight equipment while allowing every profile runner to start. */
 export const makeCombatProfileConsumables = (deps: Dependencies) => {
-  const claims = makeCombatProfileConsumableClaims();
-  const preflights = Semaphore.makeUnsafe(1);
-
-  const prepareUnlocked = Effect.fn("CombatProfileConsumables.prepareUnlocked")(
+  const host = globalThis.__host;
+  const prepare = Effect.fn("CombatProfileConsumables.prepare")(
     function* (
       profile: CombatProfile,
     ): Effect.fn.Return<CombatProfileConsumablePreparation> {
@@ -50,11 +43,11 @@ export const makeCombatProfileConsumables = (deps: Dependencies) => {
       if (profile.consumable === undefined) {
         const current = yield* deps.getConsumableSkillItem();
         if (current === null) {
-          const claim = yield* claims.acquire(undefined);
+          const claim = yield* acquireConsumableClaim(undefined, host);
           return { release: claim.release };
         }
 
-        const claim = yield* claims.acquire(current.itemId);
+        const claim = yield* acquireConsumableClaim(current.itemId, host);
         return {
           release: claim.release,
           skill5ItemId: current.itemId,
@@ -78,47 +71,30 @@ export const makeCombatProfileConsumables = (deps: Dependencies) => {
         );
       }
 
-      const claim = yield* claims.acquire(item.itemId);
-      if (!claim.acquired) {
-        return unavailable(
-          `Could not equip ${item.name} because another combat profile controls preflight equipment. Skill 5 will use whichever consumable is equipped.`,
-        );
-      }
-      if (!claim.first) {
-        return {
-          release: claim.release,
-          skill5ItemId: item.itemId,
-        };
-      }
+      return yield* Effect.acquireUseRelease(
+        acquireConsumableClaim(item.itemId, host),
+        (claim) => Effect.gen(function* () {
+          if (!claim.acquired) {
+            return unavailable(
+              `Could not equip ${item.name} because another combat profile controls preflight equipment. Skill 5 will use whichever consumable is equipped.`,
+            );
+          }
+          if (!(yield* deps.inventory.equipClaimedConsumable(item.itemId, claim.id))) {
+            yield* claim.release;
+            return unavailable(
+              `Could not equip ${item.name}. Check its requirements. Skill 5 will use whichever consumable is equipped.`,
+            );
+          }
 
-      const current = yield* deps.getConsumableSkillItem();
-      if (current?.itemId !== item.itemId) {
-        if ((yield* deps.player.getState()) !== EntityState.Idle) {
-          yield* claim.release;
-          return unavailable(
-            `Could not equip ${item.name} while you were in combat. Skill 5 will use whichever consumable is equipped.`,
-          );
-        }
-        if (!(yield* deps.inventory.equip(item.itemId))) {
-          yield* claim.release;
-          return unavailable(
-            `Could not equip ${item.name}. Check its requirements. Skill 5 will use whichever consumable is equipped.`,
-          );
-        }
-      }
-
-      return {
-        release: claim.release,
-        skill5ItemId: item.itemId,
-      };
+          return {
+            release: claim.release,
+            skill5ItemId: item.itemId,
+          };
+        }),
+        (claim, exit) => (Exit.isFailure(exit) ? claim.release : Effect.void),
+      );
     },
   );
-
-  const prepare = Effect.fn("CombatProfileConsumables.prepare")(function* (
-    profile: CombatProfile,
-  ): Effect.fn.Return<CombatProfileConsumablePreparation> {
-    return yield* preflights.withPermit(prepareUnlocked(profile));
-  });
 
   return { prepare };
 };

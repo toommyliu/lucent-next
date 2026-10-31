@@ -6,13 +6,16 @@ const operations = new Map<
   {
     complete: (answer: OperationAnswer | null, error: string | null) => void;
     fail: (cause: Error) => void;
-    timeout?: ReturnType<typeof setTimeout>;
+    timeout?: ReturnType<typeof setTimeout> | undefined;
+    started?: boolean;
+    requiresIssuance: boolean;
   }
 >();
 
 export const operate = (
   operation: Operation,
   host: Pick<typeof __host, "prepareOperation" | "operate" | "cancelOperation">,
+  queueDeadline = Date.now() + 5_000,
 ): Effect.Effect<OperationAnswer, Error> =>
   Effect.callback((resume) => {
     let id: string;
@@ -44,7 +47,15 @@ export const operate = (
       cancel();
       resume(Effect.fail(cause));
     };
-    operations.set(id, { complete, fail });
+    const requiresIssuance = operation.kind === "equipConsumable" || operation.kind === "prepareConsumableClaim";
+    operations.set(id, {
+      complete,
+      fail,
+      requiresIssuance,
+      timeout: requiresIssuance
+        ? setTimeout(() => fail(new Error("The equip permit timed out")), Math.max(0, queueDeadline - Date.now()))
+        : undefined,
+    });
     try {
       host.operate(id, json);
     } catch (cause) {
@@ -53,9 +64,20 @@ export const operate = (
     return Effect.sync(cancel);
   });
 
-export const startOperation = (id: string): void => {
+export const setOperationResponsibility = (id: string, responsible: boolean): void => {
   const pending = operations.get(id);
-  if (pending === undefined || pending.timeout !== undefined) return;
+  if (pending === undefined || pending.started) return;
+  clearTimeout(pending.timeout);
+  pending.timeout = responsible
+    ? setTimeout(() => pending.fail(new Error("The equip permit timed out")), 5_000)
+    : undefined;
+};
+
+export const startOperation = (id: string, issued = false): void => {
+  const pending = operations.get(id);
+  if (pending === undefined || pending.started || (pending.requiresIssuance && !issued)) return;
+  pending.started = true;
+  clearTimeout(pending.timeout);
   pending.timeout = setTimeout(() => {
     pending.fail(new Error("The host operation timed out"));
   }, 35_000);
